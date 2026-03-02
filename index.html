@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-01-01";
+  const APP_VERSION = "2026-03-02-01";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -2033,9 +2033,26 @@ function updateMainSizeDisplay(){
 function nextPow2(n){let p=1;while(p<n)p*=2;return p;}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
-function buildSnakeOrder(grps){
-  const order=[];const rem=grps.map((g,i)=>({i,rem:g.size}));let fwd=true;
-  while(rem.some(g=>g.rem>0)){const seq=fwd?[...rem]:[...rem].reverse();for(const g of seq){if(g.rem>0){order.push(g.i);g.rem--;}}fwd=!fwd;}
+function buildSnakeOrder(grps,opt){
+  opt = opt || {};
+  const order=[];
+  let rem=grps.map((g,idx)=>({
+    i:(g&&g.i!=null)?g.i:idx,
+    rem:(g&&g.size!=null)?g.size:(g&&g.rem!=null)?g.rem:0
+  }));
+  if(opt.shuffle) shuffle(rem);
+  if(opt.rotate && rem.length>1){
+    const k = randInt(rem.length);
+    rem = rem.slice(k).concat(rem.slice(0,k));
+  }
+  let fwd = true;
+  if(opt.startRandom) fwd = randInt(2)===0;
+  if(opt.startReverse) fwd = false;
+  while(rem.some(g=>g.rem>0)){
+    const seq = fwd ? rem : [...rem].reverse();
+    for(const g of seq){ if(g.rem>0){ order.push(g.i); g.rem--; } }
+    fwd = !fwd;
+  }
   return order;
 }
 
@@ -2043,17 +2060,17 @@ function smartShuffle(indices,teams){
   const grpSizes=DW.cfg?.grpSizes||[];
   for(let attempt=0;attempt<200;attempt++){
     const arr=[...indices];
-    for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+    for(let i=arr.length-1;i>0;i--){const j=randInt(i+1);[arr[i],arr[j]]=[arr[j],arr[i]];}
     if(!grpSizes.length) return arr;
     const grps=grpSizes.map(()=>[]);
-    const snakeOrder=buildSnakeOrder(grpSizes.map((size,i)=>({i,size})));
+    const snakeOrder=buildSnakeOrder(grpSizes.map((size,i)=>({i,size})),{startRandom:true,shuffle:true,rotate:true});
     snakeOrder.forEach((gi,pos)=>{if(pos<arr.length)grps[gi].push(arr[pos]);});
     let conflict=false;
     for(const grp of grps){const clubs=grp.map(ti=>teams[ti]?.club);if(clubs.length!==new Set(clubs).size){conflict=true;break;}}
     if(!conflict) return arr;
   }
   const arr=[...indices];
-  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  for(let i=arr.length-1;i>0;i--){const j=randInt(i+1);[arr[i],arr[j]]=[arr[j],arr[i]];}
   const byClub={};arr.forEach(ti=>{const c=teams[ti].club;if(!byClub[c])byClub[c]=[];byClub[c].push(ti);});
   const clubs=Object.values(byClub).sort((a,b)=>b.length-a.length);
   const result=[];const maxLen=clubs[0]?.length||0;
@@ -2075,7 +2092,7 @@ async function startDraw(){
   await resetMatchRecords(key);
   const shuffled=smartShuffle(teams.map((_,i)=>i),teams);
   const grps=grpSizes.map(size=>({teams:[],size}));
-  const assignOrder=buildSnakeOrder(grps.map((g,i)=>({i,size:g.size})));
+  const assignOrder=buildSnakeOrder(grps.map((g,i)=>({i,size:g.size})),{startRandom:true,shuffle:true,rotate:true});
 
   ge('drawGroupRows').innerHTML=grps.map((_,gi)=>`<div class="draw-group-row" id="dg_${gi}"><div class="draw-group-label">${gi+1}조</div><div id="dg_slots_${gi}" style="display:flex;flex-wrap:wrap;gap:4px">${Array(grps[gi].size).fill(0).map(()=>`<span class="draw-team-slot">?</span>`).join('')}</div></div>`).join('');
 
@@ -2214,9 +2231,9 @@ async function startMainDraw(){
   const allIdxs=shuffle([...Array(matchCount).keys()]);
 
   // 부전승 매치 인덱스
-  const byeIdxs=allIdxs.slice(0,byeCount).sort((a,b)=>a-b);
+  const byeIdxs=allIdxs.slice(0,byeCount);
   // 일반 매치 인덱스
-  const normalIdxs=allIdxs.slice(byeCount).sort((a,b)=>a-b);
+  const normalIdxs=allIdxs.slice(byeCount);
 
   // 1위팀 셔플
   const rank1Pool=shuffle([...rank1]);
@@ -3445,7 +3462,26 @@ function goBracket(tid,div){
 }
 function dl(d){return{'금':'🥇 금배부','은':'🥈 은배부','동':'🥉 동배부','테린이':'🌱 테린이부','gold':'🥇 금배부','silver':'🥈 은배부','bronze':'🥉 동배부','terinee':'🌱 테린이부','women':'👩 여성부'}[d]||d;}
 function dc(d){return{'금':'gold','은':'silver','동':'bronze','테린이':'blue','gold':'gold','silver':'silver','bronze':'bronze','terinee':'blue','women':'purple'}[d]||'';}
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function randInt(max){
+  max = Math.floor(max||0);
+  if(max<=0) return 0;
+  const c = (window.crypto||window.msCrypto);
+  if(c && c.getRandomValues){
+    const u = new Uint32Array(1);
+    const limit = Math.floor(0xFFFFFFFF / max) * max;
+    let x = 0;
+    do{ c.getRandomValues(u); x = u[0]; }while(x>=limit);
+    return x % max;
+  }
+  return Math.floor(Math.random()*max);
+}
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=randInt(i+1);
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
 function np2(n){let p=1;while(p<n)p*=2;return p;}
 function ago(iso){const d=Date.now()-new Date(iso).getTime(),m=Math.floor(d/60000);if(m<1)return'방금';if(m<60)return m+'분 전';const h=Math.floor(m/60);if(h<24)return h+'시간 전';return Math.floor(h/24)+'일 전';}
 function ge(id){return document.getElementById(id);}
