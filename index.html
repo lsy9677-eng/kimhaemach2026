@@ -854,7 +854,12 @@ async function initFB(){
     // onSnapshot → getDocs: reads 수천 회 → 1회로 절감
     const playersSnap=await getDocs(collection(db,'players'));
     G.players={};
-    playersSnap.forEach(d=>{const x=d.data();if(x?.name)G.players[x.name]=x;});
+    playersSnap.forEach(d=>{
+      const x=d.data();
+      if(!x?.name) return;
+      const k=x.key||(x.club?x.name+'__'+x.club:x.name);
+      G.players[k]=x;
+    });
     renderAllP();popCF();
 
     // ⑤ 활동로그 - 최근 10개만 1회 읽기 (실시간 불필요)
@@ -929,7 +934,10 @@ async function stM(key){
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=[...curIds];
 }
-async function stP(n){try{await setDoc(doc(db,'players',n.replace(/[\/\.#\$\[\]]/g,'_')),{...G.players[n],name:n});}catch(e){}}
+// 동명이인 구분: "이름__클럽" 키 사용
+function pKey(name,club){ return (name&&club)?name+'__'+club:(name||''); }
+function pKeyParse(key){ const i=(key||'').lastIndexOf('__'); return i>0?{name:key.slice(0,i),club:key.slice(i+2)}:{name:key,club:''}; }
+async function stP(k){try{const pk=pKeyParse(k);await setDoc(doc(db,'players',k.replace(/[\/\.#\$\[\]]/g,'_')),{...G.players[k],key:k,name:pk.name,club:pk.club||''});}catch(e){}}
 async function fbLog(t,i='📌'){try{await addDoc(collection(db,'activityLog'),{text:t,icon:i,time:new Date().toISOString()});}catch(e){}}
 function onDU(){
   // 새로고침 후 관리자 세션 복원
@@ -1249,8 +1257,9 @@ function renderRL(){
     const isT=div==='terinee';
     const dbl=isT?(p.length<=6?3:p.length<=8?4:5):5;
     const mainCount=dbl*2;
-    const mk=(a,b)=>p[a]&&p[b]?`<span onclick="openPD('${esc(p[a])}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>/<span onclick="openPD('${esc(p[b])}')" style="cursor:pointer;color:var(--primary)">${p[b]}</span>`:p[a]?`<span onclick="openPD('${esc(p[a])}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>`:'—';
-    const sub=p.slice(mainCount).filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}')" style="cursor:pointer;font-size:.73rem;color:var(--text3)">${n}</span>`).join(', ');
+    const tc=esc(t.club||'');
+    const mk=(a,b)=>p[a]&&p[b]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>/<span onclick="openPD('${esc(p[b])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[b]}</span>`:p[a]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>`:'—';
+    const sub=p.slice(mainCount).filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer;font-size:.73rem;color:var(--text3)">${n}</span>`).join(', ');
     return`<tr><td><div class="team-num">${i+1}</div></td><td><b>${tdn(t,key,i)}</b></td><td style="font-size:.8rem">${mk(0,1)}</td><td style="font-size:.8rem">${mk(2,3)}</td><td style="font-size:.8rem">${mk(4,5)}</td><td style="font-size:.8rem">${dbl>=4?mk(6,7):'—'}</td><td style="font-size:.8rem">${dbl>=5?mk(8,9):'—'}</td><td>${sub||'-'}</td><td style="white-space:nowrap">${AD?`<button class="btn btn-outline" style="padding:3px 6px;font-size:.67rem;margin-right:2px" onclick="openETeam('${key}',${i})">수정</button><button class="btn btn-danger" style="padding:3px 6px;font-size:.67rem" onclick="delTeam('${key}',${i})">삭제</button>`:''}</td></tr>`;
   }).join('');
 }
@@ -2510,18 +2519,15 @@ function buildMainMatches(matchSlots,n){
     slots=hs;
   }
 
-  // 부전승 전파: 반복 적용으로 연속 부전승 처리
+  // 부전승 전파: r0 bye팀의 다음 라운드 자리(t1/t2)만 채움 - winner 자동 설정 안 함
   const maxR=Math.max(...mainMs.map(m=>m.round));
   for(let r=0;r<maxR;r++){
-    mainMs.filter(m=>m.round===r&&m.winner!==null).forEach(bm=>{
+    mainMs.filter(m=>m.round===r&&m.winner!==null&&m.bye).forEach(bm=>{
       const nm=mainMs.find(m2=>m2.round===r+1&&m2.slot===Math.floor(bm.slot/2));
       if(!nm) return;
-      // t1(짝수 슬롯) or t2(홀수 슬롯)
       if(bm.slot%2===0){ if(nm.t1===null) nm.t1=bm.winner; }
       else             { if(nm.t2===null) nm.t2=bm.winner; }
-      // 상대가 없는 경우 부전승으로 자동 진출
-      if(nm.t1!==null && nm.t2===null){ nm.winner=nm.t1; nm.bye=true; }
-      else if(nm.t2!==null && nm.t1===null){ nm.winner=nm.t2; nm.bye=true; }
+      // winner는 절대 자동 설정 안 함 - 실제 경기 후에만 설정
     });
   }
   return mainMs;
@@ -2599,15 +2605,14 @@ async function saveManualEdit(){
     }
   });
 
-  // 다음 라운드 부전승 재연산
+  // 다음 라운드 부전승 재연산 (winner 자동설정 제거)
   const mainMs=allMs.filter(m=>m.phase==='main');
   mainMs.filter(m=>m.round>0).forEach(m=>{m.t1=null;m.t2=null;m.winner=null;m.bye=false;});
   mainMs.filter(m=>m.bye&&m.winner!==null&&m.round===0).forEach(bm=>{
     const nm=mainMs.find(m2=>m2.round===bm.round+1&&m2.slot===Math.floor(bm.slot/2));
     if(nm){
       if(bm.slot%2===0)nm.t1=bm.winner; else nm.t2=bm.winner;
-      if(nm.t1!==null&&nm.t2===null){nm.winner=nm.t1;nm.bye=true;}
-      else if(nm.t2!==null&&nm.t1===null){nm.winner=nm.t2;nm.bye=true;}
+      // winner 자동설정 안 함
     }
   });
 
@@ -2773,11 +2778,11 @@ async function resetMatchRecords(key){
   const affected=new Set();
   for(const m of matches){
     if(m.winner==null) continue;
-    const wt=teams[m.winner], lt=teams[m.winner===m.t1?m.t2:m.t1];
-    (wt?.players||[]).forEach(n=>{if(G.players[n]){G.players[n].wins=Math.max(0,(G.players[n].wins||0)-1);affected.add(n);}});
-    (lt?.players||[]).forEach(n=>{if(G.players[n]){G.players[n].losses=Math.max(0,(G.players[n].losses||0)-1);affected.add(n);}});
+    const wt=teams[m.winner],lt=teams[m.winner===m.t1?m.t2:m.t1];
+    (wt?.players||[]).forEach(n=>{const k=getPlayerKey(n,wt?.club);if(G.players[k]){G.players[k].wins=Math.max(0,(G.players[k].wins||0)-1);affected.add(k);}});
+    (lt?.players||[]).forEach(n=>{const k=getPlayerKey(n,lt?.club);if(G.players[k]){G.players[k].losses=Math.max(0,(G.players[k].losses||0)-1);affected.add(k);}});
   }
-  if(affected.size>0) await Promise.all([...affected].map(n=>stP(n)));
+  if(affected.size>0) await Promise.all([...affected].map(k=>stP(k)));
   G.matches[key]=[];
   delete G.draws[key];
 }
@@ -2799,14 +2804,14 @@ async function recalcAllPlayerStats(){
       for(const m of (matchList||[])){
         if(m.winner==null||m.bye) continue;
         const wt=teams[m.winner], lt=teams[m.winner===m.t1?m.t2:m.t1];
-        (wt?.players||[]).forEach(n=>{if(G.players[n])G.players[n].wins=(G.players[n].wins||0)+1;});
-        (lt?.players||[]).forEach(n=>{if(G.players[n])G.players[n].losses=(G.players[n].losses||0)+1;});
+        (wt?.players||[]).forEach(n=>{const k=getPlayerKey(n,wt?.club);if(G.players[k])G.players[k].wins=(G.players[k].wins||0)+1;});
+        (lt?.players||[]).forEach(n=>{const k=getPlayerKey(n,lt?.club);if(G.players[k])G.players[k].losses=(G.players[k].losses||0)+1;});
       }
     }
 
     // ③ 모든 선수 Firebase 저장
     const names=Object.keys(G.players);
-    await Promise.all(names.map(n=>stP(n)));
+    await Promise.all(names.map(k=>stP(k)));
 
     sl(false);
     toast(`재계산 완료 ✅ (${names.length}명)`,'success');
@@ -2820,20 +2825,25 @@ async function recalcAllPlayerStats(){
 
 async function updPS(key,m,prevW){
   const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];if(!t1||!t2)return;
-  if(prevW!=null){const pw=teams[prevW],pl=teams[prevW===m.t1?m.t2:m.t1];if(pw)pw.players.forEach(n=>{if(G.players[n]?.wins>0)G.players[n].wins--;});if(pl)pl.players.forEach(n=>{if(G.players[n]?.losses>0)G.players[n].losses--;});}
+  if(prevW!=null){
+    const pw=teams[prevW],pl=teams[prevW===m.t1?m.t2:m.t1];
+    if(pw)pw.players.forEach(n=>{const k=getPlayerKey(n,pw.club);if(G.players[k]?.wins>0)G.players[k].wins--;});
+    if(pl)pl.players.forEach(n=>{const k=getPlayerKey(n,pl.club);if(G.players[k]?.losses>0)G.players[k].losses--;});
+  }
   const wt=teams[m.winner],lt=teams[m.winner===m.t1?m.t2:m.t1];
-  if(wt)(wt.players||[]).forEach(n=>{if(G.players[n])G.players[n].wins=(G.players[n].wins||0)+1;});
-  if(lt)(lt.players||[]).forEach(n=>{if(G.players[n])G.players[n].losses=(G.players[n].losses||0)+1;});
-  const all=[...((wt?.players)||[]),...((lt?.players)||[])];
-  await Promise.all(all.map(n=>G.players[n]?stP(n):Promise.resolve()));
+  if(wt)wt.players.forEach(n=>{const k=getPlayerKey(n,wt.club);if(G.players[k])G.players[k].wins=(G.players[k].wins||0)+1;});
+  if(lt)lt.players.forEach(n=>{const k=getPlayerKey(n,lt.club);if(G.players[k])G.players[k].losses=(G.players[k].losses||0)+1;});
+  const allKeys=[...((wt?.players)||[]).map(n=>getPlayerKey(n,wt?.club)),...((lt?.players)||[]).map(n=>getPlayerKey(n,lt?.club))];
+  await Promise.all(allKeys.map(k=>G.players[k]?stP(k):Promise.resolve()));
 }
 
 async function autoAdv(key,mid){
   const list=G.matches[key]||[];const m=list.find(m=>m.id===mid);if(!m||m.phase!=='main')return;
   const nm=list.find(m2=>m2.phase==='main'&&m2.round===m.round+1&&m2.slot===Math.floor(m.slot/2));if(!nm)return;
   if(m.slot%2===0)nm.t1=m.winner;else nm.t2=m.winner;
-  if(nm.t1!==null&&nm.t2===null){nm.winner=nm.t1;nm.bye=true;}else if(nm.t2!==null&&nm.t1===null){nm.winner=nm.t2;nm.bye=true;}else{nm.winner=null;nm.bye=false;}
-  await stM(key);if(nm.bye)await autoAdv(key,nm.id);
+  // winner 자동 설정 안 함 - 실제 경기 입력 후에만 winner 설정
+  nm.winner=null;nm.bye=false;
+  await stM(key);
 }
 
 
@@ -3043,22 +3053,35 @@ function upDash(){
 function upLog(){if(G.log.length)ge('recentLog').innerHTML=G.log.slice(0,6).map(a=>`<li class="ri"><div class="ri-icon">${a.icon||'📌'}</div><div class="ri-text"><div>${a.text}</div></div><div class="ri-time">${ago(a.time)}</div></li>`).join('');}
 
 async function regP(name,club,tid,div){
-  if(!G.players[name])G.players[name]={clubs:[],history:[],wins:0,losses:0};
-  const p=G.players[name];if(!p.clubs.includes(club))p.clubs.push(club);
+  const k=pKey(name,club);
+  if(!G.players[k])G.players[k]={clubs:[],history:[],wins:0,losses:0,name,club};
+  const p=G.players[k];
+  if(!p.clubs)p.clubs=[];
+  if(!p.clubs.includes(club))p.clubs.push(club);
   const t=G.tournaments.find(t=>t.id===tid);
+  if(!p.history)p.history=[];
   if(!p.history.find(h=>h.tid===tid&&h.div===div))p.history.push({tid,tname:t?.name||'',date:t?.date||'',club,div,result:'참가',rank:null});
-  await stP(name);
+  await stP(k);
 }
 
 // ── 선수명 정규화/조회 유틸 (Firebase + HIST_DATA 일관 처리) ──
 function normName(s){ return (s||'').replace(/\s+/g,'').trim(); }
 
-function getPlayerKeyByName(name){
-  const n = normName(name);
+function getPlayerKeyByName(name,club){
+  const n=normName(name);
+  if(club){const k1=pKey(name,club);if(G.players[k1])return k1;}
   for(const k of Object.keys(G.players||{})){
-    if(normName(k) === n) return k;
+    const pk=pKeyParse(k);
+    if(normName(pk.name)===n) return k;
   }
   return null;
+}
+// 팀 클럽명으로 선수 key 찾기 (동명이인 구분)
+function getPlayerKey(name,club){
+  const k1=pKey(name,club);
+  if(G.players[k1]) return k1;
+  if(G.players[name]) return name;
+  return k1;
 }
 function hasHistPlayer(name){
   const n = normName(name);
@@ -3214,15 +3237,15 @@ function buildPH(name,p){
 }
 function popCF(){const el=ge('pfClub');if(!el)return;const cur=el.value;el.innerHTML='<option value="">전체 클럽</option>'+G.clubs.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');}
 function filterP(){PF.club=ge('pfClub')?.value||'';PF.div=ge('pfDiv')?.value||'';PF.search=ge('psInput')?.value||'';renderAllP();}
-function showP(name){
+function showP(name,club){
   const sec=ge('ppSection');
-  let p=G.players[name];
+  const k=club?getPlayerKeyByName(name,club):getPlayerKeyByName(name);
+  let p=k?G.players[k]:null;
   if(!p){
-    // HIST_DATA에서 해당 선수 검색해서 임시 profile 생성
     const histRecs=[];
     HIST_DATA.forEach(t=>{
       t.teams.forEach(tm=>{
-        if((tm.players||[]).some(pn=>pn===name)){
+        if((tm.players||[]).some(pn=>pn===name)&&(!club||tm.club===club)){
           histRecs.push({date:t.date,tname:t.name,club:tm.club,div:tm.div,rank:tm.rank});
         }
       });
@@ -3270,15 +3293,17 @@ function renderAllP(){
   const tb=ge('allPT');if(!tb)return;
   if(!allNames.length){tb.innerHTML='<tr><td colspan="8"><div class="empty-state" style="padding:14px"><p>조건에 맞는 선수 없음</p></div></td></tr>';return;}
 
-  tb.innerHTML=allNames.map(name=>{
-    const p=G.players[name]||{clubs:[],history:[],wins:0,losses:0};
-    // HIST_DATA에서 추가 정보 수집
+  tb.innerHTML=allNames.map(rawKey=>{
+    const pk=pKeyParse(rawKey);
+    const name=pk.name||rawKey;
+    const keyClub=pk.club||'';
+    const p=G.players[rawKey]||{clubs:[],history:[],wins:0,losses:0};
     const histRecs=[];
     HIST_DATA.forEach(t=>t.teams.forEach(tm=>{
-      if((tm.players||[]).some(pn=>pn===name))histRecs.push({club:tm.club,div:tm.div,rank:tm.rank});
+      if((tm.players||[]).some(pn=>pn===name)&&(!keyClub||tm.club===keyClub))histRecs.push({club:tm.club,div:tm.div,rank:tm.rank});
     }));
-    const allClubs=[...new Set([...p.clubs,...histRecs.map(r=>r.club)])];
-    const lc=allClubs.slice(-1)[0]||'-';
+    const allClubs=[...new Set([...p.clubs,...(keyClub?[keyClub]:[]),...histRecs.map(r=>r.club)])];
+    const lc=keyClub||allClubs.slice(-1)[0]||'-';
     const cnt=(p.history||[]).length+histRecs.length;
     const dCnt={'금':0,'은':0,'동':0,'테린이':0};
     (p.history||[]).forEach(h=>{if(dCnt[h.div]!==undefined)dCnt[h.div]++;});
@@ -3286,9 +3311,10 @@ function renderAllP(){
     let br=null;
     (p.history||[]).forEach(h=>{if(h.rank&&(!br||h.rank<br))br=h.rank;});
     histRecs.forEach(r=>{if(r.rank&&(!br||r.rank<br))br=r.rank;});
-    const isFb=fbNames.has(name);
+    const dispName=keyClub?`${name}<small style="color:var(--text3);font-size:.72rem">(${keyClub})</small>`:name;
+    const editArg=esc(rawKey);
     return`<tr>
-      <td style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="showP('${name}')">${name}${AD?` <button class="btn btn-outline" style="font-size:.6rem;padding:1px 6px;margin-left:4px" onclick="event.stopPropagation();openEditPlayer('${name}')">✏️</button>`:''}</td>
+      <td style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="showP('${esc(name)}','${esc(keyClub)}')">${dispName}${AD?` <button class="btn btn-outline" style="font-size:.6rem;padding:1px 6px;margin-left:4px" onclick="event.stopPropagation();openEditPlayer('${editArg}')">✏️</button>`:''}</td>
       <td>${lc}</td><td>${cnt}</td>
       <td>${dCnt['금']||'-'}</td><td>${dCnt['은']||'-'}</td>
       <td>${dCnt['동']||'-'}</td><td>${dCnt['테린이']||'-'}</td>
@@ -3296,15 +3322,18 @@ function renderAllP(){
     </tr>`;
   }).join('');
 }
-function openPD(name){
-  const p=G.players[name];
-  ge('mPDT').textContent='👤 '+name;
+function openPD(name,club){
+  const k=club?getPlayerKeyByName(name,club):getPlayerKeyByName(name);
+  const p=k?G.players[k]:null;
+  const dispClub=club||(p?.clubs?.slice(-1)[0])||(p?.club)||'';
+  const dispName=dispClub?name+'('+dispClub+')':name;
+  ge('mPDT').textContent='👤 '+dispName;
   ge('mPDB').innerHTML=p?buildPH(name,p):`<div class="empty-state"><div class="empty-icon">👤</div><p>기록 없음</p></div>`;
-  // 관리자 버튼 추가
   const footer=ge('mPDFooter');
+  const editKey=k||name;
   if(footer){
     footer.innerHTML=AD
-      ?`<button class="btn btn-outline" style="font-size:.78rem" onclick="openEditPlayer('${name}')">✏️ 수정/삭제</button><div style="flex:1"></div><button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`
+      ?`<button class="btn btn-outline" style="font-size:.78rem" onclick="openEditPlayer('${editKey}')">✏️ 수정/삭제</button><div style="flex:1"></div><button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`
       :`<button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`;
   }
   om('mPD');
@@ -3409,9 +3438,9 @@ function openRoster(tid,div){
   if(!teams.length){ge('mRosterB').innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>등록된 팀 없음</p></div>';om('mRoster');return;}
   const total=teams.reduce((s,t)=>s+t.players.length,0);
   let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">팀</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div>`;
-  teams.forEach((team,i)=>{const dn=tdn(team,key,i);const p=team.players||[];
+  teams.forEach((team,i)=>{const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
     html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-    <div style="padding:10px 14px">${(()=>{const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=dbl*2;const cols=Math.min(dbl,5);return`<div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:6px;margin-bottom:6px">${Array.from({length:dbl},(_,r)=>`<div style="padding:6px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);text-align:center"><div style="font-size:.6rem;color:var(--text3);margin-bottom:3px">${r+1}복식</div><div style="font-size:.77rem">${[p[r*2],p[r*2+1]].filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}')" style="cursor:pointer;color:var(--primary)">${n}</span>`).join(' / ')}</div></div>`).join('')}</div>${p.slice(mainCount).length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${p.slice(mainCount).map(n=>`<span onclick="openPD('${esc(n)}')" style="cursor:pointer">${n}</span>`).join(', ')}</div>`:''}`})()}</div></div>`;
+    <div style="padding:10px 14px">${(()=>{const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=dbl*2;const cols=Math.min(dbl,5);return`<div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:6px;margin-bottom:6px">${Array.from({length:dbl},(_,r)=>`<div style="padding:6px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);text-align:center"><div style="font-size:.6rem;color:var(--text3);margin-bottom:3px">${r+1}복식</div><div style="font-size:.77rem">${[p[r*2],p[r*2+1]].filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer;color:var(--primary)">${n}</span>`).join(' / ')}</div></div>`).join('')}</div>${p.slice(mainCount).length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${p.slice(mainCount).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer">${n}</span>`).join(', ')}</div>`:''}`})()}</div></div>`;
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
