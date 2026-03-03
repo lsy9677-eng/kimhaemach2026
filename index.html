@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-03-02-courtfix";
+  const APP_VERSION = "2026-03-04-v7-default-open-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -370,8 +370,23 @@ body{overflow-x:hidden;}
   background:var(--accent);
   width:16px;border-radius:3px;
 }
-</style>
 
+
+/* ✅ 선수기록(전체 선수 목록) 이름: 좌측정렬 + 모바일에서 안 잘리게(줄바꿈) */
+#page-players .table-wrap table{table-layout:auto;}
+#page-players .table-wrap table th:nth-child(1),
+#page-players .table-wrap table td:nth-child(1){text-align:left !important;}
+#page-players .table-wrap table th:nth-child(1){min-width:110px;}
+#page-players .table-wrap table td:nth-child(1){
+  white-space:normal;          /* 줄바꿈 허용 */
+  overflow:visible;            /* 잘림 방지 */
+  text-overflow:clip;
+  word-break:keep-all;         /* 한글 단어 단위 유지 */
+  overflow-wrap:anywhere;      /* 아주 긴 문자열 대비 */
+  line-height:1.25;
+}
+#page-players .table-wrap table td:nth-child(1) small{margin-left:6px; color:var(--text3);}
+</style>
 
 <!-- PWA -->
 <link rel="manifest" href="./manifest.json">
@@ -1169,6 +1184,21 @@ function showPage(n){
   if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
   if(n==='home')upDash();if(n==='tournament')renderTL();if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();if(n==='players'){renderAllP();popCF();}if(n==='ranking')popSel();
+
+  // ✅ 페이지 진입 시 기본 대회(접수중) 자동 선택
+  if(n==='register'){
+    const el=ge('regTS');
+    if(el && !el.value){ el.value = pickDefaultTournamentId(); onRegTC(); }
+  }
+  if(n==='bracket'){
+    const el=ge('brTS');
+    if(el && !el.value){ el.value = pickDefaultTournamentId(); onBrTC(); }
+  }
+  if(n==='ranking'){
+    const el=ge('rankTS');
+    if(el && !el.value){ el.value = pickDefaultTournamentId(); onRankTC(); }
+  }
+
   window.scrollTo(0,0);
 }
 
@@ -1366,6 +1396,16 @@ function _getActiveTournamentLabel(){
   }catch(e){return '';}
 }
 
+// ✅ 기본 대회 선택: "접수중(open)" 우선 → 없으면 "진행중(ongoing)" → 최신 1개
+function pickDefaultTournamentId(){
+  if(!Array.isArray(G.tournaments) || G.tournaments.length===0) return '';
+  const openT = G.tournaments.find(t=>t.status==='open');
+  if(openT) return openT.id;
+  const onT = G.tournaments.find(t=>t.status==='ongoing');
+  if(onT) return onT.id;
+  return G.tournaments[0].id;
+}
+
 function openSupportModal(){
   const phone = (G.meta.adminPhone||'').trim();
   if(!phone){
@@ -1547,22 +1587,33 @@ function openTD(tid){
 
 
 function popSel(){
+  // regTS / brTS : 기본은 "접수중(open)" 대회 우선 선택
   ['regTS','brTS'].forEach(id=>{
-    const el=ge(id);if(!el)return;
-    const v=el.value;
+    const el=ge(id); if(!el) return;
+    let v = el.value;
+
+    if(!v) v = pickDefaultTournamentId();
+
     el.innerHTML='<option value="">-- 대회 선택 --</option>'+
-      G.tournaments.map(t=>`<option value="${t.id}" ${t.id===v?'selected':''}>${t.name} (${t.date})</option>`).join('');
+      G.tournaments.map(t=>{
+        const dis = (!AD && id==='regTS' && t.status!=='open') ? 'disabled' : '';
+        const label = `${t.name} (${t.date})` + (t.status==='open'?' [접수중]':t.status==='ongoing'?' [진행중]':t.status==='closed'?' [마감]':t.status==='finished'?' [종료]':'');
+        return `<option value="${t.id}" ${t.id===v?'selected':''} ${dis}>${label}</option>`;
+      }).join('');
   });
-  // rankTS: Firebase 대회 + 과거 내장 대회 모두 표시
+
+  // rankTS: Firebase 대회 + 과거 내장 대회 모두 표시 (기본도 접수중 우선)
   const rankEl=ge('rankTS');
   if(rankEl){
-    const v=rankEl.value;
-    const allT=[...G.tournaments,...HIST_DATA].sort((a,b)=>b.date.localeCompare(a.date));
+    let v = rankEl.value;
+    if(!v) v = pickDefaultTournamentId();
+    const allT=[...G.tournaments,...HIST_DATA].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     rankEl.innerHTML='<option value="">-- 대회 선택 --</option>'+
-      allT.map(t=>`<option value="${t.id}" ${t.id===v?'selected':''}>${t.name} (${t.date?.substring(0,7)||''})</option>`).join('');
+      allT.map(t=>`<option value="${t.id}" ${t.id===v?'selected':''}>${t.name} (${(t.date||'').substring(0,7)||''})</option>`).join('');
   }
+
   const cs=ge('regClub');
-  if(cs)cs.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option>${c}</option>`).join('');
+  if(cs) cs.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option>${c}</option>`).join('');
 }
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
@@ -1620,23 +1671,73 @@ function updateRegisterSlots(){
 }
 
 function renderRL(){
-  const tid=ge('regTS').value,div=ge('regDS').value;if(!tid||!div)return;
-  ge('regSection').style.display='block';ge('aoReg').style.display=AD?'block':'none';
+  const tid=ge('regTS').value,div=ge('regDS').value;
+  if(!tid||!div) return;
+
+  const t=G.tournaments.find(t=>t.id===tid);
+  const isOpen = (t?.status==='open');
+
+  ge('regSection').style.display='block';
+  ge('aoReg').style.display=AD?'block':'none';
+
   // 부서 변경 시 슬롯 업데이트
   updateRegisterSlots();
+
+  // ✅ 접수중(open) 대회가 아니면(일반 사용자) 팀 등록 UI 비활성화
+  const lock = (!AD && !isOpen);
+
+  // 클럽/선수 입력/등록버튼 비활성화
+  const clubSel=ge('regClub'); if(clubSel) clubSel.disabled = lock;
+  for(let i=1;i<=12;i++){ const el=ge('p'+i); if(el) el.disabled = lock; }
+  // 등록 버튼(aoReg 안의 버튼) 비활성화
+  const regBtn = document.querySelector('#aoReg button.btn.btn-primary');
+  if(regBtn) regBtn.disabled = lock;
+
+  // 안내 메시지(없으면 생성)
+  let msg = ge('regLockMsg');
+  if(!msg){
+    msg = document.createElement('div');
+    msg.id = 'regLockMsg';
+    msg.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);font-size:.78rem;color:var(--text2);line-height:1.5;display:none;';
+    const anchor = ge('aoReg');
+    if(anchor) anchor.insertAdjacentElement('afterend', msg);
+  }
+  if(lock){
+    msg.style.display='block';
+    msg.innerHTML = `⛔ 현재 선택한 대회는 <b>${t?.status==='finished'?'종료':t?.status==='closed'?'마감':'접수중 아님'}</b> 상태라 팀 등록이 비활성화 됩니다.<br>상단에서 <b>접수중 대회</b>를 선택해 주세요.`;
+  }else{
+    msg.style.display='none';
+  }
+
   const key=tid+'_'+div,teams=G.teams[key]||[];
-  ge('regTCnt').textContent=teams.length+'팀';ge('regNo').value=teams.length+1;
+  ge('regTCnt').textContent=teams.length+'팀';
+  ge('regNo').value=teams.length+1;
+
   const tb=ge('regTBody');
-  if(!teams.length){tb.innerHTML='<tr><td colspan="9"><div class="empty-state" style="padding:14px"><p>등록된 팀 없음</p></div></td></tr>';return;}
-  tb.innerHTML=teams.map((t,i)=>{
-    const p=t.players||[];
+  if(!teams.length){
+    tb.innerHTML='<tr><td colspan="9"><div class="empty-state" style="padding:14px"><p>등록된 팀 없음</p></div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML=teams.map((t2,i)=>{
+    const p=t2.players||[];
     const isT=div==='terinee';
     const dbl=isT?(p.length<=6?3:p.length<=8?4:5):5;
     const mainCount=dbl*2;
-    const tc=esc(t.club||'');
+    const tc=esc(t2.club||'');
     const mk=(a,b)=>p[a]&&p[b]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>/<span onclick="openPD('${esc(p[b])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[b]}</span>`:p[a]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>`:'—';
     const sub=p.slice(mainCount).filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer;font-size:.73rem;color:var(--text3)">${n}</span>`).join(', ');
-    return`<tr><td><div class="team-num">${i+1}</div></td><td><b>${tdn(t,key,i)}</b></td><td style="font-size:.8rem">${mk(0,1)}</td><td style="font-size:.8rem">${mk(2,3)}</td><td style="font-size:.8rem">${mk(4,5)}</td><td style="font-size:.8rem">${dbl>=4?mk(6,7):'—'}</td><td style="font-size:.8rem">${dbl>=5?mk(8,9):'—'}</td><td>${sub||'-'}</td><td style="white-space:nowrap">${AD?`<button class="btn btn-outline" style="padding:3px 6px;font-size:.67rem;margin-right:2px" onclick="openETeam('${key}',${i})">수정</button><button class="btn btn-danger" style="padding:3px 6px;font-size:.67rem" onclick="delTeam('${key}',${i})">삭제</button>`:''}</td></tr>`;
+    return`<tr>
+      <td><div class="team-num">${i+1}</div></td>
+      <td><b>${tdn(t2,key,i)}</b></td>
+      <td style="font-size:.8rem">${mk(0,1)}</td>
+      <td style="font-size:.8rem">${mk(2,3)}</td>
+      <td style="font-size:.8rem">${mk(4,5)}</td>
+      <td style="font-size:.8rem">${dbl>=4?mk(6,7):'—'}</td>
+      <td style="font-size:.8rem">${dbl>=5?mk(8,9):'—'}</td>
+      <td>${sub||'-'}</td>
+      <td style="white-space:nowrap">${AD?`<button class="btn btn-outline" style="padding:3px 6px;font-size:.67rem;margin-right:2px" onclick="openETeam('${key}',${i})">수정</button><button class="btn btn-danger" style="padding:3px 6px;font-size:.67rem" onclick="delTeam('${key}',${i})">삭제</button>`:''}</td>
+    </tr>`;
   }).join('');
 }
 async function registerTeam(){
@@ -3529,6 +3630,14 @@ function cleanName(s){
   // 전화번호 패턴 제거: (010-...) 또는 (01x-...)
   return s.replace(/\s*\(0\d{1,2}[-\d]+\)/g,'').trim();
 }
+// ✅ 화면표시용: "이름__클럽" 키가 들어와도 이름/클럽 분리
+function splitKeyNameClub(raw){
+  const pk = pKeyParse(raw||'');
+  const name = cleanName(pk.name||raw||'');
+  const club = (pk.club||'').trim();
+  return { name, club };
+}
+
 
 function getPlayerKeyByName(name,club){
   const n=normName(name);
@@ -3597,27 +3706,47 @@ function getPlayerForDisplay(name){
 
 
 function phint(inp,num){
-  const v=inp.value.trim(),h=ge('h'+num); if(!v){h.innerHTML='';return;}
+  const v=(inp?.value||'').trim(), h=ge('h'+num);
+  if(!h) return;
+  if(!v){ h.innerHTML=''; return; }
+
   const nv = normName(v);
-  const names = allPlayerNames();
-  const m = names.filter(nm=> normName(nm).includes(nv));
-  if(!m.length){
+
+  // 후보 목록: Firebase 키(name__club)가 섞여 있어도 "표시 이름"은 name만 사용
+  const rawNames = allPlayerNames();
+  const cand = rawNames.map(raw=>{
+    const pk = pKeyParse(raw);
+    const disp = cleanName(pk.name||raw);        // 화면/입력에 넣을 값(이름만)
+    const club = (pk.club||'').trim();           // 키에 포함된 클럽(있으면)
+    return { raw, disp, club };
+  }).filter(x=> normName(x.disp).includes(nv));
+
+  if(!cand.length){
     h.innerHTML='<span style="color:var(--text3);font-size:.72rem">첫 참가 선수</span>';
     return;
   }
-  h.innerHTML = m.slice(0,4).map(nm=>{
-    const key = getPlayerKeyByName(nm);
+
+  h.innerHTML = cand.slice(0,4).map(x=>{
+    // Firebase에 같은 이름이 여러 클럽으로 존재할 수 있으니, 표시용 클럽은 players 데이터 우선
+    const key = getPlayerKeyByName(x.disp, x.club||'');
     const fb = key ? G.players[key] : null;
-    const club = (fb?.clubs?.slice(-1)[0]) || getLastClubFromHist(nm) || '';
-    return `<span onclick="ge('p${num}').value='${nm}';ge('h${num}').innerHTML=''"
+    const clubDisp = (fb?.clubs?.slice(-1)[0]) || x.club || getLastClubFromHist(x.disp) || '';
+
+    // 클릭하면 "이름만" 입력되도록 고정 (name__club 방지)
+    return `<span onclick="ge('p${num}').value='${x.disp}';ge('h${num}').innerHTML=''"
       style="cursor:pointer;color:var(--primary);font-size:.73rem;text-decoration:underline">
-      ${nm}(${club})
+      ${x.disp}${clubDisp?`(${clubDisp})`:''}
     </span>`;
   }).join(' ');
 }
 function openPHist(iid){
-  const name=ge(iid).value.trim();
+  let name=(ge(iid)?.value||'').trim();
   if(!name){toast('이름 먼저 입력','info');return;}
+
+  // 입력값에 "이름__클럽"이 들어와도 보정
+  const sp = splitKeyNameClub(name);
+  name = sp.name || name;
+
   const info = getPlayerForDisplay(name);
   ge('mPHistBody').innerHTML = info.exists
     ? buildPH(info.name, info.p)
@@ -3715,23 +3844,32 @@ function popCF(){const el=ge('pfClub');if(!el)return;const cur=el.value;el.inner
 function filterP(){PF.club=ge('pfClub')?.value||'';PF.div=ge('pfDiv')?.value||'';PF.search=ge('psInput')?.value||'';renderAllP();}
 function showP(name,club){
   const sec=ge('ppSection');
-  const k=club?getPlayerKeyByName(name,club):getPlayerKeyByName(name);
-  let p=k?G.players[k]:null;
+
+  // name이 "이름__클럽" 형태로 들어와도 보정
+  const sp = splitKeyNameClub(name);
+  const dispName = sp.name || (name||'');
+  const clubFromKey = sp.club || '';
+  const useClub = (club||'').trim() || clubFromKey;
+
+  const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
+  let p = k ? G.players[k] : null;
+
   if(!p){
     const histRecs=[];
     HIST_DATA.forEach(t=>{
       t.teams.forEach(tm=>{
-        if((tm.players||[]).some(pn=>pn===name)&&(!club||tm.club===club)){
+        if((tm.players||[]).some(pn=>pn===dispName) && (!useClub||tm.club===useClub)){
           histRecs.push({date:t.date,tname:t.name,club:tm.club,div:tm.div,rank:tm.rank});
         }
       });
     });
-    if(!histRecs.length){sec.style.display='none';toast(`"${name}" 기록 없음`,'info');return;}
-    p={name,clubs:[...new Set(histRecs.map(r=>r.club))],history:[],wins:0,losses:0};
+    if(!histRecs.length){ sec.style.display='none'; toast(`"${dispName}" 기록 없음`,'info'); return; }
+    p={name:dispName,clubs:[...new Set(histRecs.map(r=>r.club))],history:[],wins:0,losses:0};
   }
+
   sec.style.display='block';
   const ppBody=ge('ppBody');
-  if(ppBody) ppBody.innerHTML=`<div class="card">${buildPH(name,p)}</div>`;
+  if(ppBody) ppBody.innerHTML=`<div class="card">${buildPH(dispName,p)}</div>`;
   sec.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function renderAllP(){
@@ -3810,18 +3948,28 @@ function renderAllP(){
   }).join('');
 }
 function openPD(name,club){
-  const k=club?getPlayerKeyByName(name,club):getPlayerKeyByName(name);
-  const p=k?G.players[k]:null;
-  const dispClub=club||(p?.clubs?.slice(-1)[0])||(p?.club)||'';
-  const dispName=dispClub?name+'('+dispClub+')':name;
-  ge('mPDT').textContent='👤 '+dispName;
-  ge('mPDB').innerHTML=p?buildPH(name,p):`<div class="empty-state"><div class="empty-icon">👤</div><p>기록 없음</p></div>`;
+  // name에 "이름__클럽"이 들어와도 정상 표시되도록 보정
+  const sp = splitKeyNameClub(name);
+  const dispName = sp.name || (name||'');
+  const dispClubFromKey = sp.club || '';
+  const useClub = (club||'').trim() || dispClubFromKey;
+
+  const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
+  const p = k ? G.players[k] : null;
+
+  const finalClub = useClub || (p?.clubs?.slice(-1)[0]) || (p?.club) || '';
+  const title = finalClub ? `${dispName}(${finalClub})` : dispName;
+
+  ge('mPDT').textContent='👤 '+title;
+  ge('mPDB').innerHTML = p ? buildPH(dispName, p)
+    : `<div class="empty-state"><div class="empty-icon">👤</div><p>기록 없음</p></div>`;
+
   const footer=ge('mPDFooter');
-  const editKey=k||name;
+  const editKey = k || (useClub ? pKey(dispName, useClub) : dispName);
   if(footer){
-    footer.innerHTML=AD
-      ?`<button class="btn btn-outline" style="font-size:.78rem" onclick="openEditPlayer('${editKey}')">✏️ 수정/삭제</button><div style="flex:1"></div><button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`
-      :`<button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`;
+    footer.innerHTML = AD
+      ? `<button class="btn btn-outline" style="font-size:.78rem" onclick="openEditPlayer('${editKey}')">✏️ 수정/삭제</button><div style="flex:1"></div><button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`
+      : `<button class="btn btn-gray" onclick="cm('mPD')">닫기</button>`;
   }
   om('mPD');
 }
