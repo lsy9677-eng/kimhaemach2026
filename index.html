@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-03-02";
+  const APP_VERSION = "2026-03-03-02-courtfix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -950,10 +950,33 @@ let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
 // ── 코트 목록 (예선 조별 코트 배정용, 복수 선택 가능) ─────────────────
-const COURT_LIST = [
-  ...Array.from({length:8},(_,i)=>`능동${i+1}`),
-  ...Array.from({length:8},(_,i)=>`국제하드${i+1}`)
+const COURT_GROUPS = [
+  {
+    title: '장유',
+    courts: [
+      ...Array.from({length:8},(_,i)=>`장유능동${i+1}`),
+      ...Array.from({length:8},(_,i)=>`장유국제${i+1}`)
+    ]
+  },
+  {
+    title: '삼계',
+    courts: [
+      ...Array.from({length:10},(_,i)=>`신삼계${i+1}`),
+      ...Array.from({length:2},(_,i)=>`구삼계${i+1}`)
+    ]
+  },
+  {
+    title: '기타',
+    courts: [
+      ...Array.from({length:4},(_,i)=>`금병${i+1}`),
+      ...Array.from({length:4},(_,i)=>`원도심${i+1}`),
+      ...Array.from({length:7},(_,i)=>`동부${i+1}`)
+    ]
+  }
 ];
+// 기존 로직 호환을 위해 펼친 목록도 유지
+const COURT_LIST = COURT_GROUPS.flatMap(g => g.courts);
+
 
 // ── 조 코트 배정 UI 열림 상태(렌더 후에도 유지) ─────────────────────
 let GC_OPEN = {}; // { [key:string]: Set<number> }
@@ -4520,24 +4543,30 @@ function openMatchCourtModal(key,mid){
     });
   });
 
-  const rows=COURT_LIST.map(c=>{
-    const isMine=mCourts.includes(c);
-    const usedBy=usedCourts[c]||[];
-    const isUsed=usedBy.length>0 && !isMine;
-    const bg=isMine?'#e8f4fd':isUsed?'#fff8e1':'white';
-    const border=isMine?'#1565c0':isUsed?'#f5a623':'var(--border)';
-    const extra=isUsed?`<span style="font-size:.62rem;color:#e67e22">⚠️ ${usedBy[0]} 대기중</span>`:'';
-    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${border};border-radius:999px;background:${bg};font-size:.8rem;cursor:pointer;flex-wrap:wrap">
-      <input type="checkbox" value="${c}" ${isMine?'checked':''}>
-      <span style="font-weight:${isMine?700:400}">${c}${isMine?' ✅':''}</span>
-      ${extra}
-    </label>`;
+  const sectionsHtml = COURT_GROUPS.map(g=>{
+    const labels = g.courts.map(c=>{
+      const isMine=mCourts.includes(c);
+      const usedBy=usedCourts[c]||[];
+      const isUsed=usedBy.length>0 && !isMine;
+      const bg=isMine?'#e8f4fd':isUsed?'#fff8e1':'white';
+      const border=isMine?'#1565c0':isUsed?'#f5a623':'var(--border)';
+      const extra=isUsed?`<span style="font-size:.62rem;color:#e67e22">⚠️ ${usedBy[0]} 대기중</span>`:'';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1.5px solid ${border};border-radius:999px;background:${bg};font-size:.8rem;cursor:pointer;flex-wrap:wrap">
+        <input type="checkbox" value="${c}" ${isMine?'checked':''}>
+        <span style="font-weight:${isMine?700:400}">${c}${isMine?' ✅':''}</span>
+        ${extra}
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:.75rem;font-weight:900;color:var(--primary-dark);margin:2px 2px 8px">📍 ${g.title}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${labels}</div>
+    </div>`;
   }).join('');
   const hint=`<div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
     ✅ 현재 배정된 코트 &nbsp;|&nbsp; ⚠️ 다른 경기 사용 중<br>
     사용 중인 코트 선택 시 해당 경기는 <b>대기중</b>으로 변경됩니다.
   </div>`;
-  ge('mMCourtB').innerHTML=hint+`<div style="display:flex;flex-wrap:wrap;gap:8px">${rows}</div>`;
+  ge('mMCourtB').innerHTML=hint+sectionsHtml;
   om('mMCourt');
 }
 
@@ -4665,19 +4694,25 @@ function openGroupCourtModal(key,gi){
   GC_MODAL={key,gi};
   const grpCourts=(G.draws[key]?.groups?.[gi]?.courts)||[];
   const title=`🎾 ${gi+1}조 코트 배정 (복수 선택)`;
-  const rows = COURT_LIST.map(c=>{
-    const chk = grpCourts.includes(c) ? 'checked' : '';
-    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:white;font-size:.8rem;cursor:pointer">
-      <input type="checkbox" value="${c}" ${chk}>
-      <span>${c}</span>
-    </label>`;
+  const sectionsHtml = COURT_GROUPS.map(g=>{
+    const labels = g.courts.map(c=>{
+      const chk = grpCourts.includes(c) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:white;font-size:.8rem;cursor:pointer">
+        <input type="checkbox" value="${c}" ${chk}>
+        <span>${c}</span>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:.75rem;font-weight:900;color:var(--primary-dark);margin:2px 2px 8px">📍 ${g.title}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${labels}</div>
+    </div>`;
   }).join('');
   const hint = `<div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
     • 체크박스로 여러 코트를 선택할 수 있습니다.<br>
     • 아래 <b>저장</b>을 눌러야 반영됩니다.
   </div>`;
   ge('mGCourtT').textContent = title;
-  ge('mGCourtB').innerHTML = hint + `<div style="display:flex;flex-wrap:wrap;gap:8px">${rows}</div>`;
+  ge('mGCourtB').innerHTML = hint + sectionsHtml;
   om('mGCourt');
 }
 
