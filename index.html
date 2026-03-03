@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-02-01";
+  const APP_VERSION = "2026-03-03-01";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -419,6 +419,20 @@ body{overflow-x:hidden;}
     <div class="card fade-in"><div class="card-title">📌 현재 대회</div><div id="homeTournInfo"><p class="muted">등록된 대회가 없습니다</p></div></div>
     <div class="card fade-in"><div class="card-title">📋 최근 활동</div><ul class="ri-list" id="recentLog"><li class="ri"><div class="ri-icon">⏳</div><div class="ri-text"><div>활동 없음</div></div></li></ul></div>
   </div>
+  
+  <div class="card fade-in">
+    <div class="card-title">📩 관리자에게 문의</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:.82rem;color:var(--text2);line-height:1.55">
+        앱 사용 중 <b>수정 요청 / 불편 사항 / 개선 아이디어</b>가 있으면 바로 문자로 보낼 수 있어요.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="openSupportModal()">✍️ 요청사항 문자 보내기</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3)">※ 휴대폰에서 문자앱이 열립니다. (PC에서는 내용 복사로 안내)</div>
+    </div>
+  </div>
+
   <div class="card fade-in"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
 </div>
 
@@ -706,6 +720,8 @@ body{overflow-x:hidden;}
       <button class="btn btn-danger" style="padding:12px 8px;font-size:.82rem" onclick="recalcAllPlayerStats()">🔄 관리자 복구(승패 재계산)</button>
     
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mHistExcel')">📥 엑셀로 과거대회 등록</button>
+      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cleanupPlayerHistories()">🧹 개인기록 정리(중복/삭제대회)</button>
+      <button class="btn btn-danger" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="hardResetAllData()">🧨 전체 리셋(대회/팀/경기/선수)</button>
 </div>
     <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.5">
       • “관리자 복구”는 현재 저장된 경기결과 기준으로 선수 승/패를 다시 계산합니다.<br>
@@ -736,6 +752,21 @@ body{overflow-x:hidden;}
     <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.5">
       • 동명이인/이적 관리를 위해 <b>이름+클럽</b> 조합으로 선수키를 생성합니다.<br>
       • 선수 추가는 팀등록 전에 미리 명단을 만들어두는 용도입니다.
+    </div>
+  </div>
+
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">📱 관리자 연락처(문자 수신번호)</div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">관리자 휴대폰 번호</label>
+      <input class="form-input" id="adminPhoneInput" placeholder="예: 010-1234-5678" inputmode="tel">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="saveAdminPhone()">💾 번호 저장</button>
+    </div>
+    <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.5">
+      • 홈 화면의 “요청사항 문자 보내기” 버튼이 이 번호로 전송됩니다.<br>
+      • 번호는 관리자만 변경 가능합니다.
     </div>
   </div>
 <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px">
@@ -862,6 +893,42 @@ body{overflow-x:hidden;}
   </div>
 </div>
 
+
+<!-- 관리자 문의(SMS) 모달 -->
+<div class="modal-overlay" id="mSupport">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-header">
+      <h3>📩 관리자에게 요청사항 보내기</h3>
+      <button class="modal-close" onclick="cm('mSupport')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:.75rem;color:var(--text2);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+        • 휴대폰에서는 문자앱이 열립니다.<br>
+        • PC에서는 메시지가 자동 복사되며, 휴대폰에서 붙여넣어 보내면 됩니다.
+      </div>
+      <div class="form-group">
+        <label class="form-label">구분</label>
+        <select class="form-select" id="supportType" onchange="(function(){const ta=ge('supportMsg'); if(!ta) return; const v=this.value; ta.value=ta.value.replace(/구분:.*\n/, '구분: '+v+'\n');}).call(this)">
+          <option value="수정요청">수정요청</option>
+          <option value="불편">불편 사항</option>
+          <option value="개선">개선 아이디어</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">내용</label>
+        <textarea class="form-textarea" id="supportMsg" placeholder="요청 내용을 입력하세요"></textarea>
+      </div>
+      <div id="supportHint" style="font-size:.75rem;color:var(--text3);line-height:1.5"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="cm('mSupport')">닫기</button>
+      <button class="btn btn-outline" onclick="(async()=>{try{await navigator.clipboard.writeText(ge('supportMsg')?.value||'');toast('내용 복사 ✅','success');}catch(e){toast('복사 실패','error');}})()">📋 내용 복사</button>
+      <button class="btn btn-primary" onclick="sendSupportSMS()">📨 문자 보내기</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="TC"></div>
 <button class="scroll-top" id="stBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
@@ -970,8 +1037,8 @@ async function initFB(){
     sl(false);toast('🔥 연결 완료','success');
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta=d;if(d.clubs)G.clubs=d.clubs;}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',clubs:G.clubs});}catch(e){}}
-async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,clubs:G.clubs});}catch(e){}}
+async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta=d;if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',clubs:G.clubs,adminPhone:''});}catch(e){}}
+async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,clubs:G.clubs,adminPhone:(G.meta.adminPhone||'')});}catch(e){}}
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
@@ -1130,6 +1197,7 @@ function openAdminSettings(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   // 입력 초기화
   ['aspCur','aspNew','aspNew2'].forEach(id=>{const el=ge(id);if(el)el.value='';});
+  const ap=ge('adminPhoneInput'); if(ap) ap.value=(G.meta.adminPhone||'');
   fillAdminPlayerClub();
   ge('apName') && (ge('apName').value='');
   om('mAdminSettings');
@@ -1248,6 +1316,88 @@ async function adminAddPlayer(){
 }
 
 
+
+
+async function saveAdminPhone(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const raw = (ge('adminPhoneInput')?.value||'').trim();
+  // 간단 정규화: 숫자/하이픈만
+  const phone = raw.replace(/[^0-9\-]/g,'');
+  if(phone && phone.length < 9){ toast('휴대폰 번호를 확인해주세요','error'); return; }
+  G.meta.adminPhone = phone;
+  sl(true);
+  try{
+    await saveMeta();
+    sl(false);
+    toast('관리자 번호 저장 완료 ✅','success');
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+  }
+}
+
+function _getActiveTournamentLabel(){
+  try{
+    const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
+    return at?`${at.name} (${at.date||''})`:'';
+  }catch(e){return '';}
+}
+
+function openSupportModal(){
+  const phone = (G.meta.adminPhone||'').trim();
+  if(!phone){
+    toast('관리자 연락처가 아직 설정되지 않았습니다 (관리자 설정에서 번호 저장)','info');
+  }
+  // 기본 문구 구성
+  const tlabel=_getActiveTournamentLabel();
+  const base=`[요청사항]\n대회: ${tlabel||'-'}\n구분: (수정/불편/개선/기타)\n내용: \n\n- 보내는 사람: (이름/클럽)`;
+  const ta=ge('supportMsg');
+  if(ta) ta.value = base;
+  const sel=ge('supportType');
+  if(sel) sel.value='불편';
+  om('mSupport');
+}
+
+function _openSMS(phone, body){
+  const p = (phone||'').replace(/[^0-9\+]/g,'').replace(/^82/, '+82'); // best-effort
+  const msg = encodeURIComponent(body||'');
+  // sms URI: Android/most browsers
+  const url = `sms:${p}?body=${msg}`;
+  // 시도
+  try{
+    window.location.href = url;
+  }catch(e){
+    // fallback: 클립보드
+  }
+}
+
+async function sendSupportSMS(){
+  const phone=(G.meta.adminPhone||'').trim();
+  const body=(ge('supportMsg')?.value||'').trim();
+  if(!body){ toast('내용을 입력하세요','error'); return; }
+  if(!phone){
+    toast('관리자 연락처가 없습니다. 관리자 설정에서 번호를 저장해주세요.','error');
+    return;
+  }
+
+  // PC/데스크탑일 때는 sms 스킴이 안 먹는 경우가 많아 복사 안내
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(!isMobile){
+    try{
+      await navigator.clipboard.writeText(body);
+      toast('PC에서는 문자앱을 열 수 없어 내용을 복사했습니다. 휴대폰에서 붙여넣어 보내주세요.','info');
+    }catch(e){
+      toast('PC에서는 문자앱 열기가 제한될 수 있습니다. 내용을 복사해 보내주세요.','info');
+    }
+    // 전화번호도 같이 안내
+    ge('supportHint') && (ge('supportHint').innerHTML = `받는 번호: <b>${phone}</b> (복사하여 문자로 보내주세요)`);
+    return;
+  }
+
+  _openSMS(phone, body);
+  cm('mSupport');
+  toast('문자 앱을 열었습니다','success');
+}
 
 function tdn(team,key,idx){if(!team)return'?';const ts=G.teams[key]||[];const same=ts.filter(t=>t.club===team.club);if(same.length<=1)return team.club;let o=0;for(let i=0;i<idx;i++){if(ts[i]&&ts[i].club===team.club)o++;}return team.club+'-'+String.fromCharCode(65+o);}
 
@@ -3478,11 +3628,17 @@ function buildPH(name,p){
     });
   });
 
-  // ③ 합치기 (중복 제거: 같은 대회명+부서 중복 제거)
+  // ③ 합치기 (중복 제거: tid 우선 + (부서+클럽) 기준)
+  // - 대회명을 수정/삭제해도 중복으로 쌓이지 않도록 tid가 있으면 tid로 묶음
+  // - club은 하모니A/하모니B 같은 팀표기를 baseClub로 정규화해서 중복 방지
   const seen=new Set();
   const allHist=[...fbHist,...histHist].filter(h=>{
-    const k=h.tname+'|'+h.div+'|'+h.club;
-    if(seen.has(k))return false;seen.add(k);return true;
+    const keyTid = (h.tid||'') || (h.tname||'');
+    const keyClub = (h.baseClub||baseClub(h.club)||h.club||'');
+    const k = keyTid+'|'+(h.div||'')+'|'+keyClub;
+    if(seen.has(k))return false;
+    seen.add(k);
+    return true;
   }).sort((a,b)=>b.date.localeCompare(a.date));
 
   // 총 참가 횟수, 통계
@@ -5070,6 +5226,136 @@ async function uploadHistFromExcel(){
 }
 
 
+
+// ──────────────────────────────────────────────────────────────
+// 🧹 개인 기록 정리(중복/삭제된 대회 제거) + 🧨 전체 리셋(관리자)
+// ──────────────────────────────────────────────────────────────
+async function cleanupPlayerHistories(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  if(!confirm('개인 기록을 정리합니다.\n- 삭제된 대회(tid 없음) 기록 제거\n- 같은 대회/부서/클럽 중복 제거\n계속하시겠습니까?')) return;
+
+  sl(true);
+  try{
+    const liveTids = new Set((G.tournaments||[]).map(t=>t.id));
+    const histTids = new Set((HIST_DATA||[]).map(t=>t.id));
+    const keepTids = new Set([...liveTids, ...histTids]);
+
+    const keys = Object.keys(G.players||{});
+    let changed = 0;
+
+    let batch = writeBatch(db);
+    let ops = 0;
+
+    for(const k of keys){
+      const p = G.players[k];
+      if(!p) continue;
+      const hist = Array.isArray(p.history) ? p.history : [];
+
+      let filtered = hist.filter(h=>{
+        const tid = h?.tid;
+        if(!tid) return true;
+        return keepTids.has(tid);
+      });
+
+      const seen = new Set();
+      const out = [];
+      for(const h of filtered){
+        const tid = h?.tid || '';
+        const div = h?.div || '';
+        const club = h?.baseClub || baseClub(h?.club||'') || (h?.club||'');
+        const key = (tid||h?.tname||'') + '|' + div + '|' + club;
+        if(seen.has(key)) continue;
+        seen.add(key);
+        out.push(h);
+      }
+      out.sort((a,b)=>((b?.date||'').localeCompare(a?.date||'')));
+
+      const sameLen = out.length===hist.length;
+      const same = sameLen && out.every((h,i)=>h===hist[i]);
+      if(!same){
+        p.history = out;
+        changed++;
+
+        const docId = k.replace(/[\/\.#\$\[\]]/g,'_');
+        batch.set(doc(db,'players',docId), {...p, key:k}, {merge:true});
+        ops++;
+
+        if(ops>=400){
+          await batch.commit();
+          batch = writeBatch(db);
+          ops = 0;
+        }
+      }
+    }
+
+    if(ops>0) await batch.commit();
+
+    sl(false);
+    toast(`정리 완료 ✅ (수정 ${changed}명)`, 'success');
+    renderAllP();
+  }catch(e){
+    sl(false);
+    console.error(e);
+    toast('정리 실패: '+(e?.message||e), 'error');
+  }
+}
+
+async function _deleteCollectionAll(colName){
+  const snap = await getDocs(collection(db, colName));
+  if(snap.empty) return 0;
+  let deleted = 0;
+  let batch = writeBatch(db);
+  let ops = 0;
+  for(const d of snap.docs){
+    batch.delete(doc(db, colName, d.id));
+    ops++; deleted++;
+    if(ops>=450){
+      await batch.commit();
+      batch = writeBatch(db);
+      ops = 0;
+    }
+  }
+  if(ops>0) await batch.commit();
+  return deleted;
+}
+
+async function hardResetAllData(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  if(!confirm('⚠️ 전체 리셋을 진행합니다.\n\n삭제 대상:\n- tournaments(대회)\n- registrations(팀등록)\n- draws(추첨)\n- matches(경기)\n- players(선수)\n- activityLog(활동로그)\n- tourGuides(요강메타)\n\n※ 이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?')) return;
+
+  sl(true);
+  try{
+    const res = {};
+    res.tournaments = await _deleteCollectionAll('tournaments');
+    res.registrations = await _deleteCollectionAll('registrations');
+    res.draws = await _deleteCollectionAll('draws');
+    res.matches = await _deleteCollectionAll('matches');
+    res.players = await _deleteCollectionAll('players');
+    try{ res.activityLog = await _deleteCollectionAll('activityLog'); }catch(e){}
+    try{ res.tourGuides  = await _deleteCollectionAll('tourGuides'); }catch(e){}
+
+    G.tournaments = [];
+    G.teams = {};
+    G.draws = {};
+    G.matches = {};
+    G.players = {};
+    G.log = [];
+
+    popSel();
+    renderTL();
+    renderAllP();
+    upDash();
+
+    sl(false);
+    toast(`전체 리셋 완료 ✅ (대회 ${res.tournaments||0}, 팀 ${res.registrations||0}, 경기 ${res.matches||0}, 선수 ${res.players||0})`, 'success');
+    await fbLog('전체 리셋 실행','🧨');
+  }catch(e){
+    sl(false);
+    console.error(e);
+    toast('전체 리셋 실패: '+(e?.message||e), 'error');
+  }
+}
+
 Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
@@ -5078,7 +5364,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
-  openPD,openEditPlayer,saveEditPlayer,deletePlayer,mergePlayer,
+  openPD,openEditPlayer,saveEditPlayer,deletePlayer,mergePlayer, cleanupPlayerHistories,hardResetAllData,
   resetMatchRecords,recalcAllPlayerStats,
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
