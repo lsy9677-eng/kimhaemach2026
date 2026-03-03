@@ -704,6 +704,26 @@ body{overflow-x:hidden;}
   <button class="btn btn-gray" onclick="cm('mEditP')">취소</button>
   <button class="btn btn-primary" onclick="saveEditPlayer()">💾 저장</button>
 </div></div></div>
+
+<!-- ✅ 대회별 개별 삭제 모달 -->
+<div class="modal-overlay" id="mSelectiveClear">
+  <div class="modal-box" style="max-width:580px">
+    <div class="modal-header">
+      <h3>🗑️ 대회별 개별 삭제</h3>
+      <button class="modal-close" onclick="cm('mSelectiveClear')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#fef3cd;border:1px solid #f5a623;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#92400e;margin-bottom:14px;line-height:1.6">
+        ⚠️ 선택한 대회의 <b>팀등록·경기기록·선수 이력(출전경력·승패)</b>을 삭제합니다.<br>
+        삭제 후에는 복구가 어렵습니다. 신중하게 선택하세요.
+      </div>
+      <div id="scTournList" style="display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="cm('mSelectiveClear')">닫기</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="mBackup"><div class="modal-box" style="max-width:500px"><div class="modal-header"><h3>💾 백업 / 복구</h3><button class="modal-close" onclick="cm('mBackup')">✕</button></div>
 <div class="modal-body">
   <div class="form-group">
@@ -735,6 +755,7 @@ body{overflow-x:hidden;}
       <button class="btn btn-danger" style="padding:12px 8px;font-size:.82rem" onclick="recalcAllPlayerStats()">🔄 관리자 복구(승패 재계산)</button>
     
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mHistExcel')">📥 엑셀로 과거대회 등록</button>
+      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="openSelectiveClearModal()">🗑️ 대회별 개별 삭제(선수기록 포함)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cleanupPlayerHistories()">🧹 개인기록 정리(중복/삭제대회)</button>
       <button class="btn btn-danger" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="hardResetAllData()">🧨 전체 리셋(대회/팀/경기/선수)</button>
 </div>
@@ -1503,15 +1524,35 @@ function renderTL(){
 
 async function chgTS(tid,s){try{await updateDoc(doc(db,'tournaments',tid),{status:s});}catch(e){toast('실패','error');}}
 async function delT(tid){
-  if(!confirm('대회를 삭제하시겠습니까?\n⚠️ 관련 경기기록 및 선수 승패도 함께 초기화됩니다.'))return;
+  if(!confirm('대회를 삭제하시겠습니까?\n⚠️ 관련 경기기록, 팀등록, 선수 이력도 함께 삭제됩니다.'))return;
   sl(true);
   try{
-    const keys=['금','은','동','테린이'].map(d=>tid+'_'+d);
+    const keys=['금','은','동','테린이','여성부'].map(d=>tid+'_'+d);
+    // ① 매치 승패 차감
     for(const key of keys) await resetMatchRecords(key);
+    // ② registrations 삭제
+    const regSnap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+    // ③ players.history에서 해당 tid 제거
+    const affectedPlayerKeys=new Set();
+    regSnap.docs.forEach(d=>{
+      const reg=d.data()||{};
+      (reg.players||[]).forEach(pn=>{
+        const bc=baseClub(reg.club||'');
+        const pk=pKey(pn,bc);
+        if(G.players[pk]){
+          G.players[pk].history=(G.players[pk].history||[]).filter(h=>h.tid!==tid);
+          affectedPlayerKeys.add(pk);
+        }
+      });
+    });
+    // ④ Firestore batch 삭제
     const batch=writeBatch(db);
     batch.delete(doc(db,'tournaments',tid));
     keys.forEach(k=>{batch.delete(doc(db,'teams',k));batch.delete(doc(db,'draws',k));batch.delete(doc(db,'matches',k));});
+    regSnap.docs.forEach(d=>batch.delete(doc(db,'registrations',d.id)));
     await batch.commit();
+    // ⑤ 선수 기록 업데이트
+    await Promise.all([...affectedPlayerKeys].map(k=>stP(k)));
     sl(false);toast('대회 삭제 완료','info');
   }catch(e){sl(false);toast('삭제 실패: '+e.message,'error');}
 }
@@ -1614,6 +1655,9 @@ function popSel(){
 
   const cs=ge('regClub');
   if(cs) cs.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option>${c}</option>`).join('');
+
+  // ✅ FIX: popSel 후 regTS 값 있으면 onRegTC 즉시 호출 → 부서 바로 표시
+  setTimeout(()=>{ const regEl=ge('regTS'); if(regEl&&regEl.value) onRegTC(); }, 0);
 }
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
@@ -5444,6 +5488,114 @@ async function uploadHistFromExcel(){
 
 
 // ──────────────────────────────────────────────────────────────
+
+// ── 대회별 개별 삭제 모달 ──────────────────────────────────────────
+function openSelectiveClearModal(){
+  cm('mAdminSettings');
+  const container=ge('scTournList');
+  if(!container) return;
+
+  // Firebase 대회 + 과거 업로드 대회(isHistorical) 모두 표시
+  const allT=[...G.tournaments].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(!allT.length){
+    container.innerHTML='<p style="color:var(--text3);text-align:center;padding:20px">등록된 대회가 없습니다</p>';
+    om('mSelectiveClear'); return;
+  }
+
+  container.innerHTML=allT.map(t=>{
+    const divs=(t.divisions||[]).join(', ');
+    const teamCount=(t.divisions||[]).reduce((s,d)=>{return s+(G.teams[t.id+'_'+d]||[]).length;},0);
+    const statusLabel=t.status==='finished'?'종료':t.status==='ongoing'?'진행중':t.status==='closed'?'마감':'접수중';
+    const isHist=t.isHistorical;
+    return `<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:.88rem">${t.name}${isHist?'<span style="font-size:.65rem;background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 5px;margin-left:5px">과거</span>':''}</div>
+          <div style="font-size:.73rem;color:var(--text2);margin-top:3px">📅 ${t.date} &nbsp;|&nbsp; ${statusLabel} &nbsp;|&nbsp; ${divs} &nbsp;|&nbsp; 팀수: ${teamCount}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px;white-space:nowrap" onclick="selectiveClearTournament('${t.id}','${t.name.replace(/'/g,'\'')}',false)">📊 기록만 삭제</button>
+          <button class="btn btn-danger" style="font-size:.72rem;padding:5px 10px;white-space:nowrap" onclick="selectiveClearTournament('${t.id}','${t.name.replace(/'/g,'\'')}',true)">🗑️ 대회 전체삭제</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  om('mSelectiveClear');
+}
+
+/**
+ * 대회별 개별 삭제
+ * @param {string} tid - 대회 ID
+ * @param {string} tname - 대회명 (확인 메시지용)
+ * @param {boolean} deleteTournament - true: 대회 문서까지 삭제 / false: 경기·선수기록만 삭제
+ */
+async function selectiveClearTournament(tid, tname, deleteTournament){
+  const msg = deleteTournament
+    ? `"${tname}" 대회를 완전히 삭제합니다.\n\n삭제 항목:\n• 대회 정보\n• 팀 등록\n• 추첨 결과\n• 경기 기록\n• 선수 출전이력 & 승패\n\n계속하시겠습니까?`
+    : `"${tname}" 대회의 기록만 삭제합니다.\n\n삭제 항목:\n• 경기 기록 (승패 차감)\n• 선수 출전이력\n• 선수 승패 수치\n\n유지 항목:\n• 대회 정보·팀등록은 유지됩니다\n\n계속하시겠습니까?`;
+  if(!confirm(msg)) return;
+
+  sl(true);
+  cm('mSelectiveClear');
+  try{
+    const t=G.tournaments.find(x=>x.id===tid);
+    const divList=(t?.divisions||['금','은','동','테린이','여성부']);
+    const keys=divList.map(d=>tid+'_'+d);
+
+    // ① 매치 승패 차감
+    for(const key of keys) await resetMatchRecords(key);
+
+    // ② registrations에서 선수 이력 제거
+    const regSnap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+    const affectedPlayerKeys=new Set();
+    regSnap.docs.forEach(d=>{
+      const reg=d.data()||{};
+      (reg.players||[]).forEach(pn=>{
+        const bc=baseClub(reg.club||'');
+        const pk=pKey(pn,bc);
+        if(G.players[pk]){
+          G.players[pk].history=(G.players[pk].history||[]).filter(h=>h.tid!==tid);
+          affectedPlayerKeys.add(pk);
+        }
+      });
+    });
+    await Promise.all([...affectedPlayerKeys].map(k=>stP(k)));
+
+    // ③ Firestore batch 삭제
+    const batch=writeBatch(db);
+    if(deleteTournament){
+      batch.delete(doc(db,'tournaments',tid));
+      keys.forEach(k=>{
+        batch.delete(doc(db,'teams',k));
+        batch.delete(doc(db,'draws',k));
+        batch.delete(doc(db,'matches',k));
+      });
+      regSnap.docs.forEach(d=>batch.delete(doc(db,'registrations',d.id)));
+    } else {
+      // 기록만 삭제: draws + matches만 지우고 teams/registrations는 유지
+      keys.forEach(k=>{
+        batch.delete(doc(db,'draws',k));
+        batch.delete(doc(db,'matches',k));
+      });
+    }
+    await batch.commit();
+
+    sl(false);
+    const msg2=deleteTournament?`"${tname}" 삭제 완료`:`"${tname}" 기록 삭제 완료`;
+    toast(msg2,'info');
+    await fbLog(msg2,'🗑️');
+
+    // 모달 목록 갱신
+    if(!deleteTournament) openSelectiveClearModal();
+
+  }catch(e){
+    sl(false);
+    toast('삭제 실패: '+e.message,'error');
+    console.error(e);
+  }
+}
+
 // 🧹 개인 기록 정리(중복/삭제된 대회 제거) + 🧨 전체 리셋(관리자)
 // ──────────────────────────────────────────────────────────────
 async function cleanupPlayerHistories(){
@@ -5580,7 +5732,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
-  openPD,openEditPlayer,saveEditPlayer,deletePlayer,mergePlayer, cleanupPlayerHistories,hardResetAllData,
+  openPD,openEditPlayer,saveEditPlayer,deletePlayer,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
   resetMatchRecords,recalcAllPlayerStats,
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
