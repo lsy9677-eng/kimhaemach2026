@@ -386,6 +386,22 @@ body{overflow-x:hidden;}
   line-height:1.25;
 }
 #page-players .table-wrap table td:nth-child(1) small{margin-left:6px; color:var(--text3);}
+
+/* 🎰 슬롯(추첨) 강조 표시 */
+.draw-slot-big{
+  min-width:240px;
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  padding:12px 16px;
+  border-radius:16px;
+  border:2px solid var(--border);
+  background:#fff;
+  font-weight:900;
+  font-size:1.05rem;
+  letter-spacing:.2px;
+}
+
 </style>
 
 <!-- PWA -->
@@ -1656,8 +1672,12 @@ function popSel(){
   const cs=ge('regClub');
   if(cs) cs.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option>${c}</option>`).join('');
 
-  // ✅ FIX: popSel 후 regTS 값 있으면 onRegTC 즉시 호출 → 부서 바로 표시
-  setTimeout(()=>{ const regEl=ge('regTS'); if(regEl&&regEl.value) onRegTC(); }, 0);
+  // ✅ FIX: popSel 후 각 select 값 있으면 즉시 UI 갱신 → 부서 바로 표시
+  setTimeout(()=>{
+    const regEl=ge('regTS'); if(regEl&&regEl.value) onRegTC();
+    const brEl=ge('brTS');  if(brEl&&brEl.value)  onBrTC();
+    const rkEl=ge('rankTS'); if(rkEl&&rkEl.value)  onRankTC();
+  }, 0);
 }
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
@@ -2612,6 +2632,144 @@ function smartShuffle(indices,teams){
   return result;
 }
 
+/* =========================
+   🎰 슬롯 추첨 효과 + WebAudio SFX (외부 파일 없음)
+   - 모바일/브라우저 정책상 "사용자 클릭" 이후에만 소리 재생 가능
+========================= */
+const SFX = (() => {
+  let ctx = null, master = null;
+  function ensure(){
+    if(ctx) return true;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = 0.22; // 전체 볼륨
+      master.connect(ctx.destination);
+      return true;
+    }catch(e){ return false; }
+  }
+  function now(){ return ctx ? ctx.currentTime : 0; }
+  function clickTick(t, pitch=520){
+    if(!ctx) return;
+    // 짧은 클릭(노이즈+톤)
+    const dur = 0.018;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(master);
+
+    // noise burst
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<data.length;i++){
+      data[i] = (Math.random()*2-1) * (1 - i/data.length);
+    }
+    const ns = ctx.createBufferSource();
+    ns.buffer = buf;
+    ns.connect(g);
+    ns.start(t);
+
+    // tiny tone
+    const o = ctx.createOscillator();
+    o.type = 'square';
+    o.frequency.setValueAtTime(pitch, t);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + dur);
+  }
+  function whoosh(t){
+    if(!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(180, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.15);
+  }
+  function ding(t){
+    if(!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.26, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.26);
+  }
+
+  // 드르륵(클릭 반복) 컨트롤
+  let rollingTimer = null;
+  function rollStart(totalMs=1400){
+    if(!ensure()) return;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    if(rollingTimer) { clearTimeout(rollingTimer); rollingTimer=null; }
+
+    const start = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const prog = Math.min(1, elapsed / totalMs);
+      const step = 40 + prog*160;   // 점점 느려짐
+      const pitch = 640 - prog*260; // 점점 낮아짐
+      clickTick(now(), pitch);
+      if(prog >= 1){ rollingTimer=null; return; }
+      rollingTimer = setTimeout(tick, step);
+    };
+    tick();
+  }
+  function rollStop(){
+    if(rollingTimer){ clearInterval(rollingTimer); rollingTimer=null; }
+  }
+  function reveal(){
+    if(!ensure()) return;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const t = now();
+    whoosh(t);
+    ding(t + 0.08);
+  }
+  function finale(){
+    if(!ensure()) return;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const t = now();
+    ding(t);
+    ding(t + 0.18);
+    ding(t + 0.36);
+  }
+  return { rollStart, rollStop, reveal, finale };
+})();
+
+/** 슬롯처럼 텍스트를 빠르게 돌렸다가 멈추는 효과 */
+async function spinSlotIn(el, pool, finalText, totalMs){
+  if(!el) return;
+  if(!Array.isArray(pool) || pool.length===0){
+    el.textContent = finalText || '';
+    return;
+  }
+  const start = performance.now();
+  let idx = Math.floor(Math.random()*pool.length);
+  let step = 35; // ms
+  while(true){
+    const elapsed = performance.now() - start;
+    const p = Math.min(1, elapsed/totalMs);
+    // 점점 느려짐
+    step = 30 + p*170;
+    idx = (idx + 1 + Math.floor(Math.random()*2)) % pool.length;
+    el.textContent = pool[idx];
+    await sleep(step);
+    if(elapsed >= totalMs) break;
+  }
+  el.textContent = finalText || pool[idx];
+}
+
 
 async function startDraw(){
   if(DW.isRunning)return;
@@ -2632,13 +2790,29 @@ async function startDraw(){
   for(let i=0;i<assignOrder.length;i++){
     const gi=assignOrder[i];const ti=shuffled[i];const team=teams[ti];const dn=tdn(team,key,ti);
     ge('drawProgressBar').style.width=`${(i/shuffled.length)*100}%`;
-    // 스피닝 공
-    ge('drawStageContent').innerHTML=`<div style="font-size:.85rem;font-weight:700;color:var(--text2);margin-bottom:6px">${i+1} / ${shuffled.length}번째 추첨</div><div class="draw-ball spinning">?</div>`;
+    // 🎰 슬롯 스핀(장유 스타일)
+    ge('drawStageContent').innerHTML = `
+      <div style="font-size:.85rem;font-weight:700;color:var(--text2);margin-bottom:6px">${i+1} / ${shuffled.length}번째 추첨</div>
+      <div style="display:flex;justify-content:center">
+        <span id="drawSpinSlot" class="draw-team-slot draw-slot-big">?</span>
+      </div>
+      <div style="margin-top:10px;font-size:.72rem;color:var(--text3)">드르륵… 멈추는 순간이 제일 재밌죠 🎾</div>
+    `;
+
+    const poolNames = shuffled.map(ti=>tdn(teams[ti],key,ti));
+    const spinMs = 1200 + randInt(1000); // 1.2~2.2초
+    SFX.rollStart(spinMs);
+    await spinSlotIn(ge('drawSpinSlot'), poolNames, dn, spinMs);
+    SFX.rollStop();
+    SFX.reveal();
+
+    // 조 배정 텍스트
+    ge('drawStageContent').innerHTML = `
+      <div style="font-size:.85rem;font-weight:700;color:var(--success);margin-bottom:6px">✨ ${gi+1}조 배정!</div>
+      <div class="draw-ball popped" style="background:var(--success);font-size:.8rem">${dn}</div>
+    `;
     await sleep(420);
-    // 팀명 공개
-    ge('drawStageContent').innerHTML=`<div style="font-size:.85rem;font-weight:700;color:var(--success);margin-bottom:6px">✨ ${gi+1}조 배정!</div><div class="draw-ball popped" style="background:var(--success);font-size:.8rem">${dn}</div>`;
-    await sleep(320);
-    // 슬롯 채우기
+// 슬롯 채우기
     const slots=ge('dg_slots_'+gi);
     const emptySlot=slots.querySelector('.draw-team-slot:not(.filled)');
     if(emptySlot){
@@ -2675,6 +2849,7 @@ async function startDraw(){
     ge('confirmDrawBtn').textContent='✅ 닫기';
     ge('confirmDrawBtn').onclick=()=>{cm('mDraw');renderBracket();};
     ge('confirmDrawBtn').disabled=false;DW.isRunning=false;
+    SFX.finale();
     toast('추첨 완료 🎲','success');
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');DW.isRunning=false;}
 }
