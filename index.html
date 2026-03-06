@@ -1190,7 +1190,7 @@ function getDivRubbers(dk){
 function grpLabel(gi){ return String.fromCharCode(65+gi)+'조'; }
 
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
@@ -1774,10 +1774,35 @@ async function delT(tid){
     keys.forEach(k=>{batch.delete(doc(db,'teams',k));batch.delete(doc(db,'draws',k));batch.delete(doc(db,'matches',k));});
     regSnap.docs.forEach(d=>batch.delete(doc(db,'registrations',d.id)));
     await batch.commit();
-    // ⑤ 선수 기록 업데이트
-    await Promise.all([...affectedPlayerKeys].map(k=>stP(k)));
-    sl(false);toast('대회 삭제 완료','info');
-  }catch(e){sl(false);toast('삭제 실패: '+e.message,'error');}
+    // ⑤ 선수 저장 or 완전삭제 (신규선수: history 없고 승패 0이면 명단에서 삭제)
+    if(affectedPlayerKeys.size>0){
+      const toDelete=[], toSave=[];
+      for(const pk of affectedPlayerKeys){
+        const p=G.players[pk]; if(!p) continue;
+        if((p.history||[]).length===0 && (p.wins||0)===0 && (p.losses||0)===0){
+          toDelete.push(pk);
+        } else {
+          toSave.push(pk);
+        }
+      }
+      if(toSave.length>0) await Promise.all(toSave.map(pk=>stP(pk)));
+      if(toDelete.length>0){
+        await Promise.all(toDelete.map(pk=>
+          deleteDoc(doc(db,'players',pk.replace(/[/.#$[\]]/g,'_'))).catch(()=>{})
+        ));
+        toDelete.forEach(pk=>{ delete G.players[pk]; });
+      }
+    }
+    // ⑥ 로컬 상태 정리
+    const keys2=['금','은','동','테린이','여성부'].map(d=>tid+'_'+d);
+    keys2.forEach(key=>{
+      delete G.teams[key]; delete G.draws[key]; delete G.matches[key];
+      if(G._regIdsByKey) delete G._regIdsByKey[key];
+    });
+    G.tournaments=(G.tournaments||[]).filter(t=>t.id!==tid);
+    sl(false);toast('대회 및 관련 기록 삭제 완료','info');
+    renderTL(); renderBracket();
+  }catch(e){sl(false);toast('삭제 실패: '+e.message,'error');console.error(e);}
 }
 
 function openET(tid){
