@@ -4985,9 +4985,11 @@ let EP_name=null;
 function openEditPlayer(name){
   EP_name=name;
   const p=G.players[name]||{clubs:[],history:[]};
-  ge('epOldName').value=name;
+  const pk=pKeyParse(name);
+  const displayName=cleanName(pk.name||name);
+  ge('epOldName').value=displayName;
   ge('epNewName').value='';
-  ge('epClubs').value=(p.clubs||[]).join(', ');
+  ge('epClubs').value=(p.clubs&&p.clubs.length?(p.clubs||[]):(pk.club?[pk.club]:[])).join(', ');
   ge('epPhone').value=p.phone||'';
   // 이력 편집 UI
   const hist=(p.history||[]);
@@ -5021,65 +5023,69 @@ function openEditPlayer(name){
 }
 
 async function saveEditPlayer(){
-  const oldName=EP_name, newName=ge('epNewName').value.trim();
+  const oldKey=EP_name;
+  const oldPk=pKeyParse(oldKey);
+  const oldDisplayName=cleanName(oldPk.name||oldKey);
+  const newName=ge('epNewName').value.trim();
   const clubsRaw=ge('epClubs').value.trim();
   const clubs=clubsRaw?clubsRaw.split(',').map(c=>c.trim()).filter(Boolean):[];
-  const finalName=newName||oldName;
+  const finalDisplayName=newName||oldDisplayName;
+  const finalClub=(clubs[0]||oldPk.club||'').trim();
+  const finalKey=pKey(finalDisplayName, finalClub);
   const phone=(ge('epPhone')?.value||'').trim();
   const delIdxs=[...document.querySelectorAll('.ep-del-hist:checked')].map(el=>parseInt(el.dataset.idx));
 
   // HIST 전용 선수(Firebase 없음) → HIST 이름만 수정
-  if(!G.players[oldName]){
-    if(finalName!==oldName){
+  if(!G.players[oldKey]){
+    if(finalDisplayName!==oldDisplayName){
       let cnt=0;
       HIST_DATA.forEach(t=>t.teams.forEach(tm=>{
-        tm.players=tm.players.map(pn=>{if(pn===oldName){cnt++;return finalName;}return pn;});
+        tm.players=tm.players.map(pn=>{if(pn===oldDisplayName){cnt++;return finalDisplayName;}return pn;});
       }));
-      toast(cnt>0?'"'+finalName+'"으로 변경됨 ✅':'변경할 기록 없음','success');
+      toast(cnt>0?'"'+finalDisplayName+'"으로 변경됨 ✅':'변경할 기록 없음','success');
       cm('mEditP');renderAllP();
     }
     return;
   }
 
-  const p=G.players[oldName];
+  const p=G.players[oldKey];
   const myHist=(p.history||[]).filter((_,i)=>!delIdxs.includes(i));
 
   sl(true);
   try{
-    if(finalName!==oldName){
-      const existing=G.players[finalName];
+    if(finalKey!==oldKey){
+      const existing=G.players[finalKey];
       let mergedHist=[...myHist];
       let mergedWins=(p.wins||0);
       let mergedLosses=(p.losses||0);
-      let mergedClubs=[...new Set([...clubs,...(existing?.clubs||[])])];
+      let mergedClubs=[...new Set([...(clubs.length?clubs:(p.clubs||[])),...(existing?.clubs||[])])];
 
       if(existing){
-        // 기존 동명 선수 기록과 합치기
         const seen=new Set(myHist.map(h=>h.tid+'|'+h.div));
         (existing.history||[]).forEach(h=>{if(!seen.has(h.tid+'|'+h.div))mergedHist.push(h);});
         mergedWins+=(existing.wins||0);
         mergedLosses+=(existing.losses||0);
-        await deleteDoc(doc(db,'players',finalName.replace(/[/.#$[\]]/g,'_')));
+        await deleteDoc(doc(db,'players',finalKey.replace(/[/.#$[\]]/g,'_')));
       }
 
-      const newP={...p,name:finalName,clubs:mergedClubs,history:mergedHist,wins:mergedWins,losses:mergedLosses,phone:phone||p.phone||''};
-      await setDoc(doc(db,'players',finalName.replace(/[/.#$[\]]/g,'_')),newP);
-      await deleteDoc(doc(db,'players',oldName.replace(/[/.#$[\]]/g,'_')));
-      delete G.players[oldName];
-      if(existing) delete G.players[finalName];
-      G.players[finalName]=newP;
+      const newP={...p,key:finalKey,name:finalDisplayName,club:finalClub,clubs:mergedClubs,history:mergedHist,wins:mergedWins,losses:mergedLosses,phone:phone||p.phone||''};
+      await setDoc(doc(db,'players',finalKey.replace(/[/.#$[\]]/g,'_')),newP);
+      await deleteDoc(doc(db,'players',oldKey.replace(/[/.#$[\]]/g,'_')));
+      delete G.players[oldKey];
+      if(existing) delete G.players[finalKey];
+      G.players[finalKey]=newP;
 
       HIST_DATA.forEach(t=>t.teams.forEach(tm=>{
-        tm.players=tm.players.map(pn=>pn===oldName?finalName:pn);
+        tm.players=tm.players.map(pn=>pn===oldDisplayName?finalDisplayName:pn);
       }));
-      toast(existing?'"'+oldName+'"과 "'+finalName+'" 합치기 완료 ✅':'"'+finalName+'"으로 변경 완료 ✅','success');
+      toast(existing?'"'+oldDisplayName+'"과 "'+finalDisplayName+'" 합치기 완료 ✅':'"'+finalDisplayName+'"으로 변경 완료 ✅','success');
     } else {
-      G.players[oldName]={...p,clubs,history:myHist,phone};
-      await stP(oldName);
+      G.players[oldKey]={...p,key:oldKey,name:oldDisplayName,club:finalClub,clubs:(clubs.length?clubs:(p.clubs||[])),history:myHist,phone};
+      await stP(oldKey);
       toast('저장 완료 ✅','success');
     }
     sl(false);cm('mEditP');renderAllP();
-    await fbLog('선수수정: '+oldName+'→'+finalName,'✏️');
+    await fbLog('선수수정: '+oldDisplayName+'→'+finalDisplayName,'✏️');
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');console.error(e);}
 }
 
