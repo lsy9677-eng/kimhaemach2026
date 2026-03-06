@@ -91,6 +91,18 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .stat-icon{font-size:1.6rem;margin-bottom:4px;}
 .stat-val{font-family:'Oswald',sans-serif;font-size:1.8rem;font-weight:600;color:var(--primary);line-height:1;}
 .stat-label{font-size:.72rem;color:var(--text2);letter-spacing:.05em;}
+.home-status-card{padding:14px 16px;}
+.home-stats{gap:10px;}
+.home-stats .stat-card{padding:12px 14px;min-height:68px;justify-content:center;}
+.home-stats .stat-val{font-size:1.55rem;}
+.hero-sub{font-size:.9rem;font-weight:700;}
+.hero-chips{display:flex;gap:10px;flex-wrap:wrap;}
+.hero-chip b{font-weight:900;}
+@media(max-width:680px){
+  .home-stats{grid-template-columns:repeat(2,1fr)!important;}
+  .home-stats .stat-card{min-height:60px;}
+  .home-stats .stat-val{font-size:1.35rem;}
+}
 .btn{padding:9px 18px;border:none;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:.82rem;font-weight:500;letter-spacing:.03em;transition:all .2s;display:inline-flex;align-items:center;gap:5px;}
 .btn-primary{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(21,101,192,0.25);}
 .btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,107,60,.3);}
@@ -551,11 +563,14 @@ body{overflow-x:hidden;}
 
 <div class="page active" id="page-home">
   <div class="hero fade-in"><h2 class="hero-title" id="heroTitle">김해시테니스협회</h2><p class="hero-sub" id="heroStatus">대회 준비중</p><div class="hero-chips" style="margin-top:10px"><span class="hero-chip" id="heroClubs">🏟 -</span><span class="hero-chip" id="heroTeams">👥 -</span></div></div>
-  <div class="g4" style="margin-bottom:16px">
-    <div class="stat-card"><div class="stat-label">참가 클럽</div><div class="stat-val" id="sClubs">0</div></div>
-    <div class="stat-card"><div class="stat-label">등록 팀</div><div class="stat-val" id="sTeams">0</div></div>
-    <div class="stat-card"><div class="stat-label">완료 경기</div><div class="stat-val" id="sMatches">0</div></div>
-    <div class="stat-card"><div class="stat-label">등록 선수</div><div class="stat-val" id="sPlayers">0</div></div>
+  <div class="card fade-in home-status-card">
+    <div class="card-title">📊 김해시테니스협회 현황</div>
+    <div class="g4 home-stats">
+      <div class="stat-card"><div class="stat-label">참가 클럽</div><div class="stat-val" id="sClubs">0</div></div>
+      <div class="stat-card"><div class="stat-label">등록 팀</div><div class="stat-val" id="sTeams">0</div></div>
+      <div class="stat-card"><div class="stat-label">완료 경기</div><div class="stat-val" id="sMatches">0</div></div>
+      <div class="stat-card"><div class="stat-label">등록 선수</div><div class="stat-val" id="sPlayers">0</div></div>
+    </div>
   </div>
   <div class="g2">
     <div class="card fade-in"><div class="card-title">📌 현재 대회</div><div id="homeTournInfo"><p class="muted">등록된 대회가 없습니다</p></div></div>
@@ -4261,62 +4276,72 @@ function upDash(){
   const tt=Object.values(G.teams).reduce((s,a)=>s+(a||[]).length,0);
   const tp=Object.keys(G.players).length;
   const tm=Object.values(G.matches).reduce((s,a)=>s+(a||[]).filter(m=>m.winner!==null).length,0);
-  const clubs=new Set();Object.values(G.teams).forEach(a=>a.forEach(t=>clubs.add(t.club)));
-  ge('sClubs').textContent=clubs.size;ge('sTeams').textContent=tt;ge('sMatches').textContent=tm;ge('sPlayers').textContent=tp;ge('regBadge').textContent=tt;ge('heroClubs').textContent=`🏟 ${clubs.size}개 클럽`;ge('heroTeams').textContent=`👥 ${tt}팀`;
+  const clubs=new Set();Object.values(G.teams).forEach(a=>a.forEach(t=>clubs.add(baseClub(t.club)||t.club)));
+  ge('sClubs').textContent=clubs.size;
+  ge('sTeams').textContent=tt;
+  ge('sMatches').textContent=tm;
+  ge('sPlayers').textContent=tp;
+  ge('regBadge').textContent=tt;
+
   const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
-  if(at){const slbl={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};ge('heroTitle').textContent=at.name;ge('heroStatus').textContent='📌 '+slbl[at.status];ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>${(at.guideText||at.guideUrl||at.hasGuideAssets||((at.guideAssets||[]).length))?`<div style="display:flex;justify-content:flex-end"><button class=\"btn btn-outline\" style=\"font-size:.75rem;padding:6px 12px\" onclick=\"openGuide('${at.id}')\">📌 요강 보기</button></div>`:''}${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;ge('homeDivStatus').innerHTML=at.divisions.map(d=>{
-    const k=`${at.id}_${d}`;
-    const tc=(G.teams[k]||[]).length;
-    const allMs=G.matches[k]||[];
-    const gMs=allMs.filter(m=>m.phase==='group');
-    const mMs=allMs.filter(m=>m.phase==='main');
-    const md=allMs.filter(m=>m.winner!==null).length;
-    const mt=allMs.length;
-    const hd=!!G.draws[k];
-    const isOngoing=at.status==='ongoing'||(hd&&mt>0);
-    // 현재 진행 요약
-    let summary='';
-    if(isOngoing&&mt>0){
-      const gDone=gMs.filter(m=>m.winner!==null).length;
-      const gTotal=gMs.length;
-      const mDone=mMs.filter(m=>m.winner!==null).length;
-      const mTotal=mMs.filter(m=>!m.bye).length;
-      const mainStarted=mMs.some(m=>m.winner!==null);
-      if(mainStarted){
-        // 본선 진행중 - 현재 남은 경기 또는 우승자 표시
-        const finalM=[...mMs].sort((a,b)=>b.round-a.round)[0];
-        const champ=finalM?.winner!=null?(G.teams[k]||[])[finalM.winner]:null;
-        if(champ){
-          const champNm=tdn(champ,k,finalM.winner);
-          summary=`<div style="margin-top:6px;padding:6px 8px;background:linear-gradient(90deg,#fef3cd,#fff9e6);border-radius:var(--radius);border:1px solid var(--accent)"><div style="font-size:.65rem;color:var(--text2);margin-bottom:2px">🏆 최종 우승</div><div style="font-weight:700;font-size:.82rem;color:#b45309">${champNm}</div></div>`;
-        } else {
-          summary=`<div style="margin-top:6px;padding:5px 8px;background:var(--panel2);border-radius:var(--radius);font-size:.7rem;color:var(--text2)">🏆 본선 진행중 <b>${mDone}/${mTotal}</b></div>`;
+  if(at){
+    const currentTeams=(at.divisions||[]).flatMap(d=>G.teams[at.id+'_'+d]||[]);
+    const currentClubSet=new Set(currentTeams.map(t=>baseClub(t.club)||t.club).filter(Boolean));
+    const currentTeamCount=currentTeams.length;
+    ge('heroClubs').innerHTML=`🏟 현재 참가 <b>${currentClubSet.size}</b>개 클럽`;
+    ge('heroTeams').innerHTML=`👥 현재 참가 <b>${currentTeamCount}</b>팀`;
+    const slbl={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
+    ge('heroTitle').textContent=at.name;
+    ge('heroStatus').textContent='📌 '+slbl[at.status];
+    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 현재 ${currentClubSet.size}개 클럽</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 현재 ${currentTeamCount}팀</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>${(at.guideText||at.guideUrl||at.hasGuideAssets||((at.guideAssets||[]).length))?`<div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.75rem;padding:6px 12px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>`:''}${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;
+    ge('homeDivStatus').innerHTML=at.divisions.map(d=>{
+      const k=`${at.id}_${d}`;
+      const tc=(G.teams[k]||[]).length;
+      const allMs=G.matches[k]||[];
+      const gMs=allMs.filter(m=>m.phase==='group');
+      const mMs=allMs.filter(m=>m.phase==='main');
+      const md=allMs.filter(m=>m.winner!==null).length;
+      const mt=allMs.length;
+      const hd=!!G.draws[k];
+      const isOngoing=at.status==='ongoing'||(hd&&mt>0);
+      let summary='';
+      if(isOngoing&&mt>0){
+        const gDone=gMs.filter(m=>m.winner!==null).length;
+        const gTotal=gMs.length;
+        const mDone=mMs.filter(m=>m.winner!==null).length;
+        const mTotal=mMs.filter(m=>!m.bye).length;
+        const mainStarted=mMs.some(m=>m.winner!==null);
+        if(mainStarted){
+          const finalM=[...mMs].sort((a,b)=>b.round-a.round)[0];
+          const champ=finalM?.winner!=null?(G.teams[k]||[])[finalM.winner]:null;
+          if(champ){
+            const champNm=tdn(champ,k,finalM.winner);
+            summary=`<div style="margin-top:6px;padding:6px 8px;background:linear-gradient(90deg,#fef3cd,#fff9e6);border-radius:var(--radius);border:1px solid var(--accent)"><div style="font-size:.65rem;color:var(--text2);margin-bottom:2px">🏆 최종 우승</div><div style="font-weight:700;font-size:.82rem;color:#b45309">${champNm}</div></div>`;
+          } else {
+            summary=`<div style="margin-top:6px;padding:5px 8px;background:var(--panel2);border-radius:var(--radius);font-size:.7rem;color:var(--text2)">🏆 본선 진행중 <b>${mDone}/${mTotal}</b></div>`;
+          }
+        } else if(gTotal>0){
+          const grps=(G.draws[k]?.groups||[]);
+          const grpSummary=grps.map((grp,gi)=>{
+            const gcMs=gMs.filter(m=>m.group===gi);
+            const gcDone=gcMs.filter(m=>m.winner!==null).length;
+            const gcTotal=gcMs.length;
+            return `${grpLabel(gi)} ${gcDone}/${gcTotal}`;
+          }).join(' · ');
+          summary=`<div style="margin-top:6px;padding:5px 8px;background:var(--panel2);border-radius:var(--radius);font-size:.68rem;color:var(--text2)">📋 예선 진행중<br><span style="font-weight:600">${grpSummary}</span></div>`;
         }
-      } else if(gTotal>0){
-        // 예선 진행중 - 조별 요약
-        const grps=(G.draws[k]?.groups||[]);
-        const grpSummary=grps.map((grp,gi)=>{
-          const gcMs=gMs.filter(m=>m.group===gi);
-          const gcDone=gcMs.filter(m=>m.winner!==null).length;
-          const gcTotal=gcMs.length;
-          return `${grpLabel(gi)} ${gcDone}/${gcTotal}`;
-        }).join(' · ');
-        summary=`<div style="margin-top:6px;padding:5px 8px;background:var(--panel2);border-radius:var(--radius);font-size:.68rem;color:var(--text2)">📋 예선 진행중<br><span style="font-weight:600">${grpSummary}</span></div>`;
       }
-    }
-    // 클릭 시 대진표 페이지로 이동
-    const onClickFn=isOngoing?`goBracket('${at.id}','${d}')`:`openRoster('${at.id}','${d}')`;
-    return`<div class="stat-card" style="cursor:pointer" onclick="${onClickFn}">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span class="dpill ${dc(d)}">${dl(d)}</span>
-        ${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite">진행중</span>':hd?'<span class="badge bg-green">추첨완료</span>':'<span class="badge bg-gray">대기</span>'}
-      </div>
-      <div class="stat-val" style="margin-top:6px">${tc}<span style="font-size:1rem;font-weight:400"> 팀</span></div>
-      <div class="stat-label">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>
-      ${summary}
-      ${isOngoing?'<div style="margin-top:6px;font-size:.65rem;color:var(--primary);font-weight:600">👆 탭하면 대진표 실시간 보기</div>':''}
-    </div>`;
-  }).join('');}
+      const onClickFn=isOngoing?`goBracket('${at.id}','${d}')`:`openRoster('${at.id}','${d}')`;
+      return`<div class="stat-card" style="cursor:pointer" onclick="${onClickFn}"><div style="display:flex;align-items:center;justify-content:space-between"><span class="dpill ${dc(d)}">${dl(d)}</span>${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite">진행중</span>':hd?'<span class="badge bg-green">추첨완료</span>':'<span class="badge bg-gray">대기</span>'}</div><div class="stat-val" style="margin-top:6px">${tc}<span style="font-size:1rem;font-weight:400"> 팀</span></div><div class="stat-label">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>${summary}${isOngoing?'<div style="margin-top:6px;font-size:.65rem;color:var(--primary);font-weight:600">👆 탭하면 대진표 실시간 보기</div>':''}</div>`;
+    }).join('');
+  } else {
+    ge('heroTitle').textContent='김해시테니스협회';
+    ge('heroStatus').textContent='대회 준비중';
+    ge('heroClubs').textContent='🏟 현재 참가 -';
+    ge('heroTeams').textContent='👥 현재 참가 -';
+    ge('homeTournInfo').innerHTML='<p class="muted">등록된 대회가 없습니다</p>';
+    ge('homeDivStatus').innerHTML='';
+  }
   upLog();
 }
 function upLog(){if(G.log.length)ge('recentLog').innerHTML=G.log.slice(0,6).map(a=>`<li class="ri"><div class="ri-icon">${a.icon||'📌'}</div><div class="ri-text"><div>${a.text}</div></div><div class="ri-time">${ago(a.time)}</div></li>`).join('');}
