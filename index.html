@@ -218,10 +218,24 @@ body{overflow-x:hidden;}
 
 /* GROUP */
 .grp-block{background:var(--panel);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;}
-.grp-hdr{background:var(--primary);color:white;padding:10px 16px;font-weight:700;font-size:.9rem;display:flex;align-items:center;justify-content:space-between;}
+.grp-hdr{background:linear-gradient(135deg,#1565c0 0%,#1976d2 100%);color:white;padding:11px 16px;font-weight:800;font-size:.92rem;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .grp-body{padding:12px;}
 .grp-tr{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--radius);margin-bottom:4px;background:var(--panel2);border:1px solid var(--border);font-size:.82rem;}
 .grp-seed{width:22px;height:22px;background:var(--bg2);border-radius:50%;font-size:.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;}
+/* grp-card: 조별 대진표 카드 */
+.grp-card{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);}
+.gs-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:.82rem;transition:background .15s;}
+.gs-row:hover{background:var(--panel2);}
+.gs-row:last-child{border-bottom:none;}
+.gs-rk{width:28px;font-size:1.1rem;text-align:center;flex-shrink:0;}
+.gs-nm{flex:1;font-weight:700;font-size:.85rem;}
+.gs-stats{display:flex;gap:10px;font-size:.78rem;color:var(--text2);}
+.gs-row.adv-1st{background:linear-gradient(90deg,#e8f4fd,#f0f8ff);}
+.gs-row.adv-2nd{background:linear-gradient(90deg,#fff3e0,#fff8f0);}
+.gs-row.adv{background:var(--panel2);}
+.adv-chip{display:inline-block;padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:700;margin-left:6px;}
+.grp-matches-section{padding:0 12px 12px;border-top:2px solid var(--border);margin-top:2px;}
+.grp-matches-label{font-size:.75rem;font-weight:700;color:var(--text2);padding:8px 2px 6px;letter-spacing:.3px;}
 
 /* MATCH CARD */
 .match-card{background:var(--panel);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px;transition:box-shadow .2s;}
@@ -263,37 +277,134 @@ body{overflow-x:hidden;}
 @keyframes tennisBallSpin{0%{transform:rotate(0deg) scale(1)}100%{transform:rotate(360deg) scale(1)}}
 @keyframes tennisBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes drawPop{0%{transform:scale(.78);opacity:.2}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
-@keyframes drawSlotFlash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.16)}}
-@keyframes vsPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.tennis-roulette{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:6px 0;}
-.tennis-roulette-ball,.draw-ball{position:relative;width:120px;height:120px;border-radius:999px;overflow:hidden;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 12px 24px rgba(0,0,0,.18));}
-.tennis-roulette-core{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 30% 28%,#fffde2 0 11%,#fff6a8 12%,#ece24e 54%,#bccd25 100%);border:3px solid rgba(104,124,0,.28);box-shadow:inset 0 4px 16px rgba(255,255,255,.62), inset 0 -8px 18px rgba(90,103,0,.16);overflow:hidden;}
-.tennis-roulette-core::before,.tennis-roulette-core::after{content:'';position:absolute;top:50%;width:62px;height:158px;border:6px solid rgba(255,255,255,.98);border-top-color:transparent;border-bottom-color:transparent;border-radius:50%;transform:translateY(-50%);pointer-events:none;}
-.tennis-roulette-core::before{left:-18px;transform:translateY(-50%) rotate(10deg);}
-.tennis-roulette-core::after{right:-18px;transform:translateY(-50%) rotate(-10deg);}
-.tennis-roulette-core.spinning{animation:tennisBallSpin .52s linear infinite, tennisBounce .8s ease-in-out infinite;}
-.tennis-roulette-ball.popped,.draw-ball.popped{animation:drawPop .42s cubic-bezier(.17,.67,.4,1.3) both;}
-.tennis-ball-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:64px;max-width:80px;padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.9);backdrop-filter:blur(3px);border:1px solid rgba(16,36,77,.08);box-shadow:0 4px 14px rgba(0,0,0,.12);color:#17320e;font-size:.84rem;font-weight:900;line-height:1.1;text-align:center;word-break:keep-all;z-index:2;}
-.tennis-ball-label.spinning{animation:drawSlotFlash .24s linear infinite;}
-.tennis-roulette-name{font-size:.82rem;font-weight:800;line-height:1.2;color:var(--text2);text-align:center;word-break:keep-all;}
-.tennis-roulette-sub{font-size:.74rem;color:var(--text3);text-align:center;}
-.tennis-reveal{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;}
-.tennis-reveal .tennis-roulette-ball{width:96px;height:96px;}
-.tennis-reveal .tennis-ball-label{min-width:54px;max-width:70px;font-size:.76rem;padding:6px 8px;}
-.tennis-reveal .tennis-roulette-name{font-size:.82rem;max-width:min(84vw,280px);}
-.tennis-vs{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;}
-.tennis-vs .tennis-reveal .tennis-roulette-ball{width:82px;height:82px;}
-.tennis-vs .tennis-reveal .tennis-ball-label{min-width:48px;max-width:62px;font-size:.68rem;padding:5px 7px;}
-.tennis-vs .tennis-reveal .tennis-roulette-name{max-width:140px;font-size:.74rem;}
-.draw-group-row{display:flex;align-items:center;gap:8px;padding:10px;border-radius:var(--radius);background:var(--panel2);border:1px solid var(--border);margin-bottom:6px;}
-.draw-group-label{font-family:'Oswald',sans-serif;font-weight:700;font-size:1rem;color:var(--primary);width:36px;text-align:center;}
-.draw-team-slot{display:inline-flex;align-items:center;padding:4px 12px;border-radius:12px;font-size:.8rem;font-weight:600;background:var(--panel);border:1.5px dashed var(--border);min-width:80px;justify-content:center;transition:all .4s;}
-.draw-team-slot.filled{background:var(--primary);color:white;border-style:solid;border-color:var(--primary);animation:drawPop .4s cubic-bezier(.17,.67,.4,1.3);}
-.draw-team-slot.same-club{background:#f59e0b;border-color:#f59e0b;color:white;}
+@keyframes cardFlyIn{0%{transform:translate(var(--fx,120px),var(--fy,-80px)) rotate(var(--fr,18deg)) scale(.55);opacity:0}60%{transform:translate(calc(var(--fx,120px)*.12),calc(var(--fy,-80px)*.12)) rotate(calc(var(--fr,18deg)*.1)) scale(1.08);opacity:1}80%{transform:translate(0,4px) rotate(-2deg) scale(1.03)}100%{transform:translate(0,0) rotate(0deg) scale(1);opacity:1}}
+@keyframes cardLand{0%{transform:scale(1)}30%{transform:scale(.93) translateY(3px)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+@keyframes cardShake{0%,100%{transform:rotate(0)}20%{transform:rotate(-4deg)}40%{transform:rotate(3deg)}60%{transform:rotate(-2deg)}80%{transform:rotate(1deg)}}
+@keyframes slotGroupComplete{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(60px) rotate(720deg);opacity:0}}
+@keyframes drumRollPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes leafFloat{
+  0%  {transform:translate(0,0) rotate(0deg) scale(1);}
+  20% {transform:translate(7px,-10px) rotate(7deg) scale(1.03);}
+  40% {transform:translate(-5px,-16px) rotate(-5deg) scale(.98);}
+  60% {transform:translate(8px,-8px) rotate(8deg) scale(1.02);}
+  80% {transform:translate(-6px,-12px) rotate(-4deg) scale(.99);}
+  100%{transform:translate(0,0) rotate(0deg) scale(1);}
+}
+@keyframes leafLand{
+  0%  {transform:translate(var(--lx,0px),var(--ly,-80px)) rotate(var(--lr,25deg)) scale(.6); opacity:0;}
+  45% {opacity:1;}
+  68% {transform:translate(calc(var(--lx,0px)*.03),6px) rotate(-2deg) scale(1.08);}
+  82% {transform:translate(0,-2px) rotate(1deg) scale(1.02);}
+  100%{transform:translate(0,0) rotate(0deg) scale(1); opacity:1;}
+}
+@keyframes rouletteScroll{
+  0%  {transform:translateY(0);}
+  100%{transform:translateY(-50%);}
+}
+@keyframes slotBlink{
+  0%,100%{background:var(--panel);border-color:#93c5fd;box-shadow:none;color:var(--text2);}
+  50%    {background:#dbeafe;border-color:#1565c0;box-shadow:0 0 0 4px rgba(21,101,192,.22);color:#1565c0;}
+}
+@keyframes slotFill{
+  0%  {transform:scale(.65) translateY(-10px);opacity:0;}
+  60% {transform:scale(1.1) translateY(2px);opacity:1;}
+  80% {transform:scale(.97);}
+  100%{transform:scale(1) translateY(0);opacity:1;}
+}
+.leaf-card-stage{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:10px 18px;border-radius:14px;font-size:.9rem;font-weight:800;
+  background:linear-gradient(135deg,#1565c0,#1e88e5);color:white;
+  box-shadow:0 6px 22px rgba(21,101,192,.42);
+  border:2px solid rgba(255,255,255,.28);
+  min-width:100px;white-space:nowrap;cursor:default;
+}
+.leaf-card-stage.same-club-card{background:linear-gradient(135deg,#d97706,#f59e0b);}
+.leaf-card-stage.floating{animation:leafFloat 2.2s ease-in-out infinite;}
+.leaf-card-stage.landing{animation:leafLand .88s cubic-bezier(.22,.68,.35,1.25) forwards;}
+/* ── 조 슬롯 ── */
+.draw-team-slot{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:5px 10px;border-radius:10px;font-size:.78rem;font-weight:600;
+  background:var(--panel);border:1.5px dashed #93c5fd;
+  width:90px;height:32px;box-sizing:border-box;
+  color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background .25s,border-color .25s;flex-shrink:0;
+}
+.draw-team-slot.slot-active{
+  animation:slotBlink .52s ease-in-out infinite;
+}
+.draw-team-slot.slot-filled{
+  background:linear-gradient(135deg,#1565c0,#1e88e5)!important;
+  color:white!important;border:1.5px solid #1565c0!important;
+  font-weight:800!important;
+  animation:slotFill .42s cubic-bezier(.22,.68,.35,1.3) forwards;
+}
+.draw-team-slot.slot-filled.same-club{
+  background:linear-gradient(135deg,#d97706,#f59e0b)!important;
+  border-color:#d97706!important;
+}
+/* ── 낙엽 카드 (스테이지용) ── */
+.leaf-card-stage{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:10px 20px;border-radius:14px;font-size:.92rem;font-weight:800;
+  background:linear-gradient(135deg,#1565c0,#1e88e5);color:white;
+  box-shadow:0 6px 24px rgba(21,101,192,.42);
+  border:2px solid rgba(255,255,255,.28);
+  min-width:110px;white-space:nowrap;
+}
+.leaf-card-stage.same-club-card{background:linear-gradient(135deg,#d97706,#f59e0b);}
+.leaf-card-stage.floating{animation:leafFloat 2.2s ease-in-out infinite;}
+.leaf-card-stage.landing{animation:leafLand .88s cubic-bezier(.22,.68,.35,1.25) forwards;}
+/* ── 룰렛 ── */
+.roulette-strip-wrap{
+  width:100%;height:180px;overflow:hidden;border-radius:12px;
+  border:1.5px solid var(--border);background:var(--bg2);position:relative;
+}
+.roulette-strip-wrap::before,.roulette-strip-wrap::after{
+  content:'';position:absolute;left:0;right:0;height:44px;z-index:2;pointer-events:none;
+}
+.roulette-strip-wrap::before{top:0;background:linear-gradient(to bottom,var(--bg2) 30%,transparent);}
+.roulette-strip-wrap::after{bottom:0;background:linear-gradient(to top,var(--bg2) 30%,transparent);}
+.roulette-highlight{
+  position:absolute;left:4px;right:4px;top:50%;transform:translateY(-50%);
+  height:42px;background:rgba(21,101,192,.08);
+  border-top:2px solid rgba(21,101,192,.4);border-bottom:2px solid rgba(21,101,192,.4);
+  z-index:1;pointer-events:none;border-radius:6px;
+}
+.roulette-strip{display:flex;flex-direction:column;will-change:transform;}
+.roulette-strip.spinning{animation:rouletteScroll var(--speed,.1s) linear infinite;}
+.roulette-item{
+  height:42px;display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:600;color:var(--text1);
+  border-bottom:1px solid var(--border);flex-shrink:0;padding:0 14px;
+  white-space:nowrap;
+}
+.roulette-item.winner-item{
+  color:#fff;font-weight:900;font-size:.9rem;
+  background:linear-gradient(135deg,#1565c0,#1e88e5);border-radius:6px;
+}
+/* ── 스테이지 카드 ── */
+.draw-stage-card{
+  background:linear-gradient(135deg,#f8faff,#eef5ff);
+  border:1.5px solid #c7d8f5;border-radius:14px;padding:12px;
+}
+/* ── confetti ── */
+.confetti-piece{position:absolute;width:8px;height:8px;border-radius:2px;pointer-events:none;animation:confettiFall .7s ease-out forwards;}
 .draw-cfg{padding:14px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:14px;}
 .draw-cfg-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
 .draw-cfg-row:last-child{margin-bottom:0;}
-.draw-cfg-label{font-size:.78rem;font-weight:700;color:var(--text2);min-width:100px;}
+.grp-preset{display:inline-block;padding:5px 11px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text1);font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;user-select:none;}
+.grp-preset:hover{border-color:var(--primary);color:var(--primary);background:#e8f0fe;}
+.grp-preset.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.draw-cfg-label{font-size:.78rem;font-weight:700;color:var(--text2);min-width:90px;}
+@media(max-width:600px){
+  #drawCfgScreen > div[style*="grid-template-columns"],
+  #drawRunScreen > div[style*="grid-template-columns"]{
+    grid-template-columns:1fr!important;
+  }
+}
 .draw-progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:10px 0;}
 .draw-progress-bar{height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:2px;transition:width .4s ease;}
 .same-club-warn{font-size:.72rem;color:#b45309;background:#fef3cd;padding:5px 10px;border-radius:var(--radius);margin-top:6px;display:none;}
@@ -342,9 +453,7 @@ body{overflow-x:hidden;}
 .sf-active{background:var(--accent);color:var(--text);}
 .sf-pend{background:var(--border);color:var(--text3);}
 .sf-lbl{font-size:.6rem;text-align:center;color:var(--text2);line-height:1.3;}
-.grp-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;}
-.grp-hdr{background:var(--primary);color:white;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;}
-.gs-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:.82rem;}
+
 .gs-row:last-child{border-bottom:none;}
 .gs-row.adv-1st{background:linear-gradient(90deg,#e3eeff,#eef2ff);border-left:3px solid #1565c0;}
 .gs-row.adv-2nd{background:linear-gradient(90deg,#fff3e0,#fffde7);border-left:3px solid #e67e22;}
@@ -658,44 +767,63 @@ body{overflow-x:hidden;}
 <div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div><p style="font-size:.75rem;color:var(--text3)">초기 비밀번호: <b>kimhae1234</b></p></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
 <div class="modal-overlay" id="mPHist"><div class="modal-box"><div class="modal-header"><h3>👤 선수 기록</h3><button class="modal-close" onclick="cm('mPHist')">✕</button></div><div class="modal-body" id="mPHistBody"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPHist')">닫기</button></div></div></div>
 <div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">⚡ 경기 결과 입력</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mM3')">취소</button><button class="btn btn-accent" onclick="saveM3()">💾 저장</button></div></div></div>
-<div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:620px"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
-<div class="modal-body" style="max-height:80vh;overflow-y:auto">
+<div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:900px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
+<div class="modal-body" style="max-height:85vh;overflow-y:auto;padding:14px 16px">
 
-  <!-- 팀 목록 -->
-  <div id="drawTeamList" style="margin-bottom:14px"></div>
+  <!-- ── 설정 화면 (추첨 전) ── -->
+  <div id="drawCfgScreen">
+    <!-- 팀 목록 -->
+    <div id="drawTeamList" style="margin-bottom:14px"></div>
 
-  <!-- 조 편성 설정 -->
-  <div class="draw-cfg" id="drawCfgBox">
-    <div style="font-weight:700;font-size:.85rem;margin-bottom:10px">⚙️ 조 편성 설정</div>
-
-    <div class="draw-cfg-row">
-      <span class="draw-cfg-label">편성 방식</span>
-      <div id="grpPresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
+    <!-- 조 편성 설정 + 본선 미리보기 2단 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+      <!-- 왼쪽: 편성 설정 -->
+      <div class="draw-cfg" id="drawCfgBox" style="margin-bottom:0">
+        <div style="font-weight:700;font-size:.85rem;margin-bottom:10px">⚙️ 조 편성 설정</div>
+        <div class="draw-cfg-row">
+          <span class="draw-cfg-label">편성 방식</span>
+          <div id="grpPresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
+        </div>
+        <div class="draw-cfg-row">
+          <span class="draw-cfg-label">조 구성</span>
+          <div id="grpConfigDisplay" style="font-size:.82rem;font-weight:600;color:var(--primary)"></div>
+        </div>
+        <div class="draw-cfg-row">
+          <span class="draw-cfg-label">본선 진출수</span>
+          <div id="advancePresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
+        </div>
+        <div class="draw-cfg-row">
+          <span class="draw-cfg-label">본선 규모</span>
+          <div id="mainSizeDisplay" style="font-size:.82rem;color:var(--text2)"></div>
+        </div>
+        <div class="same-club-warn" id="sameClubWarn">⚠️ 같은 클럽 팀이 있습니다. 추첨 시 같은 조 배정을 최소화합니다.</div>
+      </div>
+      <!-- 오른쪽: 본선 미리보기 -->
+      <div id="drawMainPreviewBox" style="display:none">
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">설정에 따른 본선 나무구조 — 추첨 후 실제 팀명으로 교체됩니다.</div>
+        <div id="drawMainPreviewContent" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
+      </div>
     </div>
-
-    <div class="draw-cfg-row">
-      <span class="draw-cfg-label">조 구성</span>
-      <div id="grpConfigDisplay" style="font-size:.82rem;font-weight:600;color:var(--primary)"></div>
-    </div>
-
-    <div class="draw-cfg-row">
-      <span class="draw-cfg-label">본선 진출수</span>
-      <div id="advancePresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
-    </div>
-
-    <div class="draw-cfg-row">
-      <span class="draw-cfg-label">본선 규모</span>
-      <div id="mainSizeDisplay" style="font-size:.82rem;color:var(--text2)"></div>
-    </div>
-
-    <div class="same-club-warn" id="sameClubWarn">⚠️ 같은 클럽 팀이 있습니다. 추첨 시 같은 조 배정을 최소화합니다.</div>
   </div>
 
-  <!-- 추첨 진행 스테이지 -->
-  <div class="draw-stage" id="drawStage" style="display:none">
-    <div id="drawStageContent"></div>
-    <div class="draw-progress"><div class="draw-progress-bar" id="drawProgressBar" style="width:0%"></div></div>
-    <div id="drawGroupRows" style="margin-top:12px"></div>
+  <!-- ── 추첨 진행 화면 (추첨 중) ── -->
+  <div id="drawRunScreen" style="display:none">
+    <!-- 2단: 왼쪽=룰렛+착지, 오른쪽=본선 미리보기 고정 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+      <!-- 왼쪽: 추첨 액션 -->
+      <div>
+        <div id="drawStageContent"></div>
+        <div class="draw-progress" style="margin:8px 0"><div class="draw-progress-bar" id="drawProgressBar" style="width:0%"></div></div>
+        <div id="drawGroupRows"></div>
+      </div>
+      <!-- 오른쪽: 본선 대진 미리보기 (추첨 중 항상 표시) -->
+      <div>
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 배정 구조</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">추첨이 완료되면 실제 팀명으로 채워집니다.</div>
+        <div id="drawRunPreviewContent" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1000,6 +1128,9 @@ body{overflow-x:hidden;}
 
 <script type="module">
 'use strict';
+// 조 알파벳 레이블: 0→A조, 1→B조 ...
+function grpLabel(gi){ return String.fromCharCode(65+gi)+'조'; }
+
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -2020,33 +2151,43 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         : (AD ? `<span class="badge bg-gray" style="font-size:.65rem">코트: 미배정</span>` : ``);
       const gcuiId = `gcui_${key}_${gi}`;
       const gcOpen = !!(GC_OPEN[key] && GC_OPEN[key].has(gi));
+      const doneCnt=gms.filter(m=>m.winner!==null).length;
       html+=`<div class="grp-card">
-        <div class="grp-hdr" style="gap:8px;flex-wrap:wrap">
-          <span style="font-weight:700">${gi+1}조</span>
-          <span style="font-size:.72rem;opacity:.9;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <span>${grp.teams.length}팀 · ${grpDone?'✅ 완료':gms.filter(m=>m.winner!==null).length+'/'+gms.length+' 완료'}</span>
+        <div class="grp-hdr">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:1.15rem;font-weight:900;letter-spacing:.5px">${grpLabel(gi)}</span>
+            <span style="font-size:.75rem;opacity:.85;font-weight:600">${grp.teams.length}팀</span>
+            ${grpDone?'<span style="background:rgba(255,255,255,.25);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700">✅ 완료</span>'
+              :`<span style="background:rgba(255,255,255,.18);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:600">${doneCnt}/${gms.length} 경기</span>`}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${courtBadges}
-            ${AD?`<button class="btn btn-outline" style="padding:4px 10px;font-size:.72rem;white-space:nowrap;background:rgba(255,255,255,0.2);border:1.5px solid white;color:white;border-radius:999px" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>`:''}
-          </span>
+            ${AD?`<button class="btn btn-outline" style="padding:3px 9px;font-size:.7rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>`:''}
+          </div>
         </div>
-      `;
+        <div style="border-bottom:2px solid var(--border)">`;
       stats.forEach((s,r)=>{
         const isAdv=r<adv&&grpDone;
         const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
         const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
-        html+=`<div class="gs-row ${rowCls}"><div class="gs-rk">${r===0?'🥇':r===1?'🥈':r===2?'🥉':r+1}</div><div class="gs-nm">${s.nm}${isAdv?` <span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div><div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span>득실 ${s.diff>0?'+':''}${s.diff}</span></div></div>`;
+        html+=`<div class="gs-row ${rowCls}">
+          <div class="gs-rk">${r===0?'🥇':r===1?'🥈':r===2?'🥉':r+1}</div>
+          <div class="gs-nm">${s.nm}${isAdv?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
+          <div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></div>
+        </div>`;
       });
-
-      html+='<div style="padding:8px 12px 12px">';
+      html+=`</div>
+        <div class="grp-matches-section">
+          <div class="grp-matches-label">📋 경기 목록</div>`;
       gms.forEach(m=>{
         const mt1=teams[m.t1],mt2=teams[m.t2];
         if(!mt1||!mt2)return;
         const dn1=tdn(mt1,key,m.t1),dn2=tdn(mt2,key,m.t2);
         const done=m.winner!==null;
         const sc1=done?rbSc(m,0):null,sc2=done?rbSc(m,1):null;
-        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,`예선 ${gi+1}조`);
+        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,`예선 ${grpLabel(gi)}`);
       });
-      html+='</div></div>';
+      html+=`</div></div>`;
     });
 
     if(cfg.format==='group_knockout'){
@@ -2054,23 +2195,42 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         const advT=getAdvT(key,draw,teams,cfg);
         html+=`<div class="card" style="background:linear-gradient(135deg,#eef2ff,#dce8fb);border:1.5px solid var(--success)">
           <div class="card-title" style="color:var(--success)">🏆 본선 진출팀 (${advT.length}팀)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">${advT.map((at,i)=>`<span class="badge bg-green" style="font-size:.8rem;padding:5px 12px">${i+1}. ${at.nm} <small style="opacity:.75">(${at.gn}조 ${at.rk}위)</small></span>`).join('')}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${advT.map((at,i)=>`<span class="badge bg-green" style="font-size:.8rem;padding:5px 12px">${i+1}. ${at.nm} <small style="opacity:.75">(${grpLabel(at.gn-1)} ${at.rk}위)</small></span>`).join('')}</div>
           ${AD&&!mMs.length?`<div style="margin-top:12px"><button class="btn btn-primary" style="padding:8px 20px" onclick="buildMain('${tid}','${div}')">🏆 본선 대진표 생성</button></div>`:''}
         </div>`;
       }
-      if(!mMs.length){
+      {
         const pv=buildPreviewMainSlots(draw,cfg);
         if(pv.n>=2){
           const adv=draw.advance||cfg.advance||2;
-          html+=`<div class="sec-title" style="margin-top:16px">👁 본선 대진표 미리보기</div>`;
-          html+=`<div class="card" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-              <div style="font-weight:800;color:var(--primary-dark)">예선 전에도 보는 본선 나무구조</div>
-              <span class="badge" style="background:var(--accent);color:#fff">${adv}팀 진출 × ${draw.groups?.length||0}조 → ${pv.n}강</span>
-            </div>
-            <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">실제 팀명 대신 <b>몇 조 몇 위</b>가 들어갈 자리를 먼저 표시합니다. 예선 결과가 나오면 자동으로 실제 팀명으로 바뀝니다.</div>
-            ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
-          </div>`;
+          const grpCount=draw.groups?.length||0;
+          if(!mMs.length){
+            // 본선 대진 아직 없음 → 구조 미리보기
+            html+=`<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+              <span>🌳 본선 대진표 구조 미리보기</span>
+              <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${pv.n}강</span>
+            </div>`;
+            html+=`<div class="card" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+                <div style="font-weight:800;color:var(--primary-dark)">📌 각 조 몇 위가 어느 본선으로 가는지 확인하세요</div>
+              </div>
+              <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">
+                실제 팀명 대신 <b>몇 조 몇 위</b> 자리를 미리 표시합니다. 예선 결과가 나오면 자동으로 실제 팀명으로 바뀝니다.
+              </div>
+              ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+            </div>`;
+          } else {
+            // 본선 대진표 있음 → 이미 renderBracketTree로 표시되므로 구조 미리보기는 접을 수 있게 토글 제공
+            html+=`<div style="margin-top:8px">
+              <button class="btn btn-outline" style="font-size:.72rem;padding:4px 12px" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'🌳 조별 본선 연결구조 보기':'🌳 조별 본선 연결구조 접기'">🌳 조별 본선 연결구조 보기</button>
+              <div style="display:none;margin-top:8px">
+                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">각 조 몇 위가 어느 본선 슬롯으로 배정되었는지 확인합니다.</div>
+                <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:12px">
+                  ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+                </div>
+              </div>
+            </div>`;
+          }
         }
       }
     }
@@ -2141,7 +2301,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const gi = m.group;
     const grpCourts = (G.draws[key]?.groups?.[gi]?.courts) || [];
     if(grpCourts.length){
-      grpCourtBadge = `<span style="font-size:.7rem;font-weight:600;background:rgba(255,255,255,.22);color:white;padding:2px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.4)">🎾 ${gi+1}조: ${grpCourts.join('/')}</span>`;
+      grpCourtBadge = `<span style="font-size:.7rem;font-weight:600;background:rgba(255,255,255,.22);color:white;padding:2px 9px;border-radius:12px;border:1px solid rgba(255,255,255,.4)">🎾 ${grpLabel(gi)}: ${grpCourts.join('/')}</span>`;
     } else if(AD){
       grpCourtBadge = `<span style="font-size:.7rem;font-weight:600;background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:2px 9px;border-radius:12px;border:1px dashed rgba(255,255,255,.35)">🎾 미배정</span>`;
     }
@@ -2245,19 +2405,39 @@ function renderCombinedBracketSection(tid, div){
   }
 
   let mainHTML = '';
-  if(mMs.length){
-    mainHTML = renderBracketTree(key,mMs,teams);
-  } else if(cfg.format==='group_knockout'){
+  if(cfg.format==='group_knockout'){
     const pv = buildPreviewMainSlots(draw,cfg);
     if(pv.n>=2){
-      mainHTML = `<div class="card" style="margin:0;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
-        <div class="card-title" style="margin-bottom:8px;color:var(--primary-dark)">🏆 본선 대진표 미리보기</div>
-        <div style="font-size:.75rem;color:var(--text2);margin-bottom:8px">예선이 끝나기 전에도 <b>몇 조 몇 위</b>가 들어갈 자리를 먼저 보여줍니다.</div>
-        ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
-      </div>`;
+      const adv=draw.advance||cfg.advance||2;
+      const grpCount=draw.groups?.length||0;
+      if(mMs.length){
+        mainHTML = renderBracketTree(key,mMs,teams);
+        // 본선 확정 후에도 조별 연결구조 토글로 제공
+        mainHTML += `<div style="margin-top:10px">
+          <button class="btn btn-outline" style="font-size:.72rem;padding:4px 12px" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'🌳 조별 본선 연결구조 보기':'🌳 조별 본선 연결구조 접기'">🌳 조별 본선 연결구조 보기</button>
+          <div style="display:none;margin-top:8px">
+            <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px;padding:0 2px">각 조 몇 위가 어느 본선 슬롯에 배정됐는지 확인합니다.</div>
+            <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:12px">
+              ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+            </div>
+          </div>
+        </div>`;
+      } else {
+        mainHTML = `<div class="card" style="margin:0;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+            <div class="card-title" style="color:var(--primary-dark);margin:0">🌳 본선 대진표 구조 미리보기</div>
+            <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${pv.n}강</span>
+          </div>
+          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px">📌 <b>몇 조 몇 위</b>가 어느 본선 슬롯으로 가는지 확인하세요. 예선 결과가 나오면 자동으로 실제 팀명으로 바뀝니다.</div>
+          ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+        </div>`;
+      }
     } else {
-      mainHTML = `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`;
+      if(mMs.length) mainHTML = renderBracketTree(key,mMs,teams);
+      else mainHTML = `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`;
     }
+  } else if(mMs.length){
+    mainHTML = renderBracketTree(key,mMs,teams);
   }
 
   let groupsHTML = '';
@@ -2270,7 +2450,7 @@ function renderCombinedBracketSection(tid, div){
       const adv = cfg.advance || 2;
       groupsHTML += `<div style="background:white;border-radius:12px;border:1px solid #dbeafe;box-shadow:0 2px 10px rgba(21,101,192,.08);min-width:220px;flex:1;overflow:hidden">
         <div style="background:linear-gradient(90deg,#1565c0,#1e88e5);color:white;padding:9px 12px;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:800">${gi+1}조</div>
+          <div style="font-weight:800">${grpLabel(gi)}</div>
           <div style="font-size:.68rem;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
             ${(grp.courts||[]).map(c=>`<span style="background:rgba(255,255,255,.22);padding:2px 6px;border-radius:999px">🎾${c}</span>`).join('')}
             <span style="background:${grpDone?'#43a047':'rgba(255,255,255,.18)'};padding:2px 6px;border-radius:999px">${grpDone?'완료':'진행중'}</span>
@@ -2286,7 +2466,7 @@ function renderCombinedBracketSection(tid, div){
               </div>
               <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
                 <span style="font-size:.68rem;color:#64748b">${s.w}승 ${s.l}패</span>
-                ${isAdv?`<span style="font-size:.62rem;background:${r===0?'#1565c0':'#e67e22'};color:white;padding:2px 6px;border-radius:999px">${gi+1}조 ${r+1}위</span>`:''}
+                ${isAdv?`<span style="font-size:.62rem;background:${r===0?'#1565c0':'#e67e22'};color:white;padding:2px 6px;border-radius:999px">${grpLabel(gi)} ${r+1}위</span>`:''}
               </div>
             </div>`;
           }).join('')}
@@ -2466,7 +2646,7 @@ function getAdvT(key,draw,teams,cfg){
 function getPreviewAdvSlots(draw,cfg){
   const adv=draw?.advance||cfg?.advance||2, res=[];
   (draw?.groups||[]).forEach((grp,gi)=>{
-    for(let rk=1; rk<=adv; rk++) res.push({nm:`${gi+1}조 ${rk}위`, gn:gi+1, rk, placeholder:true});
+    for(let rk=1; rk<=adv; rk++) res.push({nm:`${grpLabel(gi)} ${rk}위`, gn:gi+1, rk, placeholder:true});
   });
   return res;
 }
@@ -2585,8 +2765,9 @@ function openDraw(tid,div){
   ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
   buildDrawPresets(teams.length,t,div);
   ge('sameClubWarn').classList.toggle('show',hasSameClub);
-  ge('drawCfgBox').style.display='block';
-  ge('drawStage').style.display='none';
+  // 설정화면 표시, 진행화면 숨김
+  const cfgScr=ge('drawCfgScreen'); if(cfgScr) cfgScr.style.display='block';
+  const runScr=ge('drawRunScreen');  if(runScr) runScr.style.display='none';
   ge('confirmDrawBtn').textContent='🎲 추첨 시작';
   ge('confirmDrawBtn').onclick=startDraw;
   ge('confirmDrawBtn').disabled=teams.length<2;
@@ -2642,9 +2823,29 @@ function updateAdvPresets(n){
 }
 
 function updateMainSizeDisplay(){
-  const {groups,advance}=DW.cfg;if(!groups)return;
+  const {groups,advance,grpSizes}=DW.cfg;if(!groups)return;
   const total=(advance||1)*groups;const np=nextPow2(total);const byes=np-total;
   ge('mainSizeDisplay').textContent=`본선 진출 ${total}팀 → ${np}강 토너먼트${byes?` (부전승 ${byes}팀)`:' (완전 대진)'}`;
+  // 본선 나무가지 미리보기 갱신
+  updateDrawMainPreview();
+}
+
+function updateDrawMainPreview(){
+  const {groups,advance,grpSizes}=DW.cfg;
+  const pvBox=ge('drawMainPreviewBox');
+  const pvCont=ge('drawMainPreviewContent');
+  if(!pvBox||!pvCont||!groups||!advance) return;
+  // 가상 draw 객체로 슬롯 생성
+  const fakeGroups=Array.from({length:groups},(_,i)=>({i}));
+  const fakeDraw={groups:fakeGroups,advance};
+  const pv=buildPreviewMainSlots(fakeDraw,{});
+  if(pv.n<2){pvBox.style.display='none';return;}
+  pvBox.style.display='block';
+  const badgeHtml=`<span class="badge" style="background:var(--accent);color:#fff">${advance}팀 진출 × ${groups}조 → ${pv.n}강</span>`;
+  pvCont.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <div style="font-size:.8rem;color:var(--text2)">추첨 전 구조 — 조 추첨 완료 시 실제 팀명으로 교체</div>
+    ${badgeHtml}
+  </div>${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}`;
 }
 
 function nextPow2(n){let p=1;while(p<n)p*=2;return p;}
@@ -2709,252 +2910,433 @@ const SFX = (() => {
       if(!AC) return false;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.22; // 전체 볼륨
+      master.gain.value = 0.28;
       master.connect(ctx.destination);
       return true;
     }catch(e){ return false; }
   }
   function now(){ return ctx ? ctx.currentTime : 0; }
-  function clickTick(t, pitch=520){
-    if(!ctx) return;
-    // 짧은 클릭(노이즈+톤)
-    const dur = 0.018;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.35, t + 0.002);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    g.connect(master);
 
-    // noise burst
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for(let i=0;i<data.length;i++){
-      data[i] = (Math.random()*2-1) * (1 - i/data.length);
+  // 드럼 타격음 (저음 킥 + 스네어 노이즈)
+  function drumHit(t, type='kick', vol=0.5){
+    if(!ctx) return;
+    if(type==='kick'){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(160, t);
+      o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + 0.2);
+    } else if(type==='snare'){
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.15), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length) * 0.9;
+      const ns = ctx.createBufferSource();
+      const g = ctx.createGain();
+      ns.buffer = buf;
+      g.gain.setValueAtTime(vol*0.7, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      ns.connect(g); g.connect(master);
+      ns.start(t);
+      // snare tone
+      const o = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(220, t);
+      g2.gain.setValueAtTime(vol*0.3, t);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t+0.08);
+      o.connect(g2); g2.connect(master);
+      o.start(t); o.stop(t+0.09);
+    } else if(type==='hihat'){
+      const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.04), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
+      const ns = ctx.createBufferSource();
+      const g = ctx.createGain();
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'highpass'; flt.frequency.value = 7000;
+      ns.buffer = buf;
+      g.gain.setValueAtTime(vol*0.4, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.04);
+      ns.connect(flt); flt.connect(g); g.connect(master);
+      ns.start(t);
     }
-    const ns = ctx.createBufferSource();
-    ns.buffer = buf;
-    ns.connect(g);
-    ns.start(t);
-
-    // tiny tone
-    const o = ctx.createOscillator();
-    o.type = 'square';
-    o.frequency.setValueAtTime(pitch, t);
-    o.connect(g);
-    o.start(t);
-    o.stop(t + dur);
   }
-  function whoosh(t){
+
+  // 팡파레 음표
+  function fanfareNote(freq, t, dur, vol=0.22){
     if(!ctx) return;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
+    // 브라스 느낌: sawtooth + detune
     o.type = 'sawtooth';
-    o.frequency.setValueAtTime(880, t);
-    o.frequency.exponentialRampToValueAtTime(180, t + 0.12);
+    o.frequency.setValueAtTime(freq, t);
+    o.detune.setValueAtTime(8, t);
+    // 부드러운 envelope
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-    o.connect(g); g.connect(master);
-    o.start(t); o.stop(t + 0.15);
+    g.gain.linearRampToValueAtTime(vol, t + 0.04);
+    g.gain.setValueAtTime(vol, t + dur - 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    // 약간의 필터로 부드럽게
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass'; flt.frequency.value = 3200;
+    o.connect(flt); flt.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.01);
   }
-  function ding(t){
-    if(!ctx) return;
+
+  // 착지 효과음 (쿵 + 하이햇)
+  function landSound(){
+    if(!ensure()) return;
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
+    const t = now();
+    drumHit(t, 'kick', 0.7);
+    drumHit(t+0.02, 'hihat', 0.8);
+  }
+
+  // 조 완성 효과음 (스네어 롤 마무리)
+  function groupComplete(){
+    if(!ensure()) return;
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
+    const t = now();
+    drumHit(t,       'snare', 0.5);
+    drumHit(t+0.08,  'snare', 0.6);
+    drumHit(t+0.14,  'snare', 0.75);
+    drumHit(t+0.18,  'kick',  0.8);
+    // 짧은 성공 딩
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(880, t);
-    o.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.26, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.type = 'sine'; o.frequency.setValueAtTime(880, t+0.22);
+    o.frequency.exponentialRampToValueAtTime(1320, t+0.32);
+    g.gain.setValueAtTime(0.0001, t+0.22);
+    g.gain.exponentialRampToValueAtTime(0.18, t+0.24);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.38);
     o.connect(g); g.connect(master);
-    o.start(t); o.stop(t + 0.26);
+    o.start(t+0.22); o.stop(t+0.40);
   }
 
-  // 드르륵(클릭 반복) 컨트롤
+  // 드럼롤 (점점 빨라지다가 크레셴도)
   let rollingTimer = null;
-  function rollStart(totalMs=1400){
+  function rollStart(totalMs=2400){
     if(!ensure()) return;
-    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
-    if(rollingTimer) { clearTimeout(rollingTimer); rollingTimer=null; }
-
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
+    if(rollingTimer){ clearTimeout(rollingTimer); rollingTimer=null; }
     const start = performance.now();
+    let beat = 0;
     const tick = () => {
       const elapsed = performance.now() - start;
       const prog = Math.min(1, elapsed / totalMs);
-      const step = 40 + prog*160;   // 점점 느려짐
-      const pitch = 640 - prog*260; // 점점 낮아짐
-      clickTick(now(), pitch);
+      // 처음엔 kick+snare 교대, 후반엔 빠른 스네어롤
+      const step = prog < 0.5
+        ? 280 - prog * 300   // 280ms → 130ms (느린 킥+스네어)
+        : 130 - (prog-0.5)*200; // 130ms → 30ms (빠른 롤)
+      const vol = 0.3 + prog * 0.5;
+      if(prog < 0.6){
+        if(beat % 2 === 0) drumHit(now(), 'kick', vol);
+        else               drumHit(now(), 'snare', vol * 0.8);
+      } else {
+        drumHit(now(), 'snare', vol);
+        if(beat % 3 === 0) drumHit(now()+0.01, 'hihat', 0.5);
+      }
+      beat++;
       if(prog >= 1){ rollingTimer=null; return; }
-      rollingTimer = setTimeout(tick, step);
+      rollingTimer = setTimeout(tick, Math.max(18, step));
     };
     tick();
   }
   function rollStop(){
-    if(rollingTimer){ clearInterval(rollingTimer); rollingTimer=null; }
+    if(rollingTimer){ clearTimeout(rollingTimer); rollingTimer=null; }
   }
+
+  // reveal: 마지막 킥 + 하이햇 플래시
   function reveal(){
     if(!ensure()) return;
-    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
     const t = now();
-    whoosh(t);
-    ding(t + 0.08);
+    drumHit(t, 'kick', 0.9);
+    drumHit(t+0.01, 'hihat', 1.0);
+    drumHit(t+0.04, 'snare', 0.7);
   }
+
+  // 팡파레 (도-미-솔-높은도 + 화음)
   function finale(){
     if(!ensure()) return;
-    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
     const t = now();
-    ding(t);
-    ding(t + 0.18);
-    ding(t + 0.36);
+    // 드럼 인트로
+    drumHit(t,      'kick',  1.0);
+    drumHit(t+0.05, 'snare', 0.9);
+    drumHit(t+0.09, 'hihat', 0.8);
+    drumHit(t+0.12, 'kick',  0.8);
+    // 팡파레 멜로디: 도-미-솔-도(옥타브)
+    fanfareNote(523.25, t+0.18, 0.18, 0.20); // 도
+    fanfareNote(659.25, t+0.36, 0.18, 0.22); // 미
+    fanfareNote(783.99, t+0.54, 0.18, 0.22); // 솔
+    fanfareNote(1046.5, t+0.72, 0.32, 0.24); // 높은 도
+    // 화음 (도+미+솔 동시)
+    fanfareNote(523.25, t+0.72, 0.32, 0.12);
+    fanfareNote(659.25, t+0.72, 0.32, 0.10);
+    // 마지막 킥
+    drumHit(t+0.72, 'kick', 0.7);
+    drumHit(t+0.80, 'snare', 0.6);
+    drumHit(t+0.86, 'hihat', 0.9);
   }
-  return { rollStart, rollStop, reveal, finale };
+
+  return { rollStart, rollStop, reveal, finale, landSound, groupComplete };
 })();
 
 
-/** 슬롯처럼 팀명을 빠르게 돌렸다가, 실제 둥근 테니스공이 회전하고 공 위 글자가 바뀌는 방식 */
-async function spinSlotIn(el, pool, finalText, totalMs){
-  if(!el) return;
-  const list = (Array.isArray(pool) ? pool : []).filter(Boolean);
-  if(!list.length){
-    el.textContent = finalText || '';
-    return;
+/* ── 🎾 세로 룰렛 → 낙엽 착지 추첨 시스템 ── */
+
+// confetti
+function spawnConfetti(container){
+  const colors=['#1565c0','#43a047','#f59e0b','#e53935','#8e24aa','#00897b'];
+  for(let i=0;i<16;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.cssText=`left:${10+Math.random()*80}%;background:${colors[~~(Math.random()*colors.length)]};animation-delay:${Math.random()*.3}s;animation-duration:${.5+Math.random()*.4}s;transform:rotate(${Math.random()*360}deg);width:${5+Math.random()*7}px;height:${5+Math.random()*7}px;border-radius:${Math.random()>.5?'50%':'2px'};`;
+    container.style.position='relative';
+    container.appendChild(el);
+    setTimeout(()=>el.remove(), 900);
   }
-  const ball = el.closest('.tennis-roulette')?.querySelector('.tennis-roulette-core');
-  const start = performance.now();
-  let idx = Math.floor(Math.random()*list.length);
-  while(true){
-    const elapsed = performance.now() - start;
-    const p = Math.min(1, elapsed / Math.max(1, totalMs || 1));
-    const step = 36 + (p*p) * 220;
-    idx = (idx + 1 + Math.floor(Math.random()*2)) % list.length;
-    el.textContent = list[idx];
-    if(ball && p > 0.72) ball.style.animationDuration = `${0.62 + (p-0.72)*1.6}s, 0.8s`;
-    await sleep(step);
-    if(elapsed >= totalMs) break;
-  }
-  el.textContent = finalText || list[idx] || '';
-}
-function uniquePoolNames(items){
-  const seen = new Set();
-  return (items||[]).map(v=>typeof v==='string'?v:(v?.nm||'')).filter(Boolean).filter(name=>{ if(seen.has(name)) return false; seen.add(name); return true; });
-}
-function tennisBallOnlyHTML(text='', cls=''){
-  return `<div class="tennis-roulette-ball ${cls}"><div class="tennis-roulette-core"></div><div class="tennis-ball-label">${text || '?'}</div></div>`;
-}
-function tennisRevealHTML(text='', tone='primary', note=''){
-  return `<div class="tennis-reveal">
-    ${tennisBallOnlyHTML(text, 'popped')}
-    ${note ? `<div class="tennis-roulette-sub">${note}</div>` : `<div class="tennis-roulette-name">${text || '?'}</div>`}
-  </div>`;
-}
-function tennisVsHTML(leftText='', rightText='', leftTone='primary', rightTone='success'){
-  return `<div class="tennis-vs">
-    <div class="tennis-reveal">
-      ${tennisBallOnlyHTML(leftText, 'popped')}
-      <div class="tennis-roulette-name">${leftText || '?'}</div>
-    </div>
-    <div style="font-size:1.35rem;font-weight:900;color:var(--text2)">VS</div>
-    <div class="tennis-reveal">
-      ${tennisBallOnlyHTML(rightText, 'popped')}
-      <div class="tennis-roulette-name">${rightText || '?'}</div>
-    </div>
-  </div>`;
-}
-function rouletteBallHTML(text='', cls='wide', extra=''){
-  return tennisRevealHTML(text, 'primary');
-}
-function slotMarkup(slotId='drawSpinSlot', subtitle='추첨 중...'){
-  return `
-    <div style="font-size:.85rem;font-weight:700;color:var(--text2);margin-bottom:8px">${subtitle}</div>
-    <div class="tennis-roulette">
-      <div class="tennis-roulette-ball"><div class="tennis-roulette-core spinning"></div><div id="${slotId}" class="tennis-ball-label spinning">?</div></div>
-      <div class="tennis-roulette-name">둥근 테니스공이 돌면서 팀명이 공 위에서 바로 바뀝니다 🎾</div>
-    </div>`;
-}
-async function runStageSlotSpin({slotId='drawSpinSlot', subtitle='추첨 중...', pool=[], finalText='', totalMs=2200}){
-  ge('drawStageContent').innerHTML = slotMarkup(slotId, subtitle);
-  const el = ge(slotId);
-  const core = ge('drawStageContent').querySelector('.tennis-roulette-core');
-  SFX.rollStart(totalMs + 200);
-  await spinSlotIn(el, uniquePoolNames(pool.length ? pool : [finalText]), finalText, totalMs);
-  if(core) core.classList.remove('spinning');
-  el?.classList.remove('spinning');
-  SFX.rollStop();
-  SFX.reveal();
-}
-async function runMainStageSlotSpin({title='본선 추첨', slotId='mainSpinSlot', pool=[], finalText='', totalMs=2200}){
-  const host = ge('mainStageContent') || ge('mainStageMsg');
-  if(!host) return;
-  host.innerHTML = `
-    <div style="font-size:.9rem;font-weight:700;color:var(--text2);margin-bottom:8px">${title}</div>
-    <div class="tennis-roulette">
-      <div class="tennis-roulette-ball"><div class="tennis-roulette-core spinning"></div><div id="${slotId}" class="tennis-ball-label spinning">?</div></div>
-      <div class="tennis-roulette-name">본선도 같은 공 룰렛으로 천천히 한 팀씩 결정됩니다 🏆</div>
-    </div>`;
-  const el = ge(slotId);
-  const core = host.querySelector('.tennis-roulette-core');
-  SFX.rollStart(totalMs + 200);
-  await spinSlotIn(el, uniquePoolNames(pool.length ? pool : [finalText]), finalText, totalMs);
-  if(core) core.classList.remove('spinning');
-  el?.classList.remove('spinning');
-  SFX.rollStop();
-  SFX.reveal();
 }
 
+// 세로 룰렛: 빠르게 돌다가 점점 느려지며 당첨 팀에서 멈춤
+async function runRoulette(containerEl, names, finalName, totalMs){
+  if(!containerEl||!names.length) return;
+  // 두 벌 복제 (무한 스크롤 느낌)
+  const doubled=[...names,...names];
+  const itemH=42;
+  const uid='rs'+Date.now();
+  containerEl.innerHTML=`
+    <div class="roulette-strip-wrap">
+      <div class="roulette-highlight"></div>
+      <div class="roulette-strip" id="${uid}">
+        ${doubled.map(n=>`<div class="roulette-item">${n}</div>`).join('')}
+      </div>
+    </div>`;
+
+  const strip=containerEl.querySelector('#'+uid);
+  if(!strip) return;
+
+  // 빠른 스크롤
+  strip.style.setProperty('--speed','.09s');
+  strip.classList.add('spinning');
+  SFX.rollStart(totalMs);
+  await sleep(totalMs * 0.65);
+
+  // 점점 느려지기
+  for(const spd of [.14,.21,.30,.42,.56,.74,.95]){
+    strip.style.setProperty('--speed', spd+'s');
+    await sleep(spd * 780);
+  }
+  strip.classList.remove('spinning');
+  SFX.rollStop();
+
+  // 당첨 팀 중앙 정렬
+  const winIdx = names.findIndex(n=>n===finalName);
+  const targetIdx = (winIdx >= 0 ? winIdx : 0) + names.length; // 두 번째 세트
+  const wrapH = 180;
+  const offset = -(targetIdx * itemH) + (wrapH/2) - (itemH/2);
+  strip.style.transition = 'transform .52s cubic-bezier(.22,.68,.35,1.15)';
+  strip.style.transform = `translateY(${offset}px)`;
+  // 당첨 항목 강조
+  strip.querySelectorAll('.roulette-item').forEach((el,i)=>{
+    if(i===targetIdx) el.classList.add('winner-item');
+  });
+  await sleep(560);
+}
+
+// 낙엽 착지: 위에서 둥실 내려와 착지 후 살랑살랑
+async function leafLandReveal(stageEl, teamName, isSameClub){
+  if(!stageEl) return;
+  const lx=(Math.random()-.5)*44;
+  const ly=-(65+Math.random()*35);
+  const lr=(Math.random()-.5)*30;
+  stageEl.innerHTML='';
+  stageEl.style.cssText='display:flex;justify-content:center;align-items:center;min-height:68px;position:relative;overflow:visible;padding:4px 0;';
+  const card=document.createElement('div');
+  card.className='leaf-card-stage'+(isSameClub?' same-club-card':'');
+  card.textContent=teamName;
+  card.style.cssText=`opacity:0;`;
+  card.style.setProperty('--lx', lx+'px');
+  card.style.setProperty('--ly', ly+'px');
+  card.style.setProperty('--lr', lr+'deg');
+  stageEl.appendChild(card);
+  // 다음 프레임에 애니메이션 시작
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  card.classList.add('landing');
+  SFX.landSound();
+  await sleep(680);
+  card.style.opacity='1';
+  card.classList.remove('landing');
+  card.classList.add('floating');
+  await sleep(500);
+}
+
+// 해당 조의 다음 빈 슬롯을 반짝이게
+function activateSlot(groupIdx){
+  document.querySelectorAll('.draw-team-slot.slot-active').forEach(el=>el.classList.remove('slot-active'));
+  const slots=ge('dg_slots_'+groupIdx);
+  if(!slots) return;
+  const empty=slots.querySelector('.draw-team-slot:not([data-filled])');
+  if(empty) empty.classList.add('slot-active');
+}
+
+// 슬롯 채우기
+function fillSlotWithLeaf(groupIdx, teamName, isSameClub){
+  const slots=ge('dg_slots_'+groupIdx);
+  if(!slots) return;
+  const empty=slots.querySelector('.draw-team-slot:not([data-filled])');
+  if(!empty) return;
+  empty.classList.remove('slot-active');
+  empty.setAttribute('data-filled','1');
+  empty.textContent=teamName;
+  empty.classList.add('slot-filled');
+  if(isSameClub) empty.classList.add('same-club');
+}
+
+// 조 완성 연출
+async function celebrateGroupComplete(groupIdx){
+  const row=ge('dg_'+groupIdx);
+  if(!row) return;
+  row.classList.add('group-complete');
+  SFX.groupComplete();
+  spawnConfetti(row);
+  row.style.background='linear-gradient(90deg,#dcfce7,#d1fae5)';
+  row.style.borderColor='#22c55e';
+  await sleep(900);
+  row.style.background='';
+  row.style.borderColor='';
+  row.classList.remove('group-complete');
+}
+
+// 설정화면 → 진행화면 전환
+function switchToRunScreen(){
+  const cfg=ge('drawCfgScreen'); if(cfg) cfg.style.display='none';
+  const run=ge('drawRunScreen'); if(run) run.style.display='block';
+  const src=ge('drawMainPreviewContent');
+  const dst=ge('drawRunPreviewContent');
+  if(src&&dst) dst.innerHTML=src.innerHTML;
+}
+
+// 추첨 완료 후 오른쪽 패널 갱신
+function refreshRunPreview(key){
+  const freshDraw=G.draws[key];
+  const dst=ge('drawRunPreviewContent');
+  if(!freshDraw||!dst) return;
+  const pv=buildPreviewMainSlots(freshDraw,{});
+  if(pv.n>=2){
+    const adv=freshDraw.advance||2, gc=freshDraw.groups?.length||0;
+    dst.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-size:.78rem;font-weight:700;color:var(--primary-dark)">✅ 본선 배정 확정</div>
+      <span class="badge" style="background:var(--accent);color:#fff;font-size:.7rem">${adv}팀×${gc}조→${pv.n}강</span>
+    </div>${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}`;
+  }
+}
+
+// 추첨 스테이지 초기화
+function initDrawStage(current, total, groupIdx){
+  const groupColors=['#1565c0','#2e7d32','#6a1b9a','#c62828','#00695c','#e65100'];
+  const gc=groupColors[groupIdx%groupColors.length];
+  const el=ge('drawStageContent');
+  if(!el) return;
+  el.innerHTML=`
+    <div class="draw-stage-card" style="border-color:${gc}55">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:.85rem;font-weight:800;color:${gc}">${grpLabel(groupIdx)} 배정 중 🎰</div>
+        <div style="font-size:.72rem;color:var(--text2);font-weight:600">${current} / ${total}번째</div>
+      </div>
+      <div id="rouletteWrap_${groupIdx}_${current}"></div>
+      <div id="leafStage_${groupIdx}_${current}" style="margin-top:8px;min-height:68px;display:flex;justify-content:center;align-items:center;overflow:visible"></div>
+    </div>`;
+  // ID를 동적으로 부여해서 반환
+  el._rouletteId = `rouletteWrap_${groupIdx}_${current}`;
+  el._leafId     = `leafStage_${groupIdx}_${current}`;
+}
+
+function buildRouletteStrip(names){ return names.map(n=>`<div class="roulette-item">${n}</div>`).join(''); }
 
 async function startDraw(){
   if(DW.isRunning)return;
   if(!DW.key||DW.teams.length<2){toast('최소 2팀 필요','error');return;}
   DW.isRunning=true;
   ge('confirmDrawBtn').disabled=true;ge('confirmDrawBtn').textContent='추첨 중...';
-  ge('drawCfgBox').style.display='none';ge('drawStage').style.display='block';
+  // 설정화면 → 진행화면 전환
+  switchToRunScreen();
 
-  const key=DW.key,teams=DW.teams,{groups:ng,grpSizes,advance}=DW.cfg;
-  // 재추첨 전 기존 기록 초기화
+  const key=DW.key, teams=DW.teams, {groups:ng,grpSizes,advance}=DW.cfg;
   await resetMatchRecords(key);
   const shuffled=smartShuffle(teams.map((_,i)=>i),teams);
   const grps=grpSizes.map(size=>({teams:[],size}));
-  const assignOrder=buildSnakeOrder(grps.map((g,i)=>({i,size:g.size})),{startRandom:true,shuffle:true,rotate:true});
-
-  ge('drawGroupRows').innerHTML=grps.map((_,gi)=>`<div class="draw-group-row" id="dg_${gi}"><div class="draw-group-label">${gi+1}조</div><div id="dg_slots_${gi}" style="display:flex;flex-wrap:wrap;gap:4px">${Array(grps[gi].size).fill(0).map(()=>`<span class="draw-team-slot">?</span>`).join('')}</div></div>`).join('');
-
-  for(let i=0;i<assignOrder.length;i++){
-    const gi=assignOrder[i];const ti=shuffled[i];const team=teams[ti];const dn=tdn(team,key,ti);
-    ge('drawProgressBar').style.width=`${(i/shuffled.length)*100}%`;
-    // 🎰 슬롯 스핀(장유 스타일)
-    const poolNames = shuffled.slice(i).map(tj=>tdn(teams[tj],key,tj));
-    const spinMs = 2200 + randInt(1400); // 2.2~3.6초
-    await runStageSlotSpin({
-      slotId:'drawSpinSlot',
-      subtitle:`${i+1} / ${shuffled.length}번째 추첨`,
-      pool: poolNames,
-      finalText: dn,
-      totalMs: spinMs,
-      accent:'var(--primary)'
-    });
-
-    // 조 배정 텍스트
-    ge('drawStageContent').innerHTML = `
-      <div style="font-size:.95rem;font-weight:700;color:var(--success);margin-bottom:6px">✨ ${gi+1}조 배정 완료!</div>
-      ${tennisRevealHTML(dn,'success','한 팀씩 천천히 공개됩니다')}
-    `;
-    await sleep(760);
-// 슬롯 채우기
-    const slots=ge('dg_slots_'+gi);
-    const emptySlot=slots.querySelector('.draw-team-slot:not(.filled)');
-    if(emptySlot){
-      const sameClub=grps[gi].teams.some(idx=>teams[idx].club===team.club);
-      emptySlot.textContent=dn;emptySlot.classList.add('filled');
-      if(sameClub)emptySlot.classList.add('same-club');
-      grps[gi].teams.push(ti);
+  // 추첨 순서: A조1번→B조1번→C조1번→A조2번→B조2번... (라운드로빈)
+  const assignOrder = [];
+  const maxSize = Math.max(...grps.map(g=>g.size));
+  for(let slot=0; slot<maxSize; slot++){
+    for(let gi=0; gi<grps.length; gi++){
+      if(slot < grps[gi].size) assignOrder.push(gi);
     }
-    await sleep(320);
+  }
+
+  // 조 슬롯 행 초기화 (고정 width 슬롯)
+  ge('drawGroupRows').innerHTML = grps.map((_,gi)=>`
+    <div class="draw-group-row" id="dg_${gi}" style="overflow:visible">
+      <div class="draw-group-label">${grpLabel(gi)}</div>
+      <div id="dg_slots_${gi}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        ${Array(grps[gi].size).fill(0).map(()=>`<span class="draw-team-slot">?</span>`).join('')}
+      </div>
+    </div>`).join('');
+
+  const allNames = teams.map((t,i)=>tdn(t,key,i));
+
+  for(let i=0; i<assignOrder.length; i++){
+    const gi=assignOrder[i];
+    const ti=shuffled[i];
+    const team=teams[ti];
+    const dn=tdn(team,key,ti);
+    ge('drawProgressBar').style.width=`${Math.round((i+1)/shuffled.length*100)}%`;
+
+    // 1) 해당 조 빈 슬롯 반짝임
+    activateSlot(gi);
+
+    // 2) 스테이지 초기화 (동적 ID)
+    initDrawStage(i+1, shuffled.length, gi);
+
+    // 3) DOM 렌더 완료 대기
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+    // 4) 룰렛 실행
+    const stageEl=ge('drawStageContent');
+    const rWrap=stageEl ? document.getElementById(stageEl._rouletteId) : null;
+    const pool=shuffled.slice(i).map(tj=>tdn(teams[tj],key,tj));
+    const spinMs=1600+randInt(900);
+    await runRoulette(rWrap, pool, dn, spinMs);
+
+    await sleep(200);
+
+    // 5) 낙엽 착지
+    const sameClub=grps[gi].teams.some(idx=>teams[idx].club===team.club);
+    const leafEl=stageEl ? document.getElementById(stageEl._leafId) : null;
+    await leafLandReveal(leafEl, dn, sameClub);
+
+    // 6) 슬롯 채우기
+    fillSlotWithLeaf(gi, dn, sameClub);
+    grps[gi].teams.push(ti);
+
+    // 7) 조 완성?
+    if(grps[gi].teams.length >= grps[gi].size){
+      await sleep(280);
+      await celebrateGroupComplete(gi);
+    } else {
+      await sleep(160);
+    }
   }
 
   ge('drawProgressBar').style.width='100%';
-  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:700;color:var(--success);margin:10px 0">🎉 추첨 완료!</div>`;
-  await sleep(900);
+  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 모든 조 추첨 완료!</div>`;
+  await sleep(500);
 
   const groupData=grps.map(g=>({teams:g.teams,courts:[]}));
   G.draws[key]={groups:groupData,shuffled,advance};
@@ -2979,6 +3361,8 @@ async function startDraw(){
     ge('confirmDrawBtn').disabled=false;DW.isRunning=false;
     SFX.finale();
     toast('추첨 완료 🎲','success');
+    // 오른쪽 패널 실제팀명으로 갱신
+    refreshRunPreview(key);
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');DW.isRunning=false;}
 }
 
@@ -3874,7 +4258,7 @@ function renderLiveRanking(tid,div,cont){
       const stats=calcGS(key,gi,grp.teams,teams);
       const gms=allMs.filter(m=>m.phase==='group'&&m.group===gi);
       const done=gms.length>0&&gms.every(m=>m.winner!==null);
-      html+=`<div style="margin-bottom:10px"><div style="font-size:.75rem;font-weight:700;color:var(--primary-dark);margin-bottom:4px;padding:3px 8px;background:var(--panel2);border-radius:4px">${gi+1}조 ${done?'<span class="badge bg-green" style="font-size:.62rem">완료</span>':''}</div>
+      html+=`<div style="margin-bottom:10px"><div style="font-size:.75rem;font-weight:700;color:var(--primary-dark);margin-bottom:4px;padding:3px 8px;background:var(--panel2);border-radius:4px">${grpLabel(gi)} ${done?'<span class="badge bg-green" style="font-size:.62rem">완료</span>':''}</div>
         <div class="table-wrap"><table><thead><tr><th>순위</th><th>팀</th><th>승</th><th>패</th><th>득실</th></tr></thead><tbody>
         ${stats.map((s,r)=>`<tr style="background:${r===0?'#fef3cd':r===1?'#f0f4fa':''}"><td>${r===0?'🥇':r===1?'🥈':r===2?'🥉':r+1}</td><td style="font-weight:700">${s.nm}</td><td style="color:var(--success);font-weight:700">${s.w}</td><td style="color:var(--danger)">${s.l}</td><td style="font-weight:700;color:${s.diff>0?'var(--success)':s.diff<0?'var(--danger)':'inherit'}">${s.diff>0?'+':''}${s.diff}</td></tr>`).join('')}
         </tbody></table></div></div>`;
@@ -3927,7 +4311,7 @@ function upDash(){
           const gcMs=gMs.filter(m=>m.group===gi);
           const gcDone=gcMs.filter(m=>m.winner!==null).length;
           const gcTotal=gcMs.length;
-          return `${gi+1}조 ${gcDone}/${gcTotal}`;
+          return `${grpLabel(gi)} ${gcDone}/${gcTotal}`;
         }).join(' · ');
         summary=`<div style="margin-top:6px;padding:5px 8px;background:var(--panel2);border-radius:var(--radius);font-size:.68rem;color:var(--text2)">📋 예선 진행중<br><span style="font-weight:600">${grpSummary}</span></div>`;
       }
@@ -5216,7 +5600,7 @@ function openGroupCourtModal(key,gi){
   ensureGroupCourtModal();
   GC_MODAL={key,gi};
   const grpCourts=(G.draws[key]?.groups?.[gi]?.courts)||[];
-  const title=`🎾 ${gi+1}조 코트 배정 (복수 선택)`;
+  const title=`🎾 ${grpLabel(gi)} 코트 배정 (복수 선택)`;
   const sectionsHtml = COURT_GROUPS.map(g=>{
     const labels = g.courts.map(c=>{
       const chk = grpCourts.includes(c) ? 'checked' : '';
@@ -6026,7 +6410,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,openDraw,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,
+  onBrTC,renderBracket,openDraw,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
@@ -6038,7 +6422,9 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   filterP,showP,renderAllP,openPD,openRoster,
   openClubMgr,addClub,delClub,renderCL,
   gDS,om,cm,toast,ge,esc,setRbSc,
-  buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets
+  buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
+  switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
+  activateSlot,celebrateGroupComplete,refreshRunPreview,buildRouletteStrip,updateDrawMainPreview
 });
 
 document.addEventListener('DOMContentLoaded',()=>initFB());
