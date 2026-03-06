@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-06-v11-tennis-ball-actual-spin";
+  const APP_VERSION = "2026-03-06-v12-home-stats-guide-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4272,16 +4272,68 @@ function renderLiveRanking(tid,div,cont){
 }
 
 
+function getAssociationSummary(){
+  const clubSet = new Set();
+  const playerSet = new Set();
+  let teamCount = 0;
+  let matchCount = 0;
+
+  Object.values(G.teams||{}).forEach(arr=>{
+    (arr||[]).forEach(team=>{
+      teamCount++;
+      const bc = baseClub(team?.club||'') || (team?.club||'');
+      if(bc) clubSet.add(bc);
+      (team?.players||[]).forEach(name=>{
+        const clean = cleanName(name);
+        if(clean) playerSet.add(`${normName(clean)}__${bc}`);
+      });
+    });
+  });
+
+  (HIST_DATA||[]).forEach(t=>{
+    (t.teams||[]).forEach(team=>{
+      teamCount++;
+      const bc = baseClub(team?.club||'') || (team?.club||'');
+      if(bc) clubSet.add(bc);
+      (team?.players||[]).forEach(name=>{
+        const clean = cleanName(name);
+        if(clean) playerSet.add(`${normName(clean)}__${bc}`);
+      });
+    });
+  });
+
+  Object.values(G.matches||{}).forEach(arr=>{
+    (arr||[]).forEach(m=>{
+      if(m && m.winner!==null && !m.bye) matchCount++;
+    });
+  });
+
+  Object.entries(G.players||{}).forEach(([k,p])=>{
+    const pk = pKeyParse(k);
+    const nm = cleanName(pk.name || p?.name || k);
+    const bc = baseClub(pk.club || p?.club || '') || (pk.club || p?.club || '');
+    if(nm) playerSet.add(`${normName(nm)}__${bc}`);
+    (p?.clubs||[]).forEach(c=>{
+      const b = baseClub(c)||c;
+      if(b) clubSet.add(b);
+    });
+  });
+
+  return {
+    clubs: clubSet.size,
+    teams: teamCount,
+    matches: matchCount,
+    players: playerSet.size
+  };
+}
+
 function upDash(){
-  const tt=Object.values(G.teams).reduce((s,a)=>s+(a||[]).length,0);
-  const tp=Object.keys(G.players).length;
-  const tm=Object.values(G.matches).reduce((s,a)=>s+(a||[]).filter(m=>m.winner!==null).length,0);
-  const clubs=new Set();Object.values(G.teams).forEach(a=>a.forEach(t=>clubs.add(baseClub(t.club)||t.club)));
-  ge('sClubs').textContent=clubs.size;
-  ge('sTeams').textContent=tt;
-  ge('sMatches').textContent=tm;
-  ge('sPlayers').textContent=tp;
-  ge('regBadge').textContent=tt;
+  const summary = getAssociationSummary();
+  ge('sClubs').textContent=summary.clubs;
+  ge('sTeams').textContent=summary.teams;
+  ge('sMatches').textContent=summary.matches;
+  ge('sPlayers').textContent=summary.players;
+  ge('regBadge').textContent=summary.teams;
 
   const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
   if(at){
@@ -4293,7 +4345,7 @@ function upDash(){
     const slbl={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
     ge('heroTitle').textContent=at.name;
     ge('heroStatus').textContent='📌 '+slbl[at.status];
-    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 현재 ${currentClubSet.size}개 클럽</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 현재 ${currentTeamCount}팀</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>${(at.guideText||at.guideUrl||at.hasGuideAssets||((at.guideAssets||[]).length))?`<div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.75rem;padding:6px 12px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>`:''}${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;
+    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 현재 ${currentClubSet.size}개 클럽</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 현재 ${currentTeamCount}팀</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div><div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.75rem;padding:6px 12px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;
     ge('homeDivStatus').innerHTML=at.divisions.map(d=>{
       const k=`${at.id}_${d}`;
       const tc=(G.teams[k]||[]).length;
