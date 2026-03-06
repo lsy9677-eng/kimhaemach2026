@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-06-v12-home-stats-guide-fix";
+  const APP_VERSION = "2026-03-06-v13-seednum";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -2161,7 +2161,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
         const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
         html+=`<div class="gs-row ${rowCls}">
-          <div class="gs-rk">${r===0?'🥇':r===1?'🥈':r===2?'🥉':r+1}</div>
+          <div class="gs-rk">${r+1}</div>
           <div class="gs-nm">${s.nm}${isAdv?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
           <div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></div>
         </div>`;
@@ -2451,7 +2451,7 @@ function renderCombinedBracketSection(tid, div){
             const isAdv = grpDone && r<adv;
             return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:${r<stats.length-1?'1px solid #f1f5f9':'none'}">
               <div style="display:flex;align-items:center;gap:8px;min-width:0">
-                <span style="font-size:.9rem">${r===0?'🥇':r===1?'🥈':r===2?'🥉':(r+1)}</span>
+                <span style="font-size:.9rem">${r+1}</span>
                 <span style="font-weight:${isAdv?'800':'500'};color:${isAdv?'#1565c0':'#1f2937'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.nm}</span>
               </div>
               <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
@@ -4302,7 +4302,7 @@ function renderLiveRanking(tid,div,cont){
       const done=gms.length>0&&gms.every(m=>m.winner!==null);
       html+=`<div style="margin-bottom:10px"><div style="font-size:.75rem;font-weight:700;color:var(--primary-dark);margin-bottom:4px;padding:3px 8px;background:var(--panel2);border-radius:4px">${grpLabel(gi)} ${done?'<span class="badge bg-green" style="font-size:.62rem">완료</span>':''}</div>
         <div class="table-wrap"><table><thead><tr><th>순위</th><th>팀</th><th>승</th><th>패</th><th>득실</th></tr></thead><tbody>
-        ${stats.map((s,r)=>`<tr style="background:${r===0?'#fef3cd':r===1?'#f0f4fa':''}"><td>${r===0?'🥇':r===1?'🥈':r===2?'🥉':r+1}</td><td style="font-weight:700">${s.nm}</td><td style="color:var(--success);font-weight:700">${s.w}</td><td style="color:var(--danger)">${s.l}</td><td style="font-weight:700;color:${s.diff>0?'var(--success)':s.diff<0?'var(--danger)':'inherit'}">${s.diff>0?'+':''}${s.diff}</td></tr>`).join('')}
+        ${stats.map((s,r)=>`<tr style="background:${r===0?'#fef3cd':r===1?'#f0f4fa':''}"><td>${r+1}</td><td style="font-weight:700">${s.nm}</td><td style="color:var(--success);font-weight:700">${s.w}</td><td style="color:var(--danger)">${s.l}</td><td style="font-weight:700;color:${s.diff>0?'var(--success)':s.diff<0?'var(--danger)':'inherit'}">${s.diff>0?'+':''}${s.diff}</td></tr>`).join('')}
         </tbody></table></div></div>`;
     });
     html+=`</div>`;
