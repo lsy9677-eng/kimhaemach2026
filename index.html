@@ -4943,7 +4943,7 @@ function renderAllP(){
     let br=null;
     (p.history||[]).forEach(h=>{if(h.rank&&(!br||h.rank<br))br=h.rank;});
     histRecs.forEach(r=>{if(r.rank&&(!br||r.rank<br))br=r.rank;});
-    const dispName=keyClub?`${name}<small style="color:var(--text3);font-size:.72rem">(${keyClub})</small>`:name;
+    const dispName=name;
     const editArg=esc(rawKey);
     return`<tr>
       <td style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="showP('${esc(name)}','${esc(keyClub)}')">${dispName}${AD?` <button class="btn btn-outline" style="font-size:.6rem;padding:1px 6px;margin-left:4px" onclick="event.stopPropagation();openEditPlayer('${editArg}')">✏️</button>`:''}</td>
@@ -4965,7 +4965,7 @@ function openPD(name,club){
   const p = k ? G.players[k] : null;
 
   const finalClub = useClub || (p?.clubs?.slice(-1)[0]) || (p?.club) || '';
-  const title = finalClub ? `${dispName}(${finalClub})` : dispName;
+  const title = dispName;
 
   ge('mPDT').textContent='👤 '+title;
   ge('mPDB').innerHTML = p ? buildPH(dispName, p)
