@@ -510,6 +510,33 @@ body{overflow-x:hidden;}
 #page-players .table-wrap table td:nth-child(1) small{margin-left:6px; color:var(--text3);}
 
 /* 🎰 슬롯(추첨) 강조 표시 */
+
+.first-appearance-star{
+  color:#f5a623;
+  font-weight:900;
+  text-shadow:0 1px 0 rgba(0,0,0,.08);
+}
+.first-appearance-name{
+  text-decoration:underline;
+  text-underline-offset:2px;
+  font-weight:700;
+}
+.reg-roster-card{
+  margin-top:12px;
+}
+.reg-roster-card .rr-title{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+  margin-bottom:10px;font-weight:800;color:var(--primary-dark);font-size:.9rem;
+}
+.reg-roster-card .rr-guide{
+  margin:-2px 0 12px;padding:8px 12px;background:var(--panel2);border:1px solid var(--border);
+  border-radius:var(--radius);font-size:.76rem;color:var(--text2);
+}
+.reg-roster-card .rr-head{
+  display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;
+  background:var(--primary);color:white;border-radius:var(--radius-lg)
+}
+
 .draw-slot-big{
   min-width:240px;
   display:inline-flex;
@@ -524,6 +551,32 @@ body{overflow-x:hidden;}
   letter-spacing:.2px;
 }
 
+
+/* ── 통합 등록 팀 현황 (모바일 대응) ── */
+.rr-team-card{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;}
+.rr-team-header{background:var(--primary-dark);color:#fff;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;}
+.rr-team-info{display:flex;align-items:center;gap:8px;}
+.rr-team-num{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;}
+.rr-team-name{font-weight:700;font-size:.92rem;}
+.rr-team-count{font-size:.72rem;opacity:.75;background:rgba(255,255,255,.15);padding:2px 7px;border-radius:20px;}
+.rr-admin-btns{display:flex;gap:6px;}
+.rr-btn-edit,.rr-btn-del{padding:3px 9px!important;font-size:.68rem!important;line-height:1.4;}
+.rr-rub-grid{display:grid;grid-template-columns:repeat(var(--rr-cols,3),1fr);gap:6px;padding:10px 12px;}
+.rr-rub-card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 8px;text-align:center;}
+.rr-rub-label{font-size:.6rem;color:var(--text3);margin-bottom:4px;font-weight:600;letter-spacing:.03em;}
+.rr-rub-names{font-size:.77rem;line-height:1.5;word-break:keep-all;}
+.rr-slash{color:var(--text3);font-size:.7rem;margin:0 1px;}
+.rr-sub{padding:0 12px 10px;font-size:.72rem;color:var(--text3);}
+@media(max-width:600px){
+  .rr-rub-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px;padding:8px;}
+  .rr-rub-names{font-size:.72rem;}
+  .rr-team-name{font-size:.84rem;}
+  .rr-btn-edit,.rr-btn-del{padding:2px 7px!important;font-size:.64rem!important;}
+}
+@media(max-width:380px){
+  .rr-rub-grid{grid-template-columns:1fr 1fr!important;}
+  .rr-rub-card{padding:5px 4px;}
+}
 </style>
 
 <!-- PWA -->
@@ -721,10 +774,18 @@ body{overflow-x:hidden;}
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="registerTeam()">✅ 팀 등록</button></div>
     </div>
-    <div class="card">
-      <div class="card-title">📋 등록 팀 현황 <span id="regTCnt" class="badge bg-green">0팀</span></div>
-      <div class="table-wrap" style="overflow-x:auto"><table><thead><tr><th>#</th><th>클럽</th><th>1복식</th><th>2복식</th><th>3복식</th><th>4복식</th><th>5복식</th><th>후보</th><th id="regActHdr"></th></tr></thead><tbody id="regTBody"><tr><td colspan="9"><div class="empty-state" style="padding:14px"><p>등록된 팀이 없습니다</p></div></td></tr></tbody></table></div>
+    <div class="card" id="regRosterPreviewCard" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:2px">
+        <div class="card-title" style="margin-bottom:0">📋 등록 팀 현황</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="regTCnt" class="badge bg-green">0팀</span>
+          <span id="regRosterMiniCount" class="badge bg-blue">0명</span>
+        </div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);margin-bottom:12px">밑줄 + <span class="first-appearance-star">★</span> 표시는 첫 출전 선수입니다.</div>
+      <div id="regRosterPreviewBody"></div>
     </div>
+    
   </div>
 </div>
 
@@ -980,6 +1041,28 @@ body{overflow-x:hidden;}
       • 번호는 관리자만 변경 가능합니다.
     </div>
   </div>
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🧾 2026 등록 선수 명단 관리</div>
+    <div id="m26Status" style="margin-bottom:10px"></div>
+    <textarea class="form-textarea" id="m26Text" rows="6" placeholder="예시)&#10;강대영,모던A,010-1234-5678&#10;강대명,모던B&#10;이름 탭 소속 형식도 가능"></textarea>
+    <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.55">
+      • 엑셀/텍스트 파일을 한 번에 올릴 수 있습니다.<br>
+      • 클럽명은 자동으로 기본 클럽명으로 저장됩니다. 예: 모던A/모던B → 모던<br>
+      • 2026년 이후 신규 대회는 등록 선수만 팀등록 가능합니다.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <button class="btn btn-outline" onclick="importMemberRegistry2026Text('append')">➕ 텍스트 추가</button>
+      <button class="btn btn-outline" onclick="importMemberRegistry2026Text('replace')">♻️ 전체교체</button>
+      <label class="btn btn-outline" style="justify-content:center">📂 파일 추가<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="importMemberRegistry2026File(this,'append')"></label>
+      <label class="btn btn-outline" style="justify-content:center">📥 파일 전체교체<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="importMemberRegistry2026File(this,'replace')"></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-danger" onclick="clearMemberRegistry2026()">🗑️ 명단 전체 삭제</button>
+    </div>
+    <div id="m26List" style="margin-top:10px;max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--panel2)"></div>
+  </div>
+
+
 <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🔐 관리자 비밀번호 변경</div>
     <div class="form-group"><label class="form-label">현재 비밀번호</label><input class="form-input" type="password" id="aspCur" placeholder="현재 비밀번호"></div>
@@ -1200,7 +1283,7 @@ let AD=false;
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234'},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',memberRegistry2026:[]},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1315,8 +1398,8 @@ async function initFB(){
     sl(false);toast('🔥 연결 완료','success');
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta=d;if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',clubs:G.clubs,adminPhone:''});}catch(e){}}
-async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,clubs:G.clubs,adminPhone:(G.meta.adminPhone||'')});}catch(e){}}
+async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',memberRegistry2026:[],...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',clubs:G.clubs,adminPhone:'',memberRegistry2026:[]});}catch(e){}}
+async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[]});}catch(e){}}
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
@@ -1451,7 +1534,7 @@ function toggleAdmin(){
     ge('adminToggleBtn').classList.remove('active');
     ge('adminToggleBtn').textContent='관리자 로그인';
     document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='none');
-    ge('regActHdr').textContent='';
+    const rh2=ge('regActHdr'); if(rh2) rh2.textContent='';
     cm('mAdminSettings');
     toast('로그아웃','info');
   } else om('mAdmin');
@@ -1463,7 +1546,7 @@ function applyAdminUI(){
   ge('adminToggleBtn').classList.add('active');
   ge('adminToggleBtn').textContent='로그아웃';
   document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='block');
-  ge('regActHdr').textContent='관리';
+  const rh=ge('regActHdr'); if(rh) rh.textContent='관리';
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -1933,6 +2016,175 @@ function popSel(){
     const rkEl=ge('rankTS'); if(rkEl&&rkEl.value)  onRankTC();
   }, 0);
 }
+// ── 2026 김해시 등록 선수 명단 관리 ────────────────────────────────
+function _m26Name(s){
+  return (s||'').toString().replace(/\s*\(0\d{1,2}[-\d]+\)/g,'').replace(/\s+/g,'').trim();
+}
+function _m26Club(s){
+  let club=(s||'').toString().trim();
+  if(!club) return '';
+  let m=club.match(/^(.+?)\s+([A-D])$/);
+  if(m && m[1].trim().length>=2) return m[1].trim();
+  m=club.match(/^(.+?)([A-D])$/);
+  if(m && /[가-힣]/.test(m[1]) && m[1].trim().length>=2) return m[1].trim();
+  return club;
+}
+function getMemberRegistry2026(){
+  if(!Array.isArray(G.meta.memberRegistry2026)) G.meta.memberRegistry2026=[];
+  return G.meta.memberRegistry2026;
+}
+function _m26YearFromTournament(t){
+  const d=(t?.date||'').toString().trim();
+  const y=parseInt(d.slice(0,4),10);
+  if(!isNaN(y)) return y;
+  const m=(t?.name||'').toString().match(/20\d{2}/);
+  return m?parseInt(m[0],10):0;
+}
+function needsMemberRegistry2026(t){ return _m26YearFromTournament(t) >= 2026; }
+function findMemberRegistry2026(name, club){
+  const nn=_m26Name(name), cc=_m26Club(club);
+  return getMemberRegistry2026().find(x=>_m26Name(x.name)===nn && _m26Club(x.club)===cc);
+}
+function missingMembers2026(names, club, t){
+  if(!needsMemberRegistry2026(t)) return [];
+  return (names||[]).filter(n=>!findMemberRegistry2026(n, club));
+}
+function showMissingMembers2026(missing){
+  const uniq=[...new Set((missing||[]).map(x=>(x||'').trim()).filter(Boolean))];
+  const msg='2026년 김해시 클럽 회원 등록후 출전 가능합니다' + (uniq.length?('\n\n미등록 선수: '+uniq.join(', ')): '');
+  alert(msg);
+}
+async function syncRegistryMembersToPlayers(rows){
+  const tasks=[];
+  (rows||[]).forEach(r=>{
+    const name=(r.name||'').trim();
+    const club=_m26Club(r.club||'');
+    if(!name || !club) return;
+    const key=pKey(name,club);
+    if(!G.players[key]) G.players[key]={key,name,club,clubs:[club],history:[],wins:0,losses:0,phone:(r.phone||'').trim()};
+    const p=G.players[key];
+    p.key=key; p.name=name; p.club=club;
+    if(!Array.isArray(p.clubs)) p.clubs=[];
+    if(!p.clubs.includes(club)) p.clubs.push(club);
+    if((r.phone||'').trim()) p.phone=(r.phone||'').trim();
+    tasks.push(stP(key));
+  });
+  if(tasks.length) await Promise.all(tasks);
+}
+function parseMemberRegistry2026Rows(rows){
+  const out=[];
+  (rows||[]).forEach(raw=>{
+    let name='', club='', phone='';
+    if(Array.isArray(raw)){
+      name=(raw[0]??'').toString().trim();
+      club=(raw[1]??'').toString().trim();
+      phone=(raw[2]??'').toString().trim();
+    }else if(raw && typeof raw==='object'){
+      const vals=Object.values(raw||{});
+      name=(raw.name ?? raw.이름 ?? vals[0] ?? '').toString().trim();
+      club=(raw.club ?? raw.클럽 ?? raw.소속 ?? vals[1] ?? '').toString().trim();
+      phone=(raw.phone ?? raw.전화번호 ?? raw.휴대폰 ?? vals[2] ?? '').toString().trim();
+    }else{
+      let line=(raw||'').toString().trim();
+      if(!line) return;
+      let parts=line.split(/\t|,|;/).map(x=>x.trim()).filter(Boolean);
+      if(parts.length<2) parts=line.split(/\s{2,}/).map(x=>x.trim()).filter(Boolean);
+      if(parts.length<2) parts=line.split(/\s+/).map(x=>x.trim()).filter(Boolean);
+      name=parts[0]||''; club=parts[1]||''; phone=parts[2]||'';
+      if(/^\d+$/.test(phone)) phone='';
+    }
+    if(!name || !club) return;
+    if(/이름|성명/.test(name) && /클럽|소속/.test(club)) return;
+    club=_m26Club(club);
+    if(!name || !club) return;
+    const key=_m26Name(name)+'__'+_m26Club(club);
+    out.push({key,name:name.replace(/\s+/g,' ').trim(),club,phone});
+  });
+  const map=new Map();
+  out.forEach(r=>map.set(r.key,r));
+  return [...map.values()];
+}
+async function applyMemberRegistry2026(rows, mode){
+  const incoming=parseMemberRegistry2026Rows(rows);
+  if(!incoming.length){ toast('가져올 선수 명단이 없습니다','error'); return; }
+  const cur=getMemberRegistry2026();
+  let next;
+  if(mode==='replace') next=incoming;
+  else{
+    const map=new Map(cur.map(r=>[_m26Name(r.name)+'__'+_m26Club(r.club), {name:r.name,club:_m26Club(r.club),phone:r.phone||''}]));
+    incoming.forEach(r=>map.set(r.key,{name:r.name,club:_m26Club(r.club),phone:r.phone||''}));
+    next=[...map.values()];
+  }
+  G.meta.memberRegistry2026=next.map(r=>({name:r.name,club:_m26Club(r.club),phone:(r.phone||'').trim()}));
+  sl(true);
+  try{
+    await saveMeta();
+    await syncRegistryMembersToPlayers(G.meta.memberRegistry2026);
+    sl(false);
+    renderMemberRegistry2026Status();
+    if(ge('m26Text')) ge('m26Text').value='';
+    toast(`2026 등록 선수 명단 ${mode==='replace'?'전체교체':'추가'} 완료 (${incoming.length}명 반영)`,'success');
+  }catch(e){ sl(false); toast('명단 저장 실패: '+e.message,'error'); }
+}
+async function importMemberRegistry2026Text(mode){
+  const text=(ge('m26Text')?.value||'').trim();
+  if(!text){ toast('붙여넣을 명단을 입력하세요','error'); return; }
+  await applyMemberRegistry2026(text.split(/\r?\n/), mode||'append');
+}
+async function importMemberRegistry2026File(input, mode){
+  const f=input?.files?.[0];
+  if(!f) return;
+  try{
+    let rows=[];
+    const name=(f.name||'').toLowerCase();
+    if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+      const buf=await f.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    }else{
+      rows=(await f.text()).split(/\r?\n/);
+    }
+    await applyMemberRegistry2026(rows, mode||'append');
+  }catch(e){ toast('파일 불러오기 실패: '+e.message,'error'); }
+  finally{ input.value=''; }
+}
+async function clearMemberRegistry2026(){
+  if(!confirm('2026 등록 선수 명단을 모두 삭제할까요?\n과거 경기기록과 선수 이력은 삭제되지 않습니다.')) return;
+  G.meta.memberRegistry2026=[];
+  sl(true);
+  try{ await saveMeta(); sl(false); renderMemberRegistry2026Status(); toast('2026 등록 선수 명단 삭제 완료','success'); }
+  catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
+}
+function renderMemberRegistry2026Status(){
+  const box=ge('m26Status'), listEl=ge('m26List');
+  if(!box || !listEl) return;
+  const rows=[...getMemberRegistry2026()].sort((a,b)=>{
+    const c=_m26Club(a.club).localeCompare(_m26Club(b.club),'ko');
+    if(c!==0) return c;
+    return (a.name||'').localeCompare((b.name||''),'ko');
+  });
+  box.innerHTML=`<div style="font-size:.78rem;color:var(--text2);line-height:1.55">• 2026년 등록 선수만 2026년 이후 신규 대회에 팀 등록할 수 있습니다.<br>• 클럽명은 자동으로 기본 클럽명으로 저장됩니다.</div>`;
+  listEl.innerHTML = rows.length ? rows.map(r=>`<div style="display:flex;gap:8px;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:.76rem"><span>${r.name}</span><span style="color:var(--text2)">${_m26Club(r.club)}${r.phone?` · ${r.phone}`:''}</span></div>`).join('') : '<div style="font-size:.76rem;color:var(--text3);padding:6px 0">등록된 2026 선수 명단이 없습니다.</div>';
+}
+function isFirstAppearancePlayer(name, club, currentTid){
+  const nn=normName(name);
+  const bc=baseClub(club)||club||'';
+  let found=false;
+  HIST_DATA.forEach(t=>t.teams.forEach(tm=>{ if((baseClub(tm.club)||tm.club||'')===bc && (tm.players||[]).some(pn=>normName(pn)===nn)) found=true; }));
+  for(const k of Object.keys(G.players||{})){
+    const p=G.players[k];
+    const playerName=normName(p.name||pKeyParse(k).name||'');
+    if(playerName!==nn) continue;
+    (p.history||[]).forEach(h=>{ if(h.tid!==currentTid && (baseClub(h.club)||h.baseClub||h.club||'')===bc) found=true; });
+  }
+  return !found;
+}
+function rosterPlayerHTML(name, club, tid){
+  const mark=isFirstAppearancePlayer(name, club, tid);
+  return `<span onclick="openPD('${esc(name)}','${esc(club||'')}')" style="cursor:pointer;color:var(--primary);display:inline-flex;align-items:center;gap:2px;flex-wrap:wrap">${mark?'<span class="first-appearance-star">★</span>':''}<span class="${mark?'first-appearance-name':''}">${name}</span></span>`;
+}
+
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
   ge('regSection').style.display='none';
@@ -1988,9 +2240,77 @@ function updateRegisterSlots(){
   }
 }
 
+
+function renderRegistrationRosterPreview(tid,div,teams,key){
+  const card=ge('regRosterPreviewCard');
+  const body=ge('regRosterPreviewBody');
+  const mini=ge('regRosterMiniCount');
+  const tcnt=ge('regTCnt');
+  if(!card||!body) return;
+  if(!tid||!div||!teams?.length){
+    card.style.display='none';
+    body.innerHTML='';
+    if(mini) mini.textContent='0명';
+    if(tcnt) tcnt.textContent='0팀';
+    return;
+  }
+  const total=teams.reduce((s,t)=>s+((t.players||[]).length),0);
+  if(mini) mini.textContent=total+'명';
+  if(tcnt) tcnt.textContent=teams.length+'팀';
+  card.style.display='block';
+
+  let html='';
+  teams.forEach((team,i)=>{
+    const dn=tdn(team,key,i);
+    const p=team.players||[];
+    const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);
+    const mainCount=dbl*2;
+    const subs=p.slice(mainCount).filter(Boolean);
+
+    // 복식별 선수 카드 (모바일: 1~2열, 데스크탑: dbl열)
+    const rubCards=Array.from({length:dbl},(_,r)=>{
+      const pa=p[r*2], pb=p[r*2+1];
+      const paH=pa?rosterPlayerHTML(pa,team.club||'',tid):'';
+      const pbH=pb?rosterPlayerHTML(pb,team.club||'',tid):'';
+      return `<div class="rr-rub-card">
+        <div class="rr-rub-label">${r+1}복식</div>
+        <div class="rr-rub-names">${[paH,pbH].filter(Boolean).join('<span class="rr-slash"> / </span>')}</div>
+      </div>`;
+    }).join('');
+
+    const subHtml=subs.length
+      ?`<div class="rr-sub">후보: ${subs.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`
+      :'';
+
+    const adminBtns=AD
+      ?`<div class="rr-admin-btns">
+          <button class="btn btn-outline rr-btn-edit" onclick="openETeam('${esc(key)}',${i})">✏️ 수정</button>
+          <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${i})">🗑 삭제</button>
+        </div>`
+      :'';
+
+    html+=`<div class="rr-team-card">
+      <div class="rr-team-header">
+        <div class="rr-team-info">
+          <span class="rr-team-num">${i+1}</span>
+          <span class="rr-team-name">${dn}</span>
+          <span class="rr-team-count">${p.length}명</span>
+        </div>
+        ${adminBtns}
+      </div>
+      <div class="rr-rub-grid" style="--rr-cols:${Math.min(dbl,3)}">${rubCards}</div>
+      ${subHtml}
+    </div>`;
+  });
+  body.innerHTML=html;
+}
+
 function renderRL(){
   const tid=ge('regTS').value,div=ge('regDS').value;
-  if(!tid||!div) return;
+  if(!tid||!div){
+    renderRegistrationRosterPreview('', '', [], '');
+    return;
+  }
 
   const t=G.tournaments.find(t=>t.id===tid);
   const isOpen = (t?.status==='open');
@@ -2031,32 +2351,11 @@ function renderRL(){
   ge('regTCnt').textContent=teams.length+'팀';
   ge('regNo').value=teams.length+1;
 
-  const tb=ge('regTBody');
   if(!teams.length){
-    tb.innerHTML='<tr><td colspan="9"><div class="empty-state" style="padding:14px"><p>등록된 팀 없음</p></div></td></tr>';
+    renderRegistrationRosterPreview(tid,div,[],key);
     return;
   }
-
-  tb.innerHTML=teams.map((t2,i)=>{
-    const p=t2.players||[];
-    const isT=div==='terinee';
-    const dbl=isT?(p.length<=6?3:p.length<=8?4:5):5;
-    const mainCount=dbl*2;
-    const tc=esc(t2.club||'');
-    const mk=(a,b)=>p[a]&&p[b]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>/<span onclick="openPD('${esc(p[b])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[b]}</span>`:p[a]?`<span onclick="openPD('${esc(p[a])}','${tc}')" style="cursor:pointer;color:var(--primary)">${p[a]}</span>`:'—';
-    const sub=p.slice(mainCount).filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer;font-size:.73rem;color:var(--text3)">${n}</span>`).join(', ');
-    return`<tr>
-      <td><div class="team-num">${i+1}</div></td>
-      <td><b>${tdn(t2,key,i)}</b></td>
-      <td style="font-size:.8rem">${mk(0,1)}</td>
-      <td style="font-size:.8rem">${mk(2,3)}</td>
-      <td style="font-size:.8rem">${mk(4,5)}</td>
-      <td style="font-size:.8rem">${dbl>=4?mk(6,7):'—'}</td>
-      <td style="font-size:.8rem">${dbl>=5?mk(8,9):'—'}</td>
-      <td>${sub||'-'}</td>
-      <td style="white-space:nowrap">${AD?`<button class="btn btn-outline" style="padding:3px 6px;font-size:.67rem;margin-right:2px" onclick="openETeam('${key}',${i})">수정</button><button class="btn btn-danger" style="padding:3px 6px;font-size:.67rem" onclick="delTeam('${key}',${i})">삭제</button>`:''}</td>
-    </tr>`;
-  }).join('');
+  renderRegistrationRosterPreview(tid,div,teams,key);
 }
 async function registerTeam(){
   const tid=ge('regTS').value,div=ge('regDS').value,club=ge('regClub').value;
@@ -2069,6 +2368,8 @@ async function registerTeam(){
   if(names.length<mainCount){toast(`주전 ${mainCount}명(${dbl}복식) 필수 입력`,'error');return;}
   if(names.length>mainCount+2){toast(`최대 ${mainCount+2}명(후보 2명 포함)`,'error');return;}
   const uniq=new Set(names);if(uniq.size!==names.length){toast('이름 중복 있음','error');return;}
+  const missing2026=missingMembers2026(names, club, t);
+  if(missing2026.length){showMissingMembers2026(missing2026);return;}
   const key=tid+'_'+div,ex=G.teams[key]||[];
   // ✅ 같은 이름이라도 클럽이 다르면 다른 선수로 취급 (동명이인/이적 대응)
   const newKeys = new Set(names.map(n=>pKey(n,club)));
@@ -2154,7 +2455,12 @@ async function saveETeam(){
   const np=[];for(let i=1;i<=mainCount+2;i++){const el=ge('ep'+i);if(el){const v=el.value.trim();if(v)np.push(v);}}
   if(np.length<mainCount){toast(`주전 ${mainCount}명 필요`,'error');return;}
   const uniq=new Set(np);if(uniq.size!==np.length){toast('이름 중복','error');return;}
-  team.club=ge('etTC').value;team.players=np;team.doublesCount=dbl;
+  const newClub=ge('etTC').value;
+  const tid=CE_key.split('_')[0];
+  const tournament=G.tournaments.find(t=>t.id===tid);
+  const missing2026=missingMembers2026(np, newClub, tournament);
+  if(missing2026.length){showMissingMembers2026(missing2026);return;}
+  team.club=newClub;team.players=np;team.doublesCount=dbl;
   sl(true);try{await stT(CE_key);sl(false);cm('mETeam');renderRL();toast('수정 완료 ✅','success');}catch(e){sl(false);toast('저장 실패','error');}
 }
 
@@ -5174,13 +5480,13 @@ async function deletePlayer(){
 function openRoster(tid,div){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;
   const key=tid+'_'+div,teams=G.teams[key]||[];
-  ge('mRosterT').textContent=`${t.name} — ${dl(div)} 선수명단`;
+  ge('mRosterT').textContent=`${dl(div)} 선수명단 (참가기록 조회 → 명단 클릭)`;
   if(!teams.length){ge('mRosterB').innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>등록된 팀 없음</p></div>';om('mRoster');return;}
   const total=teams.reduce((s,t)=>s+t.players.length,0);
-  let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">팀</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div>`;
+  let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">팀</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div><div style="margin:-2px 0 12px;padding:8px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);font-size:.76rem;color:var(--text2)">밑줄 + ★ 표시는 첫 출전 선수입니다.</div>`;
   teams.forEach((team,i)=>{const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
     html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-    <div style="padding:10px 14px">${(()=>{const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=dbl*2;const cols=Math.min(dbl,5);return`<div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:6px;margin-bottom:6px">${Array.from({length:dbl},(_,r)=>`<div style="padding:6px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);text-align:center"><div style="font-size:.6rem;color:var(--text3);margin-bottom:3px">${r+1}복식</div><div style="font-size:.77rem">${[p[r*2],p[r*2+1]].filter(Boolean).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer;color:var(--primary)">${n}</span>`).join(' / ')}</div></div>`).join('')}</div>${p.slice(mainCount).length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${p.slice(mainCount).map(n=>`<span onclick="openPD('${esc(n)}','${tc}')" style="cursor:pointer">${n}</span>`).join(', ')}</div>`:''}`})()}</div></div>`;
+    <div style="padding:10px 14px">${(()=>{const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=dbl*2;const cols=Math.min(dbl,5);return`<div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:6px;margin-bottom:6px">${Array.from({length:dbl},(_,r)=>`<div style="padding:6px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);text-align:center"><div style="font-size:.6rem;color:var(--text3);margin-bottom:3px">${r+1}복식</div><div style="font-size:.77rem">${[p[r*2],p[r*2+1]].filter(Boolean).map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(' / ')}</div></div>`).join('')}</div>${p.slice(mainCount).length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${p.slice(mainCount).map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
