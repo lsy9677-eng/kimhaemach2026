@@ -2252,7 +2252,7 @@ function _sendKakaoQueue(clubs, body, idx){
   // ✅ 카카오톡 앱 열기 - 버튼 클릭 시점(사용자 제스처)에 직접 실행해야 차단 안 됨
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if(isMobile){
-    window.location.href = 'kakaotalk://';
+    _openKakaoTalk();
   }
 
   // 클립보드 복사 (카카오톡 열기 후 비동기 실행)
@@ -2278,6 +2278,20 @@ function _sendKakaoQueue(clubs, body, idx){
   }
 }
 
+
+function _openKakaoTalk(){
+  // a태그 동적 생성 + click() - 모바일 브라우저 딥링크 차단 우회
+  try{
+    const a = document.createElement('a');
+    a.href = 'kakaotalk://';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>document.body.removeChild(a), 300);
+  } catch(_){
+    window.location.href = 'kakaotalk://';
+  }
+}
 function _copyFallback(text){
   try{
     const ta=document.createElement('textarea');
