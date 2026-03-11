@@ -1767,7 +1767,12 @@ function openAdminSettings(){
   // 팀등록 비번 표시 초기화
   ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
   ge('newRegPwInput') && (ge('newRegPwInput').value='');
-  renderAdminNoticeSection();
+  _selClubs.clear();
+  const contacts = G.meta.clubContacts || {};
+  (G.clubs || []).forEach(c => {
+    if (contacts[c]) _selClubs.add(c);
+  });
+renderAdminNoticeSection();
   om('mAdminSettings');
 }
 
@@ -2064,7 +2069,7 @@ function renderNoticeContactBtns(){
     return;
   }
   // 처음 렌더링 시 전체 선택 상태 초기화
-  if(_selClubs.size === 0) withPhone.forEach(c=>_selClubs.add(c));
+
 
   el.innerHTML = `
     <!-- 클럽 체크박스 선택 영역 -->
@@ -2077,16 +2082,15 @@ function renderNoticeContactBtns(){
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${withPhone.map(club=>`
-          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
+    ${withPhone.map(club=>`
+          <div style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
             border:1.5px solid ${_selClubs.has(club)?'var(--primary)':'var(--border)'};
             background:${_selClubs.has(club)?'rgba(37,99,235,.1)':'transparent'};
             cursor:pointer;font-size:.8rem;font-weight:${_selClubs.has(club)?'700':'400'};
             color:${_selClubs.has(club)?'var(--primary)':'var(--text2)'};user-select:none"
             onclick="toggleClubSel('${club}')">
-            <input type="checkbox" ${_selClubs.has(club)?'checked':''} style="display:none">
             ${_selClubs.has(club)?'✅':'⬜'} ${club}
-          </label>
+          </div>
         `).join('')}
       </div>
       <div style="font-size:.72rem;color:var(--text3);margin-top:7px">
