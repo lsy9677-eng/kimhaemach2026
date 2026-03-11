@@ -498,6 +498,12 @@ body{overflow-x:hidden;}
 #page-players .table-wrap table{table-layout:auto;}
 #page-players .table-wrap table th:nth-child(1),
 #page-players .table-wrap table td:nth-child(1){text-align:left !important;}
+/* ✅ 선수기록 소속(클럽) 열: 항상 가로로 표시 */
+#page-players .table-wrap table th:nth-child(2),
+#page-players .table-wrap table td:nth-child(2){
+  white-space:nowrap;
+  min-width:60px;
+}
 #page-players .table-wrap table th:nth-child(1){min-width:110px;}
 #page-players .table-wrap table td:nth-child(1){
   white-space:normal;          /* 줄바꿈 허용 */
@@ -1476,7 +1482,7 @@ function baseClub(club){
   return club;
 }
 function pKeyParse(key){ const i=(key||'').lastIndexOf('__'); return i>0?{name:key.slice(0,i),club:key.slice(i+2)}:{name:key,club:''}; }
-async function stP(k){try{const pk=pKeyParse(k);await setDoc(doc(db,'players',k.replace(/[\/\.#\$\[\]]/g,'_')),{...G.players[k],key:k,name:pk.name,club:pk.club||''});}catch(e){}}
+async function stP(k){try{const pk=pKeyParse(k);const pureName=cleanName(pk.name||k);await setDoc(doc(db,'players',k.replace(/[\\/\\.#\\$\\[\\]]/g,'_')),{...G.players[k],key:k,name:pureName,club:pk.club||''});}catch(e){}}
 async function fbLog(t,i='📌'){try{await addDoc(collection(db,'activityLog'),{text:t,icon:i,time:new Date().toISOString()});}catch(e){}}
 function onDU(){
   // 새로고침 후 관리자 세션 복원
