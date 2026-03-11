@@ -605,7 +605,7 @@ body{overflow-x:hidden;}
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️ 관리자 설정</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">관리자 로그인</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">경기이사</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️ 관리자 설정</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">팀등록 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">관리자 로그인</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -639,7 +639,7 @@ body{overflow-x:hidden;}
     <div class="card-title">📩 관리자에게 문의</div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <div style="font-size:.82rem;color:var(--text2);line-height:1.55">
-        앱 사용 중 <b>수정 요청 / 불편 사항 / 개선 아이디어</b>가 있으면 바로 문자로 보낼 수 있어요.
+        앱 사용 중 <b>수정(명단,클럽) 요청 / 불편 사항 / 개선 아이디어</b>가 있으면 바로 문자로 보낼 수 있어요.
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-outline" onclick="openSupportModal()">✍️ 요청사항 문자 보내기</button>
@@ -723,6 +723,15 @@ body{overflow-x:hidden;}
 
 <div class="page" id="page-register">
   <div class="sec-title">팀 등록</div>
+  <!-- 팀등록 로그인 안내 (비로그인 상태) -->
+  <div id="regLoginPrompt" style="display:none">
+    <div style="padding:20px 16px;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:var(--radius-lg);border:2px solid var(--primary-light);text-align:center;margin-bottom:16px">
+      <div style="font-size:2rem;margin-bottom:8px">📋</div>
+      <div style="font-weight:700;font-size:.95rem;color:var(--primary-dark);margin-bottom:6px">팀 등록을 하려면 로그인이 필요합니다</div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5">경기이사에게 받은 팀등록 비밀번호를 입력하세요</div>
+      <button class="btn btn-primary" style="padding:10px 28px;font-size:.9rem" onclick="toggleReg()">📋 팀등록 로그인</button>
+    </div>
+  </div>
   <div class="card">
     <div class="frow">
       <div class="form-group"><label class="form-label">대회</label><select class="form-select" id="regTS" onchange="onRegTC()"><option value="">-- 대회 선택 --</option></select></div>
@@ -731,10 +740,30 @@ body{overflow-x:hidden;}
   </div>
   <div id="regSection" style="display:none">
     <div class="card" id="aoReg" style="display:none">
+      <!-- 경기이사 로그인 상태 표시 -->
+      <div id="regLoginStatusBar" style="display:none;padding:8px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:8px;margin-bottom:10px;font-size:.8rem;color:#2e7d32;display:flex;align-items:center;justify-content:space-between">
+        <span>✅ 경기이사 로그인 상태입니다</span>
+        <button class="btn btn-gray" style="font-size:.72rem;padding:2px 10px" onclick="toggleReg()">로그아웃</button>
+      </div>
       <div class="card-title">📝 팀 등록 <span id="regModeLabel" style="font-size:.73rem;font-weight:400;color:var(--text2)">— 5복식 | 주전 10명 필수 + 후보 최대 2명</span></div>
       <div class="frow">
-        <div class="form-group"><label class="form-label">클럽<span class="req">*</span></label><select class="form-select" id="regClub"></select></div>
+        <div class="form-group"><label class="form-label">클럽<span class="req">*</span></label><select class="form-select" id="regClub" onchange="onRegClubChange()"></select></div>
         <div class="form-group"><label class="form-label">팀 번호</label><input class="form-input" id="regNo" readonly style="background:var(--bg2)"></div>
+      </div>
+      <!-- 경기이사 번호 입력 (클럽 선택 시 표시) -->
+      <div id="regContactRow" style="display:none;margin-bottom:10px;padding:10px 12px;background:var(--panel2);border-radius:10px;border:1.5px solid var(--primary-light)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <label class="form-label" style="margin:0;font-size:.82rem">📱 <b id="regContactClubLabel"></b> 경기이사 연락처</label>
+          <span id="regContactSavedBadge" style="display:none;font-size:.7rem;color:var(--success);font-weight:700">✅ 저장됨</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="form-input" id="regContactPhone" placeholder="예: 010-1234-5678" inputmode="tel" style="flex:1" oninput="onRegContactInput()">
+          <button class="btn btn-outline" style="font-size:.78rem;padding:6px 10px;white-space:nowrap" onclick="saveRegContact()">💾 저장</button>
+        </div>
+        <div style="font-size:.7rem;color:var(--text3);margin-top:5px;line-height:1.4">
+          • 클럽당 1회 저장하면 이후 팀 등록 시 자동 적용됩니다.<br>
+          • 관리자가 공지 문자를 이 번호로 발송합니다.
+        </div>
       </div>
       <!-- 테린이부 복식수 선택 (테린이 선택 시에만 표시) -->
       <div id="terineeModeSel" style="display:none;margin-bottom:10px">
@@ -849,6 +878,18 @@ body{overflow-x:hidden;}
 
 </main>
 <div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div><p style="font-size:.75rem;color:var(--text3)">초기 비밀번호: <b>kimhae1234</b></p></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
+<!-- 팀등록 로그인 모달 -->
+<div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 팀등록 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
+<div class="modal-body">
+  <div style="padding:10px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#2e7d32;line-height:1.5">
+    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.<br>관리자에게 비밀번호를 받아 입력하세요.
+  </div>
+  <div class="form-group"><label class="form-label">팀등록 비밀번호</label>
+    <input class="form-input" type="password" id="regPwInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doRegLogin()">
+  </div>
+</div>
+<div class="modal-footer"><button class="btn btn-gray" onclick="cm('mRegLogin')">취소</button><button class="btn btn-primary" style="background:var(--success)" onclick="doRegLogin()">로그인</button></div>
+</div></div>
 <div class="modal-overlay" id="mPHist"><div class="modal-box"><div class="modal-header"><h3>👤 선수 기록</h3><button class="modal-close" onclick="cm('mPHist')">✕</button></div><div class="modal-body" id="mPHistBody"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPHist')">닫기</button></div></div></div>
 <div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">⚡ 경기 결과 입력</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mM3')">취소</button><button class="btn btn-accent" onclick="saveM3()">💾 저장</button></div></div></div>
 <div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:900px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
@@ -1033,6 +1074,26 @@ body{overflow-x:hidden;}
     </div>
   </div>
 
+  <!-- 팀등록 비밀번호 관리 -->
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">🔑 팀등록 비밀번호 관리</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">경기이사가 팀 등록 시 사용하는 비밀번호입니다. 간단한 번호로 설정 후 각 경기이사에게 알려주세요.</div>
+    <div style="padding:8px 12px;background:var(--panel2);border-radius:8px;margin-bottom:10px;font-size:.82rem">
+      현재 팀등록 비번: <b id="currentRegPwDisplay" style="color:var(--primary);letter-spacing:2px">●●●●</b>
+      <button class="btn btn-gray" style="font-size:.7rem;padding:2px 8px;margin-left:8px" onclick="toggleShowRegPw(this)">보기</button>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">새 팀등록 비밀번호</label>
+      <input class="form-input" type="text" id="newRegPwInput" placeholder="예: tennis2024" autocomplete="off">
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="saveRegPw()">💾 저장</button>
+    </div>
+    <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.5">
+      • 관리자 비밀번호와 별도로 관리됩니다.<br>
+      • 팀등록 비번으로는 팀 등록만 가능하며, 관리자 기능은 사용 불가합니다.
+    </div>
+  </div>
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">📱 관리자 연락처(문자 수신번호)</div>
     <div class="form-group" style="margin-bottom:8px">
@@ -1046,6 +1107,37 @@ body{overflow-x:hidden;}
       • 홈 화면의 “요청사항 문자 보내기” 버튼이 이 번호로 전송됩니다.<br>
       • 번호는 관리자만 변경 가능합니다.
     </div>
+  </div>
+  <!-- 클럽 경기이사 연락처 관리 -->
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">📲 클럽 경기이사 연락처 관리</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">팀 등록 시 자동 저장됩니다. 직접 추가/수정도 가능합니다.</div>
+    <div id="adminContactList" style="margin-bottom:10px"></div>
+    <div style="font-size:.7rem;color:var(--text3);line-height:1.4">• 번호가 등록된 클럽에만 공지 문자 버튼이 활성화됩니다.</div>
+  </div>
+  <!-- 공지 문자 보내기 -->
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">📨 경기이사에게 공지 문자 보내기</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">아래 버튼으로 내용을 자동 완성하거나 직접 입력 후 발송하세요.</div>
+    <!-- 내용 자동완성 버튼 -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('roster')">📋 등록현황</button>
+      <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('bracket_draw')">🎲 추첨결과</button>
+      <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('final_result')">🏆 최종결과</button>
+    </div>
+    <!-- 이미지 캡처 버튼 (예상대진/추첨결과용) -->
+    <div style="padding:10px 12px;background:linear-gradient(135deg,#fff8e1,#ffecb3);border-radius:10px;border:1.5px solid #ffc107;margin-bottom:10px">
+      <div style="font-size:.78rem;font-weight:700;color:#e65100;margin-bottom:6px">🖼️ 대진표 이미지 저장 (카카오톡 공유용)</div>
+      <div style="font-size:.72rem;color:#795548;margin-bottom:8px;line-height:1.4">
+        대진표 이미지는 문자 전송이 불가합니다. 이미지를 저장 후 카카오톡 단톡방에 직접 공유하세요.
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline" style="font-size:.76rem;border-color:#ffc107;color:#e65100" onclick="captureAndShareBracket('all')">🖼️ 전체 대진표 이미지 저장</button>
+        <button class="btn btn-outline" style="font-size:.76rem;border-color:#ffc107;color:#e65100" onclick="captureAndShareBracket('preview')">📊 예상대진 이미지 저장</button>
+      </div>
+    </div>
+    <textarea class="form-textarea" id="noticeMsg" rows="5" placeholder="공지 내용을 입력하거나 위 버튼으로 자동 완성하세요&#10;&#10;팁: 이미지는 대진표 탭 → 이미지 저장 버튼을 이용하세요"></textarea>
+    <div id="noticeContactBtns" style="margin-top:10px"></div>
   </div>
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🧾 2026 등록 선수 명단 관리</div>
@@ -1286,10 +1378,11 @@ const _app=initializeApp(FB);
 const db=getFirestore(_app);
 const storage=getStorage(_app);
 let AD=false;
+let REG=false; // 팀등록 로그인 상태
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',memberRegistry2026:[]},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'tennis2024',memberRegistry2026:[],clubContacts:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1404,8 +1497,8 @@ async function initFB(){
     sl(false);toast('🔥 연결 완료','success');
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',memberRegistry2026:[],...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',clubs:G.clubs,adminPhone:'',memberRegistry2026:[]});}catch(e){}}
-async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[]});}catch(e){}}
+async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'tennis2024',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='tennis2024';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'tennis2024',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
+async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,regPw:(G.meta.regPw||'tennis2024'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],clubContacts:(G.meta.clubContacts||{})});}catch(e){}}
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
@@ -1489,6 +1582,14 @@ function onDU(){
   if(!AD && sessionStorage.getItem('adm')==='1'){
     applyAdminUI();
   }
+  // 팀등록 세션 복원
+  if(!REG && sessionStorage.getItem('reg')==='1'){
+    REG=true;
+    ge('regToggleBtn') && (ge('regToggleBtn').textContent='팀등록 로그아웃');
+    ge('regToggleBtn') && (ge('regToggleBtn').style.background='#388e3c');
+    ge('regLoginBadge') && (ge('regLoginBadge').style.display='inline');
+  }
+  applyRegLoginUI();
   upDash();
   const p=document.querySelector('.nav-tab.active')?.dataset.page;
   if(p==='tournament')renderTL();
@@ -1573,6 +1674,88 @@ function doLogin(){
 }
 
 
+// ── 팀등록 로그인 함수들 ──────────────────────
+function toggleReg(){
+  if(REG && !AD){
+    // 로그아웃
+    REG=false;
+    sessionStorage.removeItem('reg');
+    ge('regToggleBtn').textContent='팀등록 로그인';
+    ge('regToggleBtn').style.background='var(--success)';
+    ge('regLoginBadge') && (ge('regLoginBadge').style.display='none');
+    ge('aoReg') && (ge('aoReg').style.display='none');
+    applyRegLoginUI();
+    const _rp=document.querySelector('.nav-tab.active')?.dataset?.page;
+    if(_rp==='register') renderRL();
+    toast('팀등록 로그아웃','info');
+  } else if(AD) {
+    // 관리자는 이미 팀등록 가능
+    toast('관리자는 팀 등록이 가능합니다','info');
+  } else {
+    om('mRegLogin');
+    setTimeout(()=>ge('regPwInput')?.focus(),200);
+  }
+}
+
+function doRegLogin(){
+  const pw = (ge('regPwInput')?.value||'').trim();
+  if(pw === G.meta.regPw){
+    REG=true;
+    sessionStorage.setItem('reg','1');
+    cm('mRegLogin');
+    ge('regPwInput').value='';
+    ge('regToggleBtn').textContent='팀등록 로그아웃';
+    ge('regToggleBtn').style.background='#388e3c';
+    ge('regLoginBadge') && (ge('regLoginBadge').style.display='inline');
+    applyRegLoginUI();
+    toast('팀등록 로그인 ✅ 팀을 등록할 수 있습니다','success');
+    // 팀등록 페이지면 바로 렌더링
+    const pg = document.querySelector('.nav-tab.active')?.dataset?.page;
+    if(pg==='register') renderRL();
+  } else {
+    toast('비밀번호 오류','error');
+    ge('regPwInput')?.select();
+  }
+}
+
+function applyRegLoginUI(){
+  const loggedIn = REG || AD;
+  // 로그인 안내 카드 / 팀등록 폼 표시 제어
+  const prompt = ge('regLoginPrompt');
+  if(prompt) prompt.style.display = loggedIn ? 'none' : 'block';
+  // 로그인 상태 바
+  const bar = ge('regLoginStatusBar');
+  if(bar){
+    bar.style.display = (REG && !AD) ? 'flex' : 'none';
+  }
+}
+
+async function saveRegPw(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const nw = (ge('newRegPwInput')?.value||'').trim();
+  if(!nw){ toast('새 비밀번호를 입력하세요','error'); return; }
+  if(nw.length < 4){ toast('4자 이상 입력하세요','error'); return; }
+  G.meta.regPw = nw;
+  try{
+    await saveMeta();
+    if(ge('newRegPwInput')) ge('newRegPwInput').value='';
+    ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
+    toast('팀등록 비밀번호 저장 완료 ✅','success');
+  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+}
+
+function toggleShowRegPw(btn){
+  const el = ge('currentRegPwDisplay');
+  if(!el) return;
+  if(el.textContent === '●●●●'){
+    el.textContent = G.meta.regPw||'(미설정)';
+    btn.textContent='숨기기';
+  } else {
+    el.textContent='●●●●';
+    btn.textContent='보기';
+  }
+}
+
 function openAdminSettings(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   // 입력 초기화
@@ -1580,6 +1763,10 @@ function openAdminSettings(){
   const ap=ge('adminPhoneInput'); if(ap) ap.value=(G.meta.adminPhone||'');
   fillAdminPlayerClub();
   ge('apName') && (ge('apName').value='');
+  // 팀등록 비번 표시 초기화
+  ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
+  ge('newRegPwInput') && (ge('newRegPwInput').value='');
+  renderAdminNoticeSection();
   om('mAdminSettings');
 }
 
@@ -1721,6 +1908,437 @@ function _getActiveTournamentLabel(){
     const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
     return at?`${at.name} (${at.date||''})`:'';
   }catch(e){return '';}
+}
+
+// ── 클럽 경기이사 연락처 + 공지 문자 함수들 ────────────────────────────────
+
+// 팀 등록 폼 - 클럽 선택 변경 시
+function onRegClubChange(){
+  const club = (ge('regClub')?.value||'').trim();
+  const row = ge('regContactRow');
+  if(!club){ if(row) row.style.display='none'; return; }
+  const contacts = G.meta.clubContacts||{};
+  const saved = contacts[club]||'';
+  const lbl = ge('regContactClubLabel');
+  const inp = ge('regContactPhone');
+  const badge = ge('regContactSavedBadge');
+  if(lbl) lbl.textContent = club;
+  if(inp) inp.value = saved;
+  if(badge) badge.style.display = saved ? 'inline' : 'none';
+  if(row) row.style.display = 'block';
+}
+
+function onRegContactInput(){
+  const badge = ge('regContactSavedBadge');
+  if(badge) badge.style.display='none';
+}
+
+async function saveRegContact(){
+  const club = (ge('regClub')?.value||'').trim();
+  const raw = (ge('regContactPhone')?.value||'').trim();
+  const phone = raw.replace(/[^0-9-]/g,'');
+  if(!club){ toast('클럽을 먼저 선택하세요','error'); return; }
+  if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
+  if(!G.meta.clubContacts) G.meta.clubContacts={};
+  G.meta.clubContacts[club] = phone;
+  try{
+    await saveMeta();
+    ge('regContactSavedBadge') && (ge('regContactSavedBadge').style.display='inline');
+    toast(`${club} 경기이사 번호 저장 완료 ✅`,'success');
+    renderAdminContactList();
+  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+}
+
+// 관리자 설정 - 클럽 연락처 목록 렌더링
+function renderAdminContactList(){
+  const el = ge('adminContactList');
+  if(!el) return;
+  const contacts = G.meta.clubContacts||{};
+  const clubs = G.clubs||[];
+  const withPhone = clubs.filter(c=>contacts[c]);
+  const noPhone = clubs.filter(c=>!contacts[c]);
+  const sorted = [...withPhone, ...noPhone];
+  if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
+  el.innerHTML = sorted.map(club=>{
+    const phone = contacts[club]||'';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">
+      <span style="min-width:65px;font-size:.82rem;font-weight:${phone?'700':'400'};color:${phone?'var(--text1)':'var(--text3)'}">${club}</span>
+      <input class="form-input" value="${phone}" placeholder="번호 없음" id="cc_${club}" inputmode="tel"
+        style="flex:1;min-width:110px;font-size:.8rem;padding:4px 8px">
+      <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveContactFromAdmin('${club}')">💾</button>
+      ${phone?`<a href="sms:${phone.replace(/[^0-9+]/g,'')}" style="text-decoration:none"><button class="btn btn-gray" style="font-size:.74rem;padding:3px 8px">📱</button></a>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function saveContactFromAdmin(club){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const raw = (ge('cc_'+club)?.value||'').trim();
+  const phone = raw.replace(/[^0-9-]/g,'');
+  if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
+  if(!G.meta.clubContacts) G.meta.clubContacts={};
+  G.meta.clubContacts[club] = phone;
+  try{
+    await saveMeta();
+    toast(`${club} 번호 저장 완료 ✅`,'success');
+    renderAdminContactList();
+    renderNoticeContactBtns();
+  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+}
+
+// 공지 문자 내용 자동 완성
+function prefillNoticeMsg(type){
+  const tid = (G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments.find(t=>t.status==='closed')||G.tournaments[0])?.id||'';
+  const t = G.tournaments.find(x=>x.id===tid);
+  const tname = t?.name||'(대회명 없음)';
+  const tdate = t?.date||'';
+  let lines = [];
+
+  if(type==='roster'){
+    lines = [`[${tname}] 팀 등록 현황`, tdate?`📅 ${tdate}`:'', ''];
+    if(tid && t){
+      (t.divisions||[]).forEach(d=>{
+        const key=tid+'_'+d;
+        const teams=G.teams[key]||[];
+        const total=teams.reduce((s,tm)=>s+(tm.players||[]).length,0);
+        lines.push(`${dl(d)}: ${teams.length}팀 / ${total}명`);
+        teams.forEach((tm,i)=>lines.push(`  ${i+1}. ${tm.club} (${(tm.players||[]).length}명)`));
+        lines.push('');
+      });
+    }
+    lines.push('📋 앱에서 상세 확인 가능합니다.');
+
+  }else if(type==='bracket_draw'){
+    lines = [`[${tname}] 추첨 결과 안내`, tdate?`📅 ${tdate}`:'', '추첨이 완료되었습니다.', ''];
+    if(tid && t){
+      (t.divisions||[]).forEach(d=>{
+        const key=tid+'_'+d;
+        const draw=G.draws[key];
+        const teams=G.teams[key]||[];
+        if(!draw){ lines.push(`${dl(d)}: 추첨 미완료`); return; }
+        lines.push(`📌 ${dl(d)} 추첨 결과:`);
+        (draw.groups||[]).forEach((g,gi)=>{
+          lines.push(`  ${gi+1}조: ${g.map(ti=>teams[ti]?.club||'?').join(' vs ')}`);
+        });
+        lines.push('');
+      });
+    }
+    lines.push('📱 대진표 이미지는 별도 공유드립니다.');
+
+  }else if(type==='final_result'){
+    lines = [`[${tname}] 최종 결과`, tdate?`📅 ${tdate}`:'', ''];
+    if(tid && t){
+      (t.divisions||[]).forEach(d=>{
+        const key=tid+'_'+d;
+        const teams=G.teams[key]||[];
+        const medals=['🥇','🥈','🥉'];
+        lines.push(`🏅 ${dl(d)}`);
+        const ranked=teams.map((tm,i)=>({...tm,_idx:i})).filter(tm=>tm.rank).sort((a,b)=>a.rank-b.rank);
+        if(ranked.length){
+          ranked.slice(0,3).forEach((tm,i)=>lines.push(`  ${medals[i]||''} ${tm.club}`));
+        } else { lines.push('  (결과 미입력)'); }
+        lines.push('');
+      });
+    }
+    lines.push('참가해주신 모든 선수 여러분 수고하셨습니다! 🎾');
+  }
+
+  const msg = lines.filter((l,i)=>!(i===1&&!tdate)).join('\n');
+  const ta=ge('noticeMsg');
+  if(ta) ta.value=msg;
+  renderNoticeContactBtns();
+}
+
+// 문자 발송 버튼 목록 렌더링
+// ── 선택된 클럽 체크박스 상태 추적 ─────────────────────────────────────────
+let _selClubs = new Set(); // 체크된 클럽 목록
+
+function renderNoticeContactBtns(){
+  const el = ge('noticeContactBtns');
+  if(!el) return;
+  const contacts = G.meta.clubContacts||{};
+  const withPhone = (G.clubs||[]).filter(c=>contacts[c]);
+  if(!withPhone.length){
+    el.innerHTML='<div style="font-size:.78rem;color:var(--text3);padding:6px 0">등록된 경기이사 번호가 없습니다.<br>위 "클럽 경기이사 연락처 관리"에서 번호를 추가하세요.</div>';
+    return;
+  }
+  // 처음 렌더링 시 전체 선택 상태 초기화
+  if(_selClubs.size === 0) withPhone.forEach(c=>_selClubs.add(c));
+
+  el.innerHTML = `
+    <!-- 클럽 체크박스 선택 영역 -->
+    <div style="background:var(--panel2);border-radius:10px;padding:10px 12px;margin-bottom:10px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <div style="font-size:.82rem;font-weight:700;color:var(--text1)">📋 받는 경기이사 선택</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-gray" style="font-size:.72rem;padding:3px 10px" onclick="selAllClubs(true)">전체선택</button>
+          <button class="btn btn-gray" style="font-size:.72rem;padding:3px 10px" onclick="selAllClubs(false)">전체해제</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${withPhone.map(club=>`
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
+            border:1.5px solid ${_selClubs.has(club)?'var(--primary)':'var(--border)'};
+            background:${_selClubs.has(club)?'rgba(37,99,235,.1)':'transparent'};
+            cursor:pointer;font-size:.8rem;font-weight:${_selClubs.has(club)?'700':'400'};
+            color:${_selClubs.has(club)?'var(--primary)':'var(--text2)'};user-select:none"
+            onclick="toggleClubSel('${club}')">
+            <input type="checkbox" ${_selClubs.has(club)?'checked':''} style="display:none">
+            ${_selClubs.has(club)?'✅':'⬜'} ${club}
+          </label>
+        `).join('')}
+      </div>
+      <div style="font-size:.72rem;color:var(--text3);margin-top:7px">
+        선택된 클럽: <b style="color:var(--primary)">${_selClubs.size}</b> / ${withPhone.length}개
+      </div>
+    </div>
+
+    <!-- 문자 발송 영역 -->
+    <div style="background:linear-gradient(135deg,#e3f2fd,#f0f8ff);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid #bbdefb">
+      <div style="font-size:.8rem;font-weight:700;color:#1565c0;margin-bottom:8px">📱 문자(SMS) 발송</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#1976d2;color:#fff;border:none;border-radius:8px;flex:1;min-width:120px"
+          onclick="sendSmsSelected()">
+          ✉️ 선택 클럽 문자
+        </button>
+        <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#0d47a1;color:#fff;border:none;border-radius:8px;flex:1;min-width:120px"
+          onclick="sendSmsAll()">
+          📨 전체 문자 (${withPhone.length}개)
+        </button>
+      </div>
+    </div>
+
+    <!-- 카카오톡 발송 영역 -->
+    <div style="background:linear-gradient(135deg,#fffde7,#fff9c4);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid #f9a825">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <img src="https://developers.kakao.com/assets/img/about/logos/kakaotalksharing/kakaotalk_sharing_btn_medium.png"
+          style="width:20px;height:20px;border-radius:4px;object-fit:cover" onerror="this.style.display='none'">
+        <span style="font-size:.8rem;font-weight:700;color:#92400e">카카오톡 발송</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#fee500;color:#3c1e1e;border:none;border-radius:8px;flex:1;min-width:120px;font-weight:700"
+          onclick="sendKakaoSelected()">
+          💬 선택 클럽 카톡
+        </button>
+        <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#f9c400;color:#3c1e1e;border:none;border-radius:8px;flex:1;min-width:120px;font-weight:700"
+          onclick="sendKakaoAll()">
+          💛 전체 카톡 (${withPhone.length}개)
+        </button>
+      </div>
+      <div style="font-size:.7rem;color:#78350f;line-height:1.5;background:rgba(255,255,255,.6);border-radius:6px;padding:5px 8px">
+        ⚠️ 카카오톡은 전화번호로 직접 열기가 불가합니다.<br>
+        내용이 클립보드에 복사됩니다 → 카카오톡 열어서 붙여넣기 후 발송하세요.<br>
+        <b>카카오톡 앱 바로가기</b>도 제공됩니다.
+      </div>
+    </div>
+
+    <!-- 카카오톡 앱 바로가기 버튼 -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <a href="kakaoplus://talk" style="text-decoration:none;flex:1;min-width:100px">
+        <button class="btn" style="width:100%;font-size:.78rem;padding:7px 10px;background:#fee500;color:#3c1e1e;border:1.5px solid #f9c400;border-radius:8px;font-weight:700">
+          📲 카카오톡 앱 열기
+        </button>
+      </a>
+      <button class="btn btn-gray" style="font-size:.78rem;padding:7px 14px;flex:1;min-width:100px"
+        onclick="copyMsgOnly()">
+        📋 내용만 복사
+      </button>
+    </div>
+
+    <div style="font-size:.7rem;color:var(--text3);line-height:1.5;padding:6px 8px;background:var(--panel2);border-radius:6px">
+      💡 <b>추천 사용법:</b> ① 위에서 클럽 선택 → ② 내용 입력/자동완성 → ③ "내용만 복사" → ④ 카카오톡 앱에서 단톡방에 붙여넣기<br>
+      📱 모바일에서 문자 버튼은 문자앱이 바로 열립니다.
+    </div>`;
+}
+
+function toggleClubSel(club){
+  if(_selClubs.has(club)) _selClubs.delete(club);
+  else _selClubs.add(club);
+  renderNoticeContactBtns();
+}
+
+function selAllClubs(selectAll){
+  const contacts = G.meta.clubContacts||{};
+  const withPhone = (G.clubs||[]).filter(c=>contacts[c]);
+  _selClubs.clear();
+  if(selectAll) withPhone.forEach(c=>_selClubs.add(c));
+  renderNoticeContactBtns();
+}
+
+// ── 문자(SMS) 발송 ──────────────────────────────────────────────────────────
+function _checkBodyAndGet(){
+  const body = (ge('noticeMsg')?.value||'').trim();
+  if(!body){ toast('공지 내용을 먼저 입력하세요','error'); return null; }
+  return body;
+}
+
+function sendSmsSelected(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const targets = [..._selClubs].filter(c=>contacts[c]);
+  if(!targets.length){ toast('선택된 클럽이 없습니다','error'); return; }
+  _sendSmsQueue(targets, body, 0);
+}
+
+function sendSmsAll(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const all = (G.clubs||[]).filter(c=>contacts[c]);
+  if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
+  if(!confirm(`전체 ${all.length}개 클럽에 순서대로 문자를 보냅니다.\n\n${all.join(', ')}\n\n시작하시겠습니까?`)) return;
+  _sendSmsQueue(all, body, 0);
+}
+
+function _sendSmsQueue(clubs, body, idx){
+  if(idx >= clubs.length){
+    toast(`✅ 전체 ${clubs.length}개 클럽 문자 완료`,'success');
+    return;
+  }
+  const club = clubs[idx];
+  const contacts = G.meta.clubContacts||{};
+  const phone = (contacts[club]||'').replace(/[^0-9+]/g,'');
+  if(!phone){ _sendSmsQueue(clubs, body, idx+1); return; }
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(!isMobile){
+    // PC: 한번에 전체 복사
+    const allLines = clubs.map(c=>`${c}: ${contacts[c]||''}`).join('\n');
+    navigator.clipboard.writeText(`[수신자]\n${allLines}\n\n[내용]\n${body}`)
+      .then(()=>toast(`PC: ${clubs.length}개 클럽 번호+내용 복사됨`,'info'))
+      .catch(()=>{});
+    return;
+  }
+  // 모바일: 순차 문자앱 열기
+  if(clubs.length > 1 && idx < clubs.length-1){
+    if(!confirm(`(${idx+1}/${clubs.length}) ${club} 에게 문자 발송\n번호: ${contacts[club]}\n\n다음 버튼을 누르면 다음 클럽으로 이동합니다.\n\n[확인] = 문자앱 열기 후 다음으로`)){
+      return; // 취소 시 중단
+    }
+  }
+  window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
+  if(clubs.length > 1){
+    setTimeout(()=>_sendSmsQueue(clubs, body, idx+1), 3000);
+  }
+}
+
+// ── 카카오톡 발송 ───────────────────────────────────────────────────────────
+function sendKakaoSelected(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const targets = [..._selClubs].filter(c=>contacts[c]);
+  if(!targets.length){ toast('선택된 클럽이 없습니다','error'); return; }
+  _sendKakaoQueue(targets, body, 0);
+}
+
+function sendKakaoAll(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const all = (G.clubs||[]).filter(c=>contacts[c]);
+  if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
+  if(!confirm(`전체 ${all.length}개 클럽에 카카오톡으로 발송합니다.\n내용이 복사되고 카카오톡 앱이 열립니다.\n\n${all.join(', ')}\n\n시작하시겠습니까?`)) return;
+  _sendKakaoQueue(all, body, 0);
+}
+
+function _sendKakaoQueue(clubs, body, idx){
+  if(idx >= clubs.length){
+    toast(`✅ ${clubs.length}개 클럽 카톡 발송 준비 완료`,'success');
+    return;
+  }
+  const club = clubs[idx];
+  const contacts = G.meta.clubContacts||{};
+  const phone = contacts[club]||'';
+  // 카카오톡은 전화번호로 직접 열기 불가 → 내용 복사 + 앱 열기
+  const msgWithTag = clubs.length > 1
+    ? `[${club} 경기이사님]\n${body}`
+    : body;
+  navigator.clipboard.writeText(msgWithTag).then(()=>{
+    toast(`📋 ${club} 발송 내용 복사됨 (${idx+1}/${clubs.length}) → 카카오톡에 붙여넣기`,'info');
+    // 카카오톡 앱 열기 시도
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if(isMobile){
+      // 카카오톡 딥링크: 특정 번호로 채팅 열기 (플러스친구 아닌 경우 지원 제한)
+      // 대신 카카오톡 앱 자체를 열고 사용자가 직접 선택하도록
+      setTimeout(()=>{
+        window.location.href = 'kakaotalk://';
+      }, 500);
+    }
+    // 여러 클럽이면 2초 후 다음으로
+    if(clubs.length > 1 && idx < clubs.length-1){
+      setTimeout(()=>{
+        toast(`다음: ${clubs[idx+1]} (${idx+2}/${clubs.length}) 복사 준비 중...`,'info');
+        setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1500);
+      }, 2000);
+    }
+  }).catch(()=>{
+    // 클립보드 실패 시 텍스트 직접 보여주기
+    alert(`[${club}]\n번호: ${phone}\n\n${msgWithTag}\n\n위 내용을 복사해서 카카오톡에 붙여넣으세요`);
+    if(clubs.length > 1) setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1000);
+  });
+}
+
+function copyMsgOnly(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  navigator.clipboard.writeText(body)
+    .then(()=>toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'))
+    .catch(()=>{
+      // 복사 실패 시 선택 가능한 텍스트로 표시
+      const ta = ge('noticeMsg');
+      if(ta){ ta.select(); document.execCommand('copy'); }
+      toast('내용을 선택 후 복사하세요','info');
+    });
+}
+
+// 대진표 이미지 캡처 및 저장 (카카오톡 공유용)
+async function captureAndShareBracket(mode){
+  // 먼저 대진표 탭으로 이동하여 표시
+  const bracketEl = ge('bracketContent');
+  if(!bracketEl){ toast('대진표 탭을 먼저 열어주세요','info'); return; }
+
+  // html2canvas 로드
+  if(!window.html2canvas){
+    toast('이미지 생성 준비 중...','info');
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+
+  // 현재 대진표 탭의 내용을 캡처
+  const tid = ge('brTS')?.value || (G.tournaments.find(t=>t.status==='ongoing')||G.tournaments[0])?.id||'';
+  const t = G.tournaments.find(x=>x.id===tid);
+
+  if(!tid || !t){
+    toast('대진표 탭에서 대회를 먼저 선택하세요','info');
+    showPage('bracket');
+    return;
+  }
+
+  if(!bracketEl.querySelector('.t-bracket,.grp-card,.rr-team-card')){
+    toast('대진표 탭에서 대회/부서를 선택하면 이미지를 저장할 수 있습니다','info');
+    showPage('bracket');
+    return;
+  }
+
+  toast('이미지 생성 중... 잠시 기다려주세요','info');
+  try{
+    const canvas = await html2canvas(bracketEl,{scale:2,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
+    const a = document.createElement('a');
+    const fname = mode==='preview'
+      ? `예상대진_${t.name}_${new Date().toISOString().substring(0,10)}.png`
+      : `대진표_${t.name}_${new Date().toISOString().substring(0,10)}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.download = fname;
+    a.click();
+    toast('이미지 저장 완료 🖼️ 카카오톡에서 공유하세요','success');
+  }catch(e){
+    toast('이미지 저장 실패. 대진표 탭에서 직접 저장해주세요','error');
+    showPage('bracket');
+  }
+}
+
+// openAdminSettings에서 연락처/공지 렌더링 추가 (기존 함수에서 호출)
+function renderAdminNoticeSection(){
+  renderAdminContactList();
+  renderNoticeContactBtns();
 }
 
 // ✅ 기본 대회 선택: "접수중(open)" 우선 → 없으면 "진행중(ongoing)" → 최신 1개
@@ -2322,7 +2940,7 @@ function renderRL(){
   const isOpen = (t?.status==='open');
 
   ge('regSection').style.display='block';
-  ge('aoReg').style.display=AD?'block':'none';
+  ge('aoReg').style.display=(AD||REG)?'block':'none';
 
   // 부서 변경 시 슬롯 업데이트
   updateRegisterSlots();
@@ -2388,6 +3006,13 @@ async function registerTeam(){
     await stT(key);
     await Promise.all(names.map(n=>regP(n,club,tid,div)));
     await fbLog(`팀 등록: ${tdn({club},key,G.teams[key].length-1)} ${dl(div)} (${dbl}복식)`,'📋');
+    // 경기이사 번호 자동 저장 (기존 번호 없을 때만)
+    const _regPhone=(ge('regContactPhone')?.value||'').replace(/[^0-9-]/g,'').trim();
+    if(_regPhone && _regPhone.length>=9 && !(G.meta.clubContacts||{})[club]){
+      if(!G.meta.clubContacts) G.meta.clubContacts={};
+      G.meta.clubContacts[club]=_regPhone;
+      try{ await saveMeta(); }catch(_e2){}
+    }
     for(let i=1;i<=mainCount+2;i++){const el=ge('p'+i);if(el){el.value='';const h=ge('h'+i);if(h)h.innerHTML='';}}
     sl(false);toast('팀 등록 완료 ✅','success');renderRL();
   }catch(e){sl(false);toast('등록 실패: '+e.message,'error');}
@@ -6993,6 +7618,11 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,
   openClubMgr,addClub,delClub,renderCL,
+  toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
+  onRegClubChange,onRegContactInput,saveRegContact,
+  renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,
+  prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,
   gDS,om,cm,toast,ge,esc,setRbSc,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
