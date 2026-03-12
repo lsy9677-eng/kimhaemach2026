@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-06-v13-seednum";
+  const APP_VERSION = "2026-03-12-v14-ui-fixes";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -596,7 +596,6 @@ body{overflow-x:hidden;}
 <meta name="apple-mobile-web-app-title" content="김해시테니스협회">
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.0/kakao.min.js"></script>
 </head>
 <body>
 <header class="app-header">
@@ -878,12 +877,12 @@ body{overflow-x:hidden;}
 </div>
 
 </main>
-<div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div><p style="font-size:.75rem;color:var(--text3)">초기 비밀번호: <b>kimhae1234</b></p></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
+<div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
 <!-- 팀등록 로그인 모달 -->
 <div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 팀등록 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
 <div class="modal-body">
   <div style="padding:10px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#2e7d32;line-height:1.5">
-    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.<br>관리자에게 비밀번호를 받아 입력하세요.
+    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.<br>최초 비밀번호: <b>202601</b>
   </div>
   <div class="form-group"><label class="form-label">팀등록 비밀번호</label>
     <input class="form-input" type="password" id="regPwInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doRegLogin()">
@@ -1085,7 +1084,7 @@ body{overflow-x:hidden;}
     </div>
     <div class="form-group" style="margin-bottom:8px">
       <label class="form-label">새 팀등록 비밀번호</label>
-      <input class="form-input" type="text" id="newRegPwInput" placeholder="예: tennis2024" autocomplete="off">
+      <input class="form-input" type="text" id="newRegPwInput" placeholder="예: 202601" autocomplete="off">
     </div>
     <div style="display:flex;justify-content:flex-end">
       <button class="btn btn-primary" onclick="saveRegPw()">💾 저장</button>
@@ -1173,7 +1172,6 @@ body{overflow-x:hidden;}
       <button class="btn btn-primary" onclick="saveAdminPassword()">💾 비밀번호 저장</button>
     </div>
     <div style="margin-top:8px;font-size:.72rem;color:var(--text3)">
-      초기 비밀번호(설치 직후): <b>kimhae1234</b>
     </div>
   </div>
 </div>
@@ -1383,7 +1381,7 @@ let REG=false; // 팀등록 로그인 상태
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'tennis2024',memberRegistry2026:[],clubContacts:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1498,8 +1496,8 @@ async function initFB(){
     sl(false);toast('🔥 연결 완료','success');
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'tennis2024',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='tennis2024';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'tennis2024',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
-async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,regPw:(G.meta.regPw||'tennis2024'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],clubContacts:(G.meta.clubContacts||{})});}catch(e){}}
+async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
+async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],clubContacts:(G.meta.clubContacts||{})});}catch(e){}}
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
@@ -1767,12 +1765,7 @@ function openAdminSettings(){
   // 팀등록 비번 표시 초기화
   ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
   ge('newRegPwInput') && (ge('newRegPwInput').value='');
-  _selClubs.clear();
-  const contacts = G.meta.clubContacts || {};
-  (G.clubs || []).forEach(c => {
-    if (contacts[c]) _selClubs.add(c);
-  });
-renderAdminNoticeSection();
+  renderAdminNoticeSection();
   om('mAdminSettings');
 }
 
@@ -2069,7 +2062,7 @@ function renderNoticeContactBtns(){
     return;
   }
   // 처음 렌더링 시 전체 선택 상태 초기화
-
+  if(_selClubs.size === 0) withPhone.forEach(c=>_selClubs.add(c));
 
   el.innerHTML = `
     <!-- 클럽 체크박스 선택 영역 -->
@@ -2082,15 +2075,16 @@ function renderNoticeContactBtns(){
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
-    ${withPhone.map(club=>`
-          <div style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
+        ${withPhone.map(club=>`
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
             border:1.5px solid ${_selClubs.has(club)?'var(--primary)':'var(--border)'};
             background:${_selClubs.has(club)?'rgba(37,99,235,.1)':'transparent'};
             cursor:pointer;font-size:.8rem;font-weight:${_selClubs.has(club)?'700':'400'};
             color:${_selClubs.has(club)?'var(--primary)':'var(--text2)'};user-select:none"
             onclick="toggleClubSel('${club}')">
+            <input type="checkbox" ${_selClubs.has(club)?'checked':''} style="display:none">
             ${_selClubs.has(club)?'✅':'⬜'} ${club}
-          </div>
+          </label>
         `).join('')}
       </div>
       <div style="font-size:.72rem;color:var(--text3);margin-top:7px">
@@ -2225,16 +2219,6 @@ function _sendSmsQueue(clubs, body, idx){
 }
 
 // ── 카카오톡 발송 ───────────────────────────────────────────────────────────
-
-// ── 카카오 SDK 초기화 ──────────────────────────
-function _initKakaoSDK(){
-  return new Promise((res,rej)=>{
-    if(typeof Kakao==='undefined'){ return rej(new Error('Kakao SDK 미로드')); }
-    if(!Kakao.isInitialized()){ Kakao.init('60509e3b65013df8d69989830a577359'); }
-    res();
-  });
-}
-
 function sendKakaoSelected(){
   const body = _checkBodyAndGet(); if(!body) return;
   const contacts = G.meta.clubContacts||{};
@@ -2248,89 +2232,58 @@ function sendKakaoAll(){
   const contacts = G.meta.clubContacts||{};
   const all = (G.clubs||[]).filter(c=>contacts[c]);
   if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
-  if(!confirm(`전체 ${all.length}개 클럽에 카카오톡으로 발송합니다.\n\n${all.join(', ')}\n\n시작하시겠습니까?`)) return;
+  if(!confirm(`전체 ${all.length}개 클럽에 카카오톡으로 발송합니다.\n내용이 복사되고 카카오톡 앱이 열립니다.\n\n${all.join(', ')}\n\n시작하시겠습니까?`)) return;
   _sendKakaoQueue(all, body, 0);
 }
 
 function _sendKakaoQueue(clubs, body, idx){
   if(idx >= clubs.length){
-    toast(`✅ ${clubs.length}개 클럽 카톡 발송 완료`,'success');
+    toast(`✅ ${clubs.length}개 클럽 카톡 발송 준비 완료`,'success');
     return;
   }
   const club = clubs[idx];
-  const msgWithTag = clubs.length > 1 ? `[${club} 경기이사님]\n${body}` : body;
-  const next = ()=>{ if(idx < clubs.length-1) setTimeout(()=>_sendKakaoQueue(clubs,body,idx+1), 1000); };
-  _sendKakaoShare(club, msgWithTag, idx+1, clubs.length, next);
-}
-
-async function _sendKakaoShare(club, msg, cur, total, nextFn){
-  try{
-    await _initKakaoSDK();
-    Kakao.Share.sendDefault({
-      objectType: 'text',
-      text: msg,
-      link: { mobileWebUrl: window.location.href, webUrl: window.location.href }
-    });
-    toast(`(${cur}/${total}) ${club} 카카오톡 공유창 열림 ✅`,'success');
-    if(total > 1) setTimeout(nextFn, 4000);
-  } catch(e){
-    console.warn('Kakao SDK 실패, 클립보드 복사로 대체:', e.message);
-    const doPopup = ()=> _showKakaoPopup(club, cur, total, nextFn);
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(msg).then(doPopup).catch(()=>{ _copyFallback(msg); doPopup(); });
-    } else { _copyFallback(msg); doPopup(); }
-  }
-}
-
-function _showKakaoPopup(club, cur, total, nextFn){
-  const old = document.getElementById('_kakaoPopup'); if(old) old.remove();
-  const popup = document.createElement('div');
-  popup.id = '_kakaoPopup';
-  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
-  const inner = document.createElement('div');
-  inner.style.cssText = 'background:#fff;border-radius:18px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)';
-  inner.innerHTML = `
-    <div style="font-size:2rem;margin-bottom:8px">📋</div>
-    <div style="font-weight:700;font-size:1rem;margin-bottom:6px;color:#111">${club} 내용 복사됨!</div>
-    <div style="font-size:.82rem;color:#555;margin-bottom:18px;line-height:1.5">(${cur}/${total})<br>카카오톡 앱을 열고 붙여넣기 하세요</div>`;
-  const btnKakao = document.createElement('button');
-  btnKakao.textContent = '💛 카카오톡 앱으로 이동';
-  btnKakao.style.cssText = 'width:100%;padding:13px;background:#fee500;color:#3c1e1e;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:10px;display:block';
-  btnKakao.onclick = ()=>{ popup.remove(); window.location.href='kakaotalk://'; setTimeout(nextFn,1500); };
-  const btnClose = document.createElement('button');
-  btnClose.textContent = '닫기';
-  btnClose.style.cssText = 'width:100%;padding:11px;background:#f0f0f0;color:#555;border:none;border-radius:12px;font-size:.88rem;cursor:pointer;display:block';
-  btnClose.onclick = ()=>{ popup.remove(); nextFn(); };
-  inner.appendChild(btnKakao); inner.appendChild(btnClose);
-  popup.appendChild(inner); document.body.appendChild(popup);
-}
-
-function _openKakaoTalk(){
-  try{ window.open('kakaotalk://','_self'); } catch(e){ window.location.href='kakaotalk://'; }
-}
-
-function _copyFallback(text){
-  try{
-    const ta=document.createElement('textarea');
-    ta.value=text; ta.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0';
-    document.body.appendChild(ta); ta.focus(); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-  }catch(_){}
+  const contacts = G.meta.clubContacts||{};
+  const phone = contacts[club]||'';
+  // 카카오톡은 전화번호로 직접 열기 불가 → 내용 복사 + 앱 열기
+  const msgWithTag = clubs.length > 1
+    ? `[${club} 경기이사님]\n${body}`
+    : body;
+  navigator.clipboard.writeText(msgWithTag).then(()=>{
+    toast(`📋 ${club} 발송 내용 복사됨 (${idx+1}/${clubs.length}) → 카카오톡에 붙여넣기`,'info');
+    // 카카오톡 앱 열기 시도
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if(isMobile){
+      // 카카오톡 딥링크: 특정 번호로 채팅 열기 (플러스친구 아닌 경우 지원 제한)
+      // 대신 카카오톡 앱 자체를 열고 사용자가 직접 선택하도록
+      setTimeout(()=>{
+        window.location.href = 'kakaotalk://';
+      }, 500);
+    }
+    // 여러 클럽이면 2초 후 다음으로
+    if(clubs.length > 1 && idx < clubs.length-1){
+      setTimeout(()=>{
+        toast(`다음: ${clubs[idx+1]} (${idx+2}/${clubs.length}) 복사 준비 중...`,'info');
+        setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1500);
+      }, 2000);
+    }
+  }).catch(()=>{
+    // 클립보드 실패 시 텍스트 직접 보여주기
+    alert(`[${club}]\n번호: ${phone}\n\n${msgWithTag}\n\n위 내용을 복사해서 카카오톡에 붙여넣으세요`);
+    if(clubs.length > 1) setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1000);
+  });
 }
 
 function copyMsgOnly(){
   const body = _checkBodyAndGet(); if(!body) return;
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(body)
-      .then(()=>toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'))
-      .catch(()=>{ _copyFallback(body); toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'); });
-  } else {
-    _copyFallback(body);
-    toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success');
-  }
+  navigator.clipboard.writeText(body)
+    .then(()=>toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'))
+    .catch(()=>{
+      // 복사 실패 시 선택 가능한 텍스트로 표시
+      const ta = ge('noticeMsg');
+      if(ta){ ta.select(); document.execCommand('copy'); }
+      toast('내용을 선택 후 복사하세요','info');
+    });
 }
-
-
 
 // 대진표 이미지 캡처 및 저장 (카카오톡 공유용)
 async function captureAndShareBracket(mode){
@@ -2488,7 +2441,15 @@ function renderTL(){
   const el=ge('tournList');if(!G.tournaments.length){el.innerHTML='<div class="empty-state card"><div class="empty-icon">🏆</div><p>등록된 대회 없음</p></div>';return;}
   const sm={open:'s-open',closed:'s-closed',ongoing:'s-ongoing',finished:'s-finished'};
   const sl2={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
-  el.innerHTML=G.tournaments.map(t=>{
+  const sorted=[...G.tournaments].sort((a,b)=>{
+    const ad=(a?.date||'').toString();
+    const bd=(b?.date||'').toString();
+    if(bd!==ad) return bd.localeCompare(ad);
+    const ac=(a?.createdAt?.seconds||0);
+    const bc=(b?.createdAt?.seconds||0);
+    return bc-ac;
+  });
+  el.innerHTML=sorted.map(t=>{
     const tc=Object.keys(G.teams).filter(k=>k.startsWith(t.id+'_')).reduce((s,k)=>s+(G.teams[k]||[]).length,0);
     return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${sl2[t.status]||'접수중'}</span></div>
     <div class="tc-body"><div class="tc-meta"><span class="tc-mi">📅 ${t.date}</span>${t.venue?`<span class="tc-mi">📍 ${t.venue}</span>`:''}<span class="tc-mi">👥 ${tc}팀</span></div>
@@ -5980,7 +5941,7 @@ function openEditPlayer(name){
     <div style="font-weight:700;font-size:.82rem;margin:12px 0 6px">📋 이력 수정 (삭제할 항목 체크)</div>
     ${hist.map((h,i)=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem;cursor:pointer">
       <input type="checkbox" class="ep-del-hist" data-idx="${i}">
-      <span style="flex:1">${h.tname||h.tid} · ${h.club} · ${dl(h.div)} · ${h.rank?h.rank+'위':'참가'}</span>
+      <span style="flex:1">${formatTournamentTitle(h.tname||h.tid, h.date||'')} · ${h.club} · ${dl(h.div)} · ${h.rank?h.rank+'위':'참가'}</span>
     </label>`).join('')}
   `:'<p style="font-size:.78rem;color:var(--text3);margin-top:8px">이력 없음</p>';
   // 합치기 드롭다운 - 현재 선수 제외한 전체 목록 (이름 유사한 것 먼저)
