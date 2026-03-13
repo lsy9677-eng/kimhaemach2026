@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-13-v16-bulk-sms";
+  const APP_VERSION = "2026-03-13-v17-kakao-share-upgrade";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -846,6 +846,7 @@ body{overflow-x:hidden;}
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;flex-wrap:wrap" id="bracketExportBar" style="display:none">
     <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="openBracketView()">📊 전체 대진표 보기</button>
     <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="bracketToImage()">🖼️ 이미지 저장</button>
+    <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px;background:#fee500;border-color:#f9c400;color:#3c1e1e;font-weight:700" onclick="captureAndShareBracket('all')">💛 카톡용 이미지</button>
     <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="bracketToPDF()">📄 PDF 저장</button>
     <button id="aoAutoOrder" class="btn btn-primary" style="font-size:.75rem;padding:5px 12px;display:none" onclick="runAutoOrder()">🔀 경기순서 자동배열</button>
   </div>
@@ -2223,6 +2224,34 @@ function _checkBodyAndGet(){
   return body;
 }
 
+
+// ── 복사 공용 유틸 ─────────────────────────────────────────────────────────
+function _copyFallback(text){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  }catch(_e){
+    return false;
+  }
+}
+
+async function copyTextSafe(text){
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(_e){}
+  return _copyFallback(text);
+}
+
 function sendSmsSelected(){
   const body = _checkBodyAndGet(); if(!body) return;
   const contacts = G.meta.clubContacts||{};
@@ -2289,7 +2318,7 @@ function sendKakaoAll(){
 }
 
 // 선택된 클럽 전체를 하나의 메시지로 합쳐서 복사
-function _buildAndCopyKakaoMsg(clubs, body){
+async function _buildAndCopyKakaoMsg(clubs, body){
   let msg;
   if(clubs.length === 1){
     msg = body;
@@ -2297,16 +2326,13 @@ function _buildAndCopyKakaoMsg(clubs, body){
     const header = clubs.map(c=>`• ${c}`).join('\n');
     msg = `[발송 대상]\n${header}\n\n${body}`;
   }
-  navigator.clipboard.writeText(msg)
-    .then(()=>{
-      toast(`📋 ${clubs.length}개 클럽 발송 내용이 복사됐습니다! 카카오톡 앱을 열어 붙여넣으세요.`,'success');
-    })
-    .catch(()=>{
-      // 클립보드 실패 시 alert로 내용 표시
-      alert(`아래 내용을 복사하세요:\n\n${msg}`);
-    });
+  const ok = await copyTextSafe(msg);
+  if(ok){
+    toast(`📋 ${clubs.length}개 클럽 발송 내용이 복사됐습니다! 카카오톡 앱을 열어 붙여넣으세요.`,'success');
+  } else {
+    alert(`아래 내용을 복사하세요:\n\n${msg}`);
+  }
 }
-
 
 function openKakaoApp(){
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -2321,15 +2347,14 @@ function openKakaoApp(){
   }
 }
 
-function copyMsgOnly(){
+async function copyMsgOnly(){
   const body = _checkBodyAndGet(); if(!body) return;
-  navigator.clipboard.writeText(body)
-    .then(()=>toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'))
-    .catch(()=>{
-      const ta = ge('noticeMsg');
-      if(ta){ ta.select(); document.execCommand('copy'); }
-      toast('내용을 선택 후 복사하세요','info');
-    });
+  const ok = await copyTextSafe(body);
+  if(ok){
+    toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success');
+  } else {
+    toast('내용을 수동으로 복사해주세요','info');
+  }
 }
 
 // 대진표 이미지 캡처 및 저장 (카카오톡 공유용)
