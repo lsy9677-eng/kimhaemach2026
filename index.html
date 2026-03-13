@@ -2307,13 +2307,17 @@ function _buildAndCopyKakaoMsg(clubs, body){
     });
 }
 
+
 function openKakaoApp(){
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if(isMobile){
-    window.location.href = 'kakaotalk://';
-    setTimeout(()=>{ window.location.href = 'https://apps.apple.com/app/id362057947'; }, 1500);
-  } else {
+  if(!isMobile){
     toast('PC에서는 카카오톡 앱을 직접 실행하세요.','info');
+    return;
+  }
+  try{
+    window.open('kakaotalk://','_self');
+  }catch(e){
+    window.location.href='kakaotalk://';
   }
 }
 
