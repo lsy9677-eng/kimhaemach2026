@@ -2069,18 +2069,19 @@ function prefillNoticeMsg(type){
 // 문자 발송 버튼 목록 렌더링
 // ── 선택된 클럽 체크박스 상태 추적 ─────────────────────────────────────────
 let _selClubs = new Set(); // 체크된 클럽 목록
+let _noticeWithPhone = []; // 전화번호 있는 클럽 캐시
 
 function renderNoticeContactBtns(){
   const el = ge('noticeContactBtns');
   if(!el) return;
   const contacts = G.meta.clubContacts||{};
-  const withPhone = (G.clubs||[]).filter(c=>contacts[c]);
-  if(!withPhone.length){
+  _noticeWithPhone = (G.clubs||[]).filter(c=>contacts[c]);
+  if(!_noticeWithPhone.length){
     el.innerHTML='<div style="font-size:.78rem;color:var(--text3);padding:6px 0">등록된 경기이사 번호가 없습니다.<br>위 "클럽 경기이사 연락처 관리"에서 번호를 추가하세요.</div>';
     return;
   }
   // 처음 렌더링 시 전체 선택 상태 초기화
-  if(_selClubs.size === 0) withPhone.forEach(c=>_selClubs.add(c));
+  if(_selClubs.size === 0) _noticeWithPhone.forEach(c=>_selClubs.add(c));
 
   el.innerHTML = `
     <!-- 클럽 체크박스 선택 영역 -->
@@ -2092,21 +2093,20 @@ function renderNoticeContactBtns(){
           <button class="btn btn-gray" style="font-size:.72rem;padding:3px 10px" onclick="selAllClubs(false)">전체해제</button>
         </div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${withPhone.map(club=>`
-          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
+      <div id="clubCheckboxArea" style="display:flex;flex-wrap:wrap;gap:6px">
+        ${_noticeWithPhone.map(club=>`
+          <label id="clublabel_${CSS.escape(club)}" style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;
             border:1.5px solid ${_selClubs.has(club)?'var(--primary)':'var(--border)'};
             background:${_selClubs.has(club)?'rgba(37,99,235,.1)':'transparent'};
             cursor:pointer;font-size:.8rem;font-weight:${_selClubs.has(club)?'700':'400'};
-            color:${_selClubs.has(club)?'var(--primary)':'var(--text2)'};user-select:none"
-            onclick="toggleClubSel('${club}')">
-            <input type="checkbox" ${_selClubs.has(club)?'checked':''} style="display:none">
-            ${_selClubs.has(club)?'✅':'⬜'} ${club}
+            color:${_selClubs.has(club)?'var(--primary)':'var(--text2)'};user-select:none">
+            <input type="checkbox" ${_selClubs.has(club)?'checked':''} onchange="toggleClubSel('${club.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--primary)">
+            ${club}
           </label>
         `).join('')}
       </div>
-      <div style="font-size:.72rem;color:var(--text3);margin-top:7px">
-        선택된 클럽: <b style="color:var(--primary)">${_selClubs.size}</b> / ${withPhone.length}개
+      <div id="selClubCount" style="font-size:.72rem;color:var(--text3);margin-top:7px">
+        선택된 클럽: <b style="color:var(--primary)">${_selClubs.size}</b> / ${_noticeWithPhone.length}개
       </div>
     </div>
 
@@ -2120,58 +2120,75 @@ function renderNoticeContactBtns(){
         </button>
         <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#0d47a1;color:#fff;border:none;border-radius:8px;flex:1;min-width:120px"
           onclick="sendSmsAll()">
-          📨 전체 문자 (${withPhone.length}개)
+          📨 전체 문자 (${_noticeWithPhone.length}개)
         </button>
+      </div>
+      <div style="font-size:.7rem;color:#1565c0;margin-top:6px;line-height:1.5;padding:5px 8px;background:rgba(255,255,255,.6);border-radius:6px">
+        📱 모바일: 문자앱이 바로 열립니다. 여러 클럽은 한 명씩 순서대로 발송합니다.<br>
+        🖥️ PC: 번호+내용이 클립보드에 복사됩니다.
       </div>
     </div>
 
     <!-- 카카오톡 발송 영역 -->
     <div style="background:linear-gradient(135deg,#fffde7,#fff9c4);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid #f9a825">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <img src="https://developers.kakao.com/assets/img/about/logos/kakaotalksharing/kakaotalk_sharing_btn_medium.png"
-          style="width:20px;height:20px;border-radius:4px;object-fit:cover" onerror="this.style.display='none'">
+        <span style="font-size:1.1rem">💛</span>
         <span style="font-size:.8rem;font-weight:700;color:#92400e">카카오톡 발송</span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
         <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#fee500;color:#3c1e1e;border:none;border-radius:8px;flex:1;min-width:120px;font-weight:700"
           onclick="sendKakaoSelected()">
-          💬 선택 클럽 카톡
+          💬 선택 클럽 내용 복사
         </button>
         <button class="btn" style="font-size:.78rem;padding:7px 14px;background:#f9c400;color:#3c1e1e;border:none;border-radius:8px;flex:1;min-width:120px;font-weight:700"
           onclick="sendKakaoAll()">
-          💛 전체 카톡 (${withPhone.length}개)
+          💛 전체 내용 복사 (${_noticeWithPhone.length}개)
         </button>
       </div>
-      <div style="font-size:.7rem;color:#78350f;line-height:1.5;background:rgba(255,255,255,.6);border-radius:6px;padding:5px 8px">
-        ⚠️ 카카오톡은 전화번호로 직접 열기가 불가합니다.<br>
-        내용이 클립보드에 복사됩니다 → 카카오톡 열어서 붙여넣기 후 발송하세요.<br>
-        <b>카카오톡 앱 바로가기</b>도 제공됩니다.
+      <div style="font-size:.7rem;color:#78350f;line-height:1.5;background:rgba(255,255,255,.6);border-radius:6px;padding:5px 8px;margin-bottom:6px">
+        ⚠️ 카카오톡은 전화번호로 직접 메시지 발송이 불가합니다.<br>
+        ① 버튼 클릭 → 내용 자동 복사 ② 아래 카카오톡 앱 열기 → 대화방에 붙여넣기
       </div>
-    </div>
-
-    <!-- 카카오톡 앱 바로가기 버튼 -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-      <a href="kakaoplus://talk" style="text-decoration:none;flex:1;min-width:100px">
-        <button class="btn" style="width:100%;font-size:.78rem;padding:7px 10px;background:#fee500;color:#3c1e1e;border:1.5px solid #f9c400;border-radius:8px;font-weight:700">
-          📲 카카오톡 앱 열기
-        </button>
-      </a>
-      <button class="btn btn-gray" style="font-size:.78rem;padding:7px 14px;flex:1;min-width:100px"
-        onclick="copyMsgOnly()">
-        📋 내용만 복사
+      <button class="btn" onclick="openKakaoApp()" style="width:100%;font-size:.78rem;padding:7px 10px;background:#fee500;color:#3c1e1e;border:1.5px solid #f9c400;border-radius:8px;font-weight:700">
+        📲 카카오톡 앱 열기
       </button>
     </div>
 
     <div style="font-size:.7rem;color:var(--text3);line-height:1.5;padding:6px 8px;background:var(--panel2);border-radius:6px">
-      💡 <b>추천 사용법:</b> ① 위에서 클럽 선택 → ② 내용 입력/자동완성 → ③ "내용만 복사" → ④ 카카오톡 앱에서 단톡방에 붙여넣기<br>
-      📱 모바일에서 문자 버튼은 문자앱이 바로 열립니다.
+      💡 <b>카톡 사용법:</b> ① 클럽 선택 → ② 내용 입력 → ③ "선택 클럽 내용 복사" 클릭 → ④ "카카오톡 앱 열기" → ⑤ 단톡방에서 붙여넣기
     </div>`;
 }
 
-function toggleClubSel(club){
-  if(_selClubs.has(club)) _selClubs.delete(club);
-  else _selClubs.add(club);
-  renderNoticeContactBtns();
+// 체크박스 상태만 업데이트 (전체 re-render 없이)
+function _updateClubLabelStyle(club){
+  const sel = _selClubs.has(club);
+  // label 스타일 업데이트
+  const labels = document.querySelectorAll('#clubCheckboxArea label');
+  labels.forEach(lbl=>{
+    const cb = lbl.querySelector('input[type=checkbox]');
+    if(!cb) return;
+    // onchange 속성에서 클럽명 추출
+    const oc = cb.getAttribute('onchange')||'';
+    const m = oc.match(/toggleClubSel\('(.+?)',/);
+    if(!m) return;
+    const c = m[1].replace(/\\'/g,"'");
+    const s = _selClubs.has(c);
+    lbl.style.borderColor = s?'var(--primary)':'var(--border)';
+    lbl.style.background = s?'rgba(37,99,235,.1)':'transparent';
+    lbl.style.fontWeight = s?'700':'400';
+    lbl.style.color = s?'var(--primary)':'var(--text2)';
+    cb.checked = s;
+  });
+  // 카운트 업데이트
+  const cnt = ge('selClubCount');
+  if(cnt) cnt.innerHTML = `선택된 클럽: <b style="color:var(--primary)">${_selClubs.size}</b> / ${_noticeWithPhone.length}개`;
+}
+
+function toggleClubSel(club, checked){
+  if(checked === undefined) checked = !_selClubs.has(club);
+  if(checked) _selClubs.add(club);
+  else _selClubs.delete(club);
+  _updateClubLabelStyle(club);
 }
 
 function selAllClubs(selectAll){
@@ -2179,7 +2196,24 @@ function selAllClubs(selectAll){
   const withPhone = (G.clubs||[]).filter(c=>contacts[c]);
   _selClubs.clear();
   if(selectAll) withPhone.forEach(c=>_selClubs.add(c));
-  renderNoticeContactBtns();
+  // 전체 label 일괄 스타일 업데이트
+  const labels = document.querySelectorAll('#clubCheckboxArea label');
+  labels.forEach(lbl=>{
+    const cb = lbl.querySelector('input[type=checkbox]');
+    if(!cb) return;
+    const oc = cb.getAttribute('onchange')||'';
+    const m = oc.match(/toggleClubSel\('(.+?)',/);
+    if(!m) return;
+    const c = m[1].replace(/\\'/g,"'");
+    const s = _selClubs.has(c);
+    lbl.style.borderColor = s?'var(--primary)':'var(--border)';
+    lbl.style.background = s?'rgba(37,99,235,.1)':'transparent';
+    lbl.style.fontWeight = s?'700':'400';
+    lbl.style.color = s?'var(--primary)':'var(--text2)';
+    cb.checked = s;
+  });
+  const cnt = ge('selClubCount');
+  if(cnt) cnt.innerHTML = `선택된 클럽: <b style="color:var(--primary)">${_selClubs.size}</b> / ${withPhone.length}개`;
 }
 
 // ── 문자(SMS) 발송 ──────────────────────────────────────────────────────────
@@ -2207,42 +2241,59 @@ function sendSmsAll(){
 }
 
 function _sendSmsQueue(clubs, body, idx){
+  const contacts = G.meta.clubContacts||{};
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if(!isMobile){
+    // PC: 전체 번호+내용 한번에 복사
+    const allLines = clubs.map(c=>`${c}: ${contacts[c]||''}`).join('\n');
+    const copyText = `[수신자]\n${allLines}\n\n[내용]\n${body}`;
+    navigator.clipboard.writeText(copyText)
+      .then(()=>toast(`📋 PC: ${clubs.length}개 클럽 번호+내용 복사됨. 문자앱에 붙여넣으세요.`,'info'))
+      .catch(()=>{ alert(copyText); });
+    return;
+  }
+
+  // 모바일: 순차 문자앱 열기
   if(idx >= clubs.length){
     toast(`✅ 전체 ${clubs.length}개 클럽 문자 완료`,'success');
     return;
   }
   const club = clubs[idx];
-  const contacts = G.meta.clubContacts||{};
   const phone = (contacts[club]||'').replace(/[^0-9+]/g,'');
   if(!phone){ _sendSmsQueue(clubs, body, idx+1); return; }
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if(!isMobile){
-    // PC: 한번에 전체 복사
-    const allLines = clubs.map(c=>`${c}: ${contacts[c]||''}`).join('\n');
-    navigator.clipboard.writeText(`[수신자]\n${allLines}\n\n[내용]\n${body}`)
-      .then(()=>toast(`PC: ${clubs.length}개 클럽 번호+내용 복사됨`,'info'))
-      .catch(()=>{});
-    return;
-  }
-  // 모바일: 순차 문자앱 열기
-  if(clubs.length > 1 && idx < clubs.length-1){
-    if(!confirm(`(${idx+1}/${clubs.length}) ${club} 에게 문자 발송\n번호: ${contacts[club]}\n\n다음 버튼을 누르면 다음 클럽으로 이동합니다.\n\n[확인] = 문자앱 열기 후 다음으로`)){
-      return; // 취소 시 중단
-    }
-  }
-  window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
-  if(clubs.length > 1){
-    setTimeout(()=>_sendSmsQueue(clubs, body, idx+1), 3000);
+
+  // 마지막이 아니면 confirm으로 다음 발송 유도
+  if(idx < clubs.length-1){
+    const proceed = confirm(`(${idx+1}/${clubs.length}) [${club}] 에게 문자를 보냅니다.\n번호: ${contacts[club]}\n\n문자앱이 열립니다. 발송 후 앱으로 돌아와\n[확인]을 눌러 다음 클럽으로 이동하세요.\n\n취소하면 발송을 중단합니다.`);
+    if(!proceed){ toast('문자 발송 중단됨','info'); return; }
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
+    // 앱 복귀 후 다음 발송을 위해 대기 (visibilitychange 또는 timeout)
+    let _resumed = false;
+    const _next = ()=>{
+      if(_resumed) return;
+      _resumed = true;
+      document.removeEventListener('visibilitychange', _onVisible);
+      setTimeout(()=>_sendSmsQueue(clubs, body, idx+1), 300);
+    };
+    const _onVisible = ()=>{ if(document.visibilityState==='visible') _next(); };
+    document.addEventListener('visibilitychange', _onVisible);
+    setTimeout(_next, 5000); // 5초 후 fallback
+  } else {
+    // 마지막 클럽
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(body)}`;
+    toast(`✅ 전체 ${clubs.length}개 클럽 문자 발송 완료`,'success');
   }
 }
 
 // ── 카카오톡 발송 ───────────────────────────────────────────────────────────
+// 카카오톡은 전화번호로 직접 메시지 불가 → 내용 복사 후 앱 열기 방식
 function sendKakaoSelected(){
   const body = _checkBodyAndGet(); if(!body) return;
   const contacts = G.meta.clubContacts||{};
   const targets = [..._selClubs].filter(c=>contacts[c]);
   if(!targets.length){ toast('선택된 클럽이 없습니다','error'); return; }
-  _sendKakaoQueue(targets, body, 0);
+  _buildAndCopyKakaoMsg(targets, body);
 }
 
 function sendKakaoAll(){
@@ -2250,45 +2301,36 @@ function sendKakaoAll(){
   const contacts = G.meta.clubContacts||{};
   const all = (G.clubs||[]).filter(c=>contacts[c]);
   if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
-  if(!confirm(`전체 ${all.length}개 클럽에 카카오톡으로 발송합니다.\n내용이 복사되고 카카오톡 앱이 열립니다.\n\n${all.join(', ')}\n\n시작하시겠습니까?`)) return;
-  _sendKakaoQueue(all, body, 0);
+  _buildAndCopyKakaoMsg(all, body);
 }
 
-function _sendKakaoQueue(clubs, body, idx){
-  if(idx >= clubs.length){
-    toast(`✅ ${clubs.length}개 클럽 카톡 발송 준비 완료`,'success');
-    return;
+// 선택된 클럽 전체를 하나의 메시지로 합쳐서 복사
+function _buildAndCopyKakaoMsg(clubs, body){
+  let msg;
+  if(clubs.length === 1){
+    msg = body;
+  } else {
+    const header = clubs.map(c=>`• ${c}`).join('\n');
+    msg = `[발송 대상]\n${header}\n\n${body}`;
   }
-  const club = clubs[idx];
-  const contacts = G.meta.clubContacts||{};
-  const phone = contacts[club]||'';
-  // 카카오톡은 전화번호로 직접 열기 불가 → 내용 복사 + 앱 열기
-  const msgWithTag = clubs.length > 1
-    ? `[${club} 경기이사님]\n${body}`
-    : body;
-  navigator.clipboard.writeText(msgWithTag).then(()=>{
-    toast(`📋 ${club} 발송 내용 복사됨 (${idx+1}/${clubs.length}) → 카카오톡에 붙여넣기`,'info');
-    // 카카오톡 앱 열기 시도
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if(isMobile){
-      // 카카오톡 딥링크: 특정 번호로 채팅 열기 (플러스친구 아닌 경우 지원 제한)
-      // 대신 카카오톡 앱 자체를 열고 사용자가 직접 선택하도록
-      setTimeout(()=>{
-        window.location.href = 'kakaotalk://';
-      }, 500);
-    }
-    // 여러 클럽이면 2초 후 다음으로
-    if(clubs.length > 1 && idx < clubs.length-1){
-      setTimeout(()=>{
-        toast(`다음: ${clubs[idx+1]} (${idx+2}/${clubs.length}) 복사 준비 중...`,'info');
-        setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1500);
-      }, 2000);
-    }
-  }).catch(()=>{
-    // 클립보드 실패 시 텍스트 직접 보여주기
-    alert(`[${club}]\n번호: ${phone}\n\n${msgWithTag}\n\n위 내용을 복사해서 카카오톡에 붙여넣으세요`);
-    if(clubs.length > 1) setTimeout(()=>_sendKakaoQueue(clubs, body, idx+1), 1000);
-  });
+  navigator.clipboard.writeText(msg)
+    .then(()=>{
+      toast(`📋 ${clubs.length}개 클럽 발송 내용이 복사됐습니다! 카카오톡 앱을 열어 붙여넣으세요.`,'success');
+    })
+    .catch(()=>{
+      // 클립보드 실패 시 alert로 내용 표시
+      alert(`아래 내용을 복사하세요:\n\n${msg}`);
+    });
+}
+
+function openKakaoApp(){
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(isMobile){
+    window.location.href = 'kakaotalk://';
+    setTimeout(()=>{ window.location.href = 'https://apps.apple.com/app/id362057947'; }, 1500);
+  } else {
+    toast('PC에서는 카카오톡 앱을 직접 실행하세요.','info');
+  }
 }
 
 function copyMsgOnly(){
@@ -2296,7 +2338,6 @@ function copyMsgOnly(){
   navigator.clipboard.writeText(body)
     .then(()=>toast('📋 내용 복사됨! 카카오톡에 붙여넣으세요','success'))
     .catch(()=>{
-      // 복사 실패 시 선택 가능한 텍스트로 표시
       const ta = ge('noticeMsg');
       if(ta){ ta.select(); document.execCommand('copy'); }
       toast('내용을 선택 후 복사하세요','info');
@@ -7647,7 +7688,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
   gDS,om,cm,toast,ge,esc,setRbSc,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
