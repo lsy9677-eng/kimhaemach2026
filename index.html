@@ -2640,28 +2640,94 @@ function openET(tid){
 }
 
 async function saveET(){
-  const t=G.tournaments.find(t=>t.id===CE_tid);if(!t)return;
-  const nm=ge('etN').value.trim();if(!nm){toast('대회명 필수','error');return;}
-  const newD=['금','은','동','테린이'].filter(d=>document.getElementById('etD_'+d)?.checked);if(!newD.length){toast('부서 1개 이상','error');return;}
-  sl(true);
-  try{
-    const rubMap2={'금':'G','은':'S','동':'B','테린이':'T'};
-    const ds={...(t.divSettings||{})};
-    newD.forEach(d=>{
-      const dk=rubMap2[d]||'B';
-      const rub=etGetRubbers(dk);
-      if(!ds[d])ds[d]={format:'group_knockout',grpSize:4,advance:2};
-      ds[d].doublesCount=rub;
-    });
-    // Storage 업로드 flush 먼저
-    await flushGuideUploads(CE_tid, 'edit');
-    const assets=GUIDE_FILES_EDIT||[];
-    await updateDoc(doc(db,'tournaments',CE_tid),{name:nm,date:ge('etDt').value,venue:ge('etVn').value.trim(),deadline:ge('etDl').value,status:ge('etSt').value,divisions:newD,divSettings:ds,notice:ge('etNt').value.trim(),guideText:ge('etGuideText')?.value.trim()||'',guideUrl:ge('etGuideUrl')?.value.trim()||'',hasGuideAssets:assets.length>0});
-    if(assets.length>0) await setDoc(doc(db,'tourGuides',CE_tid),{assets,updatedAt:serverTimestamp()});
-    await fbLog('대회 편집: '+nm,'✏️');sl(false);cm('mET');toast('저장 완료','success');
-  }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
-}
+  const t = G.tournaments.find(t => t.id === CE_tid);
+  if(!t) return;
 
+  const nm = ge('etN').value.trim();
+  if(!nm){
+    toast('대회명 필수','error');
+    return;
+  }
+
+  const newD = ['금','은','동','테린이'].filter(d =>
+    document.getElementById('etD_' + d)?.checked
+  );
+  if(!newD.length){
+    toast('부서 1개 이상','error');
+    return;
+  }
+
+  sl(true);
+
+  try{
+    const rubMap2 = {'금':'G','은':'S','동':'B','테린이':'T'};
+    const ds = { ...(t.divSettings || {}) };
+
+    newD.forEach(d => {
+      const dk = rubMap2[d] || 'B';
+      const rub = etGetRubbers(dk);
+
+      if(!ds[d]){
+        ds[d] = {
+          format: 'group_knockout',
+          grpSize: 4,
+          advance: 2
+        };
+      }
+
+      ds[d].doublesCount = rub;
+    });
+
+    await flushGuideUploads(CE_tid, 'edit');
+
+    const assets = GUIDE_FILES_EDIT || [];
+    const guideText = ge('etGuideText')?.value.trim() || '';
+    const guideUrl  = ge('etGuideUrl')?.value.trim() || '';
+    const notice    = ge('etNt').value.trim();
+    const venue     = ge('etVn').value.trim();
+    const hasGuideAssets = assets.length > 0;
+
+    const updFields = {
+      name: nm,
+      date: ge('etDt').value,
+      venue,
+      deadline: ge('etDl').value,
+      status: ge('etSt').value,
+      divisions: newD,
+      divSettings: ds,
+      notice,
+      guideText,
+      guideUrl,
+      hasGuideAssets
+    };
+
+    await updateDoc(doc(db, 'tournaments', CE_tid), updFields);
+
+    if(hasGuideAssets){
+      await setDoc(doc(db, 'tourGuides', CE_tid), {
+        assets,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    const _ti = G.tournaments.findIndex(x => x.id === CE_tid);
+    if(_ti >= 0){
+      Object.assign(G.tournaments[_ti], updFields);
+    }
+
+    await fbLog('대회 편집: ' + nm, '✏️');
+
+    sl(false);
+    cm('mET');
+    renderTL();
+    toast('저장 완료 ✅', 'success');
+
+  }catch(e){
+    sl(false);
+    toast('저장 실패: ' + e.message, 'error');
+    console.error(e);
+  }
+}
 function openTD(tid){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;
   ge('mTDT').textContent=t.name;
@@ -2985,12 +3051,18 @@ function renderRegistrationRosterPreview(tid,div,teams,key){
       ?`<div class="rr-sub">후보: ${subs.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`
       :'';
 
-    const adminBtns=AD
-      ?`<div class="rr-admin-btns">
-          <button class="btn btn-outline rr-btn-edit" onclick="openETeam('${esc(key)}',${i})">✏️ 수정</button>
-          <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${i})">🗑 삭제</button>
-        </div>`
-      :'';
+  const canManageTeam = AD || REG;
+
+const adminBtns=canManageTeam
+  ?`<div class="rr-admin-btns">
+      <button class="btn rr-btn-edit"
+        style="background:#f8fafc;color:#0f1e3a;border:1px solid #cbd5e1;font-weight:700"
+        onclick="openETeam('${esc(key)}',${i})">✏️ 수정</button>
+
+      <button class="btn btn-danger rr-btn-del"
+        onclick="delTeam('${esc(key)}',${i})">🗑 삭제</button>
+    </div>`
+  :'';
 
     html+=`<div class="rr-team-card">
       <div class="rr-team-header">
@@ -3096,7 +3168,63 @@ async function registerTeam(){
     sl(false);toast('팀 등록 완료 ✅','success');renderRL();
   }catch(e){sl(false);toast('등록 실패: '+e.message,'error');}
 }
-async function delTeam(key,idx){if(!confirm('팀 삭제?'))return;G.teams[key].splice(idx,1);await stT(key);renderRL();toast('삭제됨','info');}
+async function _removePlayerHistory(names, club, tid, div){
+  const bc = baseClub(club || '');
+
+  for(const name of (names || [])){
+    const keys = [];
+    const k1 = pKey(name, bc);
+    if(k1) keys.push(k1);
+    if(G.players[name]) keys.push(name); // 예전 방식 키 대응
+
+    for(const pk of [...new Set(keys)]){
+      const p = G.players[pk];
+      if(!p) continue;
+
+      p.history = (p.history || []).filter(h => !(h.tid === tid && h.div === div));
+
+      if(!(p.history || []).length && !(p.wins || 0) && !(p.losses || 0)){
+        try{
+          await deleteDoc(doc(db,'players', pk.replace(/[\/\.#\$\[\]]/g,'_')));
+        }catch(e){}
+        delete G.players[pk];
+      }else{
+        await stP(pk);
+      }
+    }
+  }
+}
+async function delTeam(key,idx){
+  if(!(AD || REG)){
+    toast('경기이사 로그인 후 삭제할 수 있습니다','error');
+    return;
+  }
+
+  const team = (G.teams[key] || [])[idx];
+  if(!team) return;
+
+  if(!confirm('팀을 삭제하면 해당 선수들의 참가 기록도 함께 삭제됩니다.\n삭제하시겠습니까?')) return;
+
+  const {tid, div} = _k2td(key);
+  const oldPlayers = [...(team.players || [])];
+  const oldClub = team.club || '';
+
+  sl(true);
+  try{
+    G.teams[key].splice(idx,1);
+    await stT(key);
+
+    await _removePlayerHistory(oldPlayers, oldClub, tid, div);
+
+    sl(false);
+    renderRL();
+    renderAllP();
+    toast('팀 및 선수기록 삭제 완료','success');
+  }catch(e){
+    sl(false);
+    toast('삭제 실패: '+e.message,'error');
+  }
+}
 function openETeam(key,idx){
   const team=(G.teams[key]||[])[idx];if(!team)return;CE_key=key;CE_idx=idx;
   const[,div]=key.split('_');const p=team.players||[];
@@ -3156,24 +3284,82 @@ function etUpdateSlots(newDbl,origIdx){
   if(lbl) lbl.textContent=`선수 (주전 ${mainCount}명 필수)`;
 }
 async function saveETeam(){
-  const teams=G.teams[CE_key]||[];const team=teams[CE_idx];if(!team)return;
-  const[,div]=CE_key.split('_');
-  const isT=div==='terinee';
-  const dblEl=document.querySelector('input[name="etDbl"]:checked');
-  const dbl=dblEl?parseInt(dblEl.value):(team.doublesCount||(isT?5:5));
-  const mainCount=dbl*2;
-  const np=[];for(let i=1;i<=mainCount+2;i++){const el=ge('ep'+i);if(el){const v=el.value.trim();if(v)np.push(v);}}
-  if(np.length<mainCount){toast(`주전 ${mainCount}명 필요`,'error');return;}
-  const uniq=new Set(np);if(uniq.size!==np.length){toast('이름 중복','error');return;}
-  const newClub=ge('etTC').value;
-  const tid=CE_key.split('_')[0];
-  const tournament=G.tournaments.find(t=>t.id===tid);
-  const missing2026=missingMembers2026(np, newClub, tournament);
-  if(missing2026.length){showMissingMembers2026(missing2026);return;}
-  team.club=newClub;team.players=np;team.doublesCount=dbl;
-  sl(true);try{await stT(CE_key);sl(false);cm('mETeam');renderRL();toast('수정 완료 ✅','success');}catch(e){sl(false);toast('저장 실패','error');}
-}
+  if(!(AD || REG)){
+    toast('경기이사 로그인 후 수정할 수 있습니다','error');
+    return;
+  }
 
+  const teams = G.teams[CE_key] || [];
+  const team = teams[CE_idx];
+  if(!team) return;
+
+  const [,div] = CE_key.split('_');
+  const dblEl = document.querySelector('input[name="etDbl"]:checked');
+  const dbl = dblEl ? parseInt(dblEl.value,10) : (team.doublesCount || 5);
+  const mainCount = dbl * 2;
+
+  const np = [];
+  for(let i=1;i<=mainCount+2;i++){
+    const el = ge('ep'+i);
+    if(el){
+      const v = el.value.trim();
+      if(v) np.push(v);
+    }
+  }
+
+  if(np.length < mainCount){
+    toast(`주전 ${mainCount}명 필요`,'error');
+    return;
+  }
+
+  const uniq = new Set(np);
+  if(uniq.size !== np.length){
+    toast('이름 중복','error');
+    return;
+  }
+
+  const newClub = ge('etTC').value;
+  const tid = CE_key.split('_')[0];
+  const tournament = G.tournaments.find(t=>t.id===tid);
+
+  const missing2026 = missingMembers2026(np, newClub, tournament);
+  if(missing2026.length){
+    showMissingMembers2026(missing2026);
+    return;
+  }
+
+  const oldPlayers = [...(team.players || [])];
+  const oldClub = team.club || '';
+
+  const removed = oldPlayers.filter(n => !np.includes(n));
+  const added = np.filter(n => !oldPlayers.includes(n));
+
+  team.club = newClub;
+  team.players = np;
+  team.doublesCount = dbl;
+
+  sl(true);
+  try{
+    await stT(CE_key);
+
+    if(removed.length){
+      await _removePlayerHistory(removed, oldClub, tid, div);
+    }
+
+    if(added.length){
+      await Promise.all(added.map(n => regP(n, newClub, tid, div)));
+    }
+
+    sl(false);
+    cm('mETeam');
+    renderRL();
+    renderAllP();
+    toast('수정 완료 ✅','success');
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+  }
+}
 
 function onBrTC(){
   const tid=ge('brTS').value, ds=ge('brDS');
