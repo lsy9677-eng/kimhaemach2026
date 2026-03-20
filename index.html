@@ -667,6 +667,14 @@ body{overflow-x:hidden;}
   </div>
 
   <div class="card fade-in"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
+
+  <!-- 등록선수 현황 버튼 -->
+  <div class="card fade-in" style="padding:12px 16px">
+    <button class="btn btn-outline" style="width:100%;padding:12px;font-size:.88rem;font-weight:600" onclick="window.openRegViewer()">
+      🧾 <span class="reg-year-label">등록선수</span> 현황 보기
+      <span id="homeRegCount" style="margin-left:6px;background:var(--primary);color:white;font-size:.72rem;padding:2px 8px;border-radius:20px;font-weight:700"></span>
+    </button>
+  </div>
 </div>
 
 <div class="page" id="page-tournament">
@@ -1056,7 +1064,7 @@ body{overflow-x:hidden;}
       <button class="btn btn-outline" style="padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mBackup')">💾 백업 / 복구</button>
       <button class="btn btn-danger" style="padding:12px 8px;font-size:.82rem" onclick="recalcAllPlayerStats()">🔄 관리자 복구(승패 재계산)</button>
     
-      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');window.openM26Mgr()">🧾 2026 등록선수 관리 (조회·추가·수정·삭제)</button>
+      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');window.openM26Mgr()">🧾 <span class="reg-year-label">등록선수</span> 관리 (조회·추가·수정·삭제)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mHistExcel')">📥 엑셀로 과거대회 등록</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="openSelectiveClearModal()">🗑️ 대회별 개별 삭제(선수기록 포함)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cleanupPlayerHistories()">🧹 개인기록 정리(중복/삭제대회)</button>
@@ -1160,13 +1168,13 @@ body{overflow-x:hidden;}
     <div id="noticeContactBtns" style="margin-top:10px"></div>
   </div>
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
-    <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🧾 2026 등록 선수 명단 관리</div>
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🧾 <span class="reg-year-label">등록 선수</span> 명단 관리</div>
     <div id="m26Status" style="margin-bottom:10px"></div>
     <textarea class="form-textarea" id="m26Text" rows="6" placeholder="예시)&#10;강대영,모던A,010-1234-5678&#10;강대명,모던B&#10;이름 탭 소속 형식도 가능"></textarea>
     <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.55">
       • 엑셀/텍스트 파일을 한 번에 올릴 수 있습니다.<br>
       • 클럽명은 자동으로 기본 클럽명으로 저장됩니다. 예: 모던A/모던B → 모던<br>
-      • 2026년 이후 신규 대회는 등록 선수만 팀등록 가능합니다.
+      • <span class="reg-year-label">등록</span> 선수만 신규 대회에 팀등록 가능합니다.
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <button class="btn btn-outline" onclick="window.importMemberRegistry2026Text('append')">➕ 텍스트 추가</button>
@@ -1279,11 +1287,31 @@ body{overflow-x:hidden;}
 </div>
 
 
-<!-- 2026 등록선수 관리 전용 모달 -->
+<!-- 등록선수 현황 조회 모달 (일반 회원용) -->
+<div class="modal-overlay" id="mRegViewer">
+  <div class="modal-box" style="max-width:680px">
+    <div class="modal-header">
+      <h3 id="mRegViewerTitle">🧾 등록선수 현황</h3>
+      <button class="modal-close" onclick="cm('mRegViewer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <span id="mRegViewerStat" style="font-size:.82rem;color:var(--text2);flex:1"></span>
+        <input class="form-input" id="mRegViewerSearch" placeholder="이름·클럽 검색" style="max-width:160px;padding:6px 10px;font-size:.82rem" oninput="window.renderRegViewer()">
+      </div>
+      <div id="mRegViewerBody" style="max-height:420px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="cm('mRegViewer')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 등록선수 관리 전용 모달 -->
 <div class="modal-overlay" id="mMember2026">
   <div class="modal-box" style="max-width:680px">
     <div class="modal-header">
-      <h3>🧾 2026 등록선수 관리</h3>
+      <h3>🧾 <span class="reg-year-label">등록선수</span> 관리</h3>
       <button class="modal-close" onclick="cm('mMember2026')">✕</button>
     </div>
     <div class="modal-body">
@@ -1382,6 +1410,8 @@ body{overflow-x:hidden;}
 
 <script type="module">
 'use strict';
+// ── 현재 연도 (매년 자동 갱신 - 코드 수정 불필요) ──
+const REG_YEAR = new Date().getFullYear(); // 2026, 2027, 2028...
 // ── 대회 편집 복식 수 헬퍼 ──
 function etToggleRub(dk){
   const chk=ge('etD_'+({'G':'금','S':'은','B':'동','T':'테린이'}[dk]||dk));
@@ -1551,6 +1581,8 @@ async function initFB(){
     }catch(e2){G.log=[];} // 로그 실패해도 앱 작동
 
     sl(false);toast('🔥 연결 완료','success');
+    // 홈 등록선수 현황 초기 렌더
+    if(window.renderHomeReg) window.renderHomeReg();
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
 async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
@@ -2872,7 +2904,7 @@ function missingMembers2026(names, club, t){
 }
 function showMissingMembers2026(missing){
   const uniq=[...new Set((missing||[]).map(x=>(x||'').trim()).filter(Boolean))];
-  const msg='2026년 김해시 클럽 회원 등록후 출전 가능합니다' + (uniq.length?('\n\n미등록 선수: '+uniq.join(', ')): '');
+  const msg=`${REG_YEAR}년 김해시 클럽 회원 등록후 출전 가능합니다` + (uniq.length?('\n\n미등록 선수: '+uniq.join(', ')): '');
   alert(msg);
 }
 async function syncRegistryMembersToPlayers(rows){
@@ -2988,7 +3020,7 @@ async function applyMemberRegistry2026(rows, mode){
     sl(false);
     renderMemberRegistry2026Status();
     if(ge('m26Text')) ge('m26Text').value='';
-    toast(`2026 등록 선수 명단 ${mode==='replace'?'전체교체':'추가'} 완료 (${incoming.length}명 반영)`,'success');
+    toast(`${REG_YEAR} 등록 선수 명단 ${mode==='replace'?'전체교체':'추가'} 완료 (${incoming.length}명 반영)`,'success');
   }catch(e){ sl(false); toast('명단 저장 실패: '+e.message,'error'); }
 }
 async function importMemberRegistry2026Text(mode){
@@ -3015,10 +3047,10 @@ async function importMemberRegistry2026File(input, mode){
   finally{ input.value=''; }
 }
 async function clearMemberRegistry2026(){
-  if(!confirm('2026 등록 선수 명단을 모두 삭제할까요?\n과거 경기기록과 선수 이력은 삭제되지 않습니다.')) return;
+  if(!confirm(`${REG_YEAR} 등록 선수 명단을 모두 삭제할까요?\n과거 경기기록과 선수 이력은 삭제되지 않습니다.`)) return;
   G.meta.memberRegistry2026=[];
   sl(true);
-  try{ await saveMeta(); sl(false); renderMemberRegistry2026Status(); toast('2026 등록 선수 명단 삭제 완료','success'); }
+  try{ await saveMeta(); sl(false); renderMemberRegistry2026Status(); toast(`${REG_YEAR} 등록 선수 명단 삭제 완료`,'success'); }
   catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
 }
 function renderMemberRegistry2026Status(){
@@ -3029,8 +3061,10 @@ function renderMemberRegistry2026Status(){
     if(c!==0) return c;
     return (a.name||'').localeCompare((b.name||''),'ko');
   });
-  box.innerHTML=`<div style="font-size:.78rem;color:var(--text2);line-height:1.55">• 2026년 등록 선수만 2026년 이후 신규 대회에 팀 등록할 수 있습니다.<br>• 클럽명은 자동으로 기본 클럽명으로 저장됩니다.</div>`;
-  listEl.innerHTML = rows.length ? rows.map(r=>`<div style="display:flex;gap:8px;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:.76rem"><span>${r.name}</span><span style="color:var(--text2)">${_m26Club(r.club)}${r.phone?` · ${r.phone}`:''}</span></div>`).join('') : '<div style="font-size:.76rem;color:var(--text3);padding:6px 0">등록된 2026 선수 명단이 없습니다.</div>';
+  box.innerHTML=`<div style="font-size:.78rem;color:var(--text2);line-height:1.55">• ${REG_YEAR}년 등록 선수만 신규 대회에 팀 등록할 수 있습니다.<br>• 클럽명은 자동으로 기본 클럽명으로 저장됩니다.</div>`;
+  listEl.innerHTML = rows.length ? rows.map(r=>`<div style="display:flex;gap:8px;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:.76rem"><span>${r.name}</span><span style="color:var(--text2)">${_m26Club(r.club)}${r.phone?` · ${r.phone}`:''}</span></div>`).join('') : `<div style="font-size:.76rem;color:var(--text3);padding:6px 0">${REG_YEAR}년 등록된 선수 명단이 없습니다.</div>`;
+  // 홈 탭 등록선수 현황도 함께 갱신
+  if(window.renderHomeReg) window.renderHomeReg();
 }
 function isFirstAppearancePlayer(name, club, currentTid){
   const nn=normName(name);
@@ -5845,8 +5879,8 @@ function upDash(){
     ge('homeDivStatus').innerHTML='';
   }
   upLog();
+  if(window.renderHomeReg) window.renderHomeReg();
 }
-function upLog(){if(G.log.length)ge('recentLog').innerHTML=G.log.slice(0,6).map(a=>`<li class="ri"><div class="ri-icon">${a.icon||'📌'}</div><div class="ri-text"><div>${a.text}</div></div><div class="ri-time">${ago(a.time)}</div></li>`).join('');}
 
 async function regP(name,club,tid,div){
   const bc=baseClub(club); // 소속 클럽 (A/B 제거: 하모니A→하모니)
@@ -7418,6 +7452,76 @@ function ensureHistGuideModal(){
   wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
 }
 
+// ── 홈 탭 등록선수 버튼 카운트 업데이트 ──────────────────────
+window.renderHomeReg = function(){
+  const count = getMemberRegistry2026().length;
+  const el = ge('homeRegCount');
+  if(el) el.textContent = count ? `총 ${count}명` : '';
+};
+
+// ── 등록선수 현황 모달 열기 (일반 회원용) ─────────────────────
+window.openRegViewer = function(){
+  const titleEl = ge('mRegViewerTitle');
+  if(titleEl) titleEl.textContent = `🧾 ${REG_YEAR}년 등록선수 현황`;
+  if(ge('mRegViewerSearch')) ge('mRegViewerSearch').value = '';
+  window.renderRegViewer();
+  document.getElementById('mRegViewer')?.classList.add('open');
+};
+
+window.renderRegViewer = function(){
+  const statEl = ge('mRegViewerStat');
+  const bodyEl = ge('mRegViewerBody');
+  if(!bodyEl) return;
+
+  const rows = getMemberRegistry2026();
+  const keyword = (ge('mRegViewerSearch')?.value||'').trim().toLowerCase();
+
+  if(!rows.length){
+    bodyEl.innerHTML = `<div style="color:var(--text3);padding:24px 0;text-align:center">${REG_YEAR}년 등록 선수 명단이 없습니다</div>`;
+    if(statEl) statEl.textContent = '';
+    return;
+  }
+
+  // 클럽별 그룹핑
+  const clubMap = new Map();
+  rows.forEach(r=>{
+    const club = _m26Club(r.club)||r.club||'기타';
+    const name = (r.name||'').trim();
+    if(!name) return;
+    if(keyword && !name.toLowerCase().includes(keyword) && !club.toLowerCase().includes(keyword)) return;
+    if(!clubMap.has(club)) clubMap.set(club,[]);
+    clubMap.get(club).push(r);
+  });
+
+  const clubs = [...clubMap.keys()].sort((a,b)=>a.localeCompare(b,'ko'));
+  const totalShown = clubs.reduce((s,c)=>s+clubMap.get(c).length, 0);
+
+  if(statEl) statEl.textContent = keyword
+    ? `전체 ${rows.length}명 중 ${totalShown}명`
+    : `총 ${rows.length}명 · ${clubMap.size}개 클럽`;
+
+  if(!clubs.length){
+    bodyEl.innerHTML = `<div style="color:var(--text3);padding:24px 0;text-align:center">검색 결과가 없습니다</div>`;
+    return;
+  }
+
+  bodyEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
+      ${clubs.map(club=>{
+        const members = clubMap.get(club);
+        return `<div style="background:var(--panel2);border-radius:var(--radius);padding:8px 10px;border:1px solid var(--border)">
+          <div style="font-weight:700;font-size:.8rem;color:var(--primary-dark);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+            <span>${club}</span>
+            <span style="font-weight:400;color:var(--text3);font-size:.75rem">${members.length}명</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${members.map(m=>`<span style="background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-size:.73rem;color:var(--text)">${m.name}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+};
+
 // Storage 함수들을 window에 노출 (모듈 스코프 → 전역 접근용)
 window._storage = storage;
 window._storageRef = ref;
@@ -7431,16 +7535,18 @@ window.importMemberRegistry2026File = importMemberRegistry2026File;
 window.importMemberRegistry2026Text = importMemberRegistry2026Text;
 window.clearMemberRegistry2026 = clearMemberRegistry2026;
 window.renderMemberRegistry2026Status = renderMemberRegistry2026Status;
-
-// ── 2026 등록선수 전용 관리 모달 ─────────────────────────────
 window.openM26Mgr = function(){
+  // 모달 타이틀 연도 업데이트
+  document.querySelectorAll('.reg-year-label').forEach(el=>{
+    el.textContent = REG_YEAR+'년 등록선수';
+  });
   // 클럽 셀렉트 채우기
   const sel = ge('m26mgr_club');
   if(sel){
     sel.innerHTML = G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
   }
   window.renderM26MgrList();
-  om('mMember2026');
+  document.getElementById('mMember2026')?.classList.add('open');
 };
 
 window.renderM26MgrList = function(){
@@ -8068,7 +8174,14 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   toggleDivRubber,selRub,getDivRubbers,
   etToggleRub,etSelRub,etGetRubbers});
 
-document.addEventListener('DOMContentLoaded',()=>initFB());
+document.addEventListener('DOMContentLoaded',()=>{
+  // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
+  const yr = new Date().getFullYear();
+  document.querySelectorAll('.reg-year-label').forEach(el=>{
+    el.textContent = yr+'년 등록선수';
+  });
+  initFB();
+});
 </script>
 
 <script>
