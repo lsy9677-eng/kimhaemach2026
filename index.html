@@ -1168,13 +1168,13 @@ body{overflow-x:hidden;}
       • 2026년 이후 신규 대회는 등록 선수만 팀등록 가능합니다.
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-      <button class="btn btn-outline" onclick="importMemberRegistry2026Text('append')">➕ 텍스트 추가</button>
-      <button class="btn btn-outline" onclick="importMemberRegistry2026Text('replace')">♻️ 전체교체</button>
-      <label class="btn btn-outline" style="justify-content:center">📂 파일 추가<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="importMemberRegistry2026File(this,'append')"></label>
-      <label class="btn btn-outline" style="justify-content:center">📥 파일 전체교체<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="importMemberRegistry2026File(this,'replace')"></label>
+      <button class="btn btn-outline" onclick="window.importMemberRegistry2026Text('append')">➕ 텍스트 추가</button>
+      <button class="btn btn-outline" onclick="window.importMemberRegistry2026Text('replace')">♻️ 전체교체</button>
+      <label class="btn btn-outline" style="justify-content:center">📂 파일 추가<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="window.importMemberRegistry2026File(this,'append')"></label>
+      <label class="btn btn-outline" style="justify-content:center">📥 파일 전체교체<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="window.importMemberRegistry2026File(this,'replace')"></label>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn btn-danger" onclick="clearMemberRegistry2026()">🗑️ 명단 전체 삭제</button>
+      <button class="btn btn-danger" onclick="window.clearMemberRegistry2026()">🗑️ 명단 전체 삭제</button>
     </div>
     <div id="m26List" style="margin-top:10px;max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;background:var(--panel2)"></div>
   </div>
