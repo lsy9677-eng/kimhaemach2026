@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-13-v17-kakao-share-upgrade";
+  const APP_VERSION = "2026-03-20-v18-kakao-sdk-admin-clean";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -614,6 +614,7 @@ body{overflow-x:hidden;}
 <meta name="apple-mobile-web-app-title" content="김해시테니스협회">
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 </head>
 <body>
 <header class="app-header">
@@ -1064,7 +1065,6 @@ body{overflow-x:hidden;}
       <button class="btn btn-danger" style="padding:12px 8px;font-size:.82rem" onclick="recalcAllPlayerStats()">🔄 관리자 복구(승패 재계산)</button>
     
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');window.openM26Mgr()">🧾 <span class="reg-year-label">등록선수</span> 관리 (조회·추가·수정·삭제)</button>
-      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mHistExcel')">📥 엑셀로 과거대회 등록</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="openSelectiveClearModal()">🗑️ 대회별 개별 삭제(선수기록 포함)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cleanupPlayerHistories()">🧹 개인기록 정리(중복/삭제대회)</button>
       <button class="btn btn-danger" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="hardResetAllData()">🧨 전체 리셋(대회/팀/경기/선수)</button>
@@ -1137,10 +1137,15 @@ body{overflow-x:hidden;}
   </div>
   <!-- 클럽 경기이사 연락처 관리 -->
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
-    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">📲 클럽 경기이사 연락처 관리</div>
-    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">팀 등록 시 자동 저장됩니다. 직접 추가/수정도 가능합니다.</div>
-    <div id="adminContactList" style="margin-bottom:10px"></div>
-    <div style="font-size:.7rem;color:var(--text3);line-height:1.4">• 번호가 등록된 클럽에만 공지 문자 버튼이 활성화됩니다.</div>
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark);display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleContactList(this)">
+      <span>📲 클럽 경기이사 연락처 관리</span>
+      <span id="contactListToggleIcon" style="font-size:.8rem;color:var(--text3);user-select:none">▼ 펼치기</span>
+    </div>
+    <div id="contactListBody" style="display:none;margin-top:10px">
+      <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">팀 등록 시 자동 저장됩니다. 직접 추가/수정도 가능합니다.</div>
+      <div id="adminContactList" style="margin-bottom:10px"></div>
+      <div style="font-size:.7rem;color:var(--text3);line-height:1.4">• 번호가 등록된 클럽에만 공지 문자 버튼이 활성화됩니다.</div>
+    </div>
   </div>
   <!-- 공지 문자 보내기 -->
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
@@ -1151,17 +1156,6 @@ body{overflow-x:hidden;}
       <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('roster')">📋 등록현황</button>
       <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('bracket_draw')">🎲 추첨결과</button>
       <button class="btn btn-outline" style="font-size:.76rem" onclick="prefillNoticeMsg('final_result')">🏆 최종결과</button>
-    </div>
-    <!-- 이미지 캡처 버튼 (예상대진/추첨결과용) -->
-    <div style="padding:10px 12px;background:linear-gradient(135deg,#fff8e1,#ffecb3);border-radius:10px;border:1.5px solid #ffc107;margin-bottom:10px">
-      <div style="font-size:.78rem;font-weight:700;color:#e65100;margin-bottom:6px">🖼️ 대진표 이미지 저장 (카카오톡 공유용)</div>
-      <div style="font-size:.72rem;color:#795548;margin-bottom:8px;line-height:1.4">
-        대진표 이미지는 문자 전송이 불가합니다. 이미지를 저장 후 카카오톡 단톡방에 직접 공유하세요.
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-outline" style="font-size:.76rem;border-color:#ffc107;color:#e65100" onclick="captureAndShareBracket('all')">🖼️ 전체 대진표 이미지 저장</button>
-        <button class="btn btn-outline" style="font-size:.76rem;border-color:#ffc107;color:#e65100" onclick="captureAndShareBracket('preview')">📊 예상대진 이미지 저장</button>
-      </div>
     </div>
     <textarea class="form-textarea" id="noticeMsg" rows="5" placeholder="공지 내용을 입력하거나 위 버튼으로 자동 완성하세요&#10;&#10;팁: 이미지는 대진표 탭 → 이미지 저장 버튼을 이용하세요"></textarea>
     <div id="noticeContactBtns" style="margin-top:10px"></div>
@@ -2050,6 +2044,17 @@ async function saveRegContact(){
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
 
+// 클럽 경기이사 연락처 접기/펼치기
+function toggleContactList(header){
+  const body = ge('contactListBody');
+  const icon = ge('contactListToggleIcon');
+  if(!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  icon.textContent = isHidden ? '▲ 접기' : '▼ 펼치기';
+  if(isHidden) renderAdminContactList();
+}
+
 // 관리자 설정 - 클럽 연락처 목록 렌더링
 function renderAdminContactList(){
   const el = ge('adminContactList');
@@ -2229,17 +2234,13 @@ function renderNoticeContactBtns(){
           💛 전체 내용 복사 (${_noticeWithPhone.length}개)
         </button>
       </div>
-      <div style="font-size:.7rem;color:#78350f;line-height:1.5;background:rgba(255,255,255,.6);border-radius:6px;padding:5px 8px;margin-bottom:6px">
-        ⚠️ 카카오톡은 전화번호로 직접 메시지 발송이 불가합니다.<br>
-        ① 버튼 클릭 → 내용 자동 복사 ② 아래 카카오톡 앱 열기 → 대화방에 붙여넣기
+      <div style="font-size:.7rem;color:#78350f;line-height:1.5;background:rgba(255,255,255,.6);border-radius:6px;padding:5px 8px">
+        내용 복사 후 카카오톡 단톡방에 붙여넣으세요
       </div>
-      <button class="btn" onclick="openKakaoApp()" style="width:100%;font-size:.78rem;padding:7px 10px;background:#fee500;color:#3c1e1e;border:1.5px solid #f9c400;border-radius:8px;font-weight:700">
-        📲 카카오톡 앱 열기
-      </button>
     </div>
 
     <div style="font-size:.7rem;color:var(--text3);line-height:1.5;padding:6px 8px;background:var(--panel2);border-radius:6px">
-      💡 <b>카톡 사용법:</b> ① 클럽 선택 → ② 내용 입력 → ③ "선택 클럽 내용 복사" 클릭 → ④ "카카오톡 앱 열기" → ⑤ 단톡방에서 붙여넣기
+      💡 내용 복사 후 카카오톡 단톡방에 붙여넣으세요
     </div>`;
 }
 
@@ -2383,25 +2384,50 @@ ${body}`;
 }
 
 // ── 카카오톡 발송 ───────────────────────────────────────────────────────────
-// 카카오톡은 전화번호로 직접 메시지 불가 → 내용 복사 후 앱 열기 방식
-function sendKakaoSelected(){
-  const body = _checkBodyAndGet(); if(!body) return;
-  const contacts = G.meta.clubContacts||{};
-  const targets = [..._selClubs].filter(c=>contacts[c]);
-  if(!targets.length){ toast('선택된 클럽이 없습니다','error'); return; }
-  _buildAndCopyKakaoMsg(targets, body);
+const KAKAO_JS_KEY = '9dee117ad9f0ea8f08467597240f5f86';
+
+function ensureKakaoReady(){
+  try{
+    if(typeof window.Kakao === 'undefined'){
+      console.warn('Kakao SDK not loaded');
+      return false;
+    }
+    if(!window.Kakao.isInitialized || !window.Kakao.isInitialized()){
+      window.Kakao.init(KAKAO_JS_KEY);
+    }
+    return true;
+  }catch(err){
+    console.error('Kakao init failed', err);
+    return false;
+  }
 }
 
-function sendKakaoAll(){
-  const body = _checkBodyAndGet(); if(!body) return;
-  const contacts = G.meta.clubContacts||{};
-  const all = (G.clubs||[]).filter(c=>contacts[c]);
-  if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
-  _buildAndCopyKakaoMsg(all, body);
+async function shareViaKakaoTalk(text){
+  if(!ensureKakaoReady()) return false;
+  try{
+    window.Kakao.Share.sendDefault({
+      objectType: 'text',
+      text,
+      link: {
+        mobileWebUrl: window.location.href,
+        webUrl: window.location.href
+      },
+      buttons: [{
+        title: '앱 열기',
+        link: {
+          mobileWebUrl: window.location.href,
+          webUrl: window.location.href
+        }
+      }]
+    });
+    return true;
+  }catch(err){
+    console.error('Kakao share failed', err);
+    return false;
+  }
 }
 
-// 선택된 클럽 전체를 하나의 메시지로 합쳐서 복사
-async function _buildAndCopyKakaoMsg(clubs, body){
+async function shareOrCopyKakaoMsg(clubs, body){
   let msg;
   if(clubs.length === 1){
     msg = body;
@@ -2409,12 +2435,40 @@ async function _buildAndCopyKakaoMsg(clubs, body){
     const header = clubs.map(c=>`• ${c}`).join('\n');
     msg = `[발송 대상]\n${header}\n\n${body}`;
   }
+
+  const shared = await shareViaKakaoTalk(msg);
+  if(shared){
+    toast('카카오톡 공유창을 열었습니다.','success');
+    return;
+  }
+
   const ok = await copyTextSafe(msg);
   if(ok){
-    toast(`📋 ${clubs.length}개 클럽 발송 내용이 복사됐습니다! 카카오톡 앱을 열어 붙여넣으세요.`,'success');
+    toast(`📋 ${clubs.length}개 클럽 발송 내용이 복사됐습니다! 카카오톡에 붙여넣으세요.`,'info');
   } else {
     alert(`아래 내용을 복사하세요:\n\n${msg}`);
   }
+}
+
+async function sendKakaoSelected(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const targets = [..._selClubs].filter(c=>contacts[c]);
+  if(!targets.length){ toast('선택된 클럽이 없습니다','error'); return; }
+  await shareOrCopyKakaoMsg(targets, body);
+}
+
+async function sendKakaoAll(){
+  const body = _checkBodyAndGet(); if(!body) return;
+  const contacts = G.meta.clubContacts||{};
+  const all = (G.clubs||[]).filter(c=>contacts[c]);
+  if(!all.length){ toast('등록된 번호가 없습니다','error'); return; }
+  await shareOrCopyKakaoMsg(all, body);
+}
+
+// 선택된 클럽 전체를 하나의 메시지로 합쳐서 복사
+async function _buildAndCopyKakaoMsg(clubs, body){
+  return shareOrCopyKakaoMsg(clubs, body);
 }
 
 function openKakaoApp(){
@@ -8347,7 +8401,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openClubMgr,addClub,delClub,renderCL,
   toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
   onRegClubChange,onRegContactInput,saveRegContact,
-  renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,
+  renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,toggleContactList,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
   gDS,om,cm,toast,ge,esc,setRbSc,
