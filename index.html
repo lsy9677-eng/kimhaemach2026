@@ -1056,6 +1056,7 @@ body{overflow-x:hidden;}
       <button class="btn btn-outline" style="padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mBackup')">💾 백업 / 복구</button>
       <button class="btn btn-danger" style="padding:12px 8px;font-size:.82rem" onclick="recalcAllPlayerStats()">🔄 관리자 복구(승패 재계산)</button>
     
+      <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');window.openM26Mgr()">🧾 2026 등록선수 관리 (조회·추가·수정·삭제)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cm('mAdminSettings');om('mHistExcel')">📥 엑셀로 과거대회 등록</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="openSelectiveClearModal()">🗑️ 대회별 개별 삭제(선수기록 포함)</button>
       <button class="btn btn-outline" style="grid-column:1/-1;padding:12px 8px;font-size:.82rem" onclick="cleanupPlayerHistories()">🧹 개인기록 정리(중복/삭제대회)</button>
@@ -1277,6 +1278,43 @@ body{overflow-x:hidden;}
   </div>
 </div>
 
+
+<!-- 2026 등록선수 관리 전용 모달 -->
+<div class="modal-overlay" id="mMember2026">
+  <div class="modal-box" style="max-width:680px">
+    <div class="modal-header">
+      <h3>🧾 2026 등록선수 관리</h3>
+      <button class="modal-close" onclick="cm('mMember2026')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- 상단 통계 + 검색 -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <span id="m26mgr_stat" style="font-size:.82rem;color:var(--text2);flex:1"></span>
+        <input class="form-input" id="m26mgr_search" placeholder="이름 또는 클럽 검색" style="max-width:180px;padding:6px 10px;font-size:.82rem" oninput="window.renderM26MgrList()">
+      </div>
+
+      <!-- 개별 추가 폼 -->
+      <div style="background:var(--panel2);border-radius:var(--radius);padding:10px;margin-bottom:12px">
+        <div style="font-weight:700;font-size:.8rem;margin-bottom:8px;color:var(--primary-dark)">➕ 선수 개별 추가</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center">
+          <input class="form-input" id="m26mgr_name" placeholder="이름" style="padding:6px 8px;font-size:.82rem">
+          <select class="form-input" id="m26mgr_club" style="padding:6px 8px;font-size:.82rem"></select>
+          <input class="form-input" id="m26mgr_phone" placeholder="전화번호 (선택)" style="padding:6px 8px;font-size:.82rem">
+          <button class="btn btn-primary" style="padding:6px 12px;font-size:.82rem;white-space:nowrap" onclick="window.addM26MgrRow()">추가</button>
+        </div>
+      </div>
+
+      <!-- 목록 -->
+      <div id="m26mgr_list" style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)"></div>
+    </div>
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-danger" style="margin-right:auto" onclick="window.clearMemberRegistry2026();cm('mMember2026')">🗑️ 전체삭제</button>
+      <label class="btn btn-outline">📂 파일 추가<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="window.importMemberRegistry2026File(this,'append');window.renderM26MgrList()"></label>
+      <label class="btn btn-outline">📥 파일 전체교체<input type="file" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="window.importMemberRegistry2026File(this,'replace');window.renderM26MgrList()"></label>
+      <button class="btn btn-gray" onclick="cm('mMember2026')">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- 빠른 선수 추가 모달 (선수기록 상단, 관리자) -->
 <div class="modal-overlay" id="mQuickAddPlayer">
@@ -7393,6 +7431,107 @@ window.importMemberRegistry2026File = importMemberRegistry2026File;
 window.importMemberRegistry2026Text = importMemberRegistry2026Text;
 window.clearMemberRegistry2026 = clearMemberRegistry2026;
 window.renderMemberRegistry2026Status = renderMemberRegistry2026Status;
+
+// ── 2026 등록선수 전용 관리 모달 ─────────────────────────────
+window.openM26Mgr = function(){
+  // 클럽 셀렉트 채우기
+  const sel = ge('m26mgr_club');
+  if(sel){
+    sel.innerHTML = G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
+  window.renderM26MgrList();
+  om('mMember2026');
+};
+
+window.renderM26MgrList = function(){
+  const stat = ge('m26mgr_stat');
+  const listEl = ge('m26mgr_list');
+  if(!listEl) return;
+  const keyword = (ge('m26mgr_search')?.value||'').trim().toLowerCase();
+  const rows = [...getMemberRegistry2026()].sort((a,b)=>{
+    const c = _m26Club(a.club).localeCompare(_m26Club(b.club),'ko');
+    return c!==0 ? c : (a.name||'').localeCompare(b.name||'','ko');
+  });
+  const filtered = keyword ? rows.filter(r=>
+    (r.name||'').toLowerCase().includes(keyword) ||
+    (_m26Club(r.club)||'').toLowerCase().includes(keyword)
+  ) : rows;
+
+  if(stat) stat.textContent = `총 ${rows.length}명${keyword ? ` (검색결과 ${filtered.length}명)` : ''}`;
+
+  if(!filtered.length){
+    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:.82rem">${keyword?'검색 결과가 없습니다':'등록된 선수가 없습니다'}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map((r,i)=>{
+    const realIdx = rows.indexOf(r);
+    return `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border);font-size:.8rem" id="m26row_${realIdx}">
+      <input class="form-input" value="${r.name||''}" placeholder="이름" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26n_${realIdx}">
+      <select class="form-input" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26c_${realIdx}">
+        ${G.clubs.map(c=>`<option value="${c}"${_m26Club(r.club)===c?' selected':''}>${c}</option>`).join('')}
+      </select>
+      <input class="form-input" value="${r.phone||''}" placeholder="전화번호" style="flex:1.3;padding:4px 6px;font-size:.78rem" id="m26p_${realIdx}">
+      <button class="btn btn-primary" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.saveM26MgrRow(${realIdx})">저장</button>
+      <button class="btn btn-danger" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.deleteM26MgrRow(${realIdx})">삭제</button>
+    </div>`;
+  }).join('');
+};
+
+window.saveM26MgrRow = function(idx){
+  const reg = getMemberRegistry2026();
+  const name = (ge(`m26n_${idx}`)?.value||'').trim();
+  const club = (ge(`m26c_${idx}`)?.value||'').trim();
+  const phone = (ge(`m26p_${idx}`)?.value||'').trim();
+  if(!name||!club){ toast('이름과 클럽을 입력하세요','error'); return; }
+  reg[idx] = { name, club:_m26Club(club), phone };
+  G.meta.memberRegistry2026 = reg;
+  sl(true);
+  saveMeta().then(()=>{
+    sl(false);
+    window.renderM26MgrList();
+    renderMemberRegistry2026Status();
+    toast(`${name} 수정 완료`,'success');
+  }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
+};
+
+window.deleteM26MgrRow = function(idx){
+  const reg = getMemberRegistry2026();
+  const name = reg[idx]?.name||'';
+  if(!confirm(`${name} 선수를 삭제할까요?`)) return;
+  reg.splice(idx,1);
+  G.meta.memberRegistry2026 = reg;
+  sl(true);
+  saveMeta().then(()=>{
+    sl(false);
+    window.renderM26MgrList();
+    renderMemberRegistry2026Status();
+    toast(`${name} 삭제 완료`,'success');
+  }).catch(e=>{ sl(false); toast('삭제 실패: '+e.message,'error'); });
+};
+
+window.addM26MgrRow = function(){
+  const name = (ge('m26mgr_name')?.value||'').trim();
+  const club = (ge('m26mgr_club')?.value||'').trim();
+  const phone = (ge('m26mgr_phone')?.value||'').trim();
+  if(!name||!club){ toast('이름과 클럽을 입력하세요','error'); return; }
+  const reg = getMemberRegistry2026();
+  const key = _m26Name(name)+'__'+_m26Club(club);
+  if(reg.find(r=> _m26Name(r.name)+'__'+_m26Club(r.club) === key)){
+    toast('이미 등록된 선수입니다','error'); return;
+  }
+  reg.push({ name, club:_m26Club(club), phone });
+  G.meta.memberRegistry2026 = reg;
+  sl(true);
+  saveMeta().then(()=>{
+    sl(false);
+    ge('m26mgr_name').value='';
+    ge('m26mgr_phone').value='';
+    window.renderM26MgrList();
+    renderMemberRegistry2026Status();
+    toast(`${name} 추가 완료`,'success');
+  }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
+};
 
 
 // ──────────────────────────────────────────────────────────────
