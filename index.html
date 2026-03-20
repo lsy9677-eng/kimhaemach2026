@@ -1516,7 +1516,21 @@ async function initFB(){
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
 async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
-async function saveMeta(){try{await setDoc(doc(db,'meta','config'),{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],clubContacts:(G.meta.clubContacts||{})});}catch(e){}}
+async function saveMeta(){
+  try{
+    await setDoc(doc(db,'meta','config'),{
+      pw:G.meta.pw,
+      regPw:(G.meta.regPw||'202601'),
+      clubs:G.clubs,
+      adminPhone:(G.meta.adminPhone||''),
+      memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],
+      clubContacts:(G.meta.clubContacts||{})
+    });
+  }catch(e){
+    console.error('saveMeta 오류:', e);
+    throw e; // 호출부에서 에러를 받을 수 있도록 re-throw
+  }
+}
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
@@ -2824,7 +2838,7 @@ function showMissingMembers2026(missing){
   alert(msg);
 }
 async function syncRegistryMembersToPlayers(rows){
-  const tasks=[];
+  const keys=[];
   (rows||[]).forEach(r=>{
     const name=(r.name||'').trim();
     const club=_m26Club(r.club||'');
@@ -2836,22 +2850,63 @@ async function syncRegistryMembersToPlayers(rows){
     if(!Array.isArray(p.clubs)) p.clubs=[];
     if(!p.clubs.includes(club)) p.clubs.push(club);
     if((r.phone||'').trim()) p.phone=(r.phone||'').trim();
-    tasks.push(stP(key));
+    keys.push(key);
   });
-  if(tasks.length) await Promise.all(tasks);
+  // 한 번에 너무 많은 동시 쓰기 방지: 20개씩 나눠서 순차 저장
+  const CHUNK = 20;
+  for(let i=0; i<keys.length; i+=CHUNK){
+    await Promise.all(keys.slice(i, i+CHUNK).map(k=>stP(k)));
+  }
 }
 function parseMemberRegistry2026Rows(rows){
   const out=[];
-  (rows||[]).forEach(raw=>{
+  // 헤더행 키워드 매핑
+  const HEADER_WORDS=/이름|성명|클럽|소속|지역|구분|회원명|선수명/;
+
+  // ── 엑셀(배열 배열) 형식일 때 헤더로 컬럼 위치 자동 감지 ──────────
+  let nameCol=-1, clubCol=-1, phoneCol=-1;
+  let dataStartIdx=0;
+
+  if(rows.length && Array.isArray(rows[0])){
+    // 첫 행이 헤더인지 확인
+    const firstRow = rows[0].map(c=>(c??'').toString().trim());
+    const isHeader = firstRow.some(c=>HEADER_WORDS.test(c));
+    if(isHeader){
+      firstRow.forEach((c,i)=>{
+        if(/회원명|선수명|이름|성명/.test(c)) nameCol=i;
+        else if(/클럽명|클럽|소속/.test(c)) clubCol=i;
+        else if(/전화|휴대/.test(c)) phoneCol=i;
+      });
+      dataStartIdx=1; // 헤더 다음 행부터 데이터
+    }
+  }
+
+  (rows||[]).forEach((raw, rowIdx)=>{
+    if(rowIdx < dataStartIdx) return; // 헤더행 스킵
     let name='', club='', phone='';
+
     if(Array.isArray(raw)){
-      name=(raw[0]??'').toString().trim();
-      club=(raw[1]??'').toString().trim();
-      phone=(raw[2]??'').toString().trim();
+      const cols = raw.map(c=>(c??'').toString().trim());
+      // 빈 행 스킵
+      if(cols.every(c=>!c)) return;
+
+      if(nameCol>=0 && clubCol>=0){
+        // 헤더로 컬럼 위치를 알고 있는 경우
+        name = cols[nameCol]||'';
+        club = cols[clubCol]||'';
+        phone = phoneCol>=0 ? (cols[phoneCol]||'') : '';
+      } else {
+        // 헤더 없는 경우: 기존 방식 [이름, 클럽, 전화]
+        name=(cols[0]||'').trim();
+        club=(cols[1]||'').trim();
+        phone=(cols[2]||'').trim();
+        if(/^\d+$/.test(phone)) phone='';
+      }
+
     }else if(raw && typeof raw==='object'){
       const vals=Object.values(raw||{});
-      name=(raw.name ?? raw.이름 ?? vals[0] ?? '').toString().trim();
-      club=(raw.club ?? raw.클럽 ?? raw.소속 ?? vals[1] ?? '').toString().trim();
+      name=(raw.name ?? raw.이름 ?? raw.회원명 ?? raw.선수명 ?? vals[0] ?? '').toString().trim();
+      club=(raw.club ?? raw.클럽 ?? raw.클럽명 ?? raw.소속 ?? vals[1] ?? '').toString().trim();
       phone=(raw.phone ?? raw.전화번호 ?? raw.휴대폰 ?? vals[2] ?? '').toString().trim();
     }else{
       let line=(raw||'').toString().trim();
@@ -2862,8 +2917,10 @@ function parseMemberRegistry2026Rows(rows){
       name=parts[0]||''; club=parts[1]||''; phone=parts[2]||'';
       if(/^\d+$/.test(phone)) phone='';
     }
+
     if(!name || !club) return;
-    if(/이름|성명/.test(name) && /클럽|소속/.test(club)) return;
+    // 헤더행 혼입 방지
+    if(HEADER_WORDS.test(name) || HEADER_WORDS.test(club)) return;
     club=_m26Club(club);
     if(!name || !club) return;
     const key=_m26Name(name)+'__'+_m26Club(club);
@@ -2888,6 +2945,7 @@ async function applyMemberRegistry2026(rows, mode){
   sl(true);
   try{
     await saveMeta();
+    toast(`명단 저장 완료 (${incoming.length}명) — 선수 데이터 동기화 중...`,'info');
     await syncRegistryMembersToPlayers(G.meta.memberRegistry2026);
     sl(false);
     renderMemberRegistry2026Status();
@@ -7329,6 +7387,12 @@ window._uploadBytes = uploadBytes;
 window._getDownloadURL = getDownloadURL;
 window._listAll = listAll;
 window._deleteObject = deleteObject;
+
+// 2026 명단 관련 함수 전역 등록 (HTML onchange/onclick에서 접근용)
+window.importMemberRegistry2026File = importMemberRegistry2026File;
+window.importMemberRegistry2026Text = importMemberRegistry2026Text;
+window.clearMemberRegistry2026 = clearMemberRegistry2026;
+window.renderMemberRegistry2026Status = renderMemberRegistry2026Status;
 
 
 // ──────────────────────────────────────────────────────────────
