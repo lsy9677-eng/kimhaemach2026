@@ -3312,6 +3312,10 @@ function updateRegisterSlots(){
   const sn1=ge('subNum1'),sn2=ge('subNum2');
   if(sn1) sn1.textContent=mainCount+1;
   if(sn2) sn2.textContent=mainCount+2;
+  // placeholder도 실제 번호로 업데이트
+  const p11=ge('p11'),p12=ge('p12');
+  if(p11) p11.placeholder=`선수 ${mainCount+1}`;
+  if(p12) p12.placeholder=`선수 ${mainCount+2}`;
 
   const lbl=ge('regModeLabel');
   if(lbl){
@@ -7174,13 +7178,14 @@ async function _buildRegListEl44(){
       html+=`<div style="font-size:.78rem;color:#888;padding:4px 6px">등록된 팀 없음</div>`;
     }else{
       sorted.forEach(({team,i})=>{
+        const teamName=tdn(team,key,i);
         const players=(team.players||[]).filter(Boolean);
         const dbl=team.doublesCount||5;
         const main=players.slice(0,dbl*2);
         const sub=players.slice(dbl*2);
         html+=`<div style="border:1px solid #d1d9e6;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:8px">
           <div style="background:#0f1e3a;color:#fff;padding:7px 12px;display:flex;align-items:center;justify-content:space-between">
-            <span style="font-weight:800;font-size:.88rem">${i+1}. ${team.club||''}</span>
+            <span style="font-weight:800;font-size:.88rem">${i+1}. ${teamName}</span>
             <span style="font-size:.72rem;opacity:.82">${players.length}명 / ${dbl}복식</span>
           </div>
           <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px">
