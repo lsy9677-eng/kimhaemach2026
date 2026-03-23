@@ -147,6 +147,7 @@ table tr:nth-child(even):hover td{background:var(--panel2);}
 .dpill.silver{background:#f0f0f0;color:#5a5a5a;border-color:#aaa;}
 .dpill.bronze{background:#fde8d0;color:#8a4500;border-color:#cd7f32;}
 .dpill.blue{background:#ddeeff;color:#1a5276;border-color:#5dade2;}
+.dpill.purple{background:#f3e8ff;color:#6b21a8;border-color:#c084fc;}
 .empty-state{text-align:center;padding:50px 20px;color:var(--text3);}
 .empty-icon{font-size:3rem;margin-bottom:12px;}
 .empty-state p{font-size:.88rem;}
@@ -669,8 +670,8 @@ body{overflow-x:hidden;}
 
   <div class="card fade-in"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
 
-  <!-- 등록선수 현황 버튼 -->
-  <div class="card fade-in" style="padding:12px 16px">
+  <!-- 등록선수 현황 버튼 (관리자/경기이사 로그인 시에만 표시) -->
+  <div class="card fade-in" id="homeRegViewerCard" style="padding:12px 16px;display:none">
     <button class="btn btn-outline" style="width:100%;padding:12px;font-size:.88rem;font-weight:600" onclick="window.openRegViewer()">
       🧾 <span class="reg-year-label">등록선수</span> 현황 보기
       <span id="homeRegCount" style="margin-left:6px;background:var(--primary);color:white;font-size:.72rem;padding:2px 8px;border-radius:20px;font-weight:700"></span>
@@ -691,37 +692,33 @@ body{overflow-x:hidden;}
       <div class="form-group"><label class="form-label">접수 마감</label><input class="form-input" type="date" id="tDeadline"></div>
     </div>
     <div class="form-group"><label class="form-label">운영 부서 &amp; 복식 수<span class="req">*</span></label>
-      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
-        <div class="div-rubber-row" id="divRowG">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:110px"><input type="checkbox" id="divG" onchange="toggleDivRubber('G')"><span class="dpill gold">🥇 금배부</span></label>
-          <div class="div-rubber-sel" id="rubSelG" style="display:none">
-            <span class="rub-opt active" id="rubG_5" onclick="selRub('G',5)">5복식</span>
-            <span class="rub-opt" id="rubG_3" onclick="selRub('G',3)">3복식</span>
-          </div>
-        </div>
-        <div class="div-rubber-row" id="divRowS">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:110px"><input type="checkbox" id="divS" onchange="toggleDivRubber('S')"><span class="dpill silver">🥈 은배부</span></label>
-          <div class="div-rubber-sel" id="rubSelS" style="display:none">
-            <span class="rub-opt active" id="rubS_5" onclick="selRub('S',5)">5복식</span>
-            <span class="rub-opt" id="rubS_3" onclick="selRub('S',3)">3복식</span>
-          </div>
-        </div>
-        <div class="div-rubber-row" id="divRowB">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:110px"><input type="checkbox" id="divB" checked onchange="toggleDivRubber('B')"><span class="dpill bronze">🥉 동배부</span></label>
-          <div class="div-rubber-sel" id="rubSelB" style="display:flex">
-            <span class="rub-opt active" id="rubB_5" onclick="selRub('B',5)">5복식</span>
-            <span class="rub-opt" id="rubB_3" onclick="selRub('B',3)">3복식</span>
-          </div>
-        </div>
-        <div class="div-rubber-row" id="divRowT">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:110px"><input type="checkbox" id="divT" onchange="toggleDivRubber('T')"><span class="dpill blue">🌱 테린이부</span></label>
-          <div class="div-rubber-sel" id="rubSelT" style="display:none">
-            <span class="rub-opt" id="rubT_5" onclick="selRub('T',5)">5복식</span>
-            <span class="rub-opt active" id="rubT_3" onclick="selRub('T',3)">3복식</span>
-          </div>
-        </div>
+      <!-- 빠른 선택 프리셋 -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;margin-bottom:10px">
+        <span style="font-size:.72rem;color:var(--text2);align-self:center">빠른 추가:</span>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('금배부',5)">🥇 금배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('은배부',5)">🥈 은배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('동배부',5)">🥉 동배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('테린이부',3)">🌱 테린이부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('여성부',3)">👩 여성부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('직장부',5)">🏢 직장부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.72rem;padding:3px 10px" onclick="addPresetDiv('시니어부',5)">🎖 시니어부</button>
       </div>
-      <div style="font-size:.72rem;color:var(--text2);margin-top:6px">💡 테린이부 기본 3복식 · 나머지 기본 5복식</div>
+      <!-- 직접 입력 -->
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+        <input class="form-input" id="newDivName" placeholder="부서명 직접 입력 (예: 일반부)" style="flex:1;font-size:.85rem">
+        <select class="form-select" id="newDivRub" style="width:90px;font-size:.82rem">
+          <option value="5">5복식</option>
+          <option value="3">3복식</option>
+          <option value="4">4복식</option>
+          <option value="2">2복식</option>
+          <option value="1">1복식</option>
+        </select>
+        <button type="button" class="btn btn-primary" style="font-size:.8rem;padding:6px 12px;white-space:nowrap" onclick="addCustomDiv()">➕ 추가</button>
+      </div>
+      <!-- 추가된 부서 목록 -->
+      <div id="customDivList" style="display:flex;flex-direction:column;gap:6px;min-height:36px">
+        <div style="font-size:.75rem;color:var(--text3);padding:8px 0" id="customDivEmpty">부서를 추가해 주세요</div>
+      </div>
     </div>
     <div class="frow3">
       <div class="form-group"><label class="form-label">경기 방식</label><select class="form-select" id="tFormat"><option value="group_knockout">예선조별+본선토너먼트</option><option value="roundrobin">풀 리그전</option><option value="knockout">토너먼트 단판</option></select></div>
@@ -749,7 +746,14 @@ body{overflow-x:hidden;}
 </div>
 
 <div class="page" id="page-register">
-  <div class="sec-title">팀 등록</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+    <div class="sec-title" style="margin-bottom:0">팀 등록</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListImage44()">🖼️ 이미지 저장</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px;background:#fee500;border-color:#f9c400;color:#3c1e1e;font-weight:700" onclick="saveRegListKakao44()">💛 카톡용 이미지</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListPDF44()">📄 PDF 저장</button>
+    </div>
+  </div>
   <!-- 팀등록 로그인 안내 (비로그인 상태) -->
   <div id="regLoginPrompt" style="display:none">
     <div style="padding:20px 16px;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:var(--radius-lg);border:2px solid var(--primary-light);text-align:center;margin-bottom:16px">
@@ -786,7 +790,17 @@ body{overflow-x:hidden;}
           <input class="form-input" id="regContactPhone" placeholder="예: 010-1234-5678" inputmode="tel" style="flex:1" oninput="onRegContactInput()">
           <button class="btn btn-outline" style="font-size:.78rem;padding:6px 10px;white-space:nowrap" onclick="saveRegContact()">💾 저장</button>
         </div>
-        <div style="font-size:.7rem;color:var(--text3);margin-top:5px;line-height:1.4">
+        <!-- 구글 이메일 등록란 -->
+        <div style="margin-top:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <input class="form-input" id="regContactEmail" placeholder="예: example@gmail.com" inputmode="email" style="flex:1" oninput="onRegContactInput()">
+          </div>
+          <div style="font-size:.68rem;color:#1a73e8;margin-top:4px;line-height:1.5;padding:5px 8px;background:linear-gradient(135deg,#e8f0fe,#d2e3fc);border-radius:6px;border:1px solid #b3d0fb">
+            📧 <b>구글 계정(Gmail) 등록</b> — 이메일 등록 시 앱 출시 때 <b>Play 스토어에서 바로 다운로드</b>할 수 있도록 테스트 초대를 보내드립니다! 🎁<br>
+            <span style="color:#555">⚠️ 반드시 <b>@gmail.com</b> 구글 계정이어야 합니다.</span>
+          </div>
+        </div>
+        <div style="font-size:.7rem;color:var(--text3);margin-top:6px;line-height:1.4">
           • 클럽당 1회 저장하면 이후 팀 등록 시 자동 적용됩니다.<br>
           • 관리자가 공지 문자를 이 번호로 발송합니다.
         </div>
@@ -795,9 +809,9 @@ body{overflow-x:hidden;}
       <div id="terineeModeSel" style="display:none;margin-bottom:10px">
         <label class="form-label">복식 수 선택 <span style="color:var(--text3);font-size:.72rem;font-weight:400">(테린이부는 3~5복식 선택 가능)</span></label>
         <div style="display:flex;gap:10px;margin-top:6px">
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="3" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 3복식 (6명+후보)</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="3" checked onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 3복식 (6명+후보)</label>
           <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="4" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 4복식 (8명+후보)</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="5" checked onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 5복식 (10명+후보)</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="5" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 5복식 (10명+후보)</label>
         </div>
       </div>
       <div class="form-group">
@@ -909,7 +923,7 @@ body{overflow-x:hidden;}
 <div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 팀등록 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
 <div class="modal-body">
   <div style="padding:10px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#2e7d32;line-height:1.5">
-    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.<br>최초 비밀번호: <b>202601</b>
+    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.
   </div>
   <div class="form-group"><label class="form-label">팀등록 비밀번호</label>
     <input class="form-input" type="password" id="regPwInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doRegLogin()">
@@ -1446,6 +1460,94 @@ function getDivRubbers(dk){
   return btn3.classList.contains('active')?3:5;
 }
 
+// ── 커스텀 부서 목록 관리 (대회 생성용) ──────────────────────────
+let _customDivList = []; // [{name, rub}]
+function _renderCustomDivList(){
+  const list=ge('customDivList');
+  const empty=ge('customDivEmpty');
+  if(!list)return;
+  if(!_customDivList.length){
+    list.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:8px 0" id="customDivEmpty">부서를 추가해 주세요</div>';
+    return;
+  }
+  list.innerHTML=_customDivList.map((d,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+      <span style="font-weight:700;font-size:.85rem;flex:1">${d.name}</span>
+      <select class="form-select" style="width:80px;font-size:.78rem;padding:3px 6px" onchange="_customDivList[${i}].rub=parseInt(this.value)">
+        <option value="5" ${d.rub===5?'selected':''}>5복식</option>
+        <option value="4" ${d.rub===4?'selected':''}>4복식</option>
+        <option value="3" ${d.rub===3?'selected':''}>3복식</option>
+        <option value="2" ${d.rub===2?'selected':''}>2복식</option>
+        <option value="1" ${d.rub===1?'selected':''}>1복식</option>
+      </select>
+      <button class="btn btn-danger" style="padding:3px 8px;font-size:.72rem" onclick="_removeCustomDiv(${i})">✕</button>
+    </div>`).join('');
+}
+function _removeCustomDiv(i){
+  _customDivList.splice(i,1);
+  _renderCustomDivList();
+}
+function addPresetDiv(name, rub){
+  if(_customDivList.find(d=>d.name===name)){toast(`"${name}" 이미 추가됨`,'info');return;}
+  _customDivList.push({name,rub});
+  _renderCustomDivList();
+}
+function addCustomDiv(){
+  const name=(ge('newDivName')?.value||'').trim();
+  const rub=parseInt(ge('newDivRub')?.value||'5');
+  if(!name){toast('부서명을 입력해 주세요','error');return;}
+  if(_customDivList.find(d=>d.name===name)){toast(`"${name}" 이미 추가됨`,'info');return;}
+  _customDivList.push({name,rub});
+  if(ge('newDivName'))ge('newDivName').value='';
+  _renderCustomDivList();
+}
+function getCustomDivList(){return _customDivList.slice();}
+function clearCustomDivList(){_customDivList=[];_renderCustomDivList();}
+
+// ── 대회 편집용 부서 목록 관리 ─────────────────────────────────
+function _renderEtDivList(){
+  const list=ge('etDivList');
+  if(!list)return;
+  const divs=window._etDivList||[];
+  if(!divs.length){
+    list.innerHTML='<div style="font-size:.75rem;color:var(--text3);padding:6px 0">부서를 추가해 주세요</div>';
+    return;
+  }
+  list.innerHTML=divs.map((d,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+      <span style="font-weight:700;font-size:.85rem;flex:1">${d.name}${d.locked?'<small style="color:var(--text3);font-weight:400;margin-left:4px">(팀 있음)</small>':''}</span>
+      <select class="form-select" style="width:80px;font-size:.78rem;padding:3px 6px" onchange="window._etDivList[${i}].rub=parseInt(this.value)">
+        <option value="5" ${d.rub===5?'selected':''}>5복식</option>
+        <option value="4" ${d.rub===4?'selected':''}>4복식</option>
+        <option value="3" ${d.rub===3?'selected':''}>3복식</option>
+        <option value="2" ${d.rub===2?'selected':''}>2복식</option>
+        <option value="1" ${d.rub===1?'selected':''}>1복식</option>
+      </select>
+      ${d.locked?`<span style="font-size:.7rem;color:var(--text3)">삭제불가</span>`:`<button class="btn btn-danger" style="padding:3px 8px;font-size:.72rem" onclick="_etRemoveDiv(${i})">✕</button>`}
+    </div>`).join('');
+}
+function _etRemoveDiv(i){
+  if((window._etDivList||[])[i]?.locked){toast('팀이 등록된 부서는 삭제할 수 없습니다','info');return;}
+  (window._etDivList||[]).splice(i,1);
+  _renderEtDivList();
+}
+function etAddPreset(name,rub){
+  if(!window._etDivList)window._etDivList=[];
+  if(window._etDivList.find(d=>d.name===name)){toast(`"${name}" 이미 추가됨`,'info');return;}
+  window._etDivList.push({name,rub,locked:false});
+  _renderEtDivList();
+}
+function etAddCustomDiv(){
+  const name=(ge('etNewDivName')?.value||'').trim();
+  const rub=parseInt(ge('etNewDivRub')?.value||'5');
+  if(!name){toast('부서명을 입력해 주세요','error');return;}
+  if(!window._etDivList)window._etDivList=[];
+  if(window._etDivList.find(d=>d.name===name)){toast(`"${name}" 이미 추가됨`,'info');return;}
+  window._etDivList.push({name,rub,locked:false});
+  if(ge('etNewDivName'))ge('etNewDivName').value='';
+  _renderEtDivList();
+}
+
 // 조 알파벳 레이블: 0→A조, 1→B조 ...
 function grpLabel(gi){ return String.fromCharCode(65+gi)+'조'; }
 
@@ -1461,7 +1563,7 @@ let REG=false; // 팀등록 로그인 상태
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1578,7 +1680,7 @@ async function initFB(){
     if(window.renderHomeReg) window.renderHomeReg();
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
+async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
 async function saveMeta(){
   try{
     await setDoc(doc(db,'meta','config'),{
@@ -1587,11 +1689,12 @@ async function saveMeta(){
       clubs:G.clubs,
       adminPhone:(G.meta.adminPhone||''),
       memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],
-      clubContacts:(G.meta.clubContacts||{})
+      clubContacts:(G.meta.clubContacts||{}),
+      clubEmails:(G.meta.clubEmails||{})
     });
   }catch(e){
     console.error('saveMeta 오류:', e);
-    throw e; // 호출부에서 에러를 받을 수 있도록 re-throw
+    throw e;
   }
 }
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
@@ -1751,6 +1854,8 @@ function applyAdminUI(){
   ge('adminToggleBtn').textContent='로그아웃';
   document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='block');
   const rh=ge('regActHdr'); if(rh) rh.textContent='관리';
+  // 홈 명단 버튼 표시
+  const regCard=ge('homeRegViewerCard'); if(regCard) regCard.style.display='block';
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -1825,6 +1930,9 @@ function applyRegLoginUI(){
   if(bar){
     bar.style.display = (REG && !AD) ? 'flex' : 'none';
   }
+  // 홈 2026 명단 버튼: 관리자 또는 경기이사 로그인 시에만 표시
+  const regCard = ge('homeRegViewerCard');
+  if(regCard) regCard.style.display = loggedIn ? 'block' : 'none';
 }
 
 async function saveRegPw(){
@@ -2021,6 +2129,10 @@ function onRegClubChange(){
   const badge = ge('regContactSavedBadge');
   if(lbl) lbl.textContent = club;
   if(inp) inp.value = saved;
+  // 저장된 구글 이메일 불러오기
+  const emailInp = ge('regContactEmail');
+  const savedEmail = (G.meta.clubEmails||{})[club]||'';
+  if(emailInp) emailInp.value = savedEmail;
   if(badge) badge.style.display = saved ? 'inline' : 'none';
   if(row) row.style.display = 'block';
 }
@@ -2034,14 +2146,27 @@ async function saveRegContact(){
   const club = (ge('regClub')?.value||'').trim();
   const raw = (ge('regContactPhone')?.value||'').trim();
   const phone = raw.replace(/[^0-9-]/g,'');
+  const emailRaw = (ge('regContactEmail')?.value||'').trim().toLowerCase();
   if(!club){ toast('클럽을 먼저 선택하세요','error'); return; }
   if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
+  // 이메일 형식 검사 (입력한 경우만)
+  if(emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)){
+    toast('이메일 형식을 확인해주세요','error'); return;
+  }
+  if(emailRaw && !emailRaw.endsWith('@gmail.com')){
+    toast('구글 계정(@gmail.com)만 등록 가능합니다','error'); return;
+  }
   if(!G.meta.clubContacts) G.meta.clubContacts={};
   G.meta.clubContacts[club] = phone;
+  if(emailRaw){
+    if(!G.meta.clubEmails) G.meta.clubEmails={};
+    G.meta.clubEmails[club] = emailRaw;
+  }
   try{
     await saveMeta();
     ge('regContactSavedBadge') && (ge('regContactSavedBadge').style.display='inline');
-    toast(`${club} 경기이사 번호 저장 완료 ✅`,'success');
+    const emailMsg = emailRaw ? ' + 구글 이메일' : '';
+    toast(`${club} 경기이사 번호${emailMsg} 저장 완료 ✅`,'success');
     renderAdminContactList();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
@@ -2062,6 +2187,7 @@ function renderAdminContactList(){
   const el = ge('adminContactList');
   if(!el) return;
   const contacts = G.meta.clubContacts||{};
+  const emails = G.meta.clubEmails||{};
   const clubs = G.clubs||[];
   const withPhone = clubs.filter(c=>contacts[c]);
   const noPhone = clubs.filter(c=>!contacts[c]);
@@ -2069,12 +2195,16 @@ function renderAdminContactList(){
   if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
   el.innerHTML = sorted.map(club=>{
     const phone = contacts[club]||'';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">
-      <span style="min-width:65px;font-size:.82rem;font-weight:${phone?'700':'400'};color:${phone?'var(--text1)':'var(--text3)'}">${club}</span>
-      <input class="form-input" value="${phone}" placeholder="번호 없음" id="cc_${club}" inputmode="tel"
-        style="flex:1;min-width:110px;font-size:.8rem;padding:4px 8px">
-      <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveContactFromAdmin('${club}')">💾</button>
-      ${phone?`<a href="sms:${phone.replace(/[^0-9+]/g,'')}" style="text-decoration:none"><button class="btn btn-gray" style="font-size:.74rem;padding:3px 8px">📱</button></a>`:''}
+    const email = emails[club]||'';
+    return `<div style="padding:6px 0;border-bottom:1px dashed var(--border)">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:${email?'4px':'0'}">
+        <span style="min-width:65px;font-size:.82rem;font-weight:${phone?'700':'400'};color:${phone?'var(--text1)':'var(--text3)'}">${club}</span>
+        <input class="form-input" value="${phone}" placeholder="번호 없음" id="cc_${club}" inputmode="tel"
+          style="flex:1;min-width:110px;font-size:.8rem;padding:4px 8px">
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveContactFromAdmin('${club}')">💾</button>
+        ${phone?`<a href="sms:${phone.replace(/[^0-9+]/g,'')}" style="text-decoration:none"><button class="btn btn-gray" style="font-size:.74rem;padding:3px 8px">📱</button></a>`:''}
+      </div>
+      ${email?`<div style="font-size:.72rem;color:#1a73e8;padding-left:2px">📧 ${email}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -2530,7 +2660,7 @@ async function captureAndShareBracket(mode){
 
   toast('이미지 생성 중... 잠시 기다려주세요','info');
   try{
-    const canvas = await html2canvas(bracketEl,{scale:2,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
+    const canvas = await html2canvas(bracketEl,{scale:3,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
     const a = document.createElement('a');
     const fname = mode==='preview'
       ? `예상대진_${t.name}_${new Date().toISOString().substring(0,10)}.png`
@@ -2622,28 +2752,22 @@ function tdn(team,key,idx){if(!team)return'?';const ts=G.teams[key]||[];const sa
 async function createTournament(){
   const nm=ge('tName').value.trim(),dt=ge('tDate').value;
   if(!nm||!dt){toast('대회명과 일자 필수','error');return;}
-  const divs=[];if(ge('divG').checked)divs.push('금');if(ge('divS').checked)divs.push('은');if(ge('divB').checked)divs.push('동');if(ge('divT').checked)divs.push('테린이');
-  if(!divs.length){toast('부서 최소 1개','error');return;}
+  // 커스텀 부서 목록 읽기
+  const divItems=getCustomDivList();
+  if(!divItems.length){toast('부서를 최소 1개 추가해 주세요','error');return;}
+  const divs=divItems.map(d=>d.name);
   sl(true);
   try{
     const fmt=ge('tFormat').value,gs=parseInt(ge('tGrpSize').value),adv=parseInt(ge('tAdvance').value);
-    // 부서별 복식 수 읽기
-    const rubMap={'금':'G','은':'S','동':'B','테린이':'T'};
-    const ds={};divs.forEach(d=>{
-      const k2=rubMap[d]||'B';
-      const rub=getDivRubbers(k2);
-      ds[d]={format:fmt,grpSize:gs,advance:adv,doublesCount:rub};
-    });
-    // guideAssets는 Firebase Storage에 업로드 → URL만 tourGuides에 저장
+    const ds={};divItems.forEach(({name,rub})=>{ds[name]={format:fmt,grpSize:gs,advance:adv,doublesCount:rub};});
     const tRef=await addDoc(collection(db,'tournaments'),{name:nm,date:dt,venue:ge('tVenue').value.trim(),deadline:ge('tDeadline').value,divisions:divs,format:fmt,grpSize:gs,advance:adv,divSettings:ds,notice:ge('tNotice').value.trim(),guideText:ge('tGuideText')?.value.trim()||'',guideUrl:ge('tGuideUrl')?.value.trim()||'',hasGuideAssets:(GUIDE_FILES_CREATE||[]).length>0||(GUIDE_FILES_CREATE_PENDING||[]).length>0,status:'open',createdAt:serverTimestamp()});
-    // 선택한 파일들을 Storage에 업로드
     await flushGuideUploads(tRef.id, 'create');
     const assets=GUIDE_FILES_CREATE||[];
-    if(assets.length>0){
-      await setDoc(doc(db,'tourGuides',tRef.id),{assets,updatedAt:serverTimestamp()});
-    }
+    if(assets.length>0){await setDoc(doc(db,'tourGuides',tRef.id),{assets,updatedAt:serverTimestamp()});}
     await fbLog('대회 생성: '+nm,'🏆');
-    ['tName','tDate','tVenue','tDeadline','tNotice','tGuideText','tGuideUrl'].forEach(id=>ge(id).value=''); GUIDE_FILES_CREATE=[]; GUIDE_FILES_CREATE_PENDING=[]; renderGuidePreview('create');
+    ['tName','tDate','tVenue','tDeadline','tNotice','tGuideText','tGuideUrl'].forEach(id=>ge(id).value='');
+    GUIDE_FILES_CREATE=[];GUIDE_FILES_CREATE_PENDING=[];renderGuidePreview('create');
+    clearCustomDivList();
     sl(false);toast('"'+nm+'" 생성됨','success');
   }catch(e){sl(false);toast('생성 실패: '+e.message,'error');}
 }
@@ -2733,26 +2857,31 @@ async function delT(tid){
 function openET(tid){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;CE_tid=tid;
   ge('mETT').textContent='✏️ 편집: '+t.name;
-  const aD=['금','은','동','테린이'];
+  // 기존 부서 목록으로 _etDivList 초기화
+  const existDivs=(t.divisions||[]);
   ge('mETB').innerHTML=`<div class="form-group"><label class="form-label">대회명</label><input class="form-input" id="etN" value="${t.name||''}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="form-group"><label class="form-label">일자</label><input class="form-input" type="date" id="etDt" value="${t.date||''}"></div><div class="form-group"><label class="form-label">장소</label><input class="form-input" id="etVn" value="${t.venue||''}"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="form-group"><label class="form-label">마감</label><input class="form-input" type="date" id="etDl" value="${t.deadline||''}"></div><div class="form-group"><label class="form-label">상태</label><select class="form-select" id="etSt"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select></div></div>
-    <div class="form-group"><label class="form-label">부서</label><div style="display:flex;gap:12px;flex-wrap:wrap;padding:10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);margin-top:6px">${aD.map(d=>{
-    const has=(t.divisions||[]).includes(d);
-    const cnt=(G.teams[tid+'_'+d]||[]).length;
-    const dbl=(t.divSettings?.[d]?.doublesCount)||((d==='테린이')?3:5);
-    const dk={'금':'G','은':'S','동':'B','테린이':'T'}[d]||'B';
-    return`<div class="div-rubber-row" style="margin-bottom:4px">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;min-width:115px">
-        <input type="checkbox" id="etD_${d}" ${has?'checked':''} ${cnt>0&&has?'disabled':''} onchange="etToggleRub('${dk}')">
-        <span class="dpill ${dc(d)}">${dl(d)}</span>${cnt>0?`<small style="color:var(--text3)">${cnt}팀</small>`:''}
-      </label>
-      <div class="div-rubber-sel" id="etRubSel${dk}" style="display:${has?'flex':'none'}">
-        <span class="rub-opt ${dbl===5?'active':''}" id="etRub${dk}_5" onclick="etSelRub('${dk}',5)">5복식</span>
-        <span class="rub-opt ${dbl===3?'active':''}" id="etRub${dk}_3" onclick="etSelRub('${dk}',3)">3복식</span>
+    <div class="form-group"><label class="form-label">부서 &amp; 복식 수</label>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 10px">
+        <span style="font-size:.72rem;color:var(--text2);align-self:center">빠른 추가:</span>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('금배부',5)">🥇 금배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('은배부',5)">🥈 은배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('동배부',5)">🥉 동배부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('테린이부',3)">🌱 테린이부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('여성부',3)">👩 여성부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('직장부',5)">🏢 직장부</button>
+        <button type="button" class="btn btn-outline" style="font-size:.7rem;padding:2px 8px" onclick="etAddPreset('시니어부',5)">🎖 시니어부</button>
       </div>
-    </div>`;
-  }).join('')}</div></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+        <input class="form-input" id="etNewDivName" placeholder="부서명 직접 입력" style="flex:1;font-size:.82rem">
+        <select class="form-select" id="etNewDivRub" style="width:85px;font-size:.8rem">
+          <option value="5">5복식</option><option value="3">3복식</option><option value="4">4복식</option><option value="2">2복식</option><option value="1">1복식</option>
+        </select>
+        <button type="button" class="btn btn-primary" style="font-size:.78rem;padding:5px 10px;white-space:nowrap" onclick="etAddCustomDiv()">➕ 추가</button>
+      </div>
+      <div id="etDivList" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
     <div class="form-group"><label class="form-label">공지</label><textarea class="form-textarea" id="etNt" rows="3">${t.notice||''}</textarea></div>
     <div class="form-group"><label class="form-label">대회요강 (텍스트)</label>
       <textarea class="form-textarea" id="etGuideText" rows="4" placeholder="대회 요강 텍스트(선택)">${t.guideText||''}</textarea>
@@ -2768,11 +2897,14 @@ function openET(tid){
     </div>
     <div id="etGuidePreview" style="margin-top:6px"></div>
 `;
+  // 기존 부서 목록으로 _etDivList 초기화
+  window._etDivList = existDivs.map(d=>({name:d, rub:(t.divSettings?.[d]?.doublesCount)||5, locked:(G.teams[tid+'_'+d]||[]).length>0}));
+  _renderEtDivList();
   // guideAssets를 별도 컬렉션(tourGuides)에서 불러오기
   GUIDE_FILES_EDIT = [];
   getDoc(doc(db,'tourGuides',tid)).then(snap=>{
     if(snap.exists()) GUIDE_FILES_EDIT=(snap.data().assets||[]).slice();
-    else GUIDE_FILES_EDIT=(t.guideAssets||[]).slice(); // 구버전 데이터 호환
+    else GUIDE_FILES_EDIT=(t.guideAssets||[]).slice();
     renderGuidePreview('edit');
   }).catch(()=>{ GUIDE_FILES_EDIT=(t.guideAssets||[]).slice(); renderGuidePreview('edit'); });
   om('mET');
@@ -2783,38 +2915,18 @@ async function saveET(){
   if(!t) return;
 
   const nm = ge('etN').value.trim();
-  if(!nm){
-    toast('대회명 필수','error');
-    return;
-  }
+  if(!nm){ toast('대회명 필수','error'); return; }
 
-  const newD = ['금','은','동','테린이'].filter(d =>
-    document.getElementById('etD_' + d)?.checked
-  );
-  if(!newD.length){
-    toast('부서 1개 이상','error');
-    return;
-  }
+  const etDivs = (window._etDivList||[]);
+  const newD = etDivs.map(d=>d.name);
+  if(!newD.length){ toast('부서 1개 이상','error'); return; }
 
   sl(true);
-
   try{
-    const rubMap2 = {'금':'G','은':'S','동':'B','테린이':'T'};
     const ds = { ...(t.divSettings || {}) };
-
-    newD.forEach(d => {
-      const dk = rubMap2[d] || 'B';
-      const rub = etGetRubbers(dk);
-
-      if(!ds[d]){
-        ds[d] = {
-          format: 'group_knockout',
-          grpSize: 4,
-          advance: 2
-        };
-      }
-
-      ds[d].doublesCount = rub;
+    etDivs.forEach(({name, rub}) => {
+      if(!ds[name]) ds[name] = { format:'group_knockout', grpSize:4, advance:2 };
+      ds[name].doublesCount = rub;
     });
 
     await flushGuideUploads(CE_tid, 'edit');
@@ -3171,22 +3283,27 @@ function onRegTC(){
 // 현재 부서가 테린이인지 확인하고 복식 수 반환
 function getRegDoublesCount(){
   const div=ge('regDS')?.value||'';
-  if(div==='terinee' || div==='테린이'){
-    const r=document.querySelector('input[name="terineeMode"]:checked');
-    return r?parseInt(r.value):5;
-  }
-  return 5; // 일반부는 항상 5복식
+  const tid=ge('regTS')?.value||'';
+  const t=G.tournaments.find(x=>x.id===tid);
+  // divSettings에 저장된 복식 수 우선 사용
+  const cfgDbl=t?.divSettings?.[div]?.doublesCount;
+  if(cfgDbl) return cfgDbl;
+  // 테린이/여성부 기본 3복식, 나머지 5복식
+  if(div==='테린이'||div==='terinee'||div==='여성부') return 3;
+  return 5;
 }
 
 // 등록 폼 슬롯 업데이트 (테린이부 복식 수 변경 시)
 function updateRegisterSlots(){
   const div=ge('regDS')?.value||'';
   const isTerinee=(div==='terinee'||div==='테린이');
+  const isWomen=(div==='여성부');
   const dbl=getRegDoublesCount();
   const mainCount=dbl*2;
 
   const sel=ge('terineeModeSel');
-  if(sel) sel.style.display=isTerinee?'block':'none';
+  // 테린이부만 라디오 선택 표시 (여성부는 3복식 고정이라 불필요)
+  if(sel) sel.style.display=(isTerinee && !isWomen)?'block':'none';
 
   const s4=ge('slot4'),s5=ge('slot5');
   if(s4) s4.style.display=dbl>=4?'block':'none';
@@ -3198,12 +3315,40 @@ function updateRegisterSlots(){
 
   const lbl=ge('regModeLabel');
   if(lbl){
-    if(isTerinee) lbl.textContent=`— 선수 명단만 등록 | 최소 ${mainCount}명, 최대 ${mainCount+2}명`;
-    else lbl.textContent='— 선수 명단만 등록 | 최소 10명, 최대 12명';
+    if(isWomen) lbl.textContent=`— 3복식 고정 | 최소 ${mainCount}명, 최대 ${mainCount+2}명`;
+    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 최소 ${mainCount}명, 최대 ${mainCount+2}명`;
+    else lbl.textContent='— 5복식 | 최소 10명, 최대 12명';
   }
   const pl=ge('regPlayerLabel');
   if(pl){
     pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">페어는 경기 결과 입력 때 선택합니다 · 최소 ${mainCount}명, 최대 ${mainCount+2}명</span>`;
+  }
+
+  // 여성부 조 편성 안내
+  let womenNotice=ge('womenPairNotice');
+  if(isWomen){
+    if(!womenNotice){
+      womenNotice=document.createElement('div');
+      womenNotice.id='womenPairNotice';
+      // regPlayerLabel 바로 위에 삽입
+      const anchor=ge('regPlayerLabel')?.closest('.form-group')||ge('regPlayerLabel');
+      if(anchor) anchor.insertAdjacentElement('beforebegin', womenNotice);
+    }
+    womenNotice.style.display='block';
+    womenNotice.innerHTML=`
+      <div style="margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1.5px solid #c084fc;border-radius:10px;font-size:.78rem;line-height:1.7">
+        <div style="font-weight:800;color:#6b21a8;margin-bottom:5px">👩 여성부 페어 고정 조건</div>
+        <div style="display:flex;flex-direction:column;gap:3px;color:#4a1772">
+          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">1조</span> 🌸 <b>개나리</b> — 구력 무관 페어</div>
+          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">2조</span> 🌼 <b>국화</b> — 구력 무관 페어</div>
+          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">3조</span> 🌱 <b>테린이</b> — 구력 <b>4년 이하</b> 페어 고정</div>
+        </div>
+        <div style="margin-top:6px;font-size:.7rem;color:#7c3aed;border-top:1px dashed #d8b4fe;padding-top:5px">
+          💡 1~4번 선수(개나리조), 5~8번 선수(국화조), 9~10번 선수(테린이조)로 명단을 구성하시면 됩니다.
+        </div>
+      </div>`;
+  } else {
+    if(womenNotice) womenNotice.style.display='none';
   }
 }
 
@@ -3211,10 +3356,11 @@ function buildRegisterRosterGrid(tid,div,teams,key){
   if(!teams?.length){
     return `<div style="font-size:.78rem;color:var(--text3);padding:4px 0">아직 등록된 팀이 없습니다.</div>`;
   }
+  const isWomen=(div==='여성부');
   return teams.map((team,i)=>{
     const dn=tdn(team,key,i);
     const p=(team.players||[]).filter(Boolean);
-    const dbl=team.doublesCount||((div==='테린이')?(p.length<=6?3:p.length<=8?4:5):5);
+    const dbl=team.doublesCount||((div==='테린이'||div==='여성부')?(p.length<=6?3:p.length<=8?4:5):5);
     const mainCount=dbl*2;
     const mainPlayers=p.slice(0,mainCount);
     const subPlayers=p.slice(mainCount);
@@ -3223,6 +3369,37 @@ function buildRegisterRosterGrid(tid,div,teams,key){
       <button class="btn rr-btn-edit" style="background:#f8fafc;color:#0f1e3a;border:1px solid #cbd5e1" onclick="openETeam('${esc(key)}',${i})">✏️ 수정</button>
       <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${i})">🗑 삭제</button>
     </div>`:'';
+
+    const womenGroups=[
+      {label:'1조 🌸 개나리', players:mainPlayers.slice(0,4), off:0},
+      {label:'2조 🌼 국화',   players:mainPlayers.slice(4,8), off:4},
+      {label:'3조 🌱 테린이 (구력 4년↓)', players:mainPlayers.slice(8,10), off:8}
+    ];
+
+    const bodyHTML = isWomen
+      ? `<div style="padding:10px 12px">
+          <div style="font-size:.65rem;color:#6b21a8;font-weight:700;letter-spacing:.03em;margin-bottom:8px">👩 여성부 조 편성</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${womenGroups.map(g=>`
+              <div style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:8px;padding:6px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#7c3aed;margin-bottom:5px">${g.label}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                  ${g.players.length
+                    ? g.players.map((n,idx)=>`<div style="background:#fff;border:1px solid #d8b4fe;border-radius:6px;padding:4px 8px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:17px;height:17px;background:#7c3aed;color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.off+idx+1}</span>${rosterPlayerHTML(n,team.club||'',tid)}</div>`).join('')
+                    : '<span style="font-size:.72rem;color:#a78bda">미등록</span>'}
+                </div>
+              </div>`).join('')}
+            ${subPlayers.length?`<div style="padding-top:4px;border-top:1px dashed #d8b4fe;font-size:.72rem;color:#7c3aed">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}
+          </div>
+        </div>`
+      : `<div style="padding:10px 12px">
+          <div style="font-size:.65rem;color:var(--text3);font-weight:600;letter-spacing:.03em;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">
+            ${mainPlayers.map((n,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n,team.club||'',tid)}</div>`).join('')}
+          </div>
+          ${subPlayers.length?`<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:.72rem;color:var(--text3)">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}
+        </div>`;
+
     return `<div class="rr-team-card">
       <div class="rr-team-header">
         <div class="rr-team-info">
@@ -3232,21 +3409,21 @@ function buildRegisterRosterGrid(tid,div,teams,key){
         </div>
         ${adminBtns}
       </div>
-      <div style="padding:10px 12px">
-        <div style="font-size:.65rem;color:var(--text3);font-weight:600;letter-spacing:.03em;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">
-          ${mainPlayers.map((n,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n,team.club||'',tid)}</div>`).join('')}
-        </div>
-        ${subPlayers.length?`<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:.72rem;color:var(--text3)">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}
-      </div>
+      ${bodyHTML}
     </div>`;
   }).join('');
 }
+
 
 function renderRegisterDivisionOverview(){
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
   if(!box) return;
+
+  // ✅ innerHTML 갱신 전에 aoReg 폼을 body로 피신시켜 DOM 소실 방지
+  const form=ge('aoReg');
+  if(form && box.contains(form)) document.body.appendChild(form);
+
   if(!tid){ box.innerHTML=''; return; }
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t){ box.innerHTML=''; return; }
@@ -3298,6 +3475,8 @@ function mountRegisterFormInline(div){
   const form=ge('aoReg');
   const host=ge(`regInlineForm_${div}`);
   if(!form||!host) return;
+  // host가 숨겨져 있으면 표시
+  host.style.display='block';
   if(form.parentElement!==host) host.appendChild(form);
   form.style.display='block';
 }
@@ -4178,7 +4357,7 @@ async function saveBracketViewImage(){
       await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
     }
     toast('이미지 생성 중...','info');
-    const canvas = await html2canvas(el, {backgroundColor:'#f0f4fa', scale:2, useCORS:true});
+    const canvas = await html2canvas(el, {backgroundColor:'#f0f4fa', scale:3, useCORS:true});
     const a = document.createElement('a');
     a.download = `대진표_${BV.div||''}_${new Date().toISOString().substring(0,10)}.png`;
     a.href = canvas.toDataURL('image/png');
@@ -6777,8 +6956,8 @@ function goBracket(tid,div){
   // 부서 선택 (약간 딜레이)
   setTimeout(()=>{const brDS=ge('brDS');if(brDS){brDS.value=div;renderBracket();}},100);
 }
-function dl(d){return{'금':'🥇 금배부','은':'🥈 은배부','동':'🥉 동배부','테린이':'🌱 테린이부','gold':'🥇 금배부','silver':'🥈 은배부','bronze':'🥉 동배부','terinee':'🌱 테린이부','women':'👩 여성부'}[d]||d;}
-function dc(d){return{'금':'gold','은':'silver','동':'bronze','테린이':'blue','gold':'gold','silver':'silver','bronze':'bronze','terinee':'blue','women':'purple'}[d]||'';}
+function dl(d){return{'금':'🥇 금배부','은':'🥈 은배부','동':'🥉 동배부','테린이':'🌱 테린이부','여성부':'👩 여성부','직장부':'🏢 직장부','시니어부':'🎖 시니어부','gold':'🥇 금배부','silver':'🥈 은배부','bronze':'🥉 동배부','terinee':'🌱 테린이부','women':'👩 여성부'}[d]||d;}
+function dc(d){return{'금':'gold','은':'silver','동':'bronze','테린이':'blue','여성부':'purple','gold':'gold','silver':'silver','bronze':'bronze','terinee':'blue','women':'purple'}[d]||'purple';}
 function randInt(max){
   max = Math.floor(max||0);
   if(max<=0) return 0;
@@ -6916,10 +7095,7 @@ async function bracketToImage(){
         s.onload=res;s.onerror=rej;document.head.appendChild(s);
       });
     }
-    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
-    const a=document.createElement('a');
-    a.href=canvas.toDataURL('image/png');
-    a.download=`대진표_${new Date().toISOString().substring(0,10)}.png`;
+    const canvas=await html2canvas(el,{scale:3,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
     a.click();
     toast('이미지 저장 완료 🖼️','success');
   }catch(e){toast('이미지 저장 실패: '+e.message,'error');}
@@ -6944,12 +7120,157 @@ async function bracketToPDF(){
         s.onload=res;s.onerror=rej;document.head.appendChild(s);
       });
     }
-    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
+    const canvas=await html2canvas(el,{scale:3,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
     const imgData=canvas.toDataURL('image/png');
     const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:canvas.width>canvas.height?'landscape':'portrait',unit:'px',format:[canvas.width/2,canvas.height/2]});
-    pdf.addImage(imgData,'PNG',0,0,canvas.width/2,canvas.height/2);
+    const isLandscape=canvas.width>canvas.height;
+    const pdf=new jsPDF({orientation:isLandscape?'landscape':'portrait',unit:'mm',format:'a4'});
+    const pageW=pdf.internal.pageSize.getWidth();
+    const pageH=pdf.internal.pageSize.getHeight();
+    const margin=6;
+    const imgW=pageW-margin*2;
+    const imgH=canvas.height*imgW/canvas.width;
+    if(imgH<=pageH-margin*2){
+      pdf.addImage(imgData,'PNG',margin,margin,imgW,imgH);
+    }else{
+      let remaining=imgH,position=0;
+      pdf.addImage(imgData,'PNG',margin,margin+position,imgW,imgH);
+      remaining-=(pageH-margin*2);
+      while(remaining>0){position-=(pageH-margin*2);pdf.addPage();pdf.addImage(imgData,'PNG',margin,margin+position,imgW,imgH);remaining-=(pageH-margin*2);}
+    }
     pdf.save(`대진표_${new Date().toISOString().substring(0,10)}.pdf`);
+    toast('PDF 저장 완료 📄','success');
+  }catch(e){toast('PDF 저장 실패: '+e.message,'error');}
+}
+
+// ── 팀 등록 명단 내보내기 (로그인 불필요) ────────────────────────────────
+async function _buildRegListEl44(){
+  const tid=ge('regTS')?.value||'';
+  const selDiv=ge('regDS')?.value||'';
+  const t=G.tournaments.find(x=>x.id===tid);
+  if(!t){toast('대회를 먼저 선택해 주세요','info');return null;}
+  const allDivs=[...(t.divisions||[])].sort((a,b)=>divOrder44(a)-divOrder44(b));
+  const targetDivs=(selDiv&&allDivs.includes(selDiv))?[selDiv]:allDivs;
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:fixed;left:-9999px;top:0;width:500px;background:#f0f4fa;padding:16px;font-family:inherit;z-index:-1';
+  const tdate=t.date?`📅 ${t.date}`:'';
+  const divLabel=selDiv?dl(selDiv):'전체 부서';
+  wrap.innerHTML=`<div style="text-align:center;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #3b6fd8">
+    <div style="font-size:1.1rem;font-weight:800;color:#0f1e3a">${t.name||'대회'}</div>
+    ${tdate?`<div style="font-size:.78rem;color:#555;margin-top:3px">${tdate}</div>`:''}
+    <div style="font-size:.82rem;color:#3b6fd8;font-weight:700;margin-top:4px">📋 팀 등록 현황 — ${divLabel}</div>
+  </div>`;
+  targetDivs.forEach(div=>{
+    const key=tid+'_'+div;
+    const teams=(G.teams[key]||[]).slice();
+    const sorted=teams.map((team,i)=>({team,i})).sort((x,y)=>(x.team.club||'').localeCompare(y.team.club||'','ko'));
+    const sec=document.createElement('div');
+    sec.style.cssText='margin-bottom:14px';
+    let html=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:#3b6fd8;border-radius:8px">
+      <span style="font-weight:800;color:#fff;font-size:.92rem">${dl(div)}</span>
+      <span style="background:rgba(255,255,255,.25);color:#fff;font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:10px">${teams.length}팀</span>
+    </div>`;
+    if(!sorted.length){
+      html+=`<div style="font-size:.78rem;color:#888;padding:4px 6px">등록된 팀 없음</div>`;
+    }else{
+      sorted.forEach(({team,i})=>{
+        const players=(team.players||[]).filter(Boolean);
+        const dbl=team.doublesCount||5;
+        const main=players.slice(0,dbl*2);
+        const sub=players.slice(dbl*2);
+        html+=`<div style="border:1px solid #d1d9e6;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:8px">
+          <div style="background:#0f1e3a;color:#fff;padding:7px 12px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:800;font-size:.88rem">${i+1}. ${team.club||''}</span>
+            <span style="font-size:.72rem;opacity:.82">${players.length}명 / ${dbl}복식</span>
+          </div>
+          <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px">
+            ${main.map((p,idx)=>`<span style="background:#f0f4fa;border:1px solid #cdd5e0;border-radius:6px;padding:2px 8px;font-size:.78rem;font-weight:600">${idx+1}. ${p}</span>`).join('')}
+            ${sub.map(p=>`<span style="background:#f8f9fa;border:1px dashed #b0b8c8;border-radius:6px;padding:2px 8px;font-size:.75rem;color:#666">후보. ${p}</span>`).join('')}
+          </div>
+        </div>`;
+      });
+    }
+    sec.innerHTML=html;
+    wrap.appendChild(sec);
+  });
+  const footer=document.createElement('div');
+  footer.style.cssText='text-align:right;font-size:.68rem;color:#999;margin-top:8px;border-top:1px solid #dde3ee;padding-top:6px';
+  footer.textContent=`출력일시: ${new Date().toLocaleString('ko-KR')}`;
+  wrap.appendChild(footer);
+  document.body.appendChild(wrap);
+  return wrap;
+}
+function divOrder44(d){return{'금':0,'은':1,'동':2,'테린이':3}[d]??99;}
+async function _loadH2c44(){
+  if(!window.html2canvas) await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+}
+async function saveRegListImage44(){
+  const tid=ge('regTS')?.value||'';
+  if(!tid){toast('대회를 먼저 선택해 주세요','info');return;}
+  try{
+    await _loadH2c44();
+    toast('이미지 생성 중...','info');
+    const wrap=await _buildRegListEl44();if(!wrap)return;
+    const selDiv=ge('regDS')?.value||'';
+    const t=G.tournaments.find(x=>x.id===tid);
+    const divLabel=selDiv?dl(selDiv):'전체';
+    const fname=`팀등록명단_${(t?.name||'').replace(/\s/g,'')}_${divLabel}_${new Date().toISOString().substring(0,10)}.png`;
+    await new Promise(r=>setTimeout(r,80));
+    const canvas=await html2canvas(wrap,{backgroundColor:'#f0f4fa',scale:3,useCORS:true,logging:false});
+    document.body.removeChild(wrap);
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=fname;a.click();
+    toast('이미지 저장 완료 🖼️','success');
+  }catch(e){toast('이미지 저장 실패: '+e.message,'error');}
+}
+async function saveRegListKakao44(){
+  const tid=ge('regTS')?.value||'';
+  if(!tid){toast('대회를 먼저 선택해 주세요','info');return;}
+  try{
+    await _loadH2c44();
+    toast('카톡용 이미지 생성 중...','info');
+    const wrap=await _buildRegListEl44();if(!wrap)return;
+    const selDiv=ge('regDS')?.value||'';
+    const t=G.tournaments.find(x=>x.id===tid);
+    const divLabel=selDiv?dl(selDiv):'전체';
+    const fname=`카톡_팀등록명단_${(t?.name||'').replace(/\s/g,'')}_${divLabel}_${new Date().toISOString().substring(0,10)}.png`;
+    await new Promise(r=>setTimeout(r,80));
+    const canvas=await html2canvas(wrap,{backgroundColor:'#f0f4fa',scale:3,useCORS:true,logging:false});
+    document.body.removeChild(wrap);
+    const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+    if(isMobile&&navigator.share){
+      canvas.toBlob(async(blob)=>{
+        try{const file=new File([blob],fname,{type:'image/png'});await navigator.share({files:[file],title:fname});toast('카카오톡 공유창을 열었습니다.','success');}
+        catch(err){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();toast('이미지 저장됨 — 카카오톡에서 직접 공유하세요','info');}
+      },'image/png');
+    }else{
+      const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=fname;a.click();
+      toast('이미지 저장 완료 — 카카오톡에 첨부하세요 💛','success');
+    }
+  }catch(e){toast('카톡용 이미지 실패: '+e.message,'error');}
+}
+async function saveRegListPDF44(){
+  const tid=ge('regTS')?.value||'';
+  if(!tid){toast('대회를 먼저 선택해 주세요','info');return;}
+  try{
+    await _loadH2c44();
+    if(!window.jspdf) await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    toast('PDF 생성 중...','info');
+    const wrap=await _buildRegListEl44();if(!wrap)return;
+    const selDiv=ge('regDS')?.value||'';
+    const t=G.tournaments.find(x=>x.id===tid);
+    const divLabel=selDiv?dl(selDiv):'전체';
+    const fname=`팀등록명단_${(t?.name||'').replace(/\s/g,'')}_${divLabel}_${new Date().toISOString().substring(0,10)}.pdf`;
+    await new Promise(r=>setTimeout(r,80));
+    const canvas=await html2canvas(wrap,{backgroundColor:'#f0f4fa',scale:3,useCORS:true,logging:false});
+    document.body.removeChild(wrap);
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pageW=pdf.internal.pageSize.getWidth(),pageH=pdf.internal.pageSize.getHeight(),margin=8;
+    const imgW=pageW-margin*2,imgH=canvas.height*imgW/canvas.width;
+    const imgData=canvas.toDataURL('image/png');
+    if(imgH<=pageH-margin*2){pdf.addImage(imgData,'PNG',margin,margin,imgW,imgH);}
+    else{let rem=imgH,pos=0;pdf.addImage(imgData,'PNG',margin,margin+pos,imgW,imgH);rem-=(pageH-margin*2);while(rem>0){pos-=(pageH-margin*2);pdf.addPage();pdf.addImage(imgData,'PNG',margin,margin+pos,imgW,imgH);rem-=(pageH-margin*2);}}
+    pdf.save(fname);
     toast('PDF 저장 완료 📄','success');
   }catch(e){toast('PDF 저장 실패: '+e.message,'error');}
 }
@@ -8406,13 +8727,14 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,toggleContactList,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
+  saveRegListImage44,saveRegListKakao44,saveRegListPDF44,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
   gDS,om,cm,toast,ge,esc,setRbSc,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
-  activateSlot,celebrateGroupComplete,refreshRunPreview,buildRouletteStrip,updateDrawMainPreview
-,
+  activateSlot,celebrateGroupComplete,refreshRunPreview,buildRouletteStrip,updateDrawMainPreview,
   toggleDivRubber,selRub,getDivRubbers,
+  addPresetDiv,addCustomDiv,etAddPreset,etAddCustomDiv,
   etToggleRub,etSelRub,etGetRubbers});
 
 document.addEventListener('DOMContentLoaded',()=>{
