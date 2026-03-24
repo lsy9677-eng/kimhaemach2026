@@ -6706,62 +6706,103 @@ function showP(name,club){
   sec.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function renderAllP(){
-  // Firebase 선수 + HIST_DATA 선수 합산
-  const fbNames=new Set(Object.keys(G.players));
+  // 2026 등록 명단 로드 (비동기면 캐시에서, 없으면 기본값)
+  const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || REGISTRY_2026_DEFAULT || [];
+  const fbKeys = Object.keys(G.players||{});
+
+  // HIST_DATA 선수 이름
   const histNames=new Set();
   HIST_DATA.forEach(t=>t.teams.forEach(tm=>(tm.players||[]).forEach(pn=>{if(pn&&pn.trim())histNames.add(pn.trim());})));
-  // 전체 선수 이름 목록 (중복 제거)
-  let allNames=[...new Set([...fbNames,...histNames])].sort();
 
-  // 필터 적용
-  if(PF.club) allNames=allNames.filter(n=>{
-    const p=G.players[n];
-    const bc=baseClub(PF.club);
-    // clubs 배열은 baseClub으로 저장됨, 혹시 A/B 포함된 경우도 처리
-    const fbClub=(p?.clubs||[]).some(cl=>cl===PF.club||cl===bc||baseClub(cl)===bc);
-    const histClub=HIST_DATA.some(t=>t.teams.some(tm=>(tm.club===PF.club||baseClub(tm.club)===bc)&&(tm.players||[]).includes(n)));
-    return fbClub||histClub;
-  });
-  if(PF.div) allNames=allNames.filter(n=>{
-    const p=G.players[n];
-    const fbDiv=(p?.history||[]).some(h=>h.div===PF.div);
-    const histDiv=HIST_DATA.some(t=>t.teams.some(tm=>tm.div===PF.div&&(tm.players||[]).includes(n)));
-    return fbDiv||histDiv;
-  });
-  if(PF.search) allNames=allNames.filter(n=>n.includes(PF.search));
+  // 2026 명단 선수 이름 셋
+  const reg2026Names = new Set(reg2026.map(m=>m.name));
 
-  const total=new Set([...fbNames,...histNames]).size;
-  const info=ge('pFInfo');if(info)info.textContent=allNames.length===total?`전체 ${total}명`:`필터: ${allNames.length}명 / 전체 ${total}명`;
+  // FB/HIST에는 있지만 2026 명단에 없는 선수
+  const otherNames = new Set([
+    ...fbKeys.map(k=>{ const pk=pKeyParse(k); return pk.name||k; }),
+    ...histNames
+  ].filter(n=>n && !reg2026Names.has(n)));
 
-  const rEl=ge('psResults');
-  if(rEl&&PF.search&&allNames.length>0&&allNames.length<=8){
-    rEl.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${allNames.map(n=>`<button class="btn btn-outline" style="font-size:.78rem;padding:4px 11px" onclick="showP('${n}')">${n}</button>`).join('')}</div>`;
-    if(allNames.length===1)showP(allNames[0]);
-  }else if(rEl)rEl.innerHTML='';
+  // 필터
+  const filterClub = PF.club ? normalizeClub(PF.club) : '';
+  const filterDiv = PF.div||'';
+  const filterSearch = PF.search||'';
 
-  const tb=ge('allPT');if(!tb)return;
-  if(!allNames.length){tb.innerHTML='<tr><td colspan="8"><div class="empty-state" style="padding:14px"><p>조건에 맞는 선수 없음</p></div></td></tr>';return;}
-
-  // 이름이 없거나 숫자/전화번호인 키는 제외
-  allNames = allNames.filter(rawKey=>{
-    const pk=pKeyParse(rawKey);
-    const name=cleanName(pk.name||rawKey);
-    if(!name || name.length < 2) return false;
-    if(/^\d+[-\d]*$/.test(name.replace(/\s/g,''))) return false;
+  // 2026 명단 필터
+  let filteredReg = reg2026.filter(m=>{
+    if(filterSearch && !(m.name||'').includes(filterSearch)) return false;
+    if(filterClub){
+      const nc=normalizeClub(m.club||'');
+      const sc=(m.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean);
+      if(nc!==filterClub && !sc.includes(filterClub)) return false;
+    }
+    if(filterDiv){
+      const name=m.name||'';
+      const nc=normalizeClub(m.club||'');
+      const fbKey=fbKeys.find(k=>{ const pk=pKeyParse(k); return pk.name===name&&(normalizeClub(pk.club||'')===nc||pk.club===nc); });
+      const p=fbKey?G.players[fbKey]:null;
+      const fbDiv=(p?.history||[]).some(h=>h.div===filterDiv);
+      const histDiv=HIST_DATA.some(t=>t.teams.some(tm=>tm.div===filterDiv&&(tm.players||[]).includes(name)));
+      if(!fbDiv&&!histDiv) return false;
+    }
     return true;
   });
 
-  tb.innerHTML=allNames.map(rawKey=>{
-    const pk=pKeyParse(rawKey);
-    const name=cleanName(pk.name||rawKey); // 전화번호 제거
-    const keyClub=pk.club||'';
-    const p=G.players[rawKey]||{clubs:[],history:[],wins:0,losses:0};
+  // 기타(비등록) 선수 필터
+  let filteredOther = [...otherNames].filter(name=>{
+    if(!name||name.length<2) return false;
+    if(/^\d+[-\d]*$/.test(name.replace(/\s/g,''))) return false;
+    if(filterSearch && !name.includes(filterSearch)) return false;
+    if(filterClub){
+      const fbKey=fbKeys.find(k=>{ const pk=pKeyParse(k); return pk.name===name&&normalizeClub(pk.club||'')===filterClub; });
+      const p=fbKey?G.players[fbKey]:null;
+      const fbMatch=p&&(p.clubs||[]).some(c=>normalizeClub(c)===filterClub);
+      const histMatch=HIST_DATA.some(t=>t.teams.some(tm=>normalizeClub(tm.club||'')===filterClub&&(tm.players||[]).includes(name)));
+      if(!fbMatch&&!histMatch) return false;
+    }
+    if(filterDiv){
+      const fbKey=fbKeys.find(k=>pKeyParse(k).name===name);
+      const p=fbKey?G.players[fbKey]:null;
+      const fbDiv=(p?.history||[]).some(h=>h.div===filterDiv);
+      const histDiv=HIST_DATA.some(t=>t.teams.some(tm=>tm.div===filterDiv&&(tm.players||[]).includes(name)));
+      if(!fbDiv&&!histDiv) return false;
+    }
+    return true;
+  }).sort();
+
+  const total = reg2026.length + otherNames.size;
+  const shown = filteredReg.length + filteredOther.length;
+  const info=ge('pFInfo');
+  if(info) info.textContent = shown===total
+    ? `2026년 등록 ${reg2026.length}명 + 기타 ${otherNames.size}명`
+    : `필터: ${shown}명 / 전체 ${total}명`;
+
+  // 검색 결과 버튼
+  const rEl=ge('psResults');
+  const searchMatches=[...filteredReg.map(m=>({name:m.name,club:m.club})),...filteredOther.map(n=>({name:n,club:''}))];
+  if(rEl&&filterSearch&&searchMatches.length>0&&searchMatches.length<=8){
+    rEl.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${searchMatches.map(({name,club})=>`<button class="btn btn-outline" style="font-size:.78rem;padding:4px 11px" onclick="showP('${esc(name)}','${esc(club)}')">${name}</button>`).join('')}</div>`;
+    if(searchMatches.length===1) showP(searchMatches[0].name, searchMatches[0].club);
+  } else if(rEl) rEl.innerHTML='';
+
+  const tb=ge('allPT'); if(!tb) return;
+  if(!shown){
+    tb.innerHTML='<tr><td colspan="8"><div class="empty-state" style="padding:14px"><p>조건에 맞는 선수 없음</p></div></td></tr>';
+    return;
+  }
+
+  // 행 생성 함수
+  const makeRow = (name, club, subClub, isReg) => {
+    const nc = normalizeClub(club||'');
+    // Firebase 키 탐색
+    const fbKey = fbKeys.find(k=>{ const pk=pKeyParse(k); return pk.name===name&&(normalizeClub(pk.club||'')===nc||pk.club===nc||!nc); })
+      || fbKeys.find(k=>pKeyParse(k).name===name);
+    const p = fbKey ? G.players[fbKey] : {clubs:[],history:[],wins:0,losses:0};
+    // 과거 기록
     const histRecs=[];
     HIST_DATA.forEach(t=>t.teams.forEach(tm=>{
-      if((tm.players||[]).some(pn=>pn===name)&&(!keyClub||tm.club===keyClub))histRecs.push({club:tm.club,div:tm.div,rank:tm.rank});
+      if((tm.players||[]).includes(name)) histRecs.push({club:tm.club,div:tm.div,rank:tm.rank});
     }));
-    const allClubs=[...new Set([...p.clubs,...(keyClub?[keyClub]:[]),...histRecs.map(r=>r.club)])];
-    const lc=keyClub||allClubs.slice(-1)[0]||'-';
     const cnt=(p.history||[]).length+histRecs.length;
     const dCnt={'금':0,'은':0,'동':0,'테린이':0};
     (p.history||[]).forEach(h=>{if(dCnt[h.div]!==undefined)dCnt[h.div]++;});
@@ -6769,16 +6810,23 @@ function renderAllP(){
     let br=null;
     (p.history||[]).forEach(h=>{if(h.rank&&(!br||h.rank<br))br=h.rank;});
     histRecs.forEach(r=>{if(r.rank&&(!br||r.rank<br))br=r.rank;});
-    const dispName=name;
-    const editArg=esc(rawKey);
-    return`<tr>
-      <td style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="showP('${esc(name)}','${esc(keyClub)}')">${dispName}${AD?` <button class="btn btn-outline" style="font-size:.6rem;padding:1px 6px;margin-left:4px" onclick="event.stopPropagation();openEditPlayer('${editArg}')">✏️</button>`:''}</td>
-      <td>${lc}</td><td>${cnt}</td>
+    const subBadge=subClub?`<span class="sub-badge" style="font-size:.62rem;margin-left:3px">${subClub}</span>`:'';
+    const notReg=isReg?'':' <span style="font-size:.6rem;color:var(--text3)">(미등록)</span>';
+    const editKey=fbKey||(nc?pKey(name,nc):name);
+    return `<tr>
+      <td style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="showP('${esc(name)}','${esc(nc)}')">${name}${notReg}${AD?` <button class="btn btn-outline" style="font-size:.6rem;padding:1px 6px;margin-left:4px" onclick="event.stopPropagation();openEditPlayer('${esc(editKey)}')">✏️</button>`:''}
+      </td>
+      <td>${nc||'-'}${subBadge}</td><td>${cnt}</td>
       <td>${dCnt['금']||'-'}</td><td>${dCnt['은']||'-'}</td>
       <td>${dCnt['동']||'-'}</td><td>${dCnt['테린이']||'-'}</td>
       <td>${br?`<span class="badge ${br===1?'bg-gold':br===2?'bg-silver':'bg-bronze'}">${br}위</span>`:'-'}</td>
     </tr>`;
-  }).join('');
+  };
+
+  tb.innerHTML = [
+    ...filteredReg.map(m=>makeRow(m.name, m.club, m.subClub||'', true)),
+    ...filteredOther.map(name=>makeRow(name,'','',false))
+  ].join('');
 }
 function openPD(name,club){
   // name에 "이름__클럽"이 들어와도 정상 표시되도록 보정
@@ -8873,7 +8921,10 @@ function switchPlayersTab(tab){
   });
   const recBtns=ge('playerPageBtns'); if(recBtns) recBtns.style.display=(tab==='records')?'flex':'none';
   if(tab==='registry') initRegistryTab();
-  if(tab==='records'){ renderAllP(); popCF(); }
+  if(tab==='records'){
+    // 2026 명단 로드 보장 후 렌더
+    loadRegistry(2026).then(()=>{ renderAllP(); popCF(); });
+  }
 }
 
 async function initRegistryTab(){
