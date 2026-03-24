@@ -3651,6 +3651,21 @@ function renderRL(){
   ge('regNo').value=teams.length+1;
   renderRegistrationRosterPreview('', '', [], '');
 }
+
+function renderRegistrationRosterPreview(club='', teamNo='', players=[], note=''){
+  const card = ge('regRosterPreviewCard');
+  const body = ge('regRosterPreviewBody');
+  if(!card || !body) return;
+  const safePlayers = Array.isArray(players) ? players.filter(Boolean) : [];
+  if(!club && !teamNo && safePlayers.length===0 && !note){
+    card.style.display='none';
+    body.innerHTML='';
+    return;
+  }
+  card.style.display='none';
+  body.innerHTML='';
+}
+
 async function registerTeam(){
   const tid=ge('regTS').value,div=ge('regDS').value,club=ge('regClub').value;
   if(!tid||!div){toast('대회/부서 선택','error');return;}
