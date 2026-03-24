@@ -1747,7 +1747,7 @@ async function initFB(){
 }
 async function loadMeta(){
   // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
-  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','어메이징':'아테','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올'};
+  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','어메이징':'아테','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
   try{
     const s=await getDoc(doc(db,'meta','config'));
     if(s.exists()){
@@ -1766,6 +1766,7 @@ async function loadMeta(){
       if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};
       if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
       if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];
+      else G.meta.memberRegistry2026=_normalizeMemberRegistry2026Rows(G.meta.memberRegistry2026);
     }else{
       await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});
     }
@@ -3153,15 +3154,53 @@ function _m26Name(s){
 function _m26Club(s){
   let club=(s||'').toString().trim();
   if(!club) return '';
+  const aliasMap={
+    '김해시시니어 클럽':'김해시니어',
+    '김해시시니어클럽':'김해시니어',
+    '김해시 시니어 클럽':'김해시니어',
+    '김해시 시니어클럽':'김해시니어',
+    '시니어클럽':'김해시니어'
+  };
+  if(aliasMap[club]) club=aliasMap[club];
   let m=club.match(/^(.+?)\s+([A-D])$/);
-  if(m && m[1].trim().length>=2) return m[1].trim();
-  m=club.match(/^(.+?)([A-D])$/);
-  if(m && /[가-힣]/.test(m[1]) && m[1].trim().length>=2) return m[1].trim();
-  return club;
+  if(m && m[1].trim().length>=2) club=m[1].trim();
+  else {
+    m=club.match(/^(.+?)([A-D])$/);
+    if(m && /[가-힣]/.test(m[1]) && m[1].trim().length>=2) club=m[1].trim();
+  }
+  if(aliasMap[club]) club=aliasMap[club];
+  return normalizeClub(club);
+}
+function _normalizeMemberRegistry2026Rows(rows){
+  const map=new Map();
+  (Array.isArray(rows)?rows:[]).forEach(r=>{
+    const name=(r?.name||'').toString().replace(/\s+/g,' ').trim();
+    const club=_m26Club(r?.club||'');
+    const phone=(r?.phone||'').toString().trim();
+    if(!name || !club) return;
+    const key=_m26Name(name)+'__'+club;
+    const prev=map.get(key)||{};
+    map.set(key,{ name, club, phone: phone || prev.phone || '', region:(r?.region||prev.region||'').toString().trim(), subClub:(r?.subClub||prev.subClub||'').toString().trim() });
+  });
+  return [...map.values()].sort((a,b)=>{
+    const c=(a.club||'').localeCompare((b.club||''),'ko');
+    if(c!==0) return c;
+    return (a.name||'').localeCompare((b.name||''),'ko');
+  });
+}
+function _setMemberRegistry2026(rows){
+  const normalized=_normalizeMemberRegistry2026Rows(rows);
+  if(!G.meta || typeof G.meta!=='object') G.meta={};
+  G.meta.memberRegistry2026=normalized;
+  return normalized;
 }
 function getMemberRegistry2026(){
-  if(!Array.isArray(G.meta.memberRegistry2026)) G.meta.memberRegistry2026=[];
-  return G.meta.memberRegistry2026;
+  const normalized=_setMemberRegistry2026(Array.isArray(G.meta?.memberRegistry2026)?G.meta.memberRegistry2026:[]);
+  if(!window.G_REGISTRY) window.G_REGISTRY={};
+  G_REGISTRY[2026]=normalized.map(r=>({name:r.name,club:r.club,phone:r.phone||'',region:r.region||'',subClub:r.subClub||''}));
+  if(!Array.isArray(window.REGISTRY_YEARS_LOADED)) window.REGISTRY_YEARS_LOADED=[];
+  if(!REGISTRY_YEARS_LOADED.includes(2026)) REGISTRY_YEARS_LOADED.push(2026);
+  return normalized;
 }
 function _m26YearFromTournament(t){
   const d=(t?.date||'').toString().trim();
@@ -3288,14 +3327,18 @@ async function applyMemberRegistry2026(rows, mode){
     incoming.forEach(r=>map.set(r.key,{name:r.name,club:_m26Club(r.club),phone:r.phone||''}));
     next=[...map.values()];
   }
-  G.meta.memberRegistry2026=next.map(r=>({name:r.name,club:_m26Club(r.club),phone:(r.phone||'').trim()}));
+  _setMemberRegistry2026(next.map(r=>({name:r.name,club:_m26Club(r.club),phone:(r.phone||'').trim()})));
+  _syncMetaToRegistry();
   sl(true);
   try{
     await saveMeta();
+    await saveRegistry(2026);
     toast(`명단 저장 완료 (${incoming.length}명) — 선수 데이터 동기화 중...`,'info');
     await syncRegistryMembersToPlayers(G.meta.memberRegistry2026);
     sl(false);
     renderMemberRegistry2026Status();
+    if(typeof renderRegistryTab==='function') renderRegistryTab();
+    if(typeof renderAllP==='function') renderAllP();
     if(ge('m26Text')) ge('m26Text').value='';
     toast(`${REG_YEAR} 등록 선수 명단 ${mode==='replace'?'전체교체':'추가'} 완료 (${incoming.length}명 반영)`,'success');
   }catch(e){ sl(false); toast('명단 저장 실패: '+e.message,'error'); }
@@ -6285,58 +6328,36 @@ function renderLiveRanking(tid,div,cont){
 
 
 function getAssociationSummary(){
-  const clubSet = new Set();
-  const playerSet = new Set();
+  const registryRows=getMemberRegistry2026();
+  const clubSet = new Set(registryRows.map(r=>_m26Club(r.club)).filter(Boolean));
   let teamCount = 0;
   let matchCount = 0;
 
-  Object.values(G.teams||{}).forEach(arr=>{
-    (arr||[]).forEach(team=>{
-      teamCount++;
-      const bc = baseClub(team?.club||'') || (team?.club||'');
-      if(bc) clubSet.add(bc);
-      (team?.players||[]).forEach(name=>{
-        const clean = cleanName(name);
-        if(clean) playerSet.add(`${normName(clean)}__${bc}`);
-      });
-    });
-  });
-
-  (HIST_DATA||[]).forEach(t=>{
-    (t.teams||[]).forEach(team=>{
-      teamCount++;
-      const bc = baseClub(team?.club||'') || (team?.club||'');
-      if(bc) clubSet.add(bc);
-      (team?.players||[]).forEach(name=>{
-        const clean = cleanName(name);
-        if(clean) playerSet.add(`${normName(clean)}__${bc}`);
-      });
-    });
-  });
-
+  Object.values(G.teams||{}).forEach(arr=>{ teamCount += (arr||[]).length; });
   Object.values(G.matches||{}).forEach(arr=>{
-    (arr||[]).forEach(m=>{
-      if(m && m.winner!==null && !m.bye) matchCount++;
-    });
-  });
-
-  Object.entries(G.players||{}).forEach(([k,p])=>{
-    const pk = pKeyParse(k);
-    const nm = cleanName(pk.name || p?.name || k);
-    const bc = baseClub(pk.club || p?.club || '') || (pk.club || p?.club || '');
-    if(nm) playerSet.add(`${normName(nm)}__${bc}`);
-    (p?.clubs||[]).forEach(c=>{
-      const b = baseClub(c)||c;
-      if(b) clubSet.add(b);
-    });
+    (arr||[]).forEach(m=>{ if(m && m.winner!==null && !m.bye) matchCount++; });
   });
 
   return {
     clubs: clubSet.size,
     teams: teamCount,
     matches: matchCount,
-    players: playerSet.size
+    players: registryRows.length
   };
+}
+function getCurrentTournamentSummary(t){
+  const teams=(t?.divisions||[]).flatMap(d=>G.teams?.[`${t.id}_${d}`]||[]);
+  const clubSet=new Set();
+  const playerSet=new Set();
+  teams.forEach(team=>{
+    const bc=baseClub(team?.club||'') || _m26Club(team?.club||'') || (team?.club||'');
+    if(bc) clubSet.add(bc);
+    (team?.players||[]).forEach(name=>{
+      const clean=cleanName(name);
+      if(clean) playerSet.add(`${normName(clean)}__${bc}`);
+    });
+  });
+  return { clubs:clubSet.size, teams:teams.length, players:playerSet.size, rows:teams };
 }
 
 function upDash(){
@@ -6349,15 +6370,13 @@ function upDash(){
 
   const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
   if(at){
-    const currentTeams=(at.divisions||[]).flatMap(d=>G.teams[at.id+'_'+d]||[]);
-    const currentClubSet=new Set(currentTeams.map(t=>baseClub(t.club)||t.club).filter(Boolean));
-    const currentTeamCount=currentTeams.length;
-    ge('heroClubs').innerHTML=`🏟 현재 참가 <b>${currentClubSet.size}</b>개 클럽`;
-    ge('heroTeams').innerHTML=`👥 현재 참가 <b>${currentTeamCount}</b>팀`;
+    const currentSummary=getCurrentTournamentSummary(at);
+    ge('heroClubs').innerHTML=`🏟 현재 참가 <b>${currentSummary.clubs}</b>개 클럽`;
+    ge('heroTeams').innerHTML=`👥 현재 <b>${currentSummary.teams}</b>팀 · <b>${currentSummary.players}</b>명`;
     const slbl={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
     ge('heroTitle').textContent=at.name;
     ge('heroStatus').textContent='📌 '+slbl[at.status];
-    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 현재 ${currentClubSet.size}개 클럽</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 현재 ${currentTeamCount}팀</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div><div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.75rem;padding:6px 12px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;
+    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:700;font-size:1rem">${at.name}</div><div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 현재 ${currentSummary.clubs}개 클럽</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 현재 ${currentSummary.teams}팀</span><span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🧍 전체 ${currentSummary.players}명</span></div><div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div><div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.75rem;padding:6px 12px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}</div>`;
     ge('homeDivStatus').innerHTML=at.divisions.map(d=>{
       const k=`${at.id}_${d}`;
       const tc=(G.teams[k]||[]).length;
@@ -8188,6 +8207,8 @@ window.renderHomeReg = function(){
   const count = getMemberRegistry2026().length;
   const el = ge('homeRegCount');
   if(el) el.textContent = count ? `총 ${count}명` : '';
+  const card=ge('sPlayers');
+  if(card) card.textContent=count;
 };
 
 // ── 등록선수 현황 모달 열기 (일반 회원용) ─────────────────────
@@ -8364,63 +8385,25 @@ window.deleteM26MgrRow = function(safeKey){
 
 // G.meta.memberRegistry2026 → G_REGISTRY[2026] 동기화 헬퍼
 // 삭제된 선수는 G_REGISTRY에서도 제거, 추가된 선수는 G_REGISTRY에 추가
-function _mergeRegistry2026Members(baseMembers, metaMembers){
-  const merged = [];
-  const map = new Map();
-
-  (baseMembers||[]).forEach(m=>{
-    const key = (m.name||'')+'__'+(m.club||'');
-    if(!map.has(key)){
-      const row = {...m};
-      delete row.__custom2026;
-      map.set(key, row);
-      merged.push(row);
-    }
-  });
-
-  // 기존 개별추가(custom) 항목은 모두 제거 후, 현재 meta 기준으로 다시 생성
-  for(let i=merged.length-1;i>=0;i--){
-    if(merged[i]?.__custom2026) merged.splice(i,1);
-  }
-
-  const cleanMerged = [];
-  const cleanMap = new Map();
-  merged.forEach(m=>{
-    const key = (m.name||'')+'__'+(m.club||'');
-    if(!cleanMap.has(key)){
-      cleanMap.set(key, m);
-      cleanMerged.push(m);
-    }
-  });
-
-  (metaMembers||[]).forEach(m=>{
-    const key=(m.name||'')+'__'+(m.club||'');
-    const prev = cleanMap.get(key);
-    const row = {
-      ...(prev||{}),
-      name:m.name||'',
-      club:m.club||'',
-      phone:m.phone||prev?.phone||'',
-      region:(prev?.region||m.region||''),
-      subClub:(prev?.subClub||m.subClub||''),
-      __custom2026:true
-    };
-    if(prev){
-      Object.assign(prev, row);
-    }else{
-      cleanMap.set(key, row);
-      cleanMerged.push(row);
-    }
-  });
-
-  return cleanMerged;
-}
-
 function _syncMetaToRegistry(){
   if(!window.G_REGISTRY) window.G_REGISTRY = {};
   const meta = G.meta.memberRegistry2026 || [];
-  const base = Array.isArray(G_REGISTRY[2026]) && G_REGISTRY[2026].length ? G_REGISTRY[2026] : (REGISTRY_2026_DEFAULT||[]);
-  G_REGISTRY[2026] = _mergeRegistry2026Members(base, meta);
+  const metaSet = new Set(meta.map(m=>(m.name||'')+'__'+(m.club||'')));
+
+  // 기존 G_REGISTRY[2026]에서 meta에 없는 항목 제거
+  const existing = (G_REGISTRY[2026] || []).filter(e=>
+    metaSet.has((e.name||'')+'__'+(e.club||''))
+  );
+  const existSet = new Set(existing.map(e=>(e.name||'')+'__'+(e.club||'')));
+
+  // meta에 있지만 G_REGISTRY에 없는 항목 추가 (region/subClub은 빈값으로)
+  meta.forEach(m=>{
+    const k=(m.name||'')+'__'+(m.club||'');
+    if(!existSet.has(k)) existing.push({name:m.name||'',club:m.club||'',region:'',subClub:''});
+  });
+
+  G_REGISTRY[2026] = existing;
+  // 캐시 무효화하여 다음 loadRegistry(2026) 때 G_REGISTRY[2026] 사용
   REGISTRY_YEARS_LOADED = REGISTRY_YEARS_LOADED.filter(y=>y!==2026);
   REGISTRY_YEARS_LOADED.push(2026);
 }
@@ -8445,7 +8428,10 @@ window.addM26MgrRow = function(){
   saveMeta().then(()=>{
     // Firebase memberRegistries/2026 도 함께 저장
     return saveRegistry(2026);
-  }).then(()=>{
+  }).then(async ()=>{
+    // 선수기록 시트용 players 데이터도 즉시 동기화
+    await syncRegistryMembersToPlayers([newEntry]);
+
     sl(false);
     ge('m26mgr_name').value='';
     ge('m26mgr_phone').value='';
@@ -8988,45 +8974,57 @@ function _isRegistryClean(members, version){
 }
 
 async function loadRegistry(year){
+  if(year===2026){
+    if(Array.isArray(G.meta?.memberRegistry2026) && G.meta.memberRegistry2026.length){
+      return getMemberRegistry2026();
+    }
+    try{
+      const snap=await getDoc(doc(db,'memberRegistries',String(year)));
+      if(snap.exists()){
+        const data = snap.data()||{};
+        const members = _normalizeMemberRegistry2026Rows(data.members||[]);
+        const version = data.version||'';
+        if(!_isRegistryClean(members, version) && !members.length){
+          console.warn('⚠️ memberRegistries/2026 오염/버전불일치 → 기본 명단으로 초기화');
+          _setMemberRegistry2026(REGISTRY_2026_DEFAULT.slice());
+          _syncMetaToRegistry();
+          await saveMeta();
+          await saveRegistry(2026);
+          toast('선수 명단을 최신 데이터로 초기화했습니다','info');
+        }else{
+          _setMemberRegistry2026(members);
+          _syncMetaToRegistry();
+          await saveMeta();
+          if(!_isRegistryClean(members, version)) await saveRegistry(2026);
+        }
+      }else{
+        _setMemberRegistry2026(REGISTRY_2026_DEFAULT.slice());
+        _syncMetaToRegistry();
+        await saveMeta();
+        await saveRegistry(2026);
+      }
+    }catch(e){
+      if(!Array.isArray(G.meta?.memberRegistry2026) || !G.meta.memberRegistry2026.length){
+        _setMemberRegistry2026(REGISTRY_2026_DEFAULT.slice());
+        _syncMetaToRegistry();
+      }
+    }
+    return getMemberRegistry2026();
+  }
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
   try{
     const snap=await getDoc(doc(db,'memberRegistries',String(year)));
-    if(snap.exists()){
-      const data = snap.data();
-      const members = data.members||[];
-      const version = data.version||'';
-      if(year===2026){
-        const meta = G?.meta?.memberRegistry2026 || [];
-        if(!_isRegistryClean(members, version)){
-          console.warn('⚠️ memberRegistries/2026 오염/버전불일치 → 기본명단 + 관리자 개별추가 명단으로 재구성');
-          G_REGISTRY[2026]=_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), meta);
-          await saveRegistry(2026);
-          toast('선수 명단을 최신 데이터 기준으로 복구했습니다','info');
-        } else {
-          G_REGISTRY[2026]=_mergeRegistry2026Members(members, meta);
-        }
-      } else {
-        G_REGISTRY[year]=members;
-      }
-    }
-    else if(year===2026){
-      G_REGISTRY[2026]=_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), G?.meta?.memberRegistry2026||[]);
-      await saveRegistry(2026);
-    }
-    else { G_REGISTRY[year]=[]; }
+    if(snap.exists()) G_REGISTRY[year]=(snap.data()?.members)||[];
+    else G_REGISTRY[year]=[];
     REGISTRY_YEARS_LOADED.push(year);
   }catch(e){
-    G_REGISTRY[year]=(year===2026)?_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), G?.meta?.memberRegistry2026||[]):[];
+    G_REGISTRY[year]=[];
     REGISTRY_YEARS_LOADED.push(year);
   }
   return G_REGISTRY[year]||[];
 }
 async function saveRegistry(year){
-  let members=G_REGISTRY[year]||[];
-  if(year===2026){
-    members = _mergeRegistry2026Members(members, G?.meta?.memberRegistry2026||[]);
-    G_REGISTRY[2026] = members;
-  }
+  const members=G_REGISTRY[year]||[];
   await setDoc(doc(db,'memberRegistries',String(year)),{
     members, version: year===2026 ? REGISTRY_VERSION : '', updatedAt:serverTimestamp()
   });
@@ -9046,10 +9044,11 @@ const CLUB_NORMALIZE_MAP={
   't-one':'T-ONE','t-One':'T-ONE','T-One':'T-ONE','tOne':'T-ONE','tone':'T-ONE','T-one':'T-ONE',
   'up테니스':'UP테니스','UP 테니스':'UP테니스','up 테니스':'UP테니스','Up테니스':'UP테니스','up':'UP테니스',
   'udt':'UDT','Udt':'UDT',
+  '김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어',
 };
 function normalizeClub(club){
   if(!club) return '';
-  const t=club.trim();
+  const t=club.trim().replace(/\s+/g,' ');
   if(CLUB_NORMALIZE_MAP[t]) return CLUB_NORMALIZE_MAP[t];
   const lo=t.toLowerCase();
   for(const [k,v] of Object.entries(CLUB_NORMALIZE_MAP)){ if(k.toLowerCase()===lo) return v; }
