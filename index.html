@@ -8364,25 +8364,63 @@ window.deleteM26MgrRow = function(safeKey){
 
 // G.meta.memberRegistry2026 → G_REGISTRY[2026] 동기화 헬퍼
 // 삭제된 선수는 G_REGISTRY에서도 제거, 추가된 선수는 G_REGISTRY에 추가
+function _mergeRegistry2026Members(baseMembers, metaMembers){
+  const merged = [];
+  const map = new Map();
+
+  (baseMembers||[]).forEach(m=>{
+    const key = (m.name||'')+'__'+(m.club||'');
+    if(!map.has(key)){
+      const row = {...m};
+      delete row.__custom2026;
+      map.set(key, row);
+      merged.push(row);
+    }
+  });
+
+  // 기존 개별추가(custom) 항목은 모두 제거 후, 현재 meta 기준으로 다시 생성
+  for(let i=merged.length-1;i>=0;i--){
+    if(merged[i]?.__custom2026) merged.splice(i,1);
+  }
+
+  const cleanMerged = [];
+  const cleanMap = new Map();
+  merged.forEach(m=>{
+    const key = (m.name||'')+'__'+(m.club||'');
+    if(!cleanMap.has(key)){
+      cleanMap.set(key, m);
+      cleanMerged.push(m);
+    }
+  });
+
+  (metaMembers||[]).forEach(m=>{
+    const key=(m.name||'')+'__'+(m.club||'');
+    const prev = cleanMap.get(key);
+    const row = {
+      ...(prev||{}),
+      name:m.name||'',
+      club:m.club||'',
+      phone:m.phone||prev?.phone||'',
+      region:(prev?.region||m.region||''),
+      subClub:(prev?.subClub||m.subClub||''),
+      __custom2026:true
+    };
+    if(prev){
+      Object.assign(prev, row);
+    }else{
+      cleanMap.set(key, row);
+      cleanMerged.push(row);
+    }
+  });
+
+  return cleanMerged;
+}
+
 function _syncMetaToRegistry(){
   if(!window.G_REGISTRY) window.G_REGISTRY = {};
   const meta = G.meta.memberRegistry2026 || [];
-  const metaSet = new Set(meta.map(m=>(m.name||'')+'__'+(m.club||'')));
-
-  // 기존 G_REGISTRY[2026]에서 meta에 없는 항목 제거
-  const existing = (G_REGISTRY[2026] || []).filter(e=>
-    metaSet.has((e.name||'')+'__'+(e.club||''))
-  );
-  const existSet = new Set(existing.map(e=>(e.name||'')+'__'+(e.club||'')));
-
-  // meta에 있지만 G_REGISTRY에 없는 항목 추가 (region/subClub은 빈값으로)
-  meta.forEach(m=>{
-    const k=(m.name||'')+'__'+(m.club||'');
-    if(!existSet.has(k)) existing.push({name:m.name||'',club:m.club||'',region:'',subClub:''});
-  });
-
-  G_REGISTRY[2026] = existing;
-  // 캐시 무효화하여 다음 loadRegistry(2026) 때 G_REGISTRY[2026] 사용
+  const base = Array.isArray(G_REGISTRY[2026]) && G_REGISTRY[2026].length ? G_REGISTRY[2026] : (REGISTRY_2026_DEFAULT||[]);
+  G_REGISTRY[2026] = _mergeRegistry2026Members(base, meta);
   REGISTRY_YEARS_LOADED = REGISTRY_YEARS_LOADED.filter(y=>y!==2026);
   REGISTRY_YEARS_LOADED.push(2026);
 }
@@ -8957,26 +8995,38 @@ async function loadRegistry(year){
       const data = snap.data();
       const members = data.members||[];
       const version = data.version||'';
-      if(year===2026 && !_isRegistryClean(members, version)){
-        console.warn('⚠️ memberRegistries/2026 오염/버전불일치 → 내장 데이터로 초기화');
-        G_REGISTRY[2026]=REGISTRY_2026_DEFAULT.slice();
-        await saveRegistry(2026);
-        toast('선수 명단을 최신 데이터로 초기화했습니다','info');
+      if(year===2026){
+        const meta = G?.meta?.memberRegistry2026 || [];
+        if(!_isRegistryClean(members, version)){
+          console.warn('⚠️ memberRegistries/2026 오염/버전불일치 → 기본명단 + 관리자 개별추가 명단으로 재구성');
+          G_REGISTRY[2026]=_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), meta);
+          await saveRegistry(2026);
+          toast('선수 명단을 최신 데이터 기준으로 복구했습니다','info');
+        } else {
+          G_REGISTRY[2026]=_mergeRegistry2026Members(members, meta);
+        }
       } else {
         G_REGISTRY[year]=members;
       }
     }
-    else if(year===2026){ G_REGISTRY[2026]=REGISTRY_2026_DEFAULT.slice(); await saveRegistry(2026); }
+    else if(year===2026){
+      G_REGISTRY[2026]=_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), G?.meta?.memberRegistry2026||[]);
+      await saveRegistry(2026);
+    }
     else { G_REGISTRY[year]=[]; }
     REGISTRY_YEARS_LOADED.push(year);
   }catch(e){
-    G_REGISTRY[year]=(year===2026)?REGISTRY_2026_DEFAULT.slice():[];
+    G_REGISTRY[year]=(year===2026)?_mergeRegistry2026Members(REGISTRY_2026_DEFAULT.slice(), G?.meta?.memberRegistry2026||[]):[];
     REGISTRY_YEARS_LOADED.push(year);
   }
   return G_REGISTRY[year]||[];
 }
 async function saveRegistry(year){
-  const members=G_REGISTRY[year]||[];
+  let members=G_REGISTRY[year]||[];
+  if(year===2026){
+    members = _mergeRegistry2026Members(members, G?.meta?.memberRegistry2026||[]);
+    G_REGISTRY[2026] = members;
+  }
   await setDoc(doc(db,'memberRegistries',String(year)),{
     members, version: year===2026 ? REGISTRY_VERSION : '', updatedAt:serverTimestamp()
   });
