@@ -3208,7 +3208,10 @@ async function syncRegistryMembersToPlayers(rows){
     const p=G.players[key];
     p.key=key; p.name=name; p.club=club;
     if(!Array.isArray(p.clubs)) p.clubs=[];
-    if(!p.clubs.includes(club)) p.clubs.push(club);
+    const clubSet = new Set((p.clubs||[]).map(c=>normalizeClub(c)).filter(Boolean));
+    clubSet.add(normalizeClub(club));
+    (String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean)).forEach(sc=>clubSet.add(sc));
+    p.clubs = [...clubSet];
     if((r.phone||'').trim()) p.phone=(r.phone||'').trim();
     keys.push(key);
   });
@@ -6579,7 +6582,18 @@ function formatTournamentTitle(tname, dateStr){
 
 function getPlayerKeyByName(name,club){
   const n=normName(name);
-  if(club){const k1=pKey(name,club);if(G.players[k1])return k1;}
+  const wantClub = normalizeClub(club||'');
+  if(wantClub){
+    const k1=pKey(name,wantClub);
+    if(G.players[k1]) return k1;
+    for(const k of Object.keys(G.players||{})){
+      const pk=pKeyParse(k);
+      if(normName(pk.name)!==n) continue;
+      const p=G.players[k]||{};
+      const clubs=[normalizeClub(pk.club||''), ...(Array.isArray(p.clubs)?p.clubs.map(c=>normalizeClub(c)):[])].filter(Boolean);
+      if(clubs.includes(wantClub)) return k;
+    }
+  }
   for(const k of Object.keys(G.players||{})){
     const pk=pKeyParse(k);
     if(normName(pk.name)===n) return k;
@@ -6632,6 +6646,14 @@ function allPlayerNames(){
       });
     });
   });
+  (getMemberRegistry2026()||[]).forEach(r=>{
+    const name=(r.name||'').trim();
+    const club=normalizeClub(r.club||'');
+    if(name){
+      set.add(club ? pKey(name, club) : name);
+      String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean).forEach(sc=>set.add(pKey(name, sc)));
+    }
+  });
   return [...set];
 }
 function getPlayerForDisplay(name){
@@ -6649,15 +6671,42 @@ function phint(inp,num){
   if(!v){ h.innerHTML=''; return; }
 
   const nv = normName(v);
+  const selectedClub = normalizeClub(ge('regClub')?.value||'');
 
   // 후보 목록: Firebase 키(name__club)가 섞여 있어도 "표시 이름"은 name만 사용
   const rawNames = allPlayerNames();
+  const seen = new Set();
   const cand = rawNames.map(raw=>{
     const pk = pKeyParse(raw);
-    const disp = cleanName(pk.name||raw);        // 화면/입력에 넣을 값(이름만)
-    const club = (pk.club||'').trim();           // 키에 포함된 클럽(있으면)
-    return { raw, disp, club };
-  }).filter(x=> normName(x.disp).includes(nv));
+    const disp = cleanName(pk.name||raw);
+    const club = normalizeClub(pk.club||'');
+    const key = getPlayerKeyByName(disp, club||selectedClub||'');
+    const fb = key ? G.players[key] : null;
+    const clubs = [...new Set([
+      club,
+      ...(Array.isArray(fb?.clubs)?fb.clubs.map(c=>normalizeClub(c)):[])
+    ].filter(Boolean))];
+    const registryRow = (getMemberRegistry2026()||[]).find(r=>normName(r.name)===normName(disp) && (
+      !selectedClub || normalizeClub(r.club||'')===selectedClub || String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).includes(selectedClub)
+    )) || (getMemberRegistry2026()||[]).find(r=>normName(r.name)===normName(disp));
+    if(registryRow){
+      const mainClub = normalizeClub(registryRow.club||'');
+      if(mainClub) clubs.unshift(mainClub);
+      String(registryRow.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean).forEach(sc=>clubs.push(sc));
+    }
+    const uniqClubs = [...new Set(clubs.filter(Boolean))];
+    const matchClub = selectedClub && uniqClubs.includes(selectedClub);
+    const displayClub = matchClub ? selectedClub : (uniqClubs[0] || getLastClubFromHist(disp) || '');
+    return { raw, disp, club:displayClub, clubs:uniqClubs, matchClub };
+  }).filter(x=> normName(x.disp).includes(nv)).sort((a,b)=>{
+    if(!!b.matchClub !== !!a.matchClub) return Number(b.matchClub)-Number(a.matchClub);
+    return a.disp.localeCompare(b.disp,'ko');
+  }).filter(x=>{
+    const dedupeKey = `${normName(x.disp)}|${x.club||''}`;
+    if(seen.has(dedupeKey)) return false;
+    seen.add(dedupeKey);
+    return true;
+  });
 
   if(!cand.length){
     h.innerHTML='<span style="color:var(--text3);font-size:.72rem">첫 참가 선수</span>';
@@ -6665,15 +6714,11 @@ function phint(inp,num){
   }
 
   h.innerHTML = cand.slice(0,4).map(x=>{
-    // Firebase에 같은 이름이 여러 클럽으로 존재할 수 있으니, 표시용 클럽은 players 데이터 우선
-    const key = getPlayerKeyByName(x.disp, x.club||'');
-    const fb = key ? G.players[key] : null;
-    const clubDisp = (fb?.clubs?.slice(-1)[0]) || x.club || getLastClubFromHist(x.disp) || '';
-
-    // 클릭하면 "이름만" 입력되도록 고정 (name__club 방지)
+    const clubDisp = x.club || '';
+    const matchedBadge = x.matchClub && selectedClub ? `<span style="font-size:.64rem;color:#7c3aed;font-weight:700"> [현재클럽]</span>` : '';
     return `<span onclick="ge('p${num}').value='${x.disp}';ge('h${num}').innerHTML=''"
       style="cursor:pointer;color:var(--primary);font-size:.73rem;text-decoration:underline">
-      ${x.disp}${clubDisp?`(${clubDisp})`:''}
+      ${x.disp}${clubDisp?`(${clubDisp})`:''}${matchedBadge}
     </span>`;
   }).join(' ');
 }
