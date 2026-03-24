@@ -1745,7 +1745,32 @@ async function initFB(){
     if(window.renderHomeReg) window.renderHomeReg();
   }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
 }
-async function loadMeta(){try{const s=await getDoc(doc(db,'meta','config'));if(s.exists()){const d=s.data();G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},...d};if(d.clubs)G.clubs=d.clubs;if(!G.meta.adminPhone)G.meta.adminPhone='';if(!G.meta.regPw)G.meta.regPw='202601';if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];}else await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});}catch(e){}}
+async function loadMeta(){
+  // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
+  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','어메이징':'아테','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올'};
+  try{
+    const s=await getDoc(doc(db,'meta','config'));
+    if(s.exists()){
+      const d=s.data();
+      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},...d};
+      if(d.clubs){
+        // Firebase 클럽 목록을 정규화된 2026 명단 기준으로 교체
+        const normalized=d.clubs.map(c=>CLUB_RENAME[c]||c);
+        // 2026 명단에 있는 클럽만 유지 + 정규화된 이름으로
+        const reg2026Clubs=["LTC","T-ONE","UDT","UP테니스","경운","국제","금병","김해시니어","남산","능동","단디","더원","동김해","돛대","로패","모던","목련","불사조","삼계","수로","써올","아테","영운","웅진","원도심","장유여성","중앙","테사모","포텐이스","포티올","하모니"];
+        const merged=[...new Set([...reg2026Clubs,...normalized])].sort((a,b)=>a.localeCompare(b,'ko'));
+        G.clubs=reg2026Clubs; // 2026 명단 기준 고정
+      }
+      if(!G.meta.adminPhone)G.meta.adminPhone='';
+      if(!G.meta.regPw)G.meta.regPw='202601';
+      if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};
+      if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
+      if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];
+    }else{
+      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});
+    }
+  }catch(e){}
+}
 async function saveMeta(){
   try{
     await setDoc(doc(db,'meta','config'),{
