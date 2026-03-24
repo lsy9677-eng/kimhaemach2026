@@ -1757,7 +1757,7 @@ async function loadMeta(){
         // Firebase 클럽 목록을 정규화된 2026 명단 기준으로 교체
         const normalized=d.clubs.map(c=>CLUB_RENAME[c]||c);
         // 2026 명단에 있는 클럽만 유지 + 정규화된 이름으로
-        const reg2026Clubs=["LTC","T-ONE","UDT","UP테니스","경운","국제","금병","김해시니어","남산","능동","단디","더원","동김해","돛대","로패","모던","목련","불사조","삼계","수로","써올","아테","영운","웅진","원도심","장유여성","중앙","테사모","포텐이스","포티올","하모니"];
+        const reg2026Clubs=["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"];
         const merged=[...new Set([...reg2026Clubs,...normalized])].sort((a,b)=>a.localeCompare(b,'ko'));
         G.clubs=reg2026Clubs; // 2026 명단 기준 고정
       }
@@ -6711,7 +6711,7 @@ function showP(name,club){
 }
 function renderAllP(){
   // 2026 등록 명단 로드 (비동기면 캐시에서, 없으면 기본값)
-  const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || REGISTRY_2026_DEFAULT || [];
+  const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
   const fbKeys = Object.keys(G.players||{});
 
   // HIST_DATA 선수 이름
@@ -8302,71 +8302,87 @@ window.renderM26MgrList = function(){
   }
 
   listEl.innerHTML = filtered.map((r,i)=>{
-    const realIdx = rows.indexOf(r);
-    return `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border);font-size:.8rem" id="m26row_${realIdx}">
-      <input class="form-input" value="${r.name||''}" placeholder="이름" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26n_${realIdx}">
-      <select class="form-input" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26c_${realIdx}">
+    const safeKey = encodeURIComponent((r.name||'')+'__'+(r.club||''));
+    return `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border);font-size:.8rem">
+      <input class="form-input" value="${r.name||''}" placeholder="이름" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26n_${i}">
+      <select class="form-input" style="flex:1.2;padding:4px 6px;font-size:.78rem" id="m26c_${i}">
         ${G.clubs.map(c=>`<option value="${c}"${_m26Club(r.club)===c?' selected':''}>${c}</option>`).join('')}
       </select>
-      <input class="form-input" value="${r.phone||''}" placeholder="전화번호" style="flex:1.3;padding:4px 6px;font-size:.78rem" id="m26p_${realIdx}">
-      <button class="btn btn-primary" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.saveM26MgrRow(${realIdx})">저장</button>
-      <button class="btn btn-danger" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.deleteM26MgrRow(${realIdx})">삭제</button>
+      <input class="form-input" value="${r.phone||''}" placeholder="전화번호" style="flex:1.3;padding:4px 6px;font-size:.78rem" id="m26p_${i}">
+      <button class="btn btn-primary" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.saveM26MgrRow(${i},'${safeKey}')">저장</button>
+      <button class="btn btn-danger" style="padding:3px 8px;font-size:.75rem;white-space:nowrap" onclick="window.deleteM26MgrRow('${safeKey}')">삭제</button>
     </div>`;
   }).join('');
 };
 
-window.saveM26MgrRow = function(idx){
+window.saveM26MgrRow = function(i, safeKey){
   const reg = getMemberRegistry2026();
-  const name = (ge(`m26n_${idx}`)?.value||'').trim();
-  const club = (ge(`m26c_${idx}`)?.value||'').trim();
-  const phone = (ge(`m26p_${idx}`)?.value||'').trim();
+  const origKey = decodeURIComponent(safeKey||'');
+  // 원본 배열에서 키로 찾기
+  const origIdx = reg.findIndex(r=>(r.name||'')+'__'+(r.club||'') === origKey);
+  if(origIdx < 0){ toast('선수를 찾을 수 없습니다','error'); return; }
+  const name = (ge(`m26n_${i}`)?.value||'').trim();
+  const club = (ge(`m26c_${i}`)?.value||'').trim();
+  const phone = (ge(`m26p_${i}`)?.value||'').trim();
   if(!name||!club){ toast('이름과 클럽을 입력하세요','error'); return; }
-  reg[idx] = { name, club:_m26Club(club), phone };
+  reg[origIdx] = { name, club:_m26Club(club), phone };
   G.meta.memberRegistry2026 = reg;
-  // G_REGISTRY 동기화
   _syncMetaToRegistry();
   sl(true);
   saveMeta().then(()=>saveRegistry(2026)).then(()=>{
     sl(false);
     window.renderM26MgrList();
     renderMemberRegistry2026Status();
+    // ✅ 선수현황 탭 즉시 갱신
+    if(typeof renderRegistryTab==='function') renderRegistryTab();
+    if(typeof renderAllP==='function') renderAllP();
     toast(`${name} 수정 완료`,'success');
   }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
 };
 
-window.deleteM26MgrRow = function(idx){
+window.deleteM26MgrRow = function(safeKey){
   const reg = getMemberRegistry2026();
-  const name = reg[idx]?.name||'';
+  const origKey = decodeURIComponent(safeKey||'');
+  const origIdx = reg.findIndex(r=>(r.name||'')+'__'+(r.club||'') === origKey);
+  if(origIdx < 0){ toast('선수를 찾을 수 없습니다','error'); return; }
+  const name = reg[origIdx]?.name||'';
   if(!confirm(`${name} 선수를 삭제할까요?`)) return;
-  reg.splice(idx,1);
+  reg.splice(origIdx, 1);
   G.meta.memberRegistry2026 = reg;
-  // G_REGISTRY 동기화
   _syncMetaToRegistry();
   sl(true);
   saveMeta().then(()=>saveRegistry(2026)).then(()=>{
     sl(false);
     window.renderM26MgrList();
     renderMemberRegistry2026Status();
+    // ✅ 선수현황 탭 즉시 갱신
+    if(typeof renderRegistryTab==='function') renderRegistryTab();
+    if(typeof renderAllP==='function') renderAllP();
     toast(`${name} 삭제 완료`,'success');
   }).catch(e=>{ sl(false); toast('삭제 실패: '+e.message,'error'); });
 };
 
 // G.meta.memberRegistry2026 → G_REGISTRY[2026] 동기화 헬퍼
+// 삭제된 선수는 G_REGISTRY에서도 제거, 추가된 선수는 G_REGISTRY에 추가
 function _syncMetaToRegistry(){
   if(!window.G_REGISTRY) window.G_REGISTRY = {};
   const meta = G.meta.memberRegistry2026 || [];
-  // G_REGISTRY[2026]에서 meta에 없는 항목 제거, meta 기준으로 갱신
-  const existing = G_REGISTRY[2026] || [];
-  const metaSet = new Set(meta.map(m=>m.name+'__'+(m.club||'')));
-  // meta에 있는 것은 유지/추가, 없는 것은 제거
-  const filtered = existing.filter(e=>metaSet.has(e.name+'__'+(e.club||'')));
-  // meta 항목 중 G_REGISTRY에 없는 것 추가
-  const existSet = new Set(filtered.map(e=>e.name+'__'+(e.club||'')));
+  const metaSet = new Set(meta.map(m=>(m.name||'')+'__'+(m.club||'')));
+
+  // 기존 G_REGISTRY[2026]에서 meta에 없는 항목 제거
+  const existing = (G_REGISTRY[2026] || []).filter(e=>
+    metaSet.has((e.name||'')+'__'+(e.club||''))
+  );
+  const existSet = new Set(existing.map(e=>(e.name||'')+'__'+(e.club||'')));
+
+  // meta에 있지만 G_REGISTRY에 없는 항목 추가 (region/subClub은 빈값으로)
   meta.forEach(m=>{
-    const k=m.name+'__'+(m.club||'');
-    if(!existSet.has(k)) filtered.push({name:m.name,club:m.club||'',region:'',subClub:''});
+    const k=(m.name||'')+'__'+(m.club||'');
+    if(!existSet.has(k)) existing.push({name:m.name||'',club:m.club||'',region:'',subClub:''});
   });
-  G_REGISTRY[2026] = filtered;
+
+  G_REGISTRY[2026] = existing;
+  // 캐시 무효화하여 다음 loadRegistry(2026) 때 G_REGISTRY[2026] 사용
   REGISTRY_YEARS_LOADED = REGISTRY_YEARS_LOADED.filter(y=>y!==2026);
   REGISTRY_YEARS_LOADED.push(2026);
 }
@@ -8397,6 +8413,9 @@ window.addM26MgrRow = function(){
     ge('m26mgr_phone').value='';
     window.renderM26MgrList();
     renderMemberRegistry2026Status();
+    // ✅ 선수현황 탭 즉시 갱신
+    if(typeof renderRegistryTab==='function') renderRegistryTab();
+    if(typeof renderAllP==='function') renderAllP();
     toast(`${name} 추가 완료`,'success');
   }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
 };
@@ -8916,11 +8935,37 @@ const REGISTRY_2026_DEFAULT = [{"name": "강민지", "club": "T-ONE", "region": 
 let G_REGISTRY = {};
 let REGISTRY_YEARS_LOADED = [];
 
+// 2026 명단 정상 클럽 셋
+const VALID_CLUBS_2026 = new Set(["LTC","T-ONE","UDT","UP테니스","경운","국제","금병","김해시니어","남산","능동","단디","더원","동김해","돛대","로패","모던","목련","불사조","삼계","수로","써올","아테","영운","웅진","원도심","장유여성","중앙","테사모","포텐이스","포티올","하모니"]);
+const REGISTRY_VERSION = 'v20260324'; // 버전 변경 시 Firebase 데이터 강제 초기화
+
+function _isRegistryClean(members, version){
+  if(!members||!members.length) return false;
+  // 버전 불일치 → 오염 판정
+  if(version !== REGISTRY_VERSION) return false;
+  const total = members.length;
+  const validClub = members.filter(m=>VALID_CLUBS_2026.has(m.club||'')).length;
+  const hasRegion = members.filter(m=>m.region&&m.region.trim()).length;
+  return (validClub/total) >= 0.95 && (hasRegion/total) >= 0.95;
+}
+
 async function loadRegistry(year){
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
   try{
     const snap=await getDoc(doc(db,'memberRegistries',String(year)));
-    if(snap.exists()){ G_REGISTRY[year]=snap.data().members||[]; }
+    if(snap.exists()){
+      const data = snap.data();
+      const members = data.members||[];
+      const version = data.version||'';
+      if(year===2026 && !_isRegistryClean(members, version)){
+        console.warn('⚠️ memberRegistries/2026 오염/버전불일치 → 내장 데이터로 초기화');
+        G_REGISTRY[2026]=REGISTRY_2026_DEFAULT.slice();
+        await saveRegistry(2026);
+        toast('선수 명단을 최신 데이터로 초기화했습니다','info');
+      } else {
+        G_REGISTRY[year]=members;
+      }
+    }
     else if(year===2026){ G_REGISTRY[2026]=REGISTRY_2026_DEFAULT.slice(); await saveRegistry(2026); }
     else { G_REGISTRY[year]=[]; }
     REGISTRY_YEARS_LOADED.push(year);
@@ -8932,7 +8977,9 @@ async function loadRegistry(year){
 }
 async function saveRegistry(year){
   const members=G_REGISTRY[year]||[];
-  await setDoc(doc(db,'memberRegistries',String(year)),{members,updatedAt:serverTimestamp()});
+  await setDoc(doc(db,'memberRegistries',String(year)),{
+    members, version: year===2026 ? REGISTRY_VERSION : '', updatedAt:serverTimestamp()
+  });
 }
 async function getRegistryYears(){
   try{
@@ -9005,12 +9052,15 @@ async function renderRegistryTab(){
   const statEl=ge('regTabStat');
   if(statEl) statEl.innerHTML=`총 <b>${filtered.length}</b>명 · <b>${clubCount}</b>클럽 · 부클럽 <b>${subCount}</b>명`;
   const clubMap=new Map();
-  filtered.forEach(m=>{ const c=m.club||'기타'; if(!clubMap.has(c)) clubMap.set(c,[]); clubMap.get(c).push(m); });
+  // 클럽별 그룹핑 (모든 선수 표시)
+  filtered.forEach(m=>{
+    const c=m.club||'기타'; if(!clubMap.has(c)) clubMap.set(c,[]); clubMap.get(c).push(m);
+  });
   const body=ge('regTabBody');
   if(!body) return;
   if(!clubMap.size){ body.innerHTML='<div class="empty-state card"><p>등록된 선수가 없습니다</p></div>'; return; }
   const regionMap=new Map();
-  [...clubMap.entries()].forEach(([club,ms])=>{ const region=ms[0]?.region||'기타'; if(!regionMap.has(region)) regionMap.set(region,[]); regionMap.get(region).push({club,members:ms}); });
+  [...clubMap.entries()].forEach(([club,ms])=>{ const region=ms[0]?.region||'미확인'; if(!regionMap.has(region)) regionMap.set(region,[]); regionMap.get(region).push({club,members:ms}); });
   body.innerHTML=[...regionMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko')).map(([region,clubList])=>{
     const regionTotal=clubList.reduce((s,c)=>s+c.members.length,0);
     return `<div style="margin-bottom:16px">
