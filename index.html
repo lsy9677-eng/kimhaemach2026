@@ -501,7 +501,6 @@ body{overflow-x:hidden;}
 .players-tab-bar{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px;}
 .players-tab-btn{padding:8px 18px;font-size:.85rem;font-weight:600;color:var(--text2);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;}
 .players-tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:800;}
-/* 선수등록 현황 */
 .reg-club-card{background:var(--panel2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;}
 .reg-club-header{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--primary-dark);color:#fff;cursor:pointer;gap:8px;}
 .reg-club-body{padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px;}
@@ -510,7 +509,6 @@ body{overflow-x:hidden;}
 .reg-member-chip.has-sub{border-color:#c084fc;background:#fdf4ff;color:#6b21a8;}
 .reg-member-chip.has-sub:hover{background:#e9d5ff;}
 .sub-badge{font-size:.65rem;background:#7c3aed;color:#fff;border-radius:10px;padding:1px 5px;font-weight:700;}
-.reg-region-tag{font-size:.68rem;background:rgba(255,255,255,.18);border-radius:8px;padding:1px 7px;}
 #page-players .table-wrap table th:nth-child(1),
 #page-players .table-wrap table td:nth-child(1){text-align:left !important;}
 /* ✅ 선수기록 소속(클럽) 열: 항상 가로로 표시 */
@@ -646,7 +644,7 @@ body{overflow-x:hidden;}
     <div class="nav-tab" onclick="showPage('tournament')" data-page="tournament">🏆 대회관리</div>
     <div class="nav-tab" onclick="showPage('register')" data-page="register">📋 팀등록 <span class="nbadge" id="regBadge">0</span></div>
     <div class="nav-tab" onclick="showPage('bracket')" data-page="bracket">🎲 대진표</div>
-    <div class="nav-tab ao-players-tab" onclick="showPage('players')" data-page="players">🧾 선수현황</div>
+    <div class="nav-tab" onclick="showPage('players')" data-page="players">🧾 선수현황</div>
     <div class="nav-tab" onclick="showPage('ranking')" data-page="ranking">📋 시합결과</div>
   </nav>
   <div class="swipe-indicator" id="swipeDots"><div class="swipe-dot active" data-page="home"></div><div class="swipe-dot" data-page="tournament"></div><div class="swipe-dot" data-page="register"></div><div class="swipe-dot" data-page="bracket"></div><div class="swipe-dot" data-page="players"></div><div class="swipe-dot" data-page="ranking"></div></div>
@@ -684,7 +682,7 @@ body{overflow-x:hidden;}
 
   <div class="card fade-in"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
 
-  <!-- 등록선수 현황 버튼 → 선수등록 현황 탭으로 바로 이동 -->
+  <!-- 등록선수 현황 버튼 (항상 표시) -->
   <div class="card fade-in" id="homeRegViewerCard" style="padding:12px 16px">
     <button class="btn btn-outline" style="width:100%;padding:12px;font-size:.88rem;font-weight:600" onclick="showPage('players');switchPlayersTab('registry')">
       🧾 <span class="reg-year-label">등록선수</span> 현황 보기
@@ -898,20 +896,17 @@ body{overflow-x:hidden;}
 
 <div class="page" id="page-players">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px">
-    <div class="sec-title" style="margin-bottom:0" id="playerPageTitle">선수 기록</div>
-    <div style="display:flex;gap:6px" id="playerPageBtns">
-            <button class="btn btn-primary admin-only" style="font-size:.75rem;padding:5px 12px" onclick="openQuickAddPlayer()">➕ 선수 추가</button>
-<button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="exportPlayersExcel()">📊 엑셀 저장</button>
+    <div class="sec-title" style="margin-bottom:0" id="playerPageTitle">선수 현황</div>
+    <div style="display:flex;gap:6px" id="playerPageBtns" style="display:none">
+      <button class="btn btn-primary admin-only" style="font-size:.75rem;padding:5px 12px" onclick="openQuickAddPlayer()">➕ 선수 추가</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="exportPlayersExcel()">📊 엑셀 저장</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="exportPlayersCSV()">📄 CSV 저장</button>
     </div>
   </div>
-  <!-- 탭 바 -->
   <div class="players-tab-bar">
-    <button class="players-tab-btn ao-players-tab" onclick="switchPlayersTab('records')" id="ptab-records" style="display:none">📊 선수 기록</button>
+    <button class="players-tab-btn" onclick="switchPlayersTab('records')" id="ptab-records" style="display:none">📊 선수 기록</button>
     <button class="players-tab-btn active" onclick="switchPlayersTab('registry')" id="ptab-registry">🧾 선수 등록 현황</button>
   </div>
-
-  <!-- ── 탭1: 선수 기록 (관리자만) ── -->
   <div id="ptab-records-content" style="display:none">
     <div class="card">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -922,33 +917,21 @@ body{overflow-x:hidden;}
       <div id="psResults"></div>
       <div style="font-size:.72rem;color:var(--text3)" id="pFInfo"></div>
     </div>
-    <div id="ppSection" style="display:none">
-      <div id="ppBody"></div>
-    </div>
+    <div id="ppSection" style="display:none"><div id="ppBody"></div></div>
     <div class="card"><div class="card-title">전체 선수 목록</div><div class="table-wrap"><table><thead><tr><th>이름</th><th>소속</th><th>참가</th><th>🥇</th><th>🥈</th><th>🥉</th><th>🌱</th><th>최고</th></tr></thead><tbody id="allPT"></tbody></table></div></div>
   </div>
-
-  <!-- ── 탭2: 선수 등록 현황 (항상 공개) ── -->
   <div id="ptab-registry-content">
-    <!-- 상단 컨트롤 -->
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="form-select" id="regYearSel" style="width:90px;font-weight:700" onchange="renderRegistryTab()">
-          <option value="2026">2026년</option>
-        </select>
-        <select class="form-select" id="regRegionSel" style="min-width:100px" onchange="renderRegistryTab()">
-          <option value="">전체 지역</option>
-        </select>
-        <select class="form-select" id="regClubSel" style="min-width:110px" onchange="renderRegistryTab()">
-          <option value="">전체 클럽</option>
-        </select>
-        <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;cursor:pointer">
-          <input type="checkbox" id="regShowSubOnly" onchange="renderRegistryTab()"> 부클럽 선수만
-        </label>
+        <select class="form-select" id="regYearSel" style="width:90px;font-weight:700" onchange="renderRegistryTab()"><option value="2026">2026년</option></select>
+        <select class="form-select" id="regRegionSel" style="min-width:100px" onchange="renderRegistryTab()"><option value="">전체 지역</option></select>
+        <select class="form-select" id="regClubSel" style="min-width:110px" onchange="renderRegistryTab()"><option value="">전체 클럽</option></select>
+        <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="regShowSubOnly" onchange="renderRegistryTab()"> 부클럽 선수만</label>
         <input type="text" class="form-input" id="regSearchInput" placeholder="🔍 이름 검색" oninput="renderRegistryTab()" style="flex:1;min-width:120px">
         <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="exportRegistryFiltered('xlsx')">📊 엑셀</button>
+          <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="exportRegistryFiltered('csv')">📄 CSV</button>
           <button class="btn btn-outline admin-only" style="font-size:.75rem;padding:5px 10px" onclick="openRegistryMgr()">✏️ 명단 관리</button>
-          <button class="btn btn-outline admin-only" style="font-size:.75rem;padding:5px 10px" onclick="exportRegistryExcel()">📊 엑셀 저장</button>
         </div>
       </div>
       <div id="regTabStat" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
@@ -966,6 +949,37 @@ body{overflow-x:hidden;}
     </div>
   </div>
   <div id="rankContent"><div class="empty-state card"><div class="empty-icon">📋</div><p>대회를 선택하세요</p></div></div>
+</div>
+
+
+<!-- 선수 등록 현황 관리 모달 -->
+<div class="modal-overlay" id="mRegistryMgr">
+  <div class="modal-box" style="max-width:700px">
+    <div class="modal-header">
+      <h3>🧾 선수 등록 명단 관리</h3>
+      <button class="modal-close" onclick="cm('mRegistryMgr')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select class="form-select" id="rmgrYearSel" style="width:90px;font-weight:700" onchange="renderRegistryMgr()"><option value="2026">2026년</option></select>
+        <span id="rmgrStat" style="font-size:.82rem;color:var(--text2);flex:1"></span>
+        <label class="btn btn-outline" style="font-size:.78rem">📥 엑셀 업로드<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importRegistryFromFile(this)"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:10px;align-items:end">
+        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">이름*</div><input class="form-input" id="rmgr_name" placeholder="홍길동" style="font-size:.82rem"></div>
+        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">주클럽*</div><select class="form-select" id="rmgr_club" style="font-size:.82rem"></select></div>
+        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">지역</div><input class="form-input" id="rmgr_region" placeholder="1.동부" style="font-size:.82rem"></div>
+        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">부클럽</div><input class="form-input" id="rmgr_subclub" placeholder="없으면 빈칸" style="font-size:.82rem"></div>
+        <button class="btn btn-primary" style="padding:6px 12px;font-size:.82rem;white-space:nowrap" onclick="addRegistryRow()">➕ 추가</button>
+      </div>
+      <div id="rmgr_list" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)"></div>
+    </div>
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+      <button class="btn btn-danger" style="margin-right:auto" onclick="clearRegistryYear()">🗑️ 해당 연도 전체삭제</button>
+      <button class="btn btn-outline" onclick="exportRegistryExcel()">📊 엑셀 저장</button>
+      <button class="btn btn-gray" onclick="cm('mRegistryMgr')">닫기</button>
+    </div>
+  </div>
 </div>
 
 </main>
@@ -1402,46 +1416,6 @@ body{overflow-x:hidden;}
   </div>
 </div>
 
-<!-- 선수 등록 현황 관리 모달 -->
-<div class="modal-overlay" id="mRegistryMgr">
-  <div class="modal-box" style="max-width:700px">
-    <div class="modal-header">
-      <h3>🧾 선수 등록 명단 관리</h3>
-      <button class="modal-close" onclick="cm('mRegistryMgr')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <select class="form-select" id="rmgrYearSel" style="width:90px;font-weight:700" onchange="renderRegistryMgr()">
-          <option value="2026">2026년</option>
-        </select>
-        <span id="rmgrStat" style="font-size:.82rem;color:var(--text2);flex:1"></span>
-        <label class="btn btn-outline" style="font-size:.78rem">
-          📥 엑셀 업로드
-          <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importRegistryFromFile(this)">
-        </label>
-      </div>
-      <!-- 새 선수 추가 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;margin-bottom:10px;align-items:end">
-        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">이름<span style="color:red">*</span></div>
-          <input class="form-input" id="rmgr_name" placeholder="홍길동" style="font-size:.82rem"></div>
-        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">주클럽<span style="color:red">*</span></div>
-          <select class="form-select" id="rmgr_club" style="font-size:.82rem"></select></div>
-        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">지역</div>
-          <input class="form-input" id="rmgr_region" placeholder="1.동부" style="font-size:.82rem"></div>
-        <div><div style="font-size:.72rem;color:var(--text2);margin-bottom:3px">부클럽</div>
-          <input class="form-input" id="rmgr_subclub" placeholder="(없으면 빈칸)" style="font-size:.82rem"></div>
-        <button class="btn btn-primary" style="padding:6px 12px;font-size:.82rem;white-space:nowrap" onclick="addRegistryRow()">➕ 추가</button>
-      </div>
-      <div id="rmgr_list" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)"></div>
-    </div>
-    <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
-      <button class="btn btn-danger" style="margin-right:auto" onclick="clearRegistryYear()">🗑️ 해당 연도 전체삭제</button>
-      <button class="btn btn-outline" onclick="exportRegistryExcelMgr()">📊 엑셀 저장</button>
-      <button class="btn btn-gray" onclick="cm('mRegistryMgr')">닫기</button>
-    </div>
-  </div>
-</div>
-
 <!-- 빠른 선수 추가 모달 (선수기록 상단, 관리자) -->
 <div class="modal-overlay" id="mQuickAddPlayer">
   <div class="modal-box" style="max-width:520px">
@@ -1654,7 +1628,7 @@ let REG=false; // 팀등록 로그인 상태
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{}},clubs:['웅진','하모니','원도심','능동','모던','LTC','경운','중앙','로패','동김해','돛대','목련','삼계','단디','영운','테사모','금병','불사조','남산','T-ONE','수로','김해','UP테니스','포티올','어메이징','단디클럽','수로클럽','한울','위드','한별','더원','더블폴트','포티폴'],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{}},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1903,12 +1877,7 @@ function showPage(n){
   if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
   if(n==='home')upDash();if(n==='tournament')renderTL();if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();
-  if(n==='players'){
-    // 비로그인은 등록현황, 관리자는 현재 탭 유지 (처음엔 등록현황 기본)
-    const activeTab = document.querySelector('.players-tab-btn.active')?.id;
-    if(!AD && activeTab==='ptab-records') switchPlayersTab('registry');
-    else if(!activeTab || activeTab==='ptab-registry') initRegistryTab();
-  }
+  if(n==='players'){ const act=ge('ptab-registry')?.classList.contains('active'); if(!act) switchPlayersTab('registry'); else initRegistryTab(); }
   if(n==='ranking')popSel();
 
   // ✅ 페이지 진입 시 기본 대회(접수중) 자동 선택
@@ -1938,10 +1907,13 @@ function toggleAdmin(){
     ge('adminToggleBtn').textContent='관리자 로그인';
     document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='none');
     const rh2=ge('regActHdr'); if(rh2) rh2.textContent='';
-    // 선수기록 내부 탭 버튼만 숨김 (nav-tab은 유지), 등록현황으로 전환
-    const ptabRecords=ge('ptab-records'); if(ptabRecords) ptabRecords.style.display='none';
+    const ptabRec=ge('ptab-records'); if(ptabRec) ptabRec.style.display='none';
+    const curPg=document.querySelector('.nav-tab.active')?.dataset?.page;
+    if(curPg==='players') switchPlayersTab('registry');
+    // 선수기록 탭 숨김, 선수기록 보고 있었으면 홈으로
+    document.querySelectorAll('.ao-players-tab').forEach(e=>e.style.display='none');
     const curPage=document.querySelector('.nav-tab.active')?.dataset?.page;
-    if(curPage==='players') switchPlayersTab('registry');
+    if(curPage==='players') showPage('home');
     cm('mAdminSettings');
     toast('로그아웃','info');
     const _ap=document.querySelector('.nav-tab.active')?.dataset?.page;
@@ -1956,8 +1928,9 @@ function applyAdminUI(){
   ge('adminToggleBtn').textContent='로그아웃';
   document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='block');
   const rh=ge('regActHdr'); if(rh) rh.textContent='관리';
-  // 선수기록 내부 탭 버튼 표시
-  const ptabRecords=ge('ptab-records'); if(ptabRecords) ptabRecords.style.display='';
+  const ptabR=ge('ptab-records'); if(ptabR) ptabR.style.display='';
+  // 선수기록 탭 표시
+  document.querySelectorAll('.ao-players-tab').forEach(e=>e.style.display='');
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -6661,19 +6634,7 @@ function buildPH(name,p){
       <div style="flex:1">
         <b style="font-size:1.1rem">${name}</b>
         <div style="font-size:.75rem;color:var(--text2);margin-top:2px">주클럽: ${(p.clubs||[]).join(', ')||'-'}</div>
-        ${(()=>{
-          // 등록 명단에서 부클럽 찾기
-          const year=new Date().getFullYear();
-          const regMembers=(G_REGISTRY&&G_REGISTRY[year])||[];
-          const regEntry=regMembers.find(m=>_m26Name(m.name)===_m26Name(name));
-          if(regEntry?.subClub){
-            return `<div style="font-size:.75rem;margin-top:3px;display:flex;align-items:center;gap:4px">
-              <span style="color:#7c3aed;font-weight:600">부클럽:</span>
-              <span class="sub-badge" style="font-size:.72rem">${regEntry.subClub}</span>
-            </div>`;
-          }
-          return '';
-        })()}
+        ${(()=>{ const yr=new Date().getFullYear(); const rm=(G_REGISTRY&&(G_REGISTRY[yr]||G_REGISTRY[2026]))||[]; const re2=rm.find(x=>_m26Name(x.name)===_m26Name(name)); return re2&&re2.subClub?`<div style="font-size:.75rem;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="color:#7c3aed;font-weight:600">부클럽:</span><span class="sub-badge" style="font-size:.72rem">${re2.subClub}</span></div>`:''; })()}
         ${AD&&p.phone?`<div style="font-size:.75rem;color:var(--text2);margin-top:2px">📱 ${p.phone}</div>`:''}
         ${divTags?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${divTags}</div>`:''}
       </div>
@@ -8830,102 +8791,91 @@ async function hardResetAllData(){
 
 
 // ═══════════════════════════════════════════════════════════════
-//  🧾 선수 등록 현황 시스템 (연도별 누적 관리)
+//  🧾 선수 등록 현황 시스템
 // ═══════════════════════════════════════════════════════════════
-
 const REGISTRY_2026_DEFAULT = [{"name": "강민지", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "박계영", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "노승남", "club": "T-ONE", "region": "1.동부", "subClub": "써올"}, {"name": "신가영", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "김성재", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "권태희", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "김명훈", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "박진영", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "서창용", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "손민호", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "송수은", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "여영선", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "오동택", "club": "T-ONE", "region": "1.동부", "subClub": "써올"}, {"name": "유지훤", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "이미림", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "최민규", "club": "T-ONE", "region": "1.동부", "subClub": "국제"}, {"name": "홍승건", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "박경대", "club": "T-ONE", "region": "1.동부", "subClub": ""}, {"name": "김영진", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "김훈식", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "박종영", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "배명철", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "서상섭", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "심태웅", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "차용환", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "정종필", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "백미경", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "전정옥", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "천상현", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "이세영", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "유영철", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "이창우", "club": "남산", "region": "1.동부", "subClub": "T-ONE"}, {"name": "서경진", "club": "남산", "region": "1.동부", "subClub": "T-ONE"}, {"name": "윤경주", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "김민정", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "서인호", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "김동훈", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "이점순", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "윤정미", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "김윤희", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "김성만", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "유지수", "club": "남산", "region": "1.동부", "subClub": ""}, {"name": "배경문", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "오경찬", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "손병학", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "이호준", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "박광오", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김형섭", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "홍성호", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김병철", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "허달영", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김선수", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김영민", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김중탁", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김명철", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "황대순", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "최은실", "club": "동김해", "region": "1.동부", "subClub": "남산"}, {"name": "최정숙", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "채은주", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "오세경", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "최현숙", "club": "동김해", "region": "1.동부", "subClub": "목련"}, {"name": "최영삼", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김미숙", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "조영석", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "김진생", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "손정미", "club": "동김해", "region": "1.동부", "subClub": ""}, {"name": "송태근", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "전종성", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "마경애", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "강성귀", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "권윤진", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "김두현", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "김슬라바", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "김장훈", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "박아소", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "박원모", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "박효원", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "백종철", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "손명진", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "심성호", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "엄수관", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "윤현욱", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이미연", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이상욱", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이상호", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이순환", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이승원", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "이용선", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "전정태", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "정성국", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "정원호", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "조상환", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "최금호", "club": "돛대", "region": "1.동부", "subClub": ""}, {"name": "강석일", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "강행호", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "김병주", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "김영록", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "김종철", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "노승덕", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "신경애", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "윤효권", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "이주락", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "이혜자", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "장숙진", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "정영호", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "제춘기", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "조범근", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "조형래", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "천종진", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "하정표", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "한은진", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "이재천", "club": "영운", "region": "1.동부", "subClub": ""}, {"name": "김한수", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "신동호", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "김춘섭", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "이희정", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "양창규", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "남은주", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "최영주", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "최정란", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "최구태", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "제신희", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "고석완", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "신봉주", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "심창근", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "권혁진", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "전현석", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "정익훈", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "조현창", "club": "수로", "region": "1.동부", "subClub": "국제"}, {"name": "조우준", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "주아형", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "반주원", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "박주하", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "김중원", "club": "수로", "region": "1.동부", "subClub": ""}, {"name": "황승규", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "조우영", "club": "LTC", "region": "2.원도심", "subClub": "UP테니스"}, {"name": "김성태", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "신정훈", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김필준", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "손원진", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "공범웅", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김승국", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "이중혁", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "함순식", "club": "LTC", "region": "2.원도심", "subClub": "UP테니스"}, {"name": "조용우", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "심운식", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "고기준", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김정수", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김주범", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김형묵", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김홍준", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "박성희", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "박수은", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "박신현", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "손대식", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "송승빈", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "신쌍기", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "신현철", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "이강맹", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "이경구", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "이일환", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "임향국", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "장용근", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "조형래", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "진종문", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "허예지", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "김상진", "club": "LTC", "region": "2.원도심", "subClub": ""}, {"name": "이승민", "club": "LTC", "region": "2.원도심", "subClub": "써올"}, {"name": "정성욱", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "문준호", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "박호석", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "김지은", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "김상훈", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "박은영", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "이창용", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "윤솔", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "안세영", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "심윤희", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "윤은하", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "이양우", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "황창일", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "주연아", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "박기병", "club": "UP테니스", "region": "2.원도심", "subClub": "써올"}, {"name": "백창헌", "club": "UP테니스", "region": "2.원도심", "subClub": ""}, {"name": "공시영", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김기형", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김다경", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김은정", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김인곤", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김재천", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "박금섭", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "박주열", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "서영아", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이상익", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이상후", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이성찬", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "양재용", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이재은", "club": "원도심", "region": "2.원도심", "subClub": "UP테니스"}, {"name": "장윤현", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "정진성", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "최재용", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "류여상", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "오수택", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "강명록", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이창헌", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이승률", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "안병용", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "이봉선", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김만호", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "정수호", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "권장수", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "백현욱", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "정충길", "club": "원도심", "region": "2.원도심", "subClub": ""}, {"name": "김민규", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "정혁진", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "조현정", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "김민정", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "김인경", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "명자홍", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "문서현", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "박재현", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "고기범", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "손호준", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "최수정", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "유수아", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "윤정수", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "장효원", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "최익준", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "박종범", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "김채언", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "이봉주", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "정유진", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "공민기", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "김유진", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "문주호", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "박성욱", "club": "써올", "region": "2.원도심", "subClub": ""}, {"name": "조진석", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "차여진", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "제성훈", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "문선지", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "이혜주", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "김순남", "club": "포텐이스", "region": "3.중부", "subClub": "써올"}, {"name": "김승현", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "김재학", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "김한나", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "남종욱", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "류진안", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "박미정", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "박민영", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "박진용", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "백명운", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "서강주", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "서원배", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "서희영", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "이대호", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "이소영", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "이왕수", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "이주희", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "전지은", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "지가현", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "지유진", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "천예준", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "최윤성", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "최한별", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "조예린", "club": "포텐이스", "region": "3.중부", "subClub": ""}, {"name": "정순용", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "오판칠", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "김선필", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "위만복", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "이현조", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "김경호", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "김병홍", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "곽종무", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "배수현", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "박순호", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "이기중", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "이명준", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "이수상", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "조여린", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "조금순", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "최찬열", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "허득원", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "황선보", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "황경선", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "허 붕", "club": "김해시니어", "region": "3.중부", "subClub": ""}, {"name": "강종헌", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "권기만", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "권순길", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김규태", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김길성", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김상구", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김성민", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김해곤", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "민병욱", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "박경표", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "박병국", "club": "단디", "region": "3.중부", "subClub": "모던"}, {"name": "박영수", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "박형진", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "서창웅", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "신종민", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "심재홍", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이경주", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이광민", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이광수", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이석용", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이용식", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이재원", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "전승철", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "진종현", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "최성호", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "최천권", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "한정수", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김상열", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "성태순", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이자희", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "최현숙", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이은경", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이시내", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김주영", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "황용생", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "김창환", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "송종업", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "천병희", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "황일선", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "윤혜진", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이정빈", "club": "단디", "region": "3.중부", "subClub": ""}, {"name": "이영진", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김선웅", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김성환", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "강대성", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "권경윤", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김장민", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김수득", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김정수", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김태훈", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "박다희", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "배용민", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "신인학", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "심호석", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "윤태호", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "이말영", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "이승열", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "오윤헌", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "박미정", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "정인영", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "주수돈", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "박천욱", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "박정목", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "이형태", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "전덕제", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "이상만", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "양기용", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "김태훈2", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "박연옥", "club": "더원", "region": "3.중부", "subClub": ""}, {"name": "이경자", "club": "더원", "region": "3.중부", "subClub": "김해시니어"}, {"name": "안원호", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "최재영", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "제종권", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "최명환", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "이두희", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "권도한", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "허회웅", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "이희승", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "김덕현", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "김근형", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "김종원", "club": "로패", "region": "3.중부", "subClub": ""}, {"name": "김영일", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "이가희", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "최영완", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "강민봉", "club": "삼계", "region": "3.중부", "subClub": "김해시니어"}, {"name": "곽찬호", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김   건", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김경목", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김대형", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김대환", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김동익", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김민규", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김선욱", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김윤지", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김정주", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "김종철", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "노정유", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "류승혁", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "박동진", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "박성현", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "서남경", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "설영복", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "송현준", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "신동훈", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "양현호", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "유상민", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "이종완", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "장환혁", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "정용식", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "정재우", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "정현태", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "정형탁", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "제정권", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "조경수", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "조영인", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "황의철", "club": "삼계", "region": "3.중부", "subClub": ""}, {"name": "강순덕", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "강종화", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "강해근", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "강헌석", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "공시욱", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김건호", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김경태", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김다솔", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김대석", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김동윤", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김두상", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김명이", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김문섭", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김민수", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김송이", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김진숙", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김진이", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김창호", "club": "중앙", "region": "3.중부", "subClub": "아테"}, {"name": "김홍일", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "남기훈", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "류호진", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "민현기", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박광해", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박상필", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박성재", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박순천", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박용상", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박욱현", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박은걸", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박흥국", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "박희동", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "백근태", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "변상대", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "신성기", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "신영재", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "안흥준", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이건창", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이경희", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이근석", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이동훈", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이상문", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이상보", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이성춘", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이승규", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이정규", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이정기", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이지안", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이철현", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "이현님", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정승원", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정양규", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정연옥", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정영환", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정진호", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "조미숙", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "조영호", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "조유진", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "조재성", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "지철구", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "차상미", "club": "중앙", "region": "3.중부", "subClub": "더원"}, {"name": "천철효", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "최정남", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "최정훈", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "최해문", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "하진욱", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "하태우", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "한명섭", "club": "중앙", "region": "3.중부", "subClub": "김해시니어"}, {"name": "황정규", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "황준용", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "황태림", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "정재현", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "김성환", "club": "중앙", "region": "3.중부", "subClub": ""}, {"name": "노평삼", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "김수미", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "최규헌", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "김현규", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "장희진", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "김태근", "club": "포티올", "region": "3.중부", "subClub": "아테"}, {"name": "문수민", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "박봉천", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "박소현", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "백성욱", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "이단비", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "김숙경", "club": "포티올", "region": "3.중부", "subClub": "아테"}, {"name": "정두호", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "권순형", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "신용우", "club": "포티올", "region": "3.중부", "subClub": ""}, {"name": "장경훈", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "하유식", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "최웅식", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "주수원", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김찬동", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "하상우", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "조근현", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "이종진", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "감해상", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "강석양", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김기수", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김대영", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김병호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김진호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김창수", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김창오", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김희정", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박민우", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박병태", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박선명", "club": "경운", "region": "3.중부", "subClub": "포텐이스"}, {"name": "박성천", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박성출", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박성환", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박지호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "박해근", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "배완기", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "배충근", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "성기수", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "손호준", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "송갑복", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "안진호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "안해수", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "오승민", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "오지민", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "윤건호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "윤연숙", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "이대훈", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "이승호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "이주학", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "이희봉", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "장은기", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "장재천", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "전동건", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "정종철", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "정찬기", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "정호정", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "지영호", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "지현국", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "최갑수", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "최만순", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "최연주", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "최용기", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "한영록", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "허재명", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "황규열", "club": "경운", "region": "3.중부", "subClub": ""}, {"name": "김판규", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "조영태", "club": "UDT", "region": "4.국제", "subClub": "불사조"}, {"name": "장준혁", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "허광민", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "황성", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "신은주", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "허정은", "club": "UDT", "region": "4.국제", "subClub": "불사조"}, {"name": "이승철", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이욱동", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "김미혜", "club": "UDT", "region": "4.국제", "subClub": "장유여성"}, {"name": "노형권", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "심정아", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이혜진", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "정준규", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "배형준", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이승훈", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "정의광", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "서슬기", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "장용현", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "박혜윤", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "강찬우", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이천수", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "임윤섭", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "박미정", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "오현택", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "박성현", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "강성금", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이정숙", "club": "UDT", "region": "4.국제", "subClub": ""}, {"name": "이재식", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "한정일", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "최근후", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "박영준", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "민경대", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이준호", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "조기현", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김량우", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "조재승", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "안제원", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이동일", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김준영", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "서득호", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김성우", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이건희", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "신혜영", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "최지민", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이연일", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김나영", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "곽아영", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "우진희", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "곽현성", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "박진흥", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "한상혁", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "박성일", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "장성진", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "강진후", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "홍슬기", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김동직", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이동진", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "서득원", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "임동환", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "원영빈", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "강유일", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "장채윤", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "이효민", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "심정화", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김진학", "club": "국제", "region": "4.국제", "subClub": ""}, {"name": "김경준", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "여찬윤", "club": "모던", "region": "4.국제", "subClub": "로패"}, {"name": "임민택", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이상영", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "강대영", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "강기홍", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "강병수", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "구영진", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김경재", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김도리", "club": "모던", "region": "4.국제", "subClub": "국제"}, {"name": "김병모", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김성대", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김성민", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김성준", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김성희", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김의용", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김정화", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김형주", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "김호진", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "나창만", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "박영복", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "박영준", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "박준열", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "박철영", "club": "모던", "region": "4.국제", "subClub": "써올"}, {"name": "반은정", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "백성우", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "부신영", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "서교수", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "심재갑", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "안이타", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "안증호", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "원동빈", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "원의현", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "유병준", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이경우", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이규용", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이종호", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이종화", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "이주찬", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "장혜성", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "정민기", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "조광식", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "차한성", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "천수연", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "최승환", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "최인규", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "최진영", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "최현준", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "한두헌", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "황성록", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "황유진", "club": "모던", "region": "4.국제", "subClub": ""}, {"name": "강무식", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "고주연", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "김진곤", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "김강일", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "김은태", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "문성모", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "박미정", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "박정자", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "배인한", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "손승환", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "신광훈", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "안남수", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "유병진", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "이종열", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "전성민", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "정미정", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "정인국", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "조재현", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "박흥선", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "유수완", "club": "아테", "region": "4.국제", "subClub": ""}, {"name": "정종연", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "차진숙", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "장현숙", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "오창수", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박민수", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이서희", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이창민", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이언주", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김환홍", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "장혜경", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "최경환", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이성희", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김종일", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정교진", "club": "능동", "region": "5.능동", "subClub": "장유여성"}, {"name": "김윤묵", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "여상진", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박인희", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이상구", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "홍경산", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "최성호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "홍명철", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "신수빈", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "배기효", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정태백", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "조덕현", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "문인경", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김종명", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박기영", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박명환", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정현식", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정창수", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "허주철", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이말수", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박진득", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "권오준", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박상록", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김재금", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이영기", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "조연규", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "하병호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "최진우", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이상곤(A)", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "여창호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "여진호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "백수영", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "공대환", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "조정래", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "최양호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "최용호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "허형선", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "곽영란", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "안시현", "club": "능동", "region": "5.능동", "subClub": "장유여성"}, {"name": "김지범", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이재환", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "구수한", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박인자", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박경주", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "한수정", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "유미선", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "이수민", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "전수진", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "강동기", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정해경", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "정지한", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "고경빈", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "홍종호", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김단우", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김미영", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김승현", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김희찬", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "염철중", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "윤운미", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "전희재", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "안정희", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "박현옥", "club": "능동", "region": "5.능동", "subClub": "장유여성"}, {"name": "김회정", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김은정", "club": "능동", "region": "5.능동", "subClub": ""}, {"name": "김혁진", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김동현", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김석용", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "박방구", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김종호", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김정화", "club": "불사조", "region": "5.능동", "subClub": "장유여성"}, {"name": "최상철", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김현경", "club": "불사조", "region": "5.능동", "subClub": "UDT,장유여성"}, {"name": "박지동", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "공우택", "club": "불사조", "region": "5.능동", "subClub": "UDT"}, {"name": "구영록", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김경화", "club": "불사조", "region": "5.능동", "subClub": "장유여성"}, {"name": "김승태", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "김태은", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "박진영", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "서정호", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "신주현", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "심채현", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "오경실", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "유병혁", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "이두원", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "이수연", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "이호철", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "정한조", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "정해주", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "최선미", "club": "불사조", "region": "5.능동", "subClub": ""}, {"name": "강덕호", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "강윤국", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "권영우", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김 우", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김대길", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김영렬", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김욱중", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김인석", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김재훈", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김진국", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "노동진", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박성민", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박유도", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박재홍", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박종성", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박진규", "club": "테사모", "region": "5.능동", "subClub": "아테"}, {"name": "박필진", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "신 석", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "신만생", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "안성배", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "오태섭", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "엄창언", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "윤성구", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "이순보", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "이정렬", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "이준석", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "임성태", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "장교준", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "장일권", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "정성한", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "정연석", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "조관용", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "조성호", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "조정민", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "조창섭", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "하태명", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김다혜", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김선우", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "김영옥", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "류영심", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박선정", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "박정회", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "손장미", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "송윤정", "club": "테사모", "region": "5.능동", "subClub": "장유여성"}, {"name": "정금숙", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "정현주", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "차해윤", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "황혜진", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "이진성", "club": "테사모", "region": "5.능동", "subClub": ""}, {"name": "강명옥", "club": "하모니", "region": "5.능동", "subClub": "장유여성"}, {"name": "강인주", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "송화진", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "도경식", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김찬순", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "서종완", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "고경덕", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "국동구", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "권혁태", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김경수", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김상옥", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김예", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김일중", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김정희", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김진우", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "김홍식", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "남진애", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "노경수", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "노상영", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "민선규", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "민성진", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "박재우", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "박철완", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "박흥수", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "배병철", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "백정렬", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "서원배", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "서은혜", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "서준근", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "손덕상", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "손범규", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "신진기", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "신창륜", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "안응수", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "안인출", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "양우홍", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "양인호", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "윤수일", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "윤장호", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "윤종윤", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이국원", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이동현", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이명호", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이세종", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이외종", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이은미", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이은정", "club": "하모니", "region": "5.능동", "subClub": "아테"}, {"name": "이은호", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이재야", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이종회", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이지아", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이지현", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이진혁", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "이형원", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "임다정", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "장순애", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "장용일", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "전진규", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "제해근", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "조민철", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "조수환", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "조찬걸", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "조현세", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "지찬원", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "진경희", "club": "하모니", "region": "5.능동", "subClub": "장유여성"}, {"name": "최종열", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "추양호", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "표세문", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "하일도", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "홍성환", "club": "하모니", "region": "5.능동", "subClub": "아테"}, {"name": "홍영주", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "황수진", "club": "하모니", "region": "5.능동", "subClub": "장유여성"}, {"name": "황인범", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "민영규", "club": "하모니", "region": "5.능동", "subClub": ""}, {"name": "변상순", "club": "장유여성", "region": "5.장유", "subClub": ""}, {"name": "김지니", "club": "장유여성", "region": "5.장유", "subClub": ""}, {"name": "박보미", "club": "장유여성", "region": "5.장유", "subClub": ""}, {"name": "강대석", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "유용주", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "안준영", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "김영동", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "강병찬", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "정봉권", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "조우근", "club": "금병", "region": "6.진영", "subClub": "목련"}, {"name": "김영우", "club": "금병", "region": "6.진영", "subClub": "웅진"}, {"name": "박형규", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "조현필", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "이보재", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "김태오", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "안선호", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "진병희", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "황동욱", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "김성진", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "김준욱", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "김동환", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "정동헌", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "손병옥", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "송광석", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "추성호", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "문홍복", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "배동훈", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "정현군", "club": "금병", "region": "6.진영", "subClub": ""}, {"name": "이상철", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "정상훈", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "안계덕", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "오성관", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "유용주", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "정원택", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "신종석", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "김봉조", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "신중하", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "양종석", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "이용식", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "최덕순", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "최동길", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "홍진식", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "오경숙", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "금관수", "club": "목련", "region": "6.진영", "subClub": ""}, {"name": "조이제", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김차진", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "박규열", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "강영옥", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김동규", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김선홍", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김성용", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김용대", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김용호", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김원주", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김원호", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김의현", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김종성", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "김학곤", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "류형훈", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "박준석", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "박현철", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "박효정", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "안성태", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "안현지", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "양현", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "오승후", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "윤인재", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "이수경", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "이채연", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "전재현", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "정재욱", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "정보경", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "조현욱", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "최병준", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "한용철", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "허현구", "club": "웅진", "region": "6.진영", "subClub": ""}, {"name": "현익섭", "club": "웅진", "region": "6.진영", "subClub": ""}];
-
 let G_REGISTRY = {};
 let REGISTRY_YEARS_LOADED = [];
 
-async function loadRegistry(year) {
+async function loadRegistry(year){
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
-  try {
-    const snap = await getDoc(doc(db,'memberRegistries', String(year)));
-    if(snap.exists()) {
-      G_REGISTRY[year] = snap.data().members||[];
-    } else {
-      if(year===2026) {
-        G_REGISTRY[2026] = REGISTRY_2026_DEFAULT.slice();
-        await saveRegistry(2026);
-      } else {
-        G_REGISTRY[year] = [];
-      }
-    }
+  try{
+    const snap=await getDoc(doc(db,'memberRegistries',String(year)));
+    if(snap.exists()){ G_REGISTRY[year]=snap.data().members||[]; }
+    else if(year===2026){ G_REGISTRY[2026]=REGISTRY_2026_DEFAULT.slice(); await saveRegistry(2026); }
+    else { G_REGISTRY[year]=[]; }
     REGISTRY_YEARS_LOADED.push(year);
-  } catch(e) {
-    if(year===2026) G_REGISTRY[2026] = REGISTRY_2026_DEFAULT.slice();
-    else G_REGISTRY[year] = [];
+  }catch(e){
+    G_REGISTRY[year]=(year===2026)?REGISTRY_2026_DEFAULT.slice():[];
     REGISTRY_YEARS_LOADED.push(year);
   }
   return G_REGISTRY[year]||[];
 }
-
-async function saveRegistry(year) {
-  const members = G_REGISTRY[year]||[];
-  await setDoc(doc(db,'memberRegistries',String(year)),{members, updatedAt:serverTimestamp()});
+async function saveRegistry(year){
+  const members=G_REGISTRY[year]||[];
+  await setDoc(doc(db,'memberRegistries',String(year)),{members,updatedAt:serverTimestamp()});
 }
-
-async function getRegistryYears() {
-  try {
-    const snaps = await getDocs(collection(db,'memberRegistries'));
-    const years = snaps.docs.map(d=>parseInt(d.id)).filter(y=>!isNaN(y)).sort();
+async function getRegistryYears(){
+  try{
+    const snaps=await getDocs(collection(db,'memberRegistries'));
+    const years=snaps.docs.map(d=>parseInt(d.id)).filter(y=>!isNaN(y)).sort();
     if(!years.includes(2026)) years.unshift(2026);
     return years;
-  } catch(e) { return [2026]; }
+  }catch(e){ return [2026]; }
 }
 
-function switchPlayersTab(tab) {
-  // 선수기록 탭은 버튼 자체가 관리자만 보임 — 추가 체크 불필요
+// 클럽명 정규화 (2026 명단 기준)
+const CLUB_NORMALIZE_MAP={
+  'ltc':'LTC','LtC':'LTC','Ltc':'LTC',
+  't-one':'T-ONE','t-One':'T-ONE','T-One':'T-ONE','tOne':'T-ONE','tone':'T-ONE','T-one':'T-ONE',
+  'up테니스':'UP테니스','UP 테니스':'UP테니스','up 테니스':'UP테니스','Up테니스':'UP테니스','up':'UP테니스',
+  'udt':'UDT','Udt':'UDT',
+};
+function normalizeClub(club){
+  if(!club) return '';
+  const t=club.trim();
+  if(CLUB_NORMALIZE_MAP[t]) return CLUB_NORMALIZE_MAP[t];
+  const lo=t.toLowerCase();
+  for(const [k,v] of Object.entries(CLUB_NORMALIZE_MAP)){ if(k.toLowerCase()===lo) return v; }
+  return t;
+}
+
+// 탭 전환
+function switchPlayersTab(tab){
   ['records','registry'].forEach(t=>{
-    const btn=ge('ptab-'+t);
-    if(btn) btn.classList.toggle('active', t===tab);
-    const c=ge('ptab-'+t+'-content');
-    if(c) c.style.display=(t===tab)?'':'none';
+    const btn=ge('ptab-'+t); if(btn) btn.classList.toggle('active',t===tab);
+    const c=ge('ptab-'+t+'-content'); if(c) c.style.display=(t===tab)?'':'none';
   });
-  const recBtns=ge('playerPageBtns');
-  if(recBtns) recBtns.style.display=(tab==='records')?'flex':'none';
+  const recBtns=ge('playerPageBtns'); if(recBtns) recBtns.style.display=(tab==='records')?'flex':'none';
   if(tab==='registry') initRegistryTab();
-  if(tab==='records') { renderAllP(); popCF(); }
+  if(tab==='records'){ renderAllP(); popCF(); }
 }
 
-async function initRegistryTab() {
-  const years = await getRegistryYears();
-  const yearSel = ge('regYearSel');
-  if(yearSel) {
-    yearSel.innerHTML = years.map(y=>`<option value="${y}">${y}년</option>`).join('');
-    const cur = new Date().getFullYear();
-    yearSel.value = years.includes(cur)?cur:years[years.length-1];
-  }
+async function initRegistryTab(){
+  const years=await getRegistryYears();
+  const yearSel=ge('regYearSel');
+  if(yearSel){ yearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join(''); yearSel.value=years.includes(new Date().getFullYear())?new Date().getFullYear():years[years.length-1]; }
   await renderRegistryTab();
 }
 
-async function renderRegistryTab() {
+async function renderRegistryTab(){
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   const regions=[...new Set(members.map(m=>m.region).filter(Boolean))].sort();
   const clubs=[...new Set(members.map(m=>m.club).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
   const regSel=ge('regRegionSel');
+  if(regSel){ const p=regSel.value; regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${r}">${r}</option>`).join(''); if(p) regSel.value=p; }
   const clubSel=ge('regClubSel');
-  if(regSel){
-    const prev=regSel.value;
-    regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${r}">${r}</option>`).join('');
-    if(prev) regSel.value=prev;
-  }
-  if(clubSel){
-    const prev=clubSel.value;
-    clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
-    if(prev) clubSel.value=prev;
-  }
+  if(clubSel){ const p=clubSel.value; clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join(''); if(p) clubSel.value=p; }
   const selRegion=ge('regRegionSel')?.value||'';
   const selClub=ge('regClubSel')?.value||'';
   const showSubOnly=ge('regShowSubOnly')?.checked||false;
   const keyword=(ge('regSearchInput')?.value||'').trim();
-  let filtered=members.filter(m=>{
-    if(selRegion && m.region!==selRegion) return false;
-    if(selClub && m.club!==selClub) return false;
-    if(showSubOnly && !m.subClub) return false;
-    if(keyword && !(m.name||'').includes(keyword) && !(m.club||'').includes(keyword)) return false;
+  const filtered=members.filter(m=>{
+    if(selRegion&&m.region!==selRegion) return false;
+    if(selClub&&m.club!==selClub) return false;
+    if(showSubOnly&&!m.subClub) return false;
+    if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)) return false;
     return true;
   });
   const subCount=filtered.filter(m=>m.subClub).length;
@@ -8933,20 +8883,12 @@ async function renderRegistryTab() {
   const statEl=ge('regTabStat');
   if(statEl) statEl.innerHTML=`총 <b>${filtered.length}</b>명 · <b>${clubCount}</b>클럽 · 부클럽 <b>${subCount}</b>명`;
   const clubMap=new Map();
-  filtered.forEach(m=>{
-    const c=m.club||'기타';
-    if(!clubMap.has(c)) clubMap.set(c,[]);
-    clubMap.get(c).push(m);
-  });
+  filtered.forEach(m=>{ const c=m.club||'기타'; if(!clubMap.has(c)) clubMap.set(c,[]); clubMap.get(c).push(m); });
   const body=ge('regTabBody');
   if(!body) return;
-  if(!clubMap.size){body.innerHTML='<div class="empty-state card"><p>등록된 선수가 없습니다</p></div>';return;}
+  if(!clubMap.size){ body.innerHTML='<div class="empty-state card"><p>등록된 선수가 없습니다</p></div>'; return; }
   const regionMap=new Map();
-  [...clubMap.entries()].forEach(([club,ms])=>{
-    const region=ms[0]?.region||'기타';
-    if(!regionMap.has(region)) regionMap.set(region,[]);
-    regionMap.get(region).push({club,members:ms});
-  });
+  [...clubMap.entries()].forEach(([club,ms])=>{ const region=ms[0]?.region||'기타'; if(!regionMap.has(region)) regionMap.set(region,[]); regionMap.get(region).push({club,members:ms}); });
   body.innerHTML=[...regionMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko')).map(([region,clubList])=>{
     const regionTotal=clubList.reduce((s,c)=>s+c.members.length,0);
     return `<div style="margin-bottom:16px">
@@ -8961,178 +8903,120 @@ async function renderRegistryTab() {
           const subBadge=hasSub?`<span class="sub-badge" title="부클럽: ${m.subClub}">${m.subClub}</span>`:'';
           return `<span class="reg-member-chip ${hasSub?'has-sub':''}" onclick="openPD('${esc(m.name)}','${esc(m.club)}')">${m.name}${subBadge}</span>`;
         }).join('');
-        return `<div class="reg-club-card">
-          <div class="reg-club-header">
-            <span style="font-weight:800">${club}</span>
-            <span style="font-size:.78rem;opacity:.85">${ms.length}명${subCnt?` · 부클럽 ${subCnt}명`:''}</span>
-          </div>
-          <div class="reg-club-body">${chips}</div>
-        </div>`;
+        return `<div class="reg-club-card"><div class="reg-club-header"><span style="font-weight:800">${club}</span><span style="font-size:.78rem;opacity:.85">${ms.length}명${subCnt?` · 부클럽 ${subCnt}명`:''}</span></div><div class="reg-club-body">${chips}</div></div>`;
       }).join('')}
     </div>`;
   }).join('');
 }
 
-async function openRegistryMgr() {
-  if(!AD){toast('관리자 로그인 필요','info');return;}
-  const years=await getRegistryYears();
-  const rmgrYearSel=ge('rmgrYearSel');
-  if(rmgrYearSel) rmgrYearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join('');
-  const curYear=ge('regYearSel')?.value||2026;
-  if(rmgrYearSel) rmgrYearSel.value=curYear;
-  const clubSel=ge('rmgr_club');
-  if(clubSel) clubSel.innerHTML=G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
-  await renderRegistryMgr();
-  om('mRegistryMgr');
-}
-
-async function renderRegistryMgr() {
-  const year=parseInt(ge('rmgrYearSel')?.value||2026);
-  const members=await loadRegistry(year);
-  const stat=ge('rmgrStat');
-  if(stat) stat.textContent=`총 ${members.length}명 (부클럽 ${members.filter(m=>m.subClub).length}명)`;
-  const list=ge('rmgr_list');
-  if(!list) return;
-  if(!members.length){list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">등록된 선수가 없습니다</div>';return;}
-  list.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:.8rem">
-    <thead><tr style="background:var(--panel2);position:sticky;top:0">
-      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">이름</th>
-      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">주클럽</th>
-      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">지역</th>
-      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">부클럽</th>
-      <th style="padding:6px 8px;border-bottom:1px solid var(--border)">관리</th>
-    </tr></thead>
-    <tbody>${members.map((m,idx)=>{
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.name)}" id="rmgr_n_${idx}"></td>
-        <td style="padding:5px 8px"><select class="form-select" style="padding:3px 6px;font-size:.78rem" id="rmgr_c_${idx}">${G.clubs.map(c=>`<option ${c===m.club?'selected':''}>${c}</option>`).join('')}</select></td>
-        <td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.region||'')}" id="rmgr_r_${idx}"></td>
-        <td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:80px" placeholder="없으면 빈칸" value="${esc(m.subClub||'')}" id="rmgr_s_${idx}"></td>
-        <td style="padding:5px 8px;white-space:nowrap">
-          <button class="btn btn-outline" style="padding:2px 7px;font-size:.72rem" onclick="saveRegistryRow(${year},${idx})">💾</button>
-          <button class="btn btn-danger" style="padding:2px 7px;font-size:.72rem" onclick="deleteRegistryRow(${year},${idx})">🗑</button>
-        </td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
-}
-
-async function addRegistryRow() {
-  const year=parseInt(ge('rmgrYearSel')?.value||2026);
-  const name=(ge('rmgr_name')?.value||'').trim();
-  const club=ge('rmgr_club')?.value||'';
-  const region=(ge('rmgr_region')?.value||'').trim();
-  const subClub=(ge('rmgr_subclub')?.value||'').trim();
-  if(!name||!club){toast('이름과 클럽은 필수입니다','error');return;}
-  const members=await loadRegistry(year);
-  if(members.find(m=>m.name===name&&m.club===club)){toast('이미 등록된 선수입니다','info');return;}
-  members.push({name,club,region,subClub});
-  sl(true);
-  try{
-    await saveRegistry(year);
-    ['rmgr_name','rmgr_region','rmgr_subclub'].forEach(id=>{const el=ge(id);if(el)el.value='';});
-    await renderRegistryMgr();
-    renderRegistryTab();
-    toast(`${name} 추가 완료`,'success');
-  }catch(e){toast('저장 실패: '+e.message,'error');}
-  sl(false);
-}
-
-async function saveRegistryRow(year,idx) {
-  const members=await loadRegistry(year);
-  if(!members[idx]) return;
-  members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim();
-  members[idx].club=ge(`rmgr_c_${idx}`)?.value||'';
-  members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim();
-  members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
-  sl(true);
-  try{await saveRegistry(year);toast('수정 완료','success');renderRegistryTab();}
-  catch(e){toast('저장 실패: '+e.message,'error');}
-  sl(false);
-}
-
-async function deleteRegistryRow(year,idx) {
-  if(!confirm('이 선수를 삭제하시겠습니까?')) return;
-  const members=await loadRegistry(year);
-  members.splice(idx,1);
-  sl(true);
-  try{await saveRegistry(year);await renderRegistryMgr();renderRegistryTab();toast('삭제 완료','success');}
-  catch(e){toast('삭제 실패: '+e.message,'error');}
-  sl(false);
-}
-
-async function clearRegistryYear() {
-  const year=parseInt(ge('rmgrYearSel')?.value||2026);
-  if(!confirm(`${year}년 명단을 전체 삭제하시겠습니까?`)) return;
-  G_REGISTRY[year]=[];
-  sl(true);
-  try{await saveRegistry(year);await renderRegistryMgr();renderRegistryTab();toast('삭제 완료','success');}
-  catch(e){toast('실패: '+e.message,'error');}
-  sl(false);
-}
-
-async function importRegistryFromFile(input) {
-  const file=input?.files?.[0];
-  if(!file) return;
-  const year=parseInt(ge('rmgrYearSel')?.value||2026);
-  await _ensureXLSX();
-  const buf=await file.arrayBuffer();
-  const wb=XLSX.read(buf,{type:'array'});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-  if(!rawRows.length){toast('데이터가 없습니다','error');return;}
-  const hdr=rawRows[0].map(c=>(c??'').toString().trim());
-  let nameCol=-1,clubCol=-1,regionCol=-1,subCol=-1;
-  hdr.forEach((h,i)=>{
-    if(/회원명|선수명|이름|성명/.test(h)) nameCol=i;
-    else if(/주클럽|등록클럽|클럽/.test(h)) clubCol=i;
-    else if(/지역/.test(h)) regionCol=i;
-    else if(/부클럽|중복/.test(h)) subCol=i;
-  });
-  if(nameCol<0||clubCol<0){toast('회원명/클럽 컬럼을 찾지 못했습니다','error');return;}
-  const newRows=[];
-  rawRows.slice(1).forEach(row=>{
-    const name=(row[nameCol]??'').toString().trim();
-    const club=(row[clubCol]??'').toString().trim();
-    if(!name||!club) return;
-    newRows.push({name,club,
-      region:regionCol>=0?(row[regionCol]??'').toString().trim():'',
-      subClub:subCol>=0?(row[subCol]??'').toString().trim():''
-    });
-  });
-  if(!newRows.length){toast('유효한 데이터가 없습니다','error');return;}
-  if(!confirm(`${year}년 명단을 ${newRows.length}명으로 교체하시겠습니까?`)) return;
-  G_REGISTRY[year]=newRows;
-  sl(true);
-  try{
-    await saveRegistry(year);
-    await renderRegistryMgr();
-    renderRegistryTab();
-    toast(`${newRows.length}명 업로드 완료`,'success');
-  }catch(e){toast('저장 실패: '+e.message,'error');}
-  sl(false);
-  input.value='';
-}
-
-async function exportRegistryExcel() {
+async function exportRegistryFiltered(fmt){
+  fmt = fmt || 'xlsx';
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
+  const selRegion=ge('regRegionSel')?.value||'';
+  const selClub=ge('regClubSel')?.value||'';
+  const showSubOnly=ge('regShowSubOnly')?.checked||false;
+  const keyword=(ge('regSearchInput')?.value||'').trim();
+  const filtered=members.filter(m=>{
+    if(selRegion&&m.region!==selRegion) return false;
+    if(selClub&&m.club!==selClub) return false;
+    if(showSubOnly&&!m.subClub) return false;
+    if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)) return false;
+    return true;
+  });
+  if(!filtered.length){ toast('다운로드할 데이터가 없습니다','info'); return; }
+  const label=selClub||selRegion||(showSubOnly?'부클럽':(year+'년전체'));
+  const date=new Date().toISOString().substring(0,10);
+  if(fmt==='csv'){
+    const hdr=['지역구분','주클럽','회원명','부클럽'];
+    const dataRows=filtered.map(m=>[m.region||'',m.club||'',m.name||'',m.subClub||'']);
+    const allRows=[hdr,...dataRows];
+    const csv=allRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='김해테니스_등록선수_'+label+'_'+date+'.csv';
+    a.click();
+    toast('CSV 저장 완료 📄','success');
+    return;
+  }
   await _ensureXLSX();
-  const wsData=[['지역구분','주클럽','회원명','부클럽'],...members.map(m=>[m.region||'',m.club||'',m.name||'',m.subClub||''])];
+  const wsData=[['지역구분','주클럽','회원명','부클럽']].concat(filtered.map(m=>[m.region||'',m.club||'',m.name||'',m.subClub||'']));
   const wb2=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet(wsData),`${year}년 등록명단`);
-  XLSX.writeFile(wb2,`김해테니스_등록선수_${year}_${new Date().toISOString().substring(0,10)}.xlsx`);
+  const ws2=XLSX.utils.aoa_to_sheet(wsData);
+  ws2['!cols']=[{wch:12},{wch:14},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb2,ws2,year+'년 등록명단');
+  XLSX.writeFile(wb2,'김해테니스_등록선수_'+label+'_'+date+'.xlsx');
+  toast('엑셀 저장 완료 📊','success');
 }
+
+// 명단 관리
+async function openRegistryMgr(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const years=await getRegistryYears();
+  const rmgrYearSel=ge('rmgrYearSel');
+  if(rmgrYearSel){ rmgrYearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join(''); rmgrYearSel.value=ge('regYearSel')?.value||2026; }
+  const cs=ge('rmgr_club'); if(cs) cs.innerHTML=G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
+  await renderRegistryMgr(); om('mRegistryMgr');
+}
+async function renderRegistryMgr(){
+  const year=parseInt(ge('rmgrYearSel')?.value||2026);
+  const members=await loadRegistry(year);
+  const stat=ge('rmgrStat'); if(stat) stat.textContent=`총 ${members.length}명 (부클럽 ${members.filter(m=>m.subClub).length}명)`;
+  const list=ge('rmgr_list'); if(!list) return;
+  if(!members.length){ list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">등록된 선수가 없습니다</div>'; return; }
+  list.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:.8rem"><thead><tr style="background:var(--panel2);position:sticky;top:0"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">이름</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">주클럽</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">지역</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">부클럽</th><th style="padding:6px 8px;border-bottom:1px solid var(--border)">관리</th></tr></thead><tbody>${members.map((m,idx)=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.name)}" id="rmgr_n_${idx}"></td><td style="padding:5px 8px"><select class="form-select" style="padding:3px 6px;font-size:.78rem" id="rmgr_c_${idx}">${G.clubs.map(c=>`<option ${c===m.club?'selected':''}>${c}</option>`).join('')}</select></td><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.region||'')}" id="rmgr_r_${idx}"></td><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:80px" placeholder="없으면 빈칸" value="${esc(m.subClub||'')}" id="rmgr_s_${idx}"></td><td style="padding:5px 8px;white-space:nowrap"><button class="btn btn-outline" style="padding:2px 7px;font-size:.72rem" onclick="saveRegistryRow(${year},${idx})">💾</button><button class="btn btn-danger" style="padding:2px 7px;font-size:.72rem" onclick="deleteRegistryRow(${year},${idx})">🗑</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function addRegistryRow(){
+  const year=parseInt(ge('rmgrYearSel')?.value||2026);
+  const name=(ge('rmgr_name')?.value||'').trim(); const club=ge('rmgr_club')?.value||'';
+  const region=(ge('rmgr_region')?.value||'').trim(); const subClub=(ge('rmgr_subclub')?.value||'').trim();
+  if(!name||!club){ toast('이름과 클럽은 필수입니다','error'); return; }
+  const members=await loadRegistry(year);
+  if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
+  members.push({name,club,region,subClub}); sl(true);
+  try{ await saveRegistry(year); ['rmgr_name','rmgr_region','rmgr_subclub'].forEach(id=>{const el=ge(id);if(el)el.value='';}); await renderRegistryMgr(); renderRegistryTab(); toast(`${name} 추가 완료`,'success'); }
+  catch(e){ toast('저장 실패: '+e.message,'error'); } sl(false);
+}
+async function saveRegistryRow(year,idx){
+  const members=await loadRegistry(year); if(!members[idx]) return;
+  members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=ge(`rmgr_c_${idx}`)?.value||'';
+  members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim(); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
+  sl(true); try{ await saveRegistry(year); toast('수정 완료','success'); renderRegistryTab(); } catch(e){ toast('저장 실패: '+e.message,'error'); } sl(false);
+}
+async function deleteRegistryRow(year,idx){
+  if(!confirm('이 선수를 삭제하시겠습니까?')) return;
+  const members=await loadRegistry(year); members.splice(idx,1); sl(true);
+  try{ await saveRegistry(year); await renderRegistryMgr(); renderRegistryTab(); toast('삭제 완료','success'); } catch(e){ toast('삭제 실패: '+e.message,'error'); } sl(false);
+}
+async function clearRegistryYear(){
+  const year=parseInt(ge('rmgrYearSel')?.value||2026);
+  if(!confirm(`${year}년 명단을 전체 삭제하시겠습니까?`)) return;
+  G_REGISTRY[year]=[]; sl(true);
+  try{ await saveRegistry(year); await renderRegistryMgr(); renderRegistryTab(); toast('삭제 완료','success'); } catch(e){ toast('실패: '+e.message,'error'); } sl(false);
+}
+async function importRegistryFromFile(input){
+  const file=input?.files?.[0]; if(!file) return;
+  const year=parseInt(ge('rmgrYearSel')?.value||2026);
+  await _ensureXLSX();
+  const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]];
+  const rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  if(!rawRows.length){ toast('데이터가 없습니다','error'); return; }
+  const hdr=rawRows[0].map(c=>(c??'').toString().trim());
+  let nameCol=-1,clubCol=-1,regionCol=-1,subCol=-1;
+  hdr.forEach((h,i)=>{ if(/회원명|선수명|이름|성명/.test(h)) nameCol=i; else if(/주클럽|등록클럽|클럽/.test(h)) clubCol=i; else if(/지역/.test(h)) regionCol=i; else if(/부클럽|중복/.test(h)) subCol=i; });
+  if(nameCol<0||clubCol<0){ toast('회원명/클럽 컬럼을 찾지 못했습니다','error'); return; }
+  const newRows=[]; rawRows.slice(1).forEach(row=>{ const name=(row[nameCol]??'').toString().trim(); const club=(row[clubCol]??'').toString().trim(); if(!name||!club) return; newRows.push({name,club,region:regionCol>=0?(row[regionCol]??'').toString().trim():'',subClub:subCol>=0?(row[subCol]??'').toString().trim():''}); });
+  if(!newRows.length){ toast('유효한 데이터가 없습니다','error'); return; }
+  if(!confirm(`${year}년 명단을 ${newRows.length}명으로 교체하시겠습니까?`)) return;
+  G_REGISTRY[year]=newRows; sl(true);
+  try{ await saveRegistry(year); await renderRegistryMgr(); renderRegistryTab(); toast(`${newRows.length}명 업로드 완료`,'success'); } catch(e){ toast('저장 실패: '+e.message,'error'); } sl(false); input.value='';
+}
+async function exportRegistryExcel(){ const year=parseInt(ge('regYearSel')?.value||2026); const members=await loadRegistry(year); await _ensureXLSX(); const wsData=[['지역구분','주클럽','회원명','부클럽'],...members.map(m=>[m.region||'',m.club||'',m.name||'',m.subClub||''])]; const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet(wsData),`${year}년 등록명단`); XLSX.writeFile(wb2,`김해테니스_등록선수_${year}_${new Date().toISOString().substring(0,10)}.xlsx`); }
 function exportRegistryExcelMgr(){ exportRegistryExcel(); }
 
-function findMemberRegistryByYear(name, club, year) {
-  const members=G_REGISTRY[year]||getMemberRegistry2026();
-  const nn=_m26Name(name), cc=_m26Club(club);
-  return members.find(x=>_m26Name(x.name)===nn && (
-    _m26Club(x.club)===cc ||
-    (x.subClub||'').split(',').map(s=>s.trim()).filter(Boolean).includes(cc)
-  ));
-}
+
+// showPage 수정 - players는 누구나 접근
 
 Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
@@ -9150,7 +9034,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   filterP,showP,renderAllP,openPD,openRoster,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
   addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
-  importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,
+  importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,
   openClubMgr,addClub,delClub,renderCL,
   toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
   onRegClubChange,onRegContactInput,saveRegContact,
