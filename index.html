@@ -3427,13 +3427,13 @@ function updateRegisterSlots(){
 
   const lbl=ge('regModeLabel');
   if(lbl){
-    if(isWomen) lbl.textContent=`— 3복식 고정 | 최대 ${mainCount+2}명 (공오더 가능)`;
-    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 최대 ${mainCount+2}명 (공오더 가능)`;
-    else lbl.textContent='— 5복식 | 최대 12명 (공오더 가능)';
+    if(isWomen) lbl.textContent='— 3복식 고정 | 후보 포함 최대 12명 (공오더 가능)';
+    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 후보 포함 최대 12명 (공오더 가능)`;
+    else lbl.textContent='— 5복식 | 후보 포함 최대 12명 (공오더 가능)';
   }
   const pl=ge('regPlayerLabel');
   if(pl){
-    pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">공오더 가능 · 최대 ${mainCount+2}명</span>`;
+    pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">공오더 가능 · 후보 포함 최대 12명</span>`;
   }
 
   // 여성부 조 편성 안내
@@ -3664,9 +3664,9 @@ async function registerTeam(){
   if(!club){toast('클럽 선택','error');return;}
   const dbl=getRegDoublesCount();
   const mainCount=dbl*2;
-  const names=[];for(let i=1;i<=mainCount+2;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
+  const names=[];for(let i=1;i<=12;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
   if(names.length<1){toast('선수를 1명 이상 입력해주세요','error');return;}
-  if(names.length>mainCount+2){toast(`최대 ${mainCount+2}명까지 등록할 수 있습니다`,'error');return;}
+  if(names.length>12){toast('최대 12명까지 등록할 수 있습니다','error');return;}
   const uniq=new Set(names);if(uniq.size!==names.length){toast('이름 중복 있음','error');return;}
   const missing2026=missingMembers2026(names, club, t);
   if(missing2026.length){showMissingMembers2026(missing2026);return;}
@@ -3720,7 +3720,7 @@ async function registerTeam(){
     console.warn('registerTeam saveMeta failed', e);
   }
 
-  for(let i=1;i<=mainCount+2;i++){const el=ge('p'+i);if(el){el.value='';const h=ge('h'+i);if(h)h.innerHTML='';}}
+  for(let i=1;i<=12;i++){const el=ge('p'+i);if(el){el.value='';const h=ge('h'+i);if(h)h.innerHTML='';}}
   sl(false);
   renderRL();
   renderRegisterDivisionOverview();
@@ -3832,8 +3832,8 @@ function openETeam(key,idx){
   ge('mETeamB').innerHTML=`<div style="margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius);font-weight:700">${tdn(team,key,idx)} — ${dl(div)}</div>
     ${terineeSelHtml}
     <div class="form-group"><label class="form-label">클럽</label><select class="form-select" id="etTC">${G.clubs.map(c=>`<option ${c===team.club?'selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="form-group"><label class="form-label" id="editRosterLabel">선수 명단 (최대 ${totalCount}명, 공오더 가능)</label>
-      <div id="etSlots">${buildRosterInputsHTML('ep',totalCount,p)}</div>
+    <div class="form-group"><label class="form-label" id="editRosterLabel">선수 명단 (후보 포함 최대 12명, 공오더 가능)</label>
+      <div id="etSlots">${buildRosterInputsHTML('ep',12,p)}</div>
       <div style="font-size:.72rem;color:var(--text3);margin-top:6px">페어는 경기 결과 입력 때 선택합니다.</div>
     </div>`;
   om('mETeam');
@@ -3850,9 +3850,9 @@ function etUpdateSlots(newDbl,origIdx){
     const el=ge('ep'+i);
     if(el) curVals.push(el.value.trim());
   }
-  ge('etSlots').innerHTML=buildRosterInputsHTML('ep',totalCount,curVals.length?curVals:p);
+  ge('etSlots').innerHTML=buildRosterInputsHTML('ep',12,curVals.length?curVals:p);
   const lbl=ge('editRosterLabel');
-  if(lbl) lbl.textContent=`선수 명단 (최대 ${totalCount}명, 공오더 가능)`;
+  if(lbl) lbl.textContent='선수 명단 (후보 포함 최대 12명, 공오더 가능)';
 }
 async function saveETeam(){
   if(!(AD || REG)){
@@ -3870,7 +3870,7 @@ async function saveETeam(){
   const mainCount = dbl * 2;
 
   const np = [];
-  for(let i=1;i<=mainCount+2;i++){
+  for(let i=1;i<=12;i++){
     const el = ge('ep'+i);
     if(el){
       const v = el.value.trim();
@@ -3880,6 +3880,10 @@ async function saveETeam(){
 
   if(np.length < 1){
     toast('선수를 1명 이상 입력해주세요','error');
+    return;
+  }
+  if(np.length > 12){
+    toast('최대 12명까지 등록할 수 있습니다','error');
     return;
   }
 
@@ -8987,8 +8991,25 @@ async function uploadHistFromExcel(){
     }
 
     // ── 기존 단일 대회 형식 ──
-    if(!tname || !date){ toast('대회명/일자는 필수입니다','error'); sl(false); return; }
-    const tid = (ge('histExcelId')?.value||'').trim() || ('hist_'+(seq?String(seq):date.replace(/-/g,'')));
+    // 파일 1행에서 대회명/날짜 자동 추출 시도
+    let autoName = tname, autoDate = date;
+    if(!autoName || !autoDate){
+      const firstCell = (grid[0]||[])[0];
+      if(firstCell && typeof firstCell==='string'){
+        const dm = firstCell.match(/(\d{4}-\d{2}-\d{2})/);
+        if(dm && !autoDate) autoDate = dm[1];
+        if(!autoName){
+          const candidate = firstCell.replace(/\(?\d{4}-\d{2}-\d{2}\)?/g,'').replace(/[()（）]/g,'').trim();
+          // 부서명(테린이/금배 등)이면 무시
+          if(candidate && !['테린이','금배','은배','동배','여성부'].includes(candidate)){
+            autoName = candidate;
+          }
+        }
+      }
+    }
+    if(!autoName){ sl(false); toast('대회명을 입력해 주세요','error'); return; }
+    if(!autoDate){ sl(false); toast('대회 날짜를 입력해 주세요','error'); return; }
+    const tid = (ge('histExcelId')?.value||'').trim() || ('hist_'+(autoDate.replace(/-/g,'')));
 
     const blocks=_findDivisionBlocks(grid);
     if(!blocks.length){ throw new Error('부서(금배/은배/동배/테린이/여성부) 블록을 찾지 못했습니다'); }
@@ -9017,8 +9038,8 @@ async function uploadHistFromExcel(){
     const divSettings = {};
     divisions.forEach(d=>divSettings[d]={format:'group_knockout', grpSize:4, advance:2});
     await setDoc(doc(db,'tournaments',tid), {
-      name: tname,
-      date,
+      name: autoName,
+      date: autoDate,
       venue: '',
       deadline: '',
       divisions,
@@ -9083,19 +9104,20 @@ async function uploadHistFromExcel(){
         if(!p.clubs.includes(bc)) p.clubs.push(bc);
         if(!p.history) p.history=[];
         if(!p.history.find(h=>h.tid===tid && h.div===tm.div && h.club===tm.club)){
-          p.history.push({tid,tname:tname,date,club:tm.club,baseClub:bc,div:tm.div,result:tm.rank?tm.rank+'위':'참가',rank:tm.rank||null});
+          const rankStr=tm.rank===1?'우승':tm.rank===2?'준우승':tm.rank===3?'3위':tm.rank===99?'최하위':'참가';
+          p.history.push({tid,tname:autoName,date:autoDate,club:tm.club,baseClub:bc,div:tm.div,result:rankStr,rank:tm.rank||null});
         }
         await stP(k);
       }
     }
 
-    await fbLog(`과거대회 업로드: ${tname} (${addCnt}팀${skipCnt?`, 스킵 ${skipCnt}`:''})`,'📥');
+    await fbLog(`과거대회 업로드: ${autoName} (${addCnt}팀${skipCnt?`, 스킵 ${skipCnt}`:''})`,'📥');
 
     sl(false);
     // ✅ 모달 닫기 전에 toast 먼저 표시
     const msg = overwrite
-      ? `☁️ "${tname}" 저장 완료! (${addCnt}팀)`
-      : `☁️ "${tname}" 저장 완료! (추가 ${addCnt}팀${skipCnt?`, 스킵 ${skipCnt}`:''}팀)`;
+      ? `☁️ "${autoName}" 저장 완료! (${addCnt}팀)`
+      : `☁️ "${autoName}" 저장 완료! (추가 ${addCnt}팀${skipCnt?`, 스킵 ${skipCnt}`:''}팀)`;
     toast(msg, 'success');
 
     // UI 갱신 후 모달 닫기
