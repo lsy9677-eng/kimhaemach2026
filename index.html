@@ -1227,6 +1227,7 @@ body{overflow-x:hidden;}
     <div id="contactListBody" style="display:none;margin-top:10px">
       <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">팀 등록 시 자동 저장됩니다. 직접 추가/수정도 가능합니다.</div>
       <div id="adminContactList" style="margin-bottom:10px"></div>
+      <div id="adminDirectorEmailSection"></div>
       <div style="font-size:.7rem;color:var(--text3);line-height:1.4">• 번호가 등록된 클럽에만 공지 문자 버튼이 활성화됩니다.</div>
     </div>
   </div>
@@ -2064,6 +2065,7 @@ function openAdminSettings(){
   // 팀등록 비번 표시 초기화
   ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
   ge('newRegPwInput') && (ge('newRegPwInput').value='');
+  renderAdminDirectorEmailSection();
   renderAdminNoticeSection();
   om('mAdminSettings');
 }
@@ -2261,6 +2263,7 @@ async function saveRegContact(){
     const emailMsg = emailRaw ? ' + 구글 이메일' : '';
     toast(`${club} 경기이사 번호${emailMsg} 저장 완료 ✅`,'success');
     renderAdminContactList();
+  renderAdminDirectorEmailSection();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
 
@@ -2769,6 +2772,68 @@ async function captureAndShareBracket(mode){
 }
 
 // openAdminSettings에서 연락처/공지 렌더링 추가 (기존 함수에서 호출)
+
+function renderAdminDirectorEmailSection(){
+  const wrap = ge('adminDirectorEmailSection');
+  if(!wrap) return;
+
+  const clubEmails = G.meta?.clubEmails || {};
+  const clubContacts = G.meta?.clubContacts || {};
+  const clubs = G.clubs || [];
+
+  const rows = clubs.map(club => ({
+    club,
+    phone: String(clubContacts[club] || '').trim(),
+    email: String(clubEmails[club] || '').trim().toLowerCase()
+  })).filter(r => r.email);
+
+  const uniq = new Map();
+  rows.forEach(r=>{
+    const k = [r.club, r.phone, r.email].join('|');
+    if(!uniq.has(k)) uniq.set(k, r);
+  });
+  const items = [...uniq.values()].sort((a,b)=>
+    String(a.club||'').localeCompare(String(b.club||''), 'ko')
+  );
+  const emailCount = items.length;
+
+  if(!items.length){
+    wrap.innerHTML = `<div class="card" style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-weight:800">📧 경기이사 (이메일 등록: 0명)</div>
+        <div style="font-size:.78rem;color:var(--text2)">이메일 입력한 경기이사만 표시</div>
+      </div>
+      <div style="font-size:.82rem;color:var(--text3)">이메일을 입력한 경기이사가 없습니다.</div>
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="card" style="margin-top:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-weight:800">📧 경기이사 (이메일 등록: ${emailCount}명)</div>
+      <div style="font-size:.78rem;color:var(--text2)">이메일 입력한 경기이사만 표시</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>클럽</th>
+            <th>전화</th>
+            <th>이메일</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(r=>`<tr>
+            <td>${r.club || '-'}</td>
+            <td>${r.phone || '-'}</td>
+            <td>${r.email}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function renderAdminNoticeSection(){
   renderAdminContactList();
   renderNoticeContactBtns();
@@ -9810,7 +9875,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openClubMgr,addClub,delClub,renderCL,
   toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
   onRegClubChange,onRegContactInput,saveRegContact,
-  renderAdminContactList,saveContactFromAdmin,renderAdminNoticeSection,toggleContactList,
+  renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListKakao44,saveRegListPDF44,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
