@@ -1341,24 +1341,6 @@ body{overflow-x:hidden;}
     </div>
   </div>
 </div>
-      <div class="form-group"><label class="form-label">엑셀 파일(xlsx)<span class="req">*</span></label>
-        <input class="form-input" type="file" id="histExcelFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-      </div>
-            <div style="margin-top:8px;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;font-size:.75rem;color:var(--text2)">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="histExcelOverwrite" checked>
-          <span><b>덮어쓰기</b> (같은 대회ID면 기존 등록팀을 삭제 후 교체)</span>
-        </label>
-        <div style="margin-top:6px;color:var(--text3);line-height:1.5">체크 해제 시: 기존 데이터 유지 + <b>(부서+클럽)</b>이 같은 팀은 자동 스킵하고 추가합니다.</div>
-      </div>
-      <div id="histExcelPreview" style="font-size:.75rem;color:var(--text3)"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-gray" onclick="cm('mHistExcel')">취소</button>
-      <button class="btn btn-primary" onclick="uploadHistFromExcel()">☁️ Firebase 저장</button>
-    </div>
-  </div>
-</div>
 
 
 <!-- 등록선수 현황 조회 모달 (일반 회원용) -->
@@ -1882,13 +1864,17 @@ function onDU(){
     ge('regLoginBadge') && (ge('regLoginBadge').style.display='inline');
   }
   applyRegLoginUI();
-  upDash();
+
+  try{ upDash(); }catch(e){ console.warn('onDU upDash failed', e); }
   const p=document.querySelector('.nav-tab.active')?.dataset.page;
-  if(p==='tournament')renderTL();
-  if(p==='register'){popSel();renderRL();}
-  if(p==='bracket')renderBracket();
-  if(p==='ranking')renderRanking();
-  popSel();
+  if(p==='tournament'){ try{ renderTL(); }catch(e){ console.warn('onDU renderTL failed', e); } }
+  if(p==='register'){
+    try{ popSel(); }catch(e){ console.warn('onDU popSel(register) failed', e); }
+    try{ renderRL(); }catch(e){ console.warn('onDU renderRL failed', e); }
+  }
+  if(p==='bracket'){ try{ renderBracket(); }catch(e){ console.warn('onDU renderBracket failed', e); } }
+  if(p==='ranking'){ try{ renderRanking(); }catch(e){ console.warn('onDU renderRanking failed', e); } }
+  try{ popSel(); }catch(e){ console.warn('onDU popSel failed', e); }
 }
 function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend','<style>@keyframes ldA{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}</style>');document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
@@ -3784,21 +3770,36 @@ async function delTeam(key,idx){
   const {tid, div} = _k2td(key);
   const oldPlayers = [...(team.players || [])];
   const oldClub = team.club || '';
+  const backupTeams = JSON.parse(JSON.stringify(G.teams[key] || []));
 
   sl(true);
   try{
     G.teams[key].splice(idx,1);
     await stT(key);
-
-    await _removePlayerHistory(oldPlayers, oldClub, tid, div);
-
-    sl(false);
-    renderRL();
-    renderAllP();
-    toast('팀 및 선수기록 삭제 완료','success');
   }catch(e){
+    G.teams[key] = backupTeams;
     sl(false);
     toast('삭제 실패: '+e.message,'error');
+    return;
+  }
+
+  const postErrors = [];
+
+  try{
+    await _removePlayerHistory(oldPlayers, oldClub, tid, div);
+  }catch(e){
+    postErrors.push('선수기록 삭제');
+    console.warn('delTeam _removePlayerHistory failed', e);
+  }
+
+  sl(false);
+  try{ renderRL(); }catch(e){ console.warn('delTeam renderRL failed', e); }
+  try{ renderAllP(); }catch(e){ console.warn('delTeam renderAllP failed', e); }
+
+  if(postErrors.length){
+    toast('삭제 완료 ✅ (일부 정리 실패: '+postErrors.join(', ')+')','info');
+  }else{
+    toast('팀 및 선수기록 삭제 완료','success');
   }
 }
 function buildRosterInputsHTML(prefix,count,values=[]){
@@ -3900,10 +3901,10 @@ async function saveETeam(){
 
   const oldPlayers = [...(team.players || [])];
   const oldClub = team.club || '';
-
   const removed = oldPlayers.filter(n => !np.includes(n));
   const added = np.filter(n => !oldPlayers.includes(n));
 
+  const backupTeam = JSON.parse(JSON.stringify(team));
   team.club = newClub;
   team.players = np;
   team.doublesCount = dbl;
@@ -3911,23 +3912,42 @@ async function saveETeam(){
   sl(true);
   try{
     await stT(CE_key);
-
-    if(removed.length){
-      await _removePlayerHistory(removed, oldClub, tid, div);
-    }
-
-    if(added.length){
-      await Promise.all(added.map(n => regP(n, newClub, tid, div)));
-    }
-
-    sl(false);
-    cm('mETeam');
-    renderRL();
-    renderAllP();
-    toast('수정 완료 ✅','success');
   }catch(e){
+    teams[CE_idx] = backupTeam;
     sl(false);
     toast('저장 실패: '+e.message,'error');
+    return;
+  }
+
+  const postErrors = [];
+
+  if(removed.length){
+    try{
+      await _removePlayerHistory(removed, oldClub, tid, div);
+    }catch(e){
+      postErrors.push('삭제선수 기록정리');
+      console.warn('saveETeam remove history failed', e);
+    }
+  }
+
+  if(added.length){
+    try{
+      await Promise.all(added.map(n => regP(n, newClub, tid, div)));
+    }catch(e){
+      postErrors.push('추가선수 기록동기화');
+      console.warn('saveETeam regP failed', e);
+    }
+  }
+
+  sl(false);
+  cm('mETeam');
+  try{ renderRL(); }catch(e){ console.warn('saveETeam renderRL failed', e); }
+  try{ renderAllP(); }catch(e){ console.warn('saveETeam renderAllP failed', e); }
+
+  if(postErrors.length){
+    toast('수정 완료 ✅ (일부 부가 저장 실패: '+postErrors.join(', ')+')','info');
+  }else{
+    toast('수정 완료 ✅','success');
   }
 }
 
@@ -8478,7 +8498,7 @@ window.saveM26MgrRow = function(i, safeKey){
   G.meta.memberRegistry2026 = reg;
   _syncMetaToRegistry();
   sl(true);
-  saveMeta().then(()=>saveRegistry(2026)).then(()=>{
+  saveRegistry(2026).then(()=>{
     sl(false);
     window.renderM26MgrList();
     renderMemberRegistry2026Status();
@@ -8501,7 +8521,7 @@ window.deleteM26MgrRow = function(safeKey){
   G.meta.memberRegistry2026 = reg;
   _syncMetaToRegistry();
   sl(true);
-  saveMeta().then(()=>saveRegistry(2026)).then(()=>{
+  saveRegistry(2026).then(()=>{
     sl(false);
     window.renderM26MgrList();
     renderMemberRegistry2026Status();
@@ -8557,10 +8577,7 @@ window.addM26MgrRow = function(){
   _syncMetaToRegistry();
 
   sl(true);
-  saveMeta().then(()=>{
-    // Firebase memberRegistries/2026 도 함께 저장
-    return saveRegistry(2026);
-  }).then(async ()=>{
+  saveRegistry(2026).then(async ()=>{
     // 선수기록 시트용 players 데이터도 즉시 동기화
     await syncRegistryMembersToPlayers([newEntry]);
 
