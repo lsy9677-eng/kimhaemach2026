@@ -6206,10 +6206,8 @@ function renderHistRankingFromRegistrations(tid, div, cont){
   const t = G.tournaments.find(x=>x.id===tid);
   if(!t){ cont.innerHTML='<div class="empty-state card"><p>대회 정보를 찾을 수 없습니다</p></div>'; return; }
 
-  // registrations에서 해당 대회 팀 모으기
   const allRegs = [];
   Object.entries(G.teams||{}).forEach(([key, arr])=>{
-    // key = tid_div (div는 '금','은','동','테린이' 등)
     if(!key.startsWith(tid+'_')) return;
     const divPart = key.slice(tid.length+1);
     (arr||[]).forEach(team=>{
@@ -6217,57 +6215,68 @@ function renderHistRankingFromRegistrations(tid, div, cont){
         div: team.division || divPart,
         club: team.club||'',
         players: team.players||[],
-        rank: team.rank ?? team._rank ?? null
+        rank: (typeof team.rank==='number'?team.rank:(typeof team._rank==='number'?team._rank:null))
       });
     });
   });
 
   if(!allRegs.length){
-    cont.innerHTML='<div class="empty-state card"><div class="empty-icon">📋</div><p>과거대회 팀 데이터가 없습니다. (등록팀이 아직 로드되지 않았거나 업로드가 실패했을 수 있어요)</p></div>';
+    // G.teams 미로드 → Firestore 직접 읽기
+    cont.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:.82rem">⏳ 데이터 로딩 중...</div>';
+    getDocs(query(collection(db,'registrations'),where('tournamentId','==',tid)))
+      .then(snap=>{
+        const regs2=[];
+        snap.docs.forEach(d=>{
+          const x=d.data()||{};
+          regs2.push({div:x.division||'',club:x.club||'',players:x.players||[],
+            rank:(typeof x.rank==='number'?x.rank:null)});
+        });
+        _renderHistRankingHTML(t,div,regs2,cont);
+      })
+      .catch(e=>{ cont.innerHTML=`<div class="empty-state card"><p>로드 실패: ${e.message}</p></div>`; });
     return;
   }
+  _renderHistRankingHTML(t,div,allRegs,cont);
+}
 
+function _renderHistRankingHTML(t, div, allRegs, cont){
   const divs = div ? [div] : (t.divisions||[]);
   let html=`<div style="padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#dce8fb);border-radius:var(--radius-lg);border:1.5px solid var(--success);margin-bottom:14px">
     <div style="font-weight:700;font-size:.95rem">${t.name}</div>
-    <div style="font-size:.78rem;color:var(--text2);margin-top:2px">📅 ${t.date}${t.histSeq?` &nbsp;|&nbsp; 제${t.histSeq}회`:''}${t.histType?` &nbsp;|&nbsp; ${t.histType}`:''}</div>
+    <div style="font-size:.78rem;color:var(--text2);margin-top:2px">📅 ${t.date}</div>
   </div>`;
 
   divs.forEach(d=>{
     const teams = allRegs.filter(r=>r.div===d);
     if(!teams.length) return;
+    if(divs.length>1) html+=`<div class="sec-title" style="margin-top:12px">${dl(d)}</div>`;
 
-    if(divs.length>1) html += `<div class="sec-title" style="margin-top:12px">${dl(d)}</div>`;
-
-    const champ = teams.find(x=>x.rank===1);
+    const champ=teams.find(x=>x.rank===1);
     if(champ){
-      html += `<div style="background:linear-gradient(135deg,#fef3cd,#f5a623);border:2px solid var(--accent);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px">
+      html+=`<div style="background:linear-gradient(135deg,#fef3cd,#f5a623);border:2px solid var(--accent);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px">
         <div style="font-size:2rem">🏆</div>
-        <div><div style="font-weight:700;font-size:1rem">${champ.club}</div><div style="font-size:.72rem;color:#92400e">최종 우승 · ${dl(d)}</div></div>
+        <div><div style="font-weight:700;font-size:1rem">${champ.club}</div><div style="font-size:.72rem;color:#92400e">우승 · ${dl(d)}</div></div>
       </div>`;
     }
 
-    const ranked = teams.filter(x=>x.rank!=null).sort((a,b)=>a.rank-b.rank);
-    const unranked = teams.filter(x=>x.rank==null);
+    const ranked=teams.filter(x=>typeof x.rank==='number').sort((a,b)=>a.rank-b.rank);
+    const unranked=teams.filter(x=>typeof x.rank!=='number');
 
-    html += `<div class="card" style="margin-bottom:10px"><div class="table-wrap"><table>
+    html+=`<div class="card" style="margin-bottom:10px"><div class="table-wrap"><table>
       <thead><tr><th>순위</th><th>팀명</th><th>선수 명단</th></tr></thead><tbody>`;
-
-    [...ranked, ...unranked].forEach(tm=>{
+    [...ranked,...unranked].forEach(tm=>{
       const rk=tm.rank;
-      const rkBadge=rk===1?'🥇':rk===2?'🥈':rk===3?'🥉':rk?rk+'위':'참가';
-      const rkBg=rk===1?'#fef3cd':rk===2?'#f0f4fa':rk===3?'#fdf0ef':'';
-      html += `<tr style="background:${rkBg}">
-        <td style="text-align:center;font-weight:700;font-size:.9rem">${rkBadge}</td>
+      const badge=rk===1?'🥇':rk===2?'🥈':rk===3?'🥉':rk===99?'최하위':rk?rk+'위':'참가';
+      const bg=rk===1?'#fef3cd':rk===2?'#f0f4fa':rk===3?'#fdf0ef':'';
+      html+=`<tr style="background:${bg}">
+        <td style="text-align:center;font-weight:700">${badge}</td>
         <td style="font-weight:700;white-space:nowrap">${tm.club}</td>
         <td style="font-size:.72rem;color:var(--text2)">${(tm.players||[]).join(' · ')}</td>
       </tr>`;
     });
-
-    html += `</tbody></table></div></div>`;
+    html+=`</tbody></table></div></div>`;
   });
-
-  cont.innerHTML = html;
+  cont.innerHTML=html;
 }
 
 // ── 과거 내장 데이터 시합결과 렌더링 ─────────────────────
@@ -6537,7 +6546,7 @@ function upDash(){
   if(window.renderHomeReg) window.renderHomeReg();
 }
 
-async function regP(name,club,tid,div){
+async function regP(name,club,tid,div,rank,_tname,_date){
   const bc=baseClub(club); // 소속 클럽 (A/B 제거: 하모니A→하모니)
   const k=pKey(name,bc);
   if(!G.players[k])G.players[k]={clubs:[],history:[],wins:0,losses:0,name,club:bc};
@@ -6547,8 +6556,13 @@ async function regP(name,club,tid,div){
   const t=G.tournaments.find(t=>t.id===tid);
   if(!p.history)p.history=[];
   // 이력에는 원본 팀명(하모니A) 보존, 기본 클럽도 저장
-  if(!p.history.find(h=>h.tid===tid&&h.div===div&&h.club===club))
-    p.history.push({tid,tname:t?.name||'',date:t?.date||'',club,baseClub:bc,div,result:'참가',rank:null});
+  if(!p.history.find(h=>h.tid===tid&&h.div===div&&h.club===club)){
+    const rankVal=(typeof rank==='number')?rank:null;
+    const resultStr=rankVal===1?'우승':rankVal===2?'준우승':rankVal===3?'3위':rankVal===99?'최하위':'참가';
+    const tnameVal=t?.name||_tname||'';
+    const dateVal=t?.date||_date||'';
+    p.history.push({tid,tname:tnameVal,date:dateVal,club,baseClub:bc,div,result:resultStr,rank:rankVal});
+  }
   await stP(k);
 }
 
@@ -8772,6 +8786,124 @@ async function previewHistExcel(input){
   }
 }
 
+// ── 복합 엑셀 파서: 여러 대회 + 부서 가로 배치 형식 ─────────────
+// (2022~2023 클럽대항 형식: 대회제목행 → 금배/은배/동배 가로 배치 → 결과행)
+function _parseMultiTournamentExcel(grid){
+  const tourn_list = [];
+
+  function cleanName(v){
+    if(v==null) return '';
+    const s = String(v).replace(/\s+/g,'').replace(/,+$/,'').trim();
+    return (s.length>=2 && !/^\d+$/.test(s)) ? s : '';
+  }
+  function normClub(c){
+    if(!c) return '';
+    c = String(c).replace(/\s*[A-Da-d]$/, '').trim();
+    const m={'한별':'테사모','위드':'불사조','한울':'하모니','더블폴트':'로패','어메이징':'아테','LT':'LTC'};
+    return m[c]||c;
+  }
+  function rankNum(s){
+    s=String(s||'').trim();
+    if(s==='우승') return 1;
+    if(s.includes('준우승')) return 2;
+    if(s.includes('3위')) return 3;
+    if(s.includes('최하위')) return 99;
+    return null;
+  }
+
+  // 대회 제목 행 찾기 (날짜 패턴 포함)
+  const dateRx = /(\d{4})\.(\d{2})\.(\d{2})/;
+  const titleRows = [];
+  for(let i=0;i<grid.length;i++){
+    const flat=(grid[i]||[]).map(v=>String(v||'')).join(' ');
+    const dm=flat.match(dateRx);
+    if(dm) titleRows.push({row:i, date:`${dm[1]}-${dm[2]}-${dm[3]}`, text:flat});
+  }
+  if(!titleRows.length) return null; // 이 형식 아님
+
+  for(let ti=0;ti<titleRows.length;ti++){
+    const {row:titleRow, date, text} = titleRows[ti];
+    const endRow = ti+1<titleRows.length ? titleRows[ti+1].row : grid.length;
+
+    let tname='', ttype='';
+    if(text.includes('시장기')) ttype='시장기';
+    else if(text.includes('협회장기')||text.includes('협회장')) ttype='협회장기';
+    else ttype='대회';
+    const yr=date.slice(0,4);
+    const seqM=text.match(/제(\d+)회/);
+    const seq2=seqM?seqM[1]:'';
+    if(seq2){
+      tname=ttype==='시장기'
+        ?`제${seq2}회 김해시장기 테니스대회`
+        :`제${seq2}회 김해시테니스협회장기 테니스대회`;
+    } else { tname=`${yr} ${ttype}`; }
+
+    // 헤더 행 찾기 (금배/은배/동배 포함)
+    let hdrRow=-1;
+    const DIV_KEYS=['금배','은배','동배','테린이','여성부','여성'];
+    const DIV_NORM={'금배':'금','은배':'은','동배':'동','테린이':'테린이','여성부':'여성부','여성':'여성부'};
+    for(let r=titleRow+1;r<endRow;r++){
+      const vals=(grid[r]||[]).map(v=>String(v||'').trim());
+      if(DIV_KEYS.some(k=>vals.includes(k))){ hdrRow=r; break; }
+    }
+    if(hdrRow<0) continue;
+
+    // 결과 행 찾기 ('결과' 포함)
+    let resRow=-1;
+    for(let r=hdrRow+1;r<endRow;r++){
+      const v=String((grid[r]||[])[0]||'').trim();
+      if(v==='결과'){ resRow=r; break; }
+    }
+    if(resRow<0) resRow=endRow-1;
+
+    // 컬럼 → (div, club) 매핑
+    const colMap={};
+    let curDiv='';
+    const hdr=grid[hdrRow]||[];
+    for(let ci=0;ci<hdr.length;ci++){
+      const sv=String(hdr[ci]||'').trim();
+      if(DIV_KEYS.includes(sv)){ curDiv=DIV_NORM[sv]||sv; continue; }
+      if(sv && sv!=='번호/클럽명' && curDiv){
+        const club=normClub(sv);
+        if(club) colMap[ci]={div:curDiv,club};
+      }
+    }
+
+    // 순위 수집
+    const colRank={};
+    if(resRow>=0){
+      const rr=grid[resRow]||[];
+      for(const ci in colMap){
+        const rk=rankNum(rr[ci]);
+        if(rk) colRank[ci]=rk;
+      }
+    }
+
+    // 선수 수집
+    const clubPlayers={};
+    for(const ci in colMap) clubPlayers[ci]=[];
+    for(let r=hdrRow+1;r<resRow;r++){
+      const row=grid[r]||[];
+      for(const ci in colMap){
+        const name=cleanName(row[ci]);
+        if(name && !clubPlayers[ci].includes(name)) clubPlayers[ci].push(name);
+      }
+    }
+
+    // 팀 조합
+    const teams=[];
+    for(const ci in colMap){
+      const {div,club}=colMap[ci];
+      const players=clubPlayers[ci]||[];
+      const rank=colRank[ci]||null;
+      if(players.length||rank) teams.push({club,div,players,rank});
+    }
+
+    tourn_list.push({tname,date,teams});
+  }
+  return tourn_list.length ? tourn_list : null;
+}
+
 async function uploadHistFromExcel(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const f=ge('histExcelFile')?.files?.[0];
@@ -8781,9 +8913,7 @@ async function uploadHistFromExcel(){
   const type=(ge('histExcelType')?.value||'').trim();
   const overwrite = !!ge('histExcelOverwrite')?.checked;
 
-  if(!tname || !date || !f){ toast('대회명/일자/파일은 필수입니다','error'); return; }
-
-  const tid = (ge('histExcelId')?.value||'').trim() || ('hist_'+(seq?String(seq):date.replace(/-/g,'')));
+  if(!f){ toast('파일을 선택해주세요','error'); return; }
 
   sl(true);
   try{
@@ -8793,6 +8923,72 @@ async function uploadHistFromExcel(){
     const wb = XLSX.read(buf, {type:'array'});
     const ws = wb.Sheets[wb.SheetNames[0]];
     const grid = _sheetToGrid(ws);
+
+    // ── 다중 대회 형식 자동 감지 ──
+    const multiResult = _parseMultiTournamentExcel(grid);
+    if(multiResult){
+      // 다중 대회 형식: 대회명/일자 자동 추출, 한 번에 저장
+      toast(`${multiResult.length}개 대회 파싱 완료, Firebase 저장 중...`,'info');
+      let totalAdded=0, totalTeams=0;
+      for(const tourn of multiResult){
+        const t_tname = tourn.tname;
+        const t_date  = tourn.date;
+        const t_tid   = 'hist_'+t_tname.replace(/[\s　]/g,'_').replace(/[^\w가-힣]/g,'');
+        const parsedTeams = tourn.teams;
+        totalTeams += parsedTeams.length;
+
+        const regSnap2 = await getDocs(collection(db,'registrations'));
+        const existingRegs2 = regSnap2.docs.map(d=>({id:d.id,...d.data()}));
+        const existingKeySet2 = new Set(existingRegs2
+          .filter(r=>r.tournamentId===t_tid)
+          .map(r=>`${r.division}||${r.club}`));
+
+        const divisions2=[...new Set(parsedTeams.map(t=>t.div))].filter(Boolean);
+        const divSettings2={};
+        divisions2.forEach(d=>divSettings2[d]={format:'group_knockout',grpSize:4,advance:2});
+        await setDoc(doc(db,'tournaments',t_tid),{
+          name:t_tname, date:t_date, venue:'', deadline:'',
+          divisions:divisions2, format:'group_knockout',
+          grpSize:4, advance:2, divSettings:divSettings2,
+          notice:'', status:'finished', isHistorical:true,
+          histType:t_tname.includes('시장기')?'시장기':'협회장기',
+          updatedAt:serverTimestamp(), createdAt:serverTimestamp()
+        },{merge:true});
+
+        const batch2=writeBatch(db);
+        if(overwrite) existingRegs2.forEach(r=>{ if(r.tournamentId===t_tid) batch2.delete(doc(db,'registrations',r.id)); });
+        let addCnt2=0;
+        for(const tm of parsedTeams){
+          const k=`${tm.div}||${tm.club}`;
+          if(!overwrite && existingKeySet2.has(k)) continue;
+          batch2.set(doc(collection(db,'registrations')),{
+            tournamentId:t_tid, division:tm.div, club:tm.club,
+            players:tm.players, rank:(typeof tm.rank==='number'?tm.rank:null),
+            registeredAt:new Date().toISOString(),
+            updatedAt:new Date().toISOString(), isHistorical:true
+          });
+          addCnt2++;
+        }
+        await batch2.commit();
+        totalAdded+=addCnt2;
+
+        // 선수 history 반영
+        for(const tm of parsedTeams){
+          for(const pname of (tm.players||[])){
+            try{ await regP(pname, tm.club, t_tid, tm.div, tm.rank, t_tname, t_date); }catch(e){}
+          }
+        }
+        toast(`${t_tname} 저장 완료 (${addCnt2}팀)`,'info');
+      }
+      sl(false);
+      toast(`✅ ${multiResult.length}개 대회 / ${totalTeams}팀 / ${totalAdded}팀 추가 완료`,'success');
+      await fbLog(`과거대회 다중 업로드: ${multiResult.map(t=>t.tname).join(', ')}`, '📥');
+      return;
+    }
+
+    // ── 기존 단일 대회 형식 ──
+    if(!tname || !date){ toast('대회명/일자는 필수입니다','error'); sl(false); return; }
+    const tid = (ge('histExcelId')?.value||'').trim() || ('hist_'+(seq?String(seq):date.replace(/-/g,'')));
 
     const blocks=_findDivisionBlocks(grid);
     if(!blocks.length){ throw new Error('부서(금배/은배/동배/테린이/여성부) 블록을 찾지 못했습니다'); }
