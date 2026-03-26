@@ -656,6 +656,20 @@ body{overflow-x:hidden;}
 
 <div class="page active" id="page-home">
   <div class="hero fade-in"><h2 class="hero-title" id="heroTitle">김해시테니스협회</h2><p class="hero-sub" id="heroStatus">대회 준비중</p><div class="hero-chips" style="margin-top:10px"><span class="hero-chip" id="heroClubs">🏟 -</span><span class="hero-chip" id="heroTeams">👥 -</span></div></div>
+  <!-- 경기이사 로그인 시 내 클럽 현황 카드 -->
+  <div id="myClubHomeCard" style="display:none;margin-bottom:10px">
+    <div class="card fade-in" style="border:2px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-weight:700;font-size:.95rem;color:#166534" id="myClubCardTitle">🏆 내 클럽 현황</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="font-size:.75rem;padding:4px 10px;background:#166534;color:white;border-radius:999px" onclick="showPage('register')">📋 팀등록</button>
+          <button class="btn" style="font-size:.75rem;padding:4px 10px;background:#1d4ed8;color:white;border-radius:999px" onclick="goMyClubBracket()">🎲 대진표</button>
+        </div>
+      </div>
+      <div id="myClubHomeBody" style="font-size:.82rem;color:#166534;line-height:1.8"></div>
+    </div>
+  </div>
+
   <div class="card fade-in home-status-card">
     <div class="card-title">📊 김해시테니스협회 현황</div>
     <div class="g4 home-stats">
@@ -782,6 +796,13 @@ body{overflow-x:hidden;}
     <div class="form-group" style="margin-bottom:0"><label class="form-label">대회</label><select class="form-select" id="regTS" onchange="onRegTC()"><option value="">-- 대회 선택 --</option></select></div>
     <div style="display:none"><select class="form-select" id="regDS" onchange="renderRL()"><option value="">-- 부서 선택 --</option></select></div>
   </div>
+  <!-- 내 클럽 필터 버튼 (경기이사 로그인 시) -->
+  <div id="myClubRegBar" style="display:none;margin-bottom:8px">
+    <button id="myClubRegBtn" onclick="toggleMyClubFilter('register')"
+      style="width:100%;padding:8px 14px;font-size:.85rem;font-weight:700;border-radius:10px;border:2px solid var(--success);background:#f0fdf4;color:#166534;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+      🏆 <span id="myClubRegBtnText">내 클럽 팀만 보기</span>
+    </button>
+  </div>
   <div id="regDivisionOverview"></div>
   <div id="regSection" style="display:none">
     <div class="card" id="aoReg" style="display:none">
@@ -880,6 +901,13 @@ body{overflow-x:hidden;}
 </div>
 
 <div class="page" id="page-bracket">
+  <!-- 내 클럽 필터 버튼 (경기이사 로그인 시) -->
+  <div id="myClubBracketBar" style="display:none;margin-bottom:8px">
+    <button id="myClubBracketBtn" onclick="toggleMyClubFilter('bracket')"
+      style="width:100%;padding:8px 14px;font-size:.85rem;font-weight:700;border-radius:10px;border:2px solid var(--success);background:#f0fdf4;color:#166534;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+      🏆 <span id="myClubBracketBtnText">내 클럽 경기만 보기</span>
+    </button>
+  </div>
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;flex-wrap:wrap" id="bracketExportBar" style="display:none">
     <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="openBracketView()">📊 전체 대진표 보기</button>
     <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="bracketToImage()">🖼️ 이미지 저장</button>
@@ -988,17 +1016,56 @@ body{overflow-x:hidden;}
 </main>
 <div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
 <!-- 팀등록 로그인 모달 -->
-<div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 팀등록 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
+<div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 경기이사 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
 <div class="modal-body">
   <div style="padding:10px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#2e7d32;line-height:1.5">
-    📌 경기이사만 사용하는 팀 등록 전용 로그인입니다.
+    📌 경기이사 전용 로그인입니다. 클럽을 선택하고 비밀번호를 입력하세요.
   </div>
-  <div class="form-group"><label class="form-label">팀등록 비밀번호</label>
-    <input class="form-input" type="password" id="regPwInput" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doRegLogin()">
+  <div class="form-group">
+    <label class="form-label">소속 클럽 <span class="req">*</span></label>
+    <select class="form-select" id="regClubLogin" onchange="onRegLoginClubChange()">
+      <option value="">-- 클럽 선택 --</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">비밀번호 <span class="req">*</span></label>
+    <input class="form-input" type="password" id="regPwInput" placeholder="전화번호 뒷 4자리" onkeydown="if(event.key==='Enter')doRegLogin()">
+    <div id="regLoginHint" style="font-size:.72rem;color:var(--text3);margin-top:4px"></div>
   </div>
 </div>
 <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mRegLogin')">취소</button><button class="btn btn-primary" style="background:var(--success)" onclick="doRegLogin()">로그인</button></div>
 </div></div>
+<!-- 최초 로그인 전화번호 등록 모달 -->
+<div class="modal-overlay" id="mFirstLogin">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>📱 전화번호 등록</h3>
+    </div>
+    <div class="modal-body">
+      <div style="padding:10px 12px;background:linear-gradient(135deg,#fff3e0,#ffe0b2);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:#e65100;line-height:1.6">
+        ⚠️ <b><span id="firstLoginClubName"></span></b> 경기이사님,<br>
+        공용 비밀번호로 로그인하셨습니다.<br>
+        전화번호를 등록하면 <b>뒷 4자리가 전용 비밀번호</b>로 자동 설정됩니다.
+      </div>
+      <div class="form-group">
+        <label class="form-label">📱 경기이사 전화번호 <span class="req">*</span></label>
+        <input class="form-input" id="firstLoginPhone" type="tel" inputmode="tel"
+          placeholder="예: 010-1234-5678"
+          onkeydown="if(event.key==='Enter')saveFirstLoginPhone()">
+      </div>
+      <div id="firstLoginMsg" style="font-size:.78rem;margin-top:4px"></div>
+    </div>
+    <div class="modal-footer" style="flex-direction:column;gap:8px">
+      <button class="btn btn-primary" style="width:100%;background:var(--success)" onclick="saveFirstLoginPhone()">
+        💾 등록하고 로그인
+      </button>
+      <button class="btn btn-gray" style="width:100%;font-size:.78rem" onclick="cm('mFirstLogin');_completeRegLogin(FIRST_LOGIN_CLUB)">
+        건너뛰기 (이번만 로그인)
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mPHist"><div class="modal-box"><div class="modal-header"><h3>👤 선수 기록</h3><button class="modal-close" onclick="cm('mPHist')">✕</button></div><div class="modal-body" id="mPHistBody"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPHist')">닫기</button></div></div></div>
 <div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">⚡ 경기 결과 입력</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mM3')">취소</button><button class="btn btn-accent" onclick="saveM3()">💾 저장</button></div></div></div>
 <div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:900px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
@@ -1613,10 +1680,13 @@ const db=getFirestore(_app);
 const storage=getStorage(_app);
 let AD=false;
 let REG=false; // 팀등록 로그인 상태
+let REG_CLUB='';   // 로그인한 경기이사 클럽명
+// window에 노출 - HTML onclick에서 접근 가능하게
+Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}});
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{}},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{}},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1753,6 +1823,7 @@ async function loadMeta(){
       if(!G.meta.regPw)G.meta.regPw='202601';
       if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};
       if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
+      if(!G.meta.clubPasswords||typeof G.meta.clubPasswords!=='object')G.meta.clubPasswords={};
     }else{
       await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{}});
     }
@@ -1783,7 +1854,8 @@ async function saveMeta(){
       clubs:G.clubs,
       adminPhone:(G.meta.adminPhone||''),
       clubContacts:(G.meta.clubContacts||{}),
-      clubEmails:(G.meta.clubEmails||{})
+      clubEmails:(G.meta.clubEmails||{}),
+      clubPasswords:(G.meta.clubPasswords||{})
     });
   }catch(e){
     console.error('saveMeta 오류:', e);
@@ -1876,11 +1948,17 @@ function onDU(){
   // 팀등록 세션 복원
   if(!REG && localStorage.getItem('reg')==='1'){
     REG=true;
-    ge('regToggleBtn') && (ge('regToggleBtn').textContent='팀등록 로그아웃');
+    REG_CLUB = localStorage.getItem('reg_club')||'';
+    ge('regToggleBtn') && (ge('regToggleBtn').textContent='로그아웃');
     ge('regToggleBtn') && (ge('regToggleBtn').style.background='#388e3c');
-    ge('regLoginBadge') && (ge('regLoginBadge').style.display='inline');
+    const _badge = ge('regLoginBadge');
+    if(_badge){
+      _badge.textContent = REG_CLUB ? `${REG_CLUB} 경기이사` : '경기이사';
+      _badge.style.display='inline';
+    }
   }
   applyRegLoginUI();
+  if(REG && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
 
   try{ upDash(); }catch(e){ console.warn('onDU upDash failed', e); }
   const p=document.querySelector('.nav-tab.active')?.dataset.page;
@@ -1988,12 +2066,15 @@ function toggleReg(){
   if(REG && !AD){
     // 로그아웃
     REG=false;
+    REG_CLUB='';
     localStorage.removeItem('reg');
+    localStorage.removeItem('reg_club');
     ge('regToggleBtn').textContent='팀등록 로그인';
     ge('regToggleBtn').style.background='var(--success)';
     ge('regLoginBadge') && (ge('regLoginBadge').style.display='none');
     ge('aoReg') && (ge('aoReg').style.display='none');
     applyRegLoginUI();
+    updateMyClubUI(); // 내 클럽 카드/버튼 숨김
     const _rp=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(_rp==='register'){renderRegisterDivisionOverview();renderRL();}
     toast('팀등록 로그아웃','info');
@@ -2002,28 +2083,126 @@ function toggleReg(){
     toast('관리자는 팀 등록이 가능합니다','info');
   } else {
     om('mRegLogin');
-    setTimeout(()=>ge('regPwInput')?.focus(),200);
+    // 클럽 선택 드롭다운 채우기
+    const _rclSel=ge('regClubLogin');
+    if(_rclSel){
+      _rclSel.innerHTML='<option value="">-- 클럽 선택 --</option>'+(G.clubs||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
+    }
+    ge('regLoginHint') && (ge('regLoginHint').textContent='');
+    setTimeout(()=>ge('regClubLogin')?.focus(),200);
+  }
+}
+
+function onRegLoginClubChange(){
+  const club = ge('regClubLogin')?.value||'';
+  const hint = ge('regLoginHint');
+  if(!hint) return;
+  if(!club){ hint.textContent=''; return; }
+  const passwords = G.meta.clubPasswords||{};
+  const contacts  = G.meta.clubContacts||{};
+  if(passwords[club]){
+    hint.textContent='비밀번호가 설정되어 있습니다.';
+    hint.style.color='var(--success)';
+  } else if(contacts[club]){
+    const phone = contacts[club].replace(/[^0-9]/g,'');
+    const last4 = phone.slice(-4);
+    hint.textContent=`비밀번호 미설정 → 전화번호 뒷 4자리(${last4})로 자동 적용됩니다.`;
+    hint.style.color='#e67e22';
+  } else {
+    hint.textContent='전화번호 미등록 → 공용 비밀번호(202601)로 로그인 후 전화번호 등록이 필요합니다.';
+    hint.style.color='#e67e22';
   }
 }
 
 function doRegLogin(){
-  const pw = (ge('regPwInput')?.value||'').trim();
-  if(pw === G.meta.regPw){
-    REG=true;
-    localStorage.setItem('reg','1');
-    cm('mRegLogin');
-    ge('regPwInput').value='';
-    ge('regToggleBtn').textContent='팀등록 로그아웃';
-    ge('regToggleBtn').style.background='#388e3c';
-    ge('regLoginBadge') && (ge('regLoginBadge').style.display='inline');
-    applyRegLoginUI();
-    toast('팀등록 로그인 ✅ 팀을 등록할 수 있습니다','success');
-    // 팀등록 페이지면 바로 렌더링
-    const pg = document.querySelector('.nav-tab.active')?.dataset?.page;
-    if(pg==='register'){renderRegisterDivisionOverview();renderRL();}
+  const pw   = (ge('regPwInput')?.value||'').trim();
+  const club = (ge('regClubLogin')?.value||'').trim();
+  if(!club){ toast('클럽을 선택해주세요','error'); return; }
+  if(!pw)  { toast('비밀번호를 입력해주세요','error'); return; }
+
+  const passwords = G.meta.clubPasswords||{};
+  const contacts  = G.meta.clubContacts||{};
+
+  // 비밀번호 확인 우선순위: ①클럽 전용 비밀번호 ②전화번호 뒷4자리 ③공용 비밀번호(최초 1회)
+  let correctPw = passwords[club] || '';
+  const hasPhone = !!(contacts[club]);
+  const hasOwnPw = !!(passwords[club]);
+
+  if(!correctPw && hasPhone){
+    const phone = contacts[club].replace(/[^0-9]/g,'');
+    correctPw = phone.slice(-4);
+  }
+  const usedFallback = !correctPw; // 클럽 비번/전화 둘 다 없어서 공용 비번 사용
+  if(!correctPw) correctPw = G.meta.regPw;
+
+  if(pw === correctPw){
+    // 공용 비밀번호로 로그인 → 전화번호 등록 강제
+    if(usedFallback){
+      cm('mRegLogin');
+      ge('regPwInput').value='';
+      openFirstLoginPhoneModal(club);
+      return;
+    }
+    _completeRegLogin(club);
   } else {
     toast('비밀번호 오류','error');
     ge('regPwInput')?.select();
+  }
+}
+
+function _completeRegLogin(club){
+  REG=true;
+  REG_CLUB=club;
+  localStorage.setItem('reg','1');
+  localStorage.setItem('reg_club', club);
+  ge('regToggleBtn').textContent='로그아웃';
+  ge('regToggleBtn').style.background='#388e3c';
+  const badge = ge('regLoginBadge');
+  if(badge){ badge.textContent=`${club} 경기이사`; badge.style.display='inline'; }
+  applyRegLoginUI();
+  updateMyClubUI(); // 내 클럽 카드/버튼 표시
+  toast(`${club} 경기이사 로그인 ✅`,'success');
+  const pg = document.querySelector('.nav-tab.active')?.dataset?.page;
+  if(pg==='register'){renderRegisterDivisionOverview();renderRL();}
+  if(pg==='bracket'){renderBracket();}
+}
+
+// 최초 로그인 시 전화번호 등록 모달
+function openFirstLoginPhoneModal(club){
+  ge('firstLoginClubName').textContent = club;
+  ge('firstLoginPhone').value='';
+  ge('firstLoginMsg').textContent='';
+  FIRST_LOGIN_CLUB = club;
+  om('mFirstLogin');
+  setTimeout(()=>ge('firstLoginPhone')?.focus(),200);
+}
+
+let FIRST_LOGIN_CLUB='';
+Object.defineProperty(window,'FIRST_LOGIN_CLUB',{get:()=>FIRST_LOGIN_CLUB,set:(v)=>{FIRST_LOGIN_CLUB=v;}});
+
+async function saveFirstLoginPhone(){
+  const raw = (ge('firstLoginPhone')?.value||'').trim();
+  const phone = raw.replace(/[^0-9-]/g,'');
+  const msg = ge('firstLoginMsg');
+  if(phone.length < 9){
+    if(msg){ msg.textContent='올바른 전화번호를 입력해주세요 (9자리 이상)'; msg.style.color='var(--danger)'; }
+    return;
+  }
+  const last4 = phone.replace(/[^0-9]/g,'').slice(-4);
+  sl(true);
+  try{
+    if(!G.meta.clubContacts) G.meta.clubContacts={};
+    if(!G.meta.clubPasswords) G.meta.clubPasswords={};
+    G.meta.clubContacts[FIRST_LOGIN_CLUB] = phone;
+    G.meta.clubPasswords[FIRST_LOGIN_CLUB] = last4;
+    await saveMeta();
+    sl(false);
+    cm('mFirstLogin');
+    _completeRegLogin(FIRST_LOGIN_CLUB);
+    toast(`전화번호 저장 완료! 다음부터는 뒷 4자리(${last4})로 로그인하세요 🔑`,'success');
+  }catch(e){
+    sl(false);
+    if(msg){ msg.textContent='저장 실패: '+e.message; msg.style.color='var(--danger)'; }
   }
 }
 
@@ -2302,20 +2481,41 @@ function renderAdminContactList(){
   const noPhone = clubs.filter(c=>!contacts[c]);
   const sorted = [...withPhone, ...noPhone];
   if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
+  const passwords = G.meta.clubPasswords||{};
   el.innerHTML = sorted.map(club=>{
     const phone = contacts[club]||'';
     const email = emails[club]||'';
-    return `<div style="padding:6px 0;border-bottom:1px dashed var(--border)">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:${email?'4px':'0'}">
+    const phone4 = phone.replace(/[^0-9]/g,'').slice(-4);
+    const pw = passwords[club]||(phone4.length===4?phone4:'');
+    return `<div style="padding:7px 0;border-bottom:1px dashed var(--border)">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span style="min-width:65px;font-size:.82rem;font-weight:${phone?'700':'400'};color:${phone?'var(--text1)':'var(--text3)'}">${club}</span>
         <input class="form-input" value="${phone}" placeholder="번호 없음" id="cc_${club}" inputmode="tel"
           style="flex:1;min-width:110px;font-size:.8rem;padding:4px 8px">
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveContactFromAdmin('${club}')">💾</button>
         ${phone?`<a href="sms:${phone.replace(/[^0-9+]/g,'')}" style="text-decoration:none"><button class="btn btn-gray" style="font-size:.74rem;padding:3px 8px">📱</button></a>`:''}
       </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:${email?'4px':'0'}">
+        <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🔑 비밀번호</span>
+        <input class="form-input" value="${pw}" placeholder="뒷4자리 자동" id="cpw_${club}" maxlength="20"
+          style="flex:1;min-width:100px;font-size:.8rem;padding:4px 8px" type="text">
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap;color:#1565c0" onclick="saveClubPassword('${club}')">🔑저장</button>
+      </div>
       ${email?`<div style="font-size:.72rem;color:#1a73e8;padding-left:2px">📧 ${email}</div>`:''}
     </div>`;
   }).join('');
+}
+
+async function saveClubPassword(club){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const pw = (ge('cpw_'+club)?.value||'').trim();
+  if(!pw){ toast('비밀번호를 입력하세요','error'); return; }
+  if(!G.meta.clubPasswords) G.meta.clubPasswords={};
+  G.meta.clubPasswords[club]=pw;
+  try{
+    await saveMeta();
+    toast(`${club} 비밀번호 저장 완료 ✅`,'success');
+  }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
 
 async function saveContactFromAdmin(club){
@@ -2325,9 +2525,20 @@ async function saveContactFromAdmin(club){
   if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
   if(!G.meta.clubContacts) G.meta.clubContacts={};
   G.meta.clubContacts[club] = phone;
+  // 전화번호 뒷 4자리를 비밀번호로 자동 설정 (기존 비밀번호 없을 때만)
+  if(phone){
+    const last4 = phone.replace(/[^0-9]/g,'').slice(-4);
+    if(last4.length===4){
+      if(!G.meta.clubPasswords) G.meta.clubPasswords={};
+      if(!G.meta.clubPasswords[club]){
+        G.meta.clubPasswords[club]=last4;
+      }
+    }
+  }
   try{
     await saveMeta();
-    toast(`${club} 번호 저장 완료 ✅`,'success');
+    const last4 = phone.replace(/[^0-9]/g,'').slice(-4);
+    toast(`${club} 번호 저장 완료 ✅ (비밀번호: ${last4||'미설정'})`, 'success');
     renderAdminContactList();
     renderNoticeContactBtns();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
@@ -3626,13 +3837,26 @@ function renderRegisterDivisionOverview(){
     const order={'금':1,'은':2,'동':3,'테린이':4};
     return (order[a]||99)-(order[b]||99);
   });
-  box.innerHTML=divisions.map(div=>{
+  // 필터 안내 배너
+  const _filterBanner = (MY_CLUB_FILTER && REG_CLUB)
+    ? `<div style="padding:8px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;font-size:.8rem;color:#166534;font-weight:600;margin-bottom:10px">
+        🏆 ${REG_CLUB} 팀만 표시 중 &nbsp;<button onclick="toggleMyClubFilter('register')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+      </div>` : '';
+  box.innerHTML=_filterBanner+divisions.map(div=>{
     const key=tid+'_'+div;
-    const teams=G.teams[key]||[];
+    const allTeams=G.teams[key]||[];
+    // 내 클럽 필터 ON 시 내 클럽 팀만 표시
+    const bc = REG_CLUB ? baseClub(REG_CLUB) : '';
+    const teams = (MY_CLUB_FILTER && bc)
+      ? allTeams.filter(tm=>baseClub(tm.club||'')===bc || tm.club===REG_CLUB)
+      : allTeams;
     const totalPlayers=teams.reduce((s,tm)=>s+((tm.players||[]).length),0);
     const isSel=selected===div;
     const canRegister=(AD||REG) && (AD||isOpen);
-    return `<div class="card" style="margin-bottom:14px;border-top:3px solid ${isSel?'#d4a017':'#dbe4f0'}">
+    // 내 클럽 필터 ON 시 내 클럽이 있는 부서만 강조
+    const hasMyTeam = bc && allTeams.some(tm=>baseClub(tm.club||'')===bc||tm.club===REG_CLUB);
+    const borderColor = MY_CLUB_FILTER && hasMyTeam ? '#16a34a' : isSel ? '#d4a017' : '#dbe4f0';
+    return `<div class="card" style="margin-bottom:14px;border-top:3px solid ${borderColor}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="dpill ${dc(div)}">${dl(div)}</span>
@@ -3676,6 +3900,8 @@ function mountRegisterFormInline(div){
 
 function renderRL(){
   const tid=ge('regTS').value,div=ge('regDS').value;
+  // 내 클럽 필터 버튼 텍스트 동기화
+  updateFilterBtnUI('register', MY_CLUB_FILTER);
   renderRegisterDivisionOverview();
   if(!tid||!div){
     ge('regSection').style.display='none';
@@ -3692,6 +3918,16 @@ function renderRL(){
   ge('regSection').style.display='block';
   ge('aoReg').style.display=canRegister?'block':'none';
   if(canRegister) mountRegisterFormInline(div);
+  // 경기이사 클럽 자동 선택
+  if(REG && REG_CLUB && !AD){
+    setTimeout(()=>{
+      const cs=ge('regClub');
+      if(cs&&cs.value!==REG_CLUB){
+        const opt=[...cs.options].find(o=>o.value===REG_CLUB);
+        if(opt){ cs.value=REG_CLUB; onRegClubChange(); }
+      }
+    },150);
+  }
 
   updateRegisterSlots();
 
@@ -3794,6 +4030,12 @@ async function registerTeam(){
     if(_regPhone && _regPhone.length>=9 && !(G.meta.clubContacts||{})[club]){
       if(!G.meta.clubContacts) G.meta.clubContacts={};
       G.meta.clubContacts[club]=_regPhone;
+      // 비밀번호 자동 설정 (기존 설정 없을 때만)
+      const _last4=_regPhone.replace(/[^0-9]/g,'').slice(-4);
+      if(_last4.length===4){
+        if(!G.meta.clubPasswords) G.meta.clubPasswords={};
+        if(!G.meta.clubPasswords[club]) G.meta.clubPasswords[club]=_last4;
+      }
       await saveMeta();
     }
   }catch(e){
@@ -4058,6 +4300,20 @@ function renderBracket(){
   const tid=ge('brTS').value;
   const div=ge('brDS').value; // '__ALL__' = 전체
   const cont=ge('bracketContent');
+
+  // 필터 버튼 동기화 + 안내 배너
+  updateFilterBtnUI('bracket', MY_CLUB_FILTER);
+  let _bBanner=ge('bracketFilterBanner');
+  if(!_bBanner){
+    _bBanner=document.createElement('div');
+    _bBanner.id='bracketFilterBanner';
+    const _bp=ge('page-bracket');
+    if(_bp) _bp.insertBefore(_bBanner,_bp.firstChild);
+  }
+  _bBanner.innerHTML=(MY_CLUB_FILTER&&REG_CLUB)
+    ?`<div style="padding:8px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;font-size:.8rem;color:#166534;font-weight:600;margin-bottom:8px">
+        🏆 ${REG_CLUB} 경기 강조 중 (흐린 경기는 타 클럽) &nbsp;<button onclick="toggleMyClubFilter('bracket')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+      </div>` : '';
 
   if(!tid){
     cont.innerHTML='<div class="empty-state card"><div class="empty-icon">🎲</div><p>대회를 선택하세요</p></div>';
@@ -4578,7 +4834,13 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     : (mCourts.length ? `<span style="font-size:.88rem;font-weight:700;background:${isWaiting?'rgba(245,166,35,.3)':'rgba(255,255,255,.22)'};color:${isWaiting?'#ffe082':'white'};padding:3px 12px;border-radius:12px;border:1px solid ${isWaiting?'rgba(245,166,35,.6)':'rgba(255,255,255,.4)'}">${courtLabel}</span>` : '');
 
   const btn=AD?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${done?'✏️ 수정':'⚡ 결과입력'}</button>`:'';
-  return`<div class="m3card"><div class="m3hdr"><div style="display:flex;align-items:center;gap:7px"><span class="m3badge">${label}</span><span style="font-size:.95rem;font-weight:700">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px">${grpCourtBadge} ${courtUI} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':'<span style="font-size:.82rem;opacity:.8;font-weight:600">대기중</span>'} ${btn}</div></div>
+  const _bc2=REG_CLUB?baseClub(REG_CLUB):'';
+  const _tms2=G.teams[key]||[];
+  const _tm1x=_tms2[m.t1]??_tms2.find(t=>t.id===m.t1||t.name===m.t1);
+  const _tm2x=_tms2[m.t2]??_tms2.find(t=>t.id===m.t2||t.name===m.t2);
+  const _isMyCM=MY_CLUB_FILTER&&_bc2&&((_tm1x&&baseClub(_tm1x.club||'')===_bc2)||(_tm2x&&baseClub(_tm2x.club||'')===_bc2));
+  const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
+  return`<div class="m3card" style="${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)':''}${_isOtherM?'opacity:0.35;':''}"><div class="m3hdr" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px"><span class="m3badge">${label}</span><span style="font-size:.95rem;font-weight:700">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px">${grpCourtBadge} ${courtUI} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':'<span style="font-size:.82rem;opacity:.8;font-weight:600">대기중</span>'} ${btn}</div></div>
     <div class="m3body">${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin-bottom:6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
@@ -6644,6 +6906,163 @@ function getAssociationSummary(){
   };
 }
 
+
+// ══════════════════════════════════════════════════════
+// 🏆 내 클럽 기능 (경기이사 로그인 시)
+// ══════════════════════════════════════════════════════
+
+let MY_CLUB_FILTER = false; // 내 클럽 필터 on/off 상태
+Object.defineProperty(window,'MY_CLUB_FILTER',{get:()=>MY_CLUB_FILTER,set:(v)=>{MY_CLUB_FILTER=v;}});
+
+// 로그인/로그아웃 시 내 클럽 UI 갱신
+function updateMyClubUI(){
+  const club = REG_CLUB;
+  const isReg = REG && !AD && club;
+
+  // 각 탭 버튼 표시/숨김
+  const regBar = ge('myClubRegBar');
+  const bracketBar = ge('myClubBracketBar');
+  if(regBar) regBar.style.display = isReg ? 'block' : 'none';
+  if(bracketBar) bracketBar.style.display = isReg ? 'block' : 'none';
+
+  // 홈 카드 표시/숨김
+  const homeCard = ge('myClubHomeCard');
+  if(homeCard) homeCard.style.display = isReg ? 'block' : 'none';
+
+  if(isReg){
+    const titleEl = ge('myClubCardTitle');
+    if(titleEl) titleEl.textContent = `🏆 ${club} 현황`;
+    updateMyClubHomeCard();
+    // 팀등록 탭: 내 클럽 자동 선택
+    const regClubSel = ge('regClub');
+    if(regClubSel && regClubSel.value !== club){
+      // 옵션이 로드된 후 선택
+      setTimeout(()=>{
+        const regClubSel2 = ge('regClub');
+        if(regClubSel2){
+          const opt = [...regClubSel2.options].find(o=>o.value===club);
+          if(opt){ regClubSel2.value=club; onRegClubChange(); }
+        }
+      }, 300);
+    }
+  } else {
+    MY_CLUB_FILTER = false;
+    updateFilterBtnUI('register', false);
+    updateFilterBtnUI('bracket', false);
+  }
+}
+
+// 홈 내 클럽 카드 내용 갱신
+function updateMyClubHomeCard(){
+  const club = REG_CLUB;
+  const body = ge('myClubHomeBody');
+  if(!body || !club) return;
+
+  const at = G.tournaments.find(t=>t.status==='ongoing') ||
+             G.tournaments.find(t=>t.status==='open') ||
+             G.tournaments[0];
+  if(!at){ body.innerHTML='<div style="color:var(--text3)">진행 중인 대회가 없습니다</div>'; return; }
+
+  const bc = baseClub(club);
+  let html = '';
+
+  // 각 부서에서 내 클럽 팀 찾기
+  const myTeams = [];
+  (at.divisions||[]).forEach(div=>{
+    const key = at.id+'_'+div;
+    const teams = G.teams[key]||[];
+    teams.forEach((team,idx)=>{
+      if(baseClub(team.club||'')=== bc || team.club===club){
+        myTeams.push({team, div, key, idx});
+      }
+    });
+  });
+
+  if(!myTeams.length){
+    body.innerHTML = `<div>📋 <b>${at.name}</b>에 등록된 팀이 없습니다.</div>
+      <button class="btn" style="margin-top:8px;font-size:.8rem;padding:5px 12px;background:#166534;color:white;border-radius:8px"
+        onclick="showPage('register')">📝 팀 등록하러 가기</button>`;
+    return;
+  }
+
+  // 등록 팀 정보
+  html += `<div style="margin-bottom:6px">📋 <b>${at.name}</b></div>`;
+  myTeams.forEach(({team, div, key, idx})=>{
+    const allMs = G.matches[key]||[];
+    // 내 팀 경기만
+    const myMs = allMs.filter(m=>{
+      const teams = G.teams[key]||[];
+      const t1 = teams[m.t1]; const t2 = teams[m.t2];
+      return (t1&&(baseClub(t1.club||'')=== bc)) || (t2&&(baseClub(t2.club||'')=== bc));
+    });
+    const done = myMs.filter(m=>m.winner!==null&&!m.bye).length;
+    const total = myMs.filter(m=>!m.bye).length;
+    const wins = myMs.filter(m=>{
+      const teams = G.teams[key]||[];
+      const winTeam = teams[m.winner];
+      return m.winner!==null && winTeam && baseClub(winTeam.club||'')=== bc;
+    }).length;
+
+    // 다음 경기 찾기
+    const nextM = myMs.find(m=>m.winner===null&&!m.bye);
+    let nextInfo = '';
+    if(nextM){
+      const tms = G.teams[key]||[];
+      const op = tms[nextM.t1]&&baseClub(tms[nextM.t1].club||'')=== bc ? tms[nextM.t2] : tms[nextM.t1];
+      const opNm = op ? (op.club||'?') : '?';
+      const courts = Array.isArray(nextM.courts)&&nextM.courts.length ? ` 🎾${nextM.courts.join('/')}` : '';
+      nextInfo = `<div style="font-size:.78rem;color:#1d4ed8;margin-top:3px">⏭ 다음: vs <b>${opNm}</b>${courts}</div>`;
+    }
+
+    html += `<div style="padding:6px 10px;background:white;border-radius:8px;margin-bottom:6px;border:1px solid #bbf7d0">
+      <div style="font-weight:700">${dl(div)} — ${tdn(team,key,idx)}</div>
+      <div style="font-size:.8rem;color:#166534">🧍 ${(team.players||[]).length}명 등록${total>0?` · 🏅 ${wins}승 ${done-wins}패 (${done}/${total}경기)`:''}</div>
+      ${nextInfo}
+    </div>`;
+  });
+
+  html += `<div style="display:flex;gap:6px;margin-top:4px">
+    <button class="btn" style="flex:1;font-size:.78rem;padding:5px;background:#166534;color:white;border-radius:8px"
+      onclick="showPage('register');toggleMyClubFilter('register',true)">📋 내 팀 보기</button>
+    <button class="btn" style="flex:1;font-size:.78rem;padding:5px;background:#1d4ed8;color:white;border-radius:8px"
+      onclick="goMyClubBracket()">🎲 내 경기 보기</button>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+// 내 클럽 대진표로 이동
+function goMyClubBracket(){
+  const at = G.tournaments.find(t=>t.status==='ongoing') ||
+             G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
+  if(!at) return;
+  showPage('bracket');
+  const brTS = ge('brTS');
+  if(brTS){ brTS.value = at.id; onBrTC(); }
+  setTimeout(()=>toggleMyClubFilter('bracket', true), 300);
+}
+
+// 내 클럽 필터 토글
+function toggleMyClubFilter(tab, forceOn){
+  if(forceOn !== undefined) MY_CLUB_FILTER = forceOn;
+  else MY_CLUB_FILTER = !MY_CLUB_FILTER;
+  updateFilterBtnUI(tab, MY_CLUB_FILTER);
+  if(tab==='bracket') renderBracket();
+  if(tab==='register') renderRL();
+}
+
+// 필터 버튼 UI 업데이트
+function updateFilterBtnUI(tab, isOn){
+  const btnText = ge(tab==='bracket' ? 'myClubBracketBtnText' : 'myClubRegBtnText');
+  const btn = ge(tab==='bracket' ? 'myClubBracketBtn' : 'myClubRegBtn');
+  const label = tab==='bracket' ? '내 클럽 경기만 보기' : '내 클럽 팀만 보기';
+  if(btnText) btnText.textContent = isOn ? `✅ ${label} (ON)` : label;
+  if(btn){
+    btn.style.background = isOn ? '#166534' : '#f0fdf4';
+    btn.style.color = isOn ? 'white' : '#166534';
+  }
+}
+
 function upDash(){
   // ── 홈 현황판 4개: 2026년 협회 전체 기준 ──────────────────
   const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
@@ -6750,6 +7169,8 @@ function upDash(){
   }
   upLog();
   if(window.renderHomeReg) window.renderHomeReg();
+  // 내 클럽 카드 갱신 (경기이사 로그인 상태면)
+  if(REG && REG_CLUB && !AD) updateMyClubHomeCard();
 }
 
 async function regP(name,club,tid,div,rank,_tname,_date){
@@ -9881,7 +10302,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
-  openPD,openEditPlayer,saveEditPlayer,deletePlayer,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
+  openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,saveFirstLoginPhone,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,toggleMyClubFilter,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
   resetMatchRecords,recalcAllPlayerStats,
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
