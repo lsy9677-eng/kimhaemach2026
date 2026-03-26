@@ -640,7 +640,7 @@ body{overflow-x:hidden;}
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">경기이사</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️ 관리자 설정</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">팀등록 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">관리자 로그인</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">경기이사</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️ 관리자 설정</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">경기이사 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">관리자 로그인</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -788,13 +788,13 @@ body{overflow-x:hidden;}
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListPDF44()">📄 PDF 저장</button>
     </div>
   </div>
-  <!-- 팀등록 로그인 안내 (비로그인 상태) -->
+  <!-- 경기이사 로그인 안내 (비로그인 상태) -->
   <div id="regLoginPrompt" style="display:none">
     <div style="padding:20px 16px;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:var(--radius-lg);border:2px solid var(--primary-light);text-align:center;margin-bottom:16px">
       <div style="font-size:2rem;margin-bottom:8px">📋</div>
       <div style="font-weight:700;font-size:.95rem;color:var(--primary-dark);margin-bottom:6px">팀 등록을 하려면 로그인이 필요합니다</div>
       <div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5">경기이사에게 받은 팀등록 비밀번호를 입력하세요</div>
-      <button class="btn btn-primary" style="padding:10px 28px;font-size:.9rem" onclick="toggleReg()">📋 팀등록 로그인</button>
+      <button class="btn btn-primary" style="padding:10px 28px;font-size:.9rem" onclick="toggleReg()">📋 경기이사 로그인</button>
     </div>
   </div>
   <div class="card">
@@ -2076,7 +2076,7 @@ function toggleReg(){
     REG_CLUB='';
     localStorage.removeItem('reg');
     localStorage.removeItem('reg_club');
-    ge('regToggleBtn').textContent='팀등록 로그인';
+    ge('regToggleBtn').textContent='경기이사 로그인';
     ge('regToggleBtn').style.background='var(--success)';
     ge('regLoginBadge') && (ge('regLoginBadge').style.display='none');
     ge('aoReg') && (ge('aoReg').style.display='none');
@@ -2084,7 +2084,7 @@ function toggleReg(){
     updateMyClubUI(); // 내 클럽 카드/버튼 숨김
     const _rp=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(_rp==='register'){renderRegisterDivisionOverview();renderRL();}
-    toast('팀등록 로그아웃','info');
+    toast('경기이사 로그아웃','info');
   } else if(AD) {
     // 관리자는 이미 팀등록 가능
     toast('관리자는 팀 등록이 가능합니다','info');
@@ -3941,7 +3941,7 @@ function selectRegDivision(div){
   const tid=ge('regTS')?.value||'';
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t){ toast('대회를 먼저 선택하세요','info'); return; }
-  if(!(AD||REG)){ toast('팀등록 로그인이 필요합니다','info'); return; }
+  if(!(AD||REG)){ toast('경기이사 로그인이 필요합니다','info'); return; }
   if(!AD && t.status!=='open'){ toast('접수중 대회만 등록 가능합니다','error'); return; }
   const ds=ge('regDS');
   if(ds) ds.value=div;
@@ -4015,7 +4015,7 @@ function renderRL(){
     ge('aoReg').style.display='none';
   }else if(!canRegister){
     msg.style.display='block';
-    msg.innerHTML='📋 팀 등록을 하려면 상단의 <b>팀등록 로그인</b>이 필요합니다.';
+    msg.innerHTML='📋 팀 등록을 하려면 상단의 <b>경기이사 로그인</b>이 필요합니다.';
   }else if(lock){
     msg.style.display='block';
     msg.innerHTML = `⛔ 현재 선택한 대회는 <b>${t?.status==='finished'?'종료':t?.status==='closed'?'마감':'접수중 아님'}</b> 상태라 팀 등록이 비활성화 됩니다.<br>상단에서 <b>접수중 대회</b>를 선택해 주세요.`;
