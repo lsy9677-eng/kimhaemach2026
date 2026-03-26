@@ -2166,6 +2166,7 @@ function _completeRegLogin(club){
   ge('regToggleBtn').style.background='#388e3c';
   const badge = ge('regLoginBadge');
   if(badge){ badge.textContent=`${club} 경기이사`; badge.style.display='inline'; }
+  cm('mRegLogin');
   applyRegLoginUI();
   updateMyClubUI(); // 내 클럽 카드/버튼 표시
   toast(`${club} 경기이사 로그인 ✅`,'success');
