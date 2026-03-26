@@ -1251,6 +1251,24 @@ body{overflow-x:hidden;}
     </div>
   </div>
 
+  <!-- 경기이사 등록 기한 설정 -->
+  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">📅 경기이사 등록 기한 설정</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">
+      기한이 지나면 경기이사는 팀 등록·수정·삭제가 불가합니다. 관리자는 항상 가능합니다.<br>
+      비워두면 기한 제한 없이 항상 허용합니다.
+    </div>
+    <div id="regDeadlineStatus" style="padding:8px 12px;background:var(--panel2);border-radius:8px;margin-bottom:10px;font-size:.82rem"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input class="form-input" type="datetime-local" id="regDeadlineDtInput" style="flex:1;min-width:180px">
+      <button class="btn btn-primary" onclick="saveRegDeadline()">💾 저장</button>
+      <button class="btn btn-gray" onclick="clearRegDeadline()">🗑 기한 해제</button>
+    </div>
+    <div style="margin-top:8px;font-size:.72rem;color:var(--text3)">
+      • 예: 2026-04-30 18:00 → 4월 30일 오후 6시까지만 경기이사 등록 가능
+    </div>
+  </div>
+
   <!-- 팀등록 비밀번호 관리 -->
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">🔑 팀등록 비밀번호 관리</div>
@@ -1686,7 +1704,7 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{}},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},regDeadlineDt:''},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[]};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -1824,6 +1842,7 @@ async function loadMeta(){
       if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};
       if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
       if(!G.meta.clubPasswords||typeof G.meta.clubPasswords!=='object')G.meta.clubPasswords={};
+      if(!G.meta.regDeadlineDt) G.meta.regDeadlineDt='';
     }else{
       await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{}});
     }
@@ -1855,7 +1874,8 @@ async function saveMeta(){
       adminPhone:(G.meta.adminPhone||''),
       clubContacts:(G.meta.clubContacts||{}),
       clubEmails:(G.meta.clubEmails||{}),
-      clubPasswords:(G.meta.clubPasswords||{})
+      clubPasswords:(G.meta.clubPasswords||{}),
+      regDeadlineDt:(G.meta.regDeadlineDt||'')
     });
   }catch(e){
     console.error('saveMeta 오류:', e);
@@ -2247,8 +2267,77 @@ function toggleShowRegPw(btn){
   }
 }
 
+
+// ── 등록 기한 관련 함수들 ─────────────────────────────────────────────
+
+// 경기이사의 현재 등록 가능 여부 (기한 체크)
+function isRegDeadlinePassed(){
+  const dt = G.meta.regDeadlineDt||'';
+  if(!dt) return false; // 기한 없으면 항상 가능
+  return new Date() > new Date(dt);
+}
+
+// 등록기한 표시 텍스트
+function regDeadlineLabel(){
+  const dt = G.meta.regDeadlineDt||'';
+  if(!dt) return '기한 없음 (항상 허용)';
+  const d = new Date(dt);
+  const passed = new Date() > d;
+  const fmt = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return passed
+    ? `⛔ 기한 만료 — ${fmt} (경기이사 등록 불가)`
+    : `✅ ${fmt} 까지 허용`;
+}
+
+// 관리자 설정 열 때 기한 UI 갱신
+function refreshRegDeadlineUI(){
+  const el = ge('regDeadlineStatus');
+  if(el){
+    const passed = isRegDeadlinePassed();
+    el.textContent = regDeadlineLabel();
+    el.style.color = isRegDeadlinePassed() ? 'var(--danger)' : 'var(--success)';
+  }
+  const inp = ge('regDeadlineDtInput');
+  if(inp && G.meta.regDeadlineDt){
+    // datetime-local 형식으로 변환
+    const d = new Date(G.meta.regDeadlineDt);
+    const local = new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    inp.value = local;
+  }
+}
+
+async function saveRegDeadline(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const val = ge('regDeadlineDtInput')?.value||'';
+  if(!val){ toast('날짜와 시간을 선택하세요','error'); return; }
+  G.meta.regDeadlineDt = new Date(val).toISOString();
+  sl(true);
+  try{
+    await saveMeta();
+    sl(false);
+    refreshRegDeadlineUI();
+    toast(`등록 기한 저장 완료 ✅ — ${regDeadlineLabel()}`,'success');
+  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
+}
+
+async function clearRegDeadline(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  if(!confirm('등록 기한을 해제하시겠습니까? 해제 시 경기이사가 언제든지 등록할 수 있습니다.')) return;
+  G.meta.regDeadlineDt = '';
+  const inp = ge('regDeadlineDtInput');
+  if(inp) inp.value='';
+  sl(true);
+  try{
+    await saveMeta();
+    sl(false);
+    refreshRegDeadlineUI();
+    toast('등록 기한 해제 완료 ✅ (제한 없음)','success');
+  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
+}
+
 function openAdminSettings(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
+  refreshRegDeadlineUI();
   // 입력 초기화
   ['aspCur','aspNew','aspNew2'].forEach(id=>{const el=ge(id);if(el)el.value='';});
   const ap=ge('adminPhoneInput'); if(ap) ap.value=(G.meta.adminPhone||'');
@@ -3852,7 +3941,7 @@ function renderRegisterDivisionOverview(){
       : allTeams;
     const totalPlayers=teams.reduce((s,tm)=>s+((tm.players||[]).length),0);
     const isSel=selected===div;
-    const canRegister=(AD||REG) && (AD||isOpen);
+    const canRegister=(AD||REG) && (AD||isOpen) && (AD||!isRegDeadlinePassed());
     // 내 클럽 필터 ON 시 내 클럽이 있는 부서만 강조
     const hasMyTeam = bc && allTeams.some(tm=>baseClub(tm.club||'')===bc||tm.club===REG_CLUB);
     const borderColor = MY_CLUB_FILTER && hasMyTeam ? '#16a34a' : isSel ? '#d4a017' : '#dbe4f0';
@@ -3912,8 +4001,10 @@ function renderRL(){
 
   const t=G.tournaments.find(t=>t.id===tid);
   const isOpen = (t?.status==='open');
-  const canRegister = AD || REG;
-  const lock = (!AD && !isOpen);
+  // 경기이사 등록 기한 체크: 관리자는 항상 가능, 경기이사는 기한 체크
+  const deadlinePassed = !AD && isRegDeadlinePassed();
+  const canRegister = AD || (REG && !deadlinePassed);
+  const lock = (!AD && !isOpen) || deadlinePassed;
 
   ge('regSection').style.display='block';
   ge('aoReg').style.display=canRegister?'block':'none';
@@ -3944,7 +4035,12 @@ function renderRL(){
     const anchor = ge('aoReg');
     if(anchor) anchor.insertAdjacentElement('afterend', msg);
   }
-  if(!canRegister){
+  if(deadlinePassed && REG){
+    // 기한 만료 - 경기이사 접근 차단
+    msg.style.display='block';
+    msg.innerHTML = `⛔ <b>등록 기한이 만료</b>되어 팀 등록·수정·삭제가 불가합니다.<br><span style="font-size:.75rem;color:var(--text3)">${regDeadlineLabel()}</span>`;
+    ge('aoReg').style.display='none';
+  }else if(!canRegister){
     msg.style.display='block';
     msg.innerHTML='📋 팀 등록을 하려면 상단의 <b>팀등록 로그인</b>이 필요합니다.';
   }else if(lock){
@@ -3976,6 +4072,7 @@ function renderRegistrationRosterPreview(club='', teamNo='', players=[], note=''
 
 async function registerTeam(){
   const tid=ge('regTS').value,div=ge('regDS').value,club=ge('regClub').value;
+  if(!AD && isRegDeadlinePassed()){ toast(`등록 기한이 만료되어 등록할 수 없습니다.\n${regDeadlineLabel()}`,'error'); return; }
   if(!tid||!div){toast('대회/부서 선택','error');return;}
   const t=G.tournaments.find(t=>t.id===tid);if(t?.status&&t.status!=='open'){toast('접수중인 대회만 등록 가능','error');return;}
   if(!club){toast('클럽 선택','error');return;}
@@ -4084,6 +4181,10 @@ async function delTeam(key,idx){
     toast('경기이사 로그인 후 삭제할 수 있습니다','error');
     return;
   }
+  if(!AD && isRegDeadlinePassed()){
+    toast(`등록 기한이 만료되어 삭제할 수 없습니다.\n${regDeadlineLabel()}`,'error');
+    return;
+  }
 
   const team = (G.teams[key] || [])[idx];
   if(!team) return;
@@ -4180,6 +4281,10 @@ function etUpdateSlots(newDbl,origIdx){
 async function saveETeam(){
   if(!(AD || REG)){
     toast('경기이사 로그인 후 수정할 수 있습니다','error');
+    return;
+  }
+  if(!AD && isRegDeadlinePassed()){
+    toast(`등록 기한이 만료되어 수정할 수 없습니다.\n${regDeadlineLabel()}`,'error');
     return;
   }
 
@@ -4310,10 +4415,52 @@ function renderBracket(){
     const _bp=ge('page-bracket');
     if(_bp) _bp.insertBefore(_bBanner,_bp.firstChild);
   }
-  _bBanner.innerHTML=(MY_CLUB_FILTER&&REG_CLUB)
-    ?`<div style="padding:8px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;font-size:.8rem;color:#166534;font-weight:600;margin-bottom:8px">
-        🏆 ${REG_CLUB} 경기 강조 중 (흐린 경기는 타 클럽) &nbsp;<button onclick="toggleMyClubFilter('bracket')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
-      </div>` : '';
+  if(MY_CLUB_FILTER&&REG_CLUB){
+    // 내 클럽 경기만 모아서 배너에 표시
+    const _mbc=baseClub(REG_CLUB);
+    const _atid=ge('brTS').value;
+    const _at=G.tournaments.find(t=>t.id===_atid);
+    let _myMatchCards='';
+    if(_at){
+      (_at.divisions||[]).forEach(_div=>{
+        const _key=_atid+'_'+_div;
+        const _tms=G.teams[_key]||[];
+        const _allMs=G.matches[_key]||[];
+        const _myMs=_allMs.filter(_m=>{
+          const _t1=_tms[_m.t1]??_tms.find(t=>t.id===_m.t1);
+          const _t2=_tms[_m.t2]??_tms.find(t=>t.id===_m.t2);
+          return !_m.bye&&((_t1&&baseClub(_t1.club||'')===_mbc)||(_t2&&baseClub(_t2.club||'')===_mbc));
+        });
+        if(_myMs.length){
+          _myMatchCards+=`<div style="font-size:.75rem;font-weight:700;color:#166534;margin:8px 0 4px">${dl(_div)}</div>`;
+          _myMs.forEach(_m=>{
+            const _t1=_tms[_m.t1]??_tms.find(t=>t.id===_m.t1);
+            const _t2=_tms[_m.t2]??_tms.find(t=>t.id===_m.t2);
+            const _n1=tdn(_t1,_key,_m.t1)||'?'; const _n2=tdn(_t2,_key,_m.t2)||'?';
+            const _courts=Array.isArray(_m.courts)&&_m.courts.length?` 🎾${_m.courts.join('/')}`:(_m.court?` 🎾${_m.court}`:'');
+            const _done=_m.winner!==null;
+            const _winNm=_done?(baseClub((_tms[_m.winner]??_tms.find(t=>t.id===_m.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):'⏳ 대기';
+            _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+              <div style="font-size:.85rem;font-weight:700">${_n1} <span style="color:var(--text3)">vs</span> ${_n2}</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                ${_courts?`<span style="font-size:.78rem;color:var(--primary)">${_courts}</span>`:''}
+                <span style="font-size:.78rem;font-weight:700;color:${_done?('#16a34a'):'#e67e22'}">${_winNm}</span>
+              </div>
+            </div>`;
+          });
+        }
+      });
+    }
+    _bBanner.innerHTML=`<div style="padding:10px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${_myMatchCards?'8px':'0'}">
+        <span style="font-size:.88rem;font-weight:700;color:#166534">🏆 ${REG_CLUB} 내 경기 모아보기</span>
+        <button onclick="toggleMyClubFilter('bracket')" style="font-size:.74rem;padding:3px 10px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+      </div>
+      ${_myMatchCards||'<div style="font-size:.78rem;color:#166534">등록된 경기가 없습니다</div>'}
+    </div>`;
+  } else {
+    _bBanner.innerHTML='';
+  }
 
   if(!tid){
     cont.innerHTML='<div class="empty-state card"><div class="empty-icon">🎲</div><p>대회를 선택하세요</p></div>';
@@ -10302,7 +10449,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
-  openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,saveFirstLoginPhone,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,toggleMyClubFilter,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
+  openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,saveFirstLoginPhone,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,toggleMyClubFilter,saveRegDeadline,clearRegDeadline,refreshRegDeadlineUI,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
   resetMatchRecords,recalcAllPlayerStats,
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
