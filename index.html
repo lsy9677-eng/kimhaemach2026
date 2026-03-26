@@ -976,6 +976,15 @@ body{overflow-x:hidden;}
         </div>
       </div>
       <div id="regTabStat" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
+      <!-- 관리자 빠른 추가 (등록 현황 탭 내) -->
+      <div id="regTabQuickAdd" class="admin-only" style="display:none;margin-top:10px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
+        <div style="font-size:.75rem;font-weight:700;color:var(--primary);margin-bottom:7px">➕ 선수 빠른 추가 (2026 명단)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+          <input class="form-input" id="rtabAddName" placeholder="이름*" style="width:100px;font-size:.82rem">
+          <select class="form-select" id="rtabAddClub" style="min-width:110px;font-size:.82rem"></select>
+          <button class="btn btn-primary" style="font-size:.78rem;padding:6px 12px;white-space:nowrap" onclick="registryTabQuickAdd()">추가</button>
+        </div>
+      </div>
     </div>
     <div id="regTabBody"></div>
   </div>
@@ -2034,6 +2043,8 @@ function toggleAdmin(){
     if(curPg==='players') switchPlayersTab('registry');
     // 선수기록 탭 숨김, 선수기록 보고 있었으면 홈으로
     document.querySelectorAll('.ao-players-tab').forEach(e=>e.style.display='none');
+    // 빠른추가 UI 숨김
+    const qaHide=ge('regTabQuickAdd'); if(qaHide) qaHide.style.display='none';
     const curPage=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(curPage==='players') showPage('home');
     cm('mAdminSettings');
@@ -2053,6 +2064,12 @@ function applyAdminUI(){
   const ptabR=ge('ptab-records'); if(ptabR) ptabR.style.display='';
   // 선수기록 탭 표시
   document.querySelectorAll('.ao-players-tab').forEach(e=>e.style.display='');
+  // 등록 현황 탭 — 빠른추가 UI 표시 + 클럽 셀렉트 채우기
+  const qa=ge('regTabQuickAdd'); if(qa) qa.style.display='';
+  const rtSel=ge('rtabAddClub');
+  if(rtSel && G.clubs && G.clubs.length){
+    rtSel.innerHTML='<option value="">-- 클럽 선택 --</option>'+(G.clubs||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -2378,12 +2395,19 @@ async function quickAddPlayer(){
   const qPhone=(ge('qapPhone')?.value||'').trim();
   G.players[key] = { key, name, club, clubs:[club], history:[], wins:0, losses:0, phone:qPhone||'' };
 
+  // 2026 등록 명단에도 추가
+  if(!window.G_REGISTRY) window.G_REGISTRY={};
+  if(!G_REGISTRY[2026]) G_REGISTRY[2026]=[];
+  const alreadyInReg = G_REGISTRY[2026].find(m=>m.name===name&&m.club===club);
+  if(!alreadyInReg) G_REGISTRY[2026].push({name, club, region:'', subClub:''});
+
   sl(true);
   try{
     await stP(key);
+    await saveRegistry(2026);
     await fbLog(`선수추가: ${name}(${club})`,'👤');
     sl(false);
-    toast(`선수 추가 완료: ${name}(${club})`,'success');
+    toast(`선수 추가 완료: ${name}(${club}) — 2026 명단 등록됨`,'success');
     if(ge('qapPhone')) ge('qapPhone').value='';
     cm('mQuickAddPlayer');
     renderAllP();
@@ -10401,6 +10425,13 @@ async function renderRegistryTab(){
   });
   const body=ge('regTabBody');
   if(!body) return;
+  // 관리자 빠른추가 클럽 셀렉트 동기화
+  if(AD){
+    const rtSel2=ge('rtabAddClub');
+    if(rtSel2 && G.clubs && G.clubs.length && rtSel2.options.length<=1){
+      rtSel2.innerHTML='<option value="">-- 클럽 선택 --</option>'+(G.clubs||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
+    }
+  }
   if(!clubMap.size){ body.innerHTML=`<div class="empty-state card" style="padding:24px;text-align:center"><p style="font-size:1rem;font-weight:600;margin-bottom:8px">📋 등록된 선수 명단이 없습니다</p><p style="font-size:.82rem;color:var(--text3);line-height:1.6">관리자 로그인 후 <b>관리자 설정 → 등록선수 관리</b>에서<br>엑셀 파일로 명단을 업로드해 주세요.</p></div>`; return; }
   const regionMap=new Map();
   [...clubMap.entries()].forEach(([club,ms])=>{ const region=ms[0]?.region||'미확인'; if(!regionMap.has(region)) regionMap.set(region,[]); regionMap.get(region).push({club,members:ms}); });
@@ -10413,10 +10444,12 @@ async function renderRegistryTab(){
       </div>
       ${clubList.sort((a,b)=>a.club.localeCompare(b.club,'ko')).map(({club,members:ms})=>{
         const subCnt=ms.filter(m=>m.subClub).length;
-        const chips=ms.map(m=>{
+        const chips=ms.map((m,mi)=>{
           const hasSub=!!m.subClub;
           const subBadge=hasSub?`<span class="sub-badge" title="부클럽: ${m.subClub}">${m.subClub}</span>`:'';
-          return `<span class="reg-member-chip ${hasSub?'has-sub':''}" onclick="openPD('${esc(m.name)}','${esc(m.club)}')">${m.name}${subBadge}</span>`;
+          const realIdx=members.indexOf(m);
+          const adminBtns=AD?`<span onclick="event.stopPropagation();quickEditRegistryMember(${year},${realIdx})" title="수정" style="cursor:pointer;font-size:.65rem;padding:1px 4px;border-radius:4px;background:rgba(0,0,0,.08);margin-left:2px">✏️</span><span onclick="event.stopPropagation();quickDeleteRegistryMember(${year},${realIdx})" title="삭제" style="cursor:pointer;font-size:.65rem;padding:1px 4px;border-radius:4px;background:rgba(220,50,50,.1);margin-left:1px">🗑</span>`:'';
+          return `<span class="reg-member-chip ${hasSub?'has-sub':''}" onclick="openPD('${esc(m.name)}','${esc(m.club)}')">${m.name}${subBadge}${adminBtns}</span>`;
         }).join('');
         return `<div class="reg-club-card"><div class="reg-club-header"><span style="font-weight:800">${club}</span><span style="font-size:.78rem;opacity:.85">${ms.length}명${subCnt?` · 부클럽 ${subCnt}명`:''}</span></div><div class="reg-club-body">${chips}</div></div>`;
       }).join('')}
@@ -10482,6 +10515,77 @@ async function renderRegistryMgr(){
   if(!members.length){ list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">등록된 선수가 없습니다</div>'; return; }
   list.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:.8rem"><thead><tr style="background:var(--panel2);position:sticky;top:0"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">이름</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">주클럽</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">지역</th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">부클럽</th><th style="padding:6px 8px;border-bottom:1px solid var(--border)">관리</th></tr></thead><tbody>${members.map((m,idx)=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.name)}" id="rmgr_n_${idx}"></td><td style="padding:5px 8px"><select class="form-select" style="padding:3px 6px;font-size:.78rem" id="rmgr_c_${idx}">${G.clubs.map(c=>`<option ${c===m.club?'selected':''}>${c}</option>`).join('')}</select></td><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${esc(m.region||'')}" id="rmgr_r_${idx}"></td><td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:80px" placeholder="없으면 빈칸" value="${esc(m.subClub||'')}" id="rmgr_s_${idx}"></td><td style="padding:5px 8px;white-space:nowrap"><button class="btn btn-outline" style="padding:2px 7px;font-size:.72rem" onclick="saveRegistryRow(${year},${idx})">💾</button><button class="btn btn-danger" style="padding:2px 7px;font-size:.72rem" onclick="deleteRegistryRow(${year},${idx})">🗑</button></td></tr>`).join('')}</tbody></table>`;
 }
+// 선수 등록 현황 탭 — 빠른 추가
+async function registryTabQuickAdd(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const name=(ge('rtabAddName')?.value||'').trim();
+  const club=(ge('rtabAddClub')?.value||'').trim();
+  if(!name){ toast('이름을 입력하세요','error'); return; }
+  if(!club){ toast('클럽을 선택하세요','error'); return; }
+  const year=parseInt(ge('regYearSel')?.value||2026);
+  const members=await loadRegistry(year);
+  if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
+  members.push({name,club,region:'',subClub:''});
+  if(!window.G_REGISTRY) window.G_REGISTRY={};
+  G_REGISTRY[year]=members;
+  // G.players에도 추가
+  const key=pKey(name,club);
+  if(!G.players[key]) G.players[key]={key,name,club,clubs:[club],history:[],wins:0,losses:0,phone:''};
+  sl(true);
+  try{
+    await stP(key);
+    await saveRegistry(year);
+    await fbLog(`선수추가: ${name}(${club})`,'👤');
+    sl(false);
+    if(ge('rtabAddName')) ge('rtabAddName').value='';
+    toast(`${name}(${club}) 추가 완료 ✅`,'success');
+    renderAllP();
+    renderRegistryTab();
+  }catch(e){ sl(false); toast('추가 실패: '+e.message,'error'); }
+}
+
+// 선수 등록 현황 탭 — 인라인 빠른 수정
+async function quickEditRegistryMember(year, idx){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const members = await loadRegistry(year);
+  const m = members[idx];
+  if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
+  const newName = prompt(`이름 수정 (현재: ${m.name})`, m.name);
+  if(newName===null) return; // 취소
+  const trimmed = newName.trim();
+  if(!trimmed){ toast('이름을 입력하세요','error'); return; }
+  members[idx].name = trimmed;
+  // G_REGISTRY도 동기화
+  if(window.G_REGISTRY && G_REGISTRY[year]) G_REGISTRY[year] = members;
+  sl(true);
+  try{
+    await saveRegistry(year);
+    sl(false);
+    toast(`${m.name} → ${trimmed} 수정 완료`,'success');
+    renderAllP();
+    renderRegistryTab();
+  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
+}
+
+// 선수 등록 현황 탭 — 인라인 빠른 삭제
+async function quickDeleteRegistryMember(year, idx){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const members = await loadRegistry(year);
+  const m = members[idx];
+  if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
+  if(!confirm(`"${m.name}" (${m.club})을 ${year}년 명단에서 삭제할까요?`)) return;
+  members.splice(idx,1);
+  if(window.G_REGISTRY && G_REGISTRY[year]) G_REGISTRY[year] = members;
+  sl(true);
+  try{
+    await saveRegistry(year);
+    sl(false);
+    toast(`${m.name} 삭제 완료`,'success');
+    renderAllP();
+    renderRegistryTab();
+  }catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
+}
+
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const name=(ge('rmgr_name')?.value||'').trim(); const club=ge('rmgr_club')?.value||'';
@@ -10588,7 +10692,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
+  registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,
   openClubMgr,addClub,delClub,renderCL,
   toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
