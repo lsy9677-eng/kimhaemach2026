@@ -719,6 +719,11 @@ body{overflow-x:hidden;}
     <div class="frow">
       <div class="form-group"><label class="form-label">장소</label><input class="form-input" id="tVenue" placeholder="경기 장소"></div>
       <div class="form-group"><label class="form-label">접수 마감</label><input class="form-input" type="date" id="tDeadline"></div>
+      <div class="form-group">
+        <label class="form-label">📅 경기이사 등록 기한 <span style="font-size:.72rem;color:var(--text3);font-weight:400">(이 시간 이후 경기이사 등록 불가)</span></label>
+        <input class="form-input" type="datetime-local" id="tRegDl">
+        <div style="font-size:.71rem;color:var(--text3);margin-top:3px">비워두면 제한 없음. 관리자는 항상 등록 가능.</div>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">운영 부서 &amp; 복식 수<span class="req">*</span></label>
       <!-- 빠른 선택 프리셋 -->
@@ -1248,24 +1253,6 @@ body{overflow-x:hidden;}
     <div style="margin-top:8px;font-size:.72rem;color:var(--text3);line-height:1.5">
       • 동명이인/이적 관리를 위해 <b>이름+클럽</b> 조합으로 선수키를 생성합니다.<br>
       • 선수 추가는 팀등록 전에 미리 명단을 만들어두는 용도입니다.
-    </div>
-  </div>
-
-  <!-- 경기이사 등록 기한 설정 -->
-  <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
-    <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;color:var(--primary-dark)">📅 경기이사 등록 기한 설정</div>
-    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.4">
-      기한이 지나면 경기이사는 팀 등록·수정·삭제가 불가합니다. 관리자는 항상 가능합니다.<br>
-      비워두면 기한 제한 없이 항상 허용합니다.
-    </div>
-    <div id="regDeadlineStatus" style="padding:8px 12px;background:var(--panel2);border-radius:8px;margin-bottom:10px;font-size:.82rem"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input class="form-input" type="datetime-local" id="regDeadlineDtInput" style="flex:1;min-width:180px">
-      <button class="btn btn-primary" onclick="saveRegDeadline()">💾 저장</button>
-      <button class="btn btn-gray" onclick="clearRegDeadline()">🗑 기한 해제</button>
-    </div>
-    <div style="margin-top:8px;font-size:.72rem;color:var(--text3)">
-      • 예: 2026-04-30 18:00 → 4월 30일 오후 6시까지만 경기이사 등록 가능
     </div>
   </div>
 
@@ -2271,73 +2258,44 @@ function toggleShowRegPw(btn){
 // ── 등록 기한 관련 함수들 ─────────────────────────────────────────────
 
 // 경기이사의 현재 등록 가능 여부 (기한 체크)
-function isRegDeadlinePassed(){
-  const dt = G.meta.regDeadlineDt||'';
-  if(!dt) return false; // 기한 없으면 항상 가능
+// ── 등록 기한: 시합별 관리 ─────────────────────────────────────
+function isRegDeadlinePassed(tid){
+  const _tid = tid || ge('regTS')?.value || '';
+  const t = G.tournaments.find(t=>t.id===_tid);
+  const dt = t?.regDeadlineDt||'';
+  if(!dt) return false;
   return new Date() > new Date(dt);
 }
-
-// 등록기한 표시 텍스트
-function regDeadlineLabel(){
-  const dt = G.meta.regDeadlineDt||'';
+function regDeadlineLabel(tid){
+  const _tid = tid || ge('regTS')?.value || '';
+  const t = G.tournaments.find(t=>t.id===_tid);
+  const dt = t?.regDeadlineDt||'';
   if(!dt) return '기한 없음 (항상 허용)';
   const d = new Date(dt);
   const passed = new Date() > d;
   const fmt = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  return passed
-    ? `⛔ 기한 만료 — ${fmt} (경기이사 등록 불가)`
-    : `✅ ${fmt} 까지 허용`;
+  return passed ? `⛔ 기한 만료 — ${fmt}` : `✅ ${fmt} 까지 허용`;
 }
-
-// 관리자 설정 열 때 기한 UI 갱신
-function refreshRegDeadlineUI(){
-  const el = ge('regDeadlineStatus');
-  if(el){
-    const passed = isRegDeadlinePassed();
-    el.textContent = regDeadlineLabel();
-    el.style.color = isRegDeadlinePassed() ? 'var(--danger)' : 'var(--success)';
-  }
-  const inp = ge('regDeadlineDtInput');
-  if(inp && G.meta.regDeadlineDt){
-    // datetime-local 형식으로 변환
-    const d = new Date(G.meta.regDeadlineDt);
-    const local = new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-    inp.value = local;
-  }
-}
-
 async function saveRegDeadline(){
-  if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const val = ge('regDeadlineDtInput')?.value||'';
-  if(!val){ toast('날짜와 시간을 선택하세요','error'); return; }
-  G.meta.regDeadlineDt = new Date(val).toISOString();
+  // 대회 편집 모달(ET)에서 저장 시 호출
+  const val = ge('etRegDl')?.value||'';
+  const tid = CE_tid;
+  if(!tid){ toast('대회를 선택하세요','error'); return; }
+  const t = G.tournaments.find(t=>t.id===tid);
+  if(!t) return;
+  t.regDeadlineDt = val ? new Date(val).toISOString() : '';
   sl(true);
   try{
-    await saveMeta();
+    await updateDoc(doc(db,'tournaments',tid),{regDeadlineDt: t.regDeadlineDt});
     sl(false);
-    refreshRegDeadlineUI();
-    toast(`등록 기한 저장 완료 ✅ — ${regDeadlineLabel()}`,'success');
+    toast(val ? `등록 기한 저장 ✅ — ${regDeadlineLabel(tid)}` : '등록 기한 해제 완료 ✅','success');
   }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
 }
-
-async function clearRegDeadline(){
-  if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  if(!confirm('등록 기한을 해제하시겠습니까? 해제 시 경기이사가 언제든지 등록할 수 있습니다.')) return;
-  G.meta.regDeadlineDt = '';
-  const inp = ge('regDeadlineDtInput');
-  if(inp) inp.value='';
-  sl(true);
-  try{
-    await saveMeta();
-    sl(false);
-    refreshRegDeadlineUI();
-    toast('등록 기한 해제 완료 ✅ (제한 없음)','success');
-  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
-}
+function refreshRegDeadlineUI(){ /* 시합별로 이동 - 사용 안 함 */ }
+async function clearRegDeadline(){ /* 시합별로 이동 - etRegDl 해제 버튼으로 처리 */ }
 
 function openAdminSettings(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
-  refreshRegDeadlineUI();
   // 입력 초기화
   ['aspCur','aspNew','aspNew2'].forEach(id=>{const el=ge(id);if(el)el.value='';});
   const ap=ge('adminPhoneInput'); if(ap) ap.value=(G.meta.adminPhone||'');
@@ -3231,12 +3189,13 @@ async function createTournament(){
   try{
     const fmt=ge('tFormat').value,gs=parseInt(ge('tGrpSize').value),adv=parseInt(ge('tAdvance').value);
     const ds={};divItems.forEach(({name,rub})=>{ds[name]={format:fmt,grpSize:gs,advance:adv,doublesCount:rub};});
-    const tRef=await addDoc(collection(db,'tournaments'),{name:nm,date:dt,venue:ge('tVenue').value.trim(),deadline:ge('tDeadline').value,divisions:divs,format:fmt,grpSize:gs,advance:adv,divSettings:ds,notice:ge('tNotice').value.trim(),guideText:ge('tGuideText')?.value.trim()||'',guideUrl:ge('tGuideUrl')?.value.trim()||'',hasGuideAssets:(GUIDE_FILES_CREATE||[]).length>0||(GUIDE_FILES_CREATE_PENDING||[]).length>0,status:'open',createdAt:serverTimestamp()});
+    const _tRegDl=ge('tRegDl')?.value;
+const tRef=await addDoc(collection(db,'tournaments'),{name:nm,date:dt,venue:ge('tVenue').value.trim(),deadline:ge('tDeadline').value,regDeadlineDt:_tRegDl?new Date(_tRegDl).toISOString():'',divisions:divs,format:fmt,grpSize:gs,advance:adv,divSettings:ds,notice:ge('tNotice').value.trim(),guideText:ge('tGuideText')?.value.trim()||'',guideUrl:ge('tGuideUrl')?.value.trim()||'',hasGuideAssets:(GUIDE_FILES_CREATE||[]).length>0||(GUIDE_FILES_CREATE_PENDING||[]).length>0,status:'open',createdAt:serverTimestamp()});
     await flushGuideUploads(tRef.id, 'create');
     const assets=GUIDE_FILES_CREATE||[];
     if(assets.length>0){await setDoc(doc(db,'tourGuides',tRef.id),{assets,updatedAt:serverTimestamp()});}
     await fbLog('대회 생성: '+nm,'🏆');
-    ['tName','tDate','tVenue','tDeadline','tNotice','tGuideText','tGuideUrl'].forEach(id=>ge(id).value='');
+    ['tName','tDate','tVenue','tDeadline','tRegDl','tNotice','tGuideText','tGuideUrl'].forEach(id=>{const el=ge(id);if(el)el.value='';});
     GUIDE_FILES_CREATE=[];GUIDE_FILES_CREATE_PENDING=[];renderGuidePreview('create');
     clearCustomDivList();
     sl(false);toast('"'+nm+'" 생성됨','success');
@@ -3333,6 +3292,17 @@ function openET(tid){
   ge('mETB').innerHTML=`<div class="form-group"><label class="form-label">대회명</label><input class="form-input" id="etN" value="${t.name||''}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="form-group"><label class="form-label">일자</label><input class="form-input" type="date" id="etDt" value="${t.date||''}"></div><div class="form-group"><label class="form-label">장소</label><input class="form-input" id="etVn" value="${t.venue||''}"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="form-group"><label class="form-label">마감</label><input class="form-input" type="date" id="etDl" value="${t.deadline||''}"></div><div class="form-group"><label class="form-label">상태</label><select class="form-select" id="etSt"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select></div></div>
+    <div class="form-group" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #16a34a;border-radius:10px;padding:10px 12px">
+      <label class="form-label" style="color:#166534">📅 경기이사 등록 기한</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input class="form-input" type="datetime-local" id="etRegDl" style="flex:1;min-width:180px"
+          value="${(()=>{const _d=t.regDeadlineDt?new Date(t.regDeadlineDt):null;return _d?new Date(_d.getTime()-_d.getTimezoneOffset()*60000).toISOString().slice(0,16):'';})()}">
+        <button class="btn btn-primary" style="white-space:nowrap;background:#166534" onclick="saveRegDeadline()">💾 저장</button>
+        <button class="btn btn-gray" style="white-space:nowrap" onclick="ge('etRegDl').value='';saveRegDeadline()">🗑 해제</button>
+      </div>
+      <div id="etRegDlStatus" style="font-size:.75rem;margin-top:6px;color:#166534">${regDeadlineLabel(t.id)}</div>
+      <div style="font-size:.7rem;color:var(--text3);margin-top:3px">비워두면 제한 없음. 관리자는 항상 등록 가능.</div>
+    </div>
     <div class="form-group"><label class="form-label">부서 &amp; 복식 수</label>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 10px">
         <span style="font-size:.72rem;color:var(--text2);align-self:center">빠른 추가:</span>
@@ -3409,11 +3379,13 @@ async function saveET(){
     const venue     = ge('etVn').value.trim();
     const hasGuideAssets = assets.length > 0;
 
+    const _etRegDlVal = ge('etRegDl')?.value||'';
     const updFields = {
       name: nm,
       date: ge('etDt').value,
       venue,
       deadline: ge('etDl').value,
+      regDeadlineDt: _etRegDlVal ? new Date(_etRegDlVal).toISOString() : '',
       status: ge('etSt').value,
       divisions: newD,
       divSettings: ds,
