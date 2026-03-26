@@ -1062,11 +1062,11 @@ body{overflow-x:hidden;}
     </div>
     <div class="modal-footer" style="flex-direction:column;gap:8px">
       <button class="btn btn-primary" style="width:100%;background:var(--success)" onclick="saveFirstLoginPhone()">
-        💾 전화번호 등록 후 계속
+        💾 등록하고 로그인
       </button>
-      <div style="width:100%;font-size:.76rem;color:var(--danger);text-align:center;line-height:1.5">
-        전화번호를 등록해야 팀 등록·수정·삭제가 가능합니다.
-      </div>
+      <button class="btn btn-gray" style="width:100%;font-size:.78rem" onclick="cm('mFirstLogin');_completeRegLogin(FIRST_LOGIN_CLUB)">
+        건너뛰기 (이번만 로그인)
+      </button>
     </div>
   </div>
 </div>
@@ -2212,28 +2212,6 @@ async function saveFirstLoginPhone(){
     sl(false);
     if(msg){ msg.textContent='저장 실패: '+e.message; msg.style.color='var(--danger)'; }
   }
-}
-
-
-function hasDirectorPhone(club){
-  const c = (club || REG_CLUB || '').trim();
-  if(!c) return false;
-  const phone = String((G.meta?.clubContacts || {})[c] || '').replace(/[^0-9]/g,'');
-  return phone.length >= 9;
-}
-
-function requireDirectorPhone(club){
-  if(AD) return true;
-  const c = (club || REG_CLUB || '').trim();
-  if(!c){
-    toast('클럽 정보가 없습니다. 다시 로그인해주세요','error');
-    return false;
-  }
-  if(hasDirectorPhone(c)) return true;
-  FIRST_LOGIN_CLUB = c;
-  openFirstLoginPhoneModal(c);
-  toast('전화번호 등록 후 등록/수정이 가능합니다','info');
-  return false;
 }
 
 function applyRegLoginUI(){
@@ -3665,21 +3643,18 @@ async function applyMemberRegistry2026(rows, mode){
   if(mode==='replace') next=incoming;
   else{
     const map=new Map(cur.map(r=>[_m26Name(r.name)+'__'+_m26Club(r.club), {name:r.name,club:_m26Club(r.club),phone:r.phone||''}]));
-    incoming.forEach(r=>map.set(r.key,{name:r.name,club:_m26Club(r.club),phone:(r.phone||'').trim()}));
+    incoming.forEach(r=>map.set(r.key,{name:r.name,club:_m26Club(r.club),phone:r.phone||''}));
     next=[...map.values()];
   }
   G.meta.memberRegistry2026=next.map(r=>({name:r.name,club:_m26Club(r.club),phone:(r.phone||'').trim()}));
-  _syncMetaToRegistry();
   sl(true);
   try{
-    await saveRegistry(2026);
+    await saveMeta();
     toast(`명단 저장 완료 (${incoming.length}명) — 선수 데이터 동기화 중...`,'info');
     await syncRegistryMembersToPlayers(G.meta.memberRegistry2026);
     sl(false);
     renderMemberRegistry2026Status();
     if(ge('m26Text')) ge('m26Text').value='';
-    if(typeof window.renderM26MgrList==='function') window.renderM26MgrList();
-    if(typeof renderRegistryTab==='function') renderRegistryTab();
     toast(`${REG_YEAR} 등록 선수 명단 ${mode==='replace'?'전체교체':'추가'} 완료 (${incoming.length}명 반영)`,'success');
   }catch(e){ sl(false); toast('명단 저장 실패: '+e.message,'error'); }
 }
@@ -3709,15 +3684,12 @@ async function importMemberRegistry2026File(input, mode){
 async function clearMemberRegistry2026(){
   if(!confirm(`${REG_YEAR} 등록 선수 명단을 모두 삭제할까요?\n과거 경기기록과 선수 이력은 삭제되지 않습니다.`)) return;
   G.meta.memberRegistry2026=[];
-  _syncMetaToRegistry();
   sl(true);
   try{
+    await saveMeta();
+    _syncMetaToRegistry();
     await saveRegistry(2026);
-    sl(false);
-    renderMemberRegistry2026Status();
-    if(typeof window.renderM26MgrList==='function') window.renderM26MgrList();
-    if(typeof renderRegistryTab==='function') renderRegistryTab();
-    toast(`${REG_YEAR} 등록 선수 명단 삭제 완료`,'success');
+    sl(false); renderMemberRegistry2026Status(); toast(`${REG_YEAR} 등록 선수 명단 삭제 완료`,'success');
   }catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
 }
 function renderMemberRegistry2026Status(){
@@ -3838,7 +3810,7 @@ function updateRegisterSlots(){
           <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">3조</span> 🌱 <b>테린이</b> — 구력 <b>4년 이하</b> 페어 고정</div>
         </div>
         <div style="margin-top:6px;font-size:.7rem;color:#7c3aed;border-top:1px dashed #d8b4fe;padding-top:5px">
-          💡 1~4번 선수(개나리조), 5~8번 선수(국화조), 9~10번 선수(테린이조)로 명단을 구성하시면 됩니다.
+          💡 순서대로 1~2번(1조), 3~4번(2조), 5~6번(3조)로 배정됩니다. 7번부터는 추가 명단으로 표시됩니다.
         </div>
       </div>`;
   } else {
@@ -3865,9 +3837,9 @@ function buildRegisterRosterGrid(tid,div,teams,key){
     </div>`:'';
 
     const womenGroups=[
-      {label:'1조 🌸 개나리', players:mainPlayers.slice(0,4), off:0},
-      {label:'2조 🌼 국화',   players:mainPlayers.slice(4,8), off:4},
-      {label:'3조 🌱 테린이 (구력 4년↓)', players:mainPlayers.slice(8,10), off:8}
+      {label:'1조 🌸 개나리', players:mainPlayers.slice(0,2), off:0},
+      {label:'2조 🌼 국화',   players:mainPlayers.slice(2,4), off:2},
+      {label:'3조 🌱 테린이 (구력 4년↓)', players:mainPlayers.slice(4,6), off:4}
     ];
 
     const bodyHTML = isWomen
@@ -4004,9 +3976,8 @@ function renderRL(){
   const isOpen = (t?.status==='open');
   // 경기이사 등록 기한 체크: 관리자는 항상 가능, 경기이사는 기한 체크
   const deadlinePassed = !AD && isRegDeadlinePassed();
-  const phoneReady = AD || hasDirectorPhone(REG_CLUB);
-  const canRegister = AD || (REG && phoneReady && !deadlinePassed);
-  const lock = (!AD && !isOpen) || deadlinePassed || (!AD && REG && !phoneReady);
+  const canRegister = AD || (REG && !deadlinePassed);
+  const lock = (!AD && !isOpen) || deadlinePassed;
 
   ge('regSection').style.display='block';
   ge('aoReg').style.display=canRegister?'block':'none';
@@ -4037,11 +4008,7 @@ function renderRL(){
     const anchor = ge('aoReg');
     if(anchor) anchor.insertAdjacentElement('afterend', msg);
   }
-  if(REG && !AD && !phoneReady){
-    msg.style.display='block';
-    msg.innerHTML='📱 <b>경기이사 전화번호를 먼저 등록</b>해야 팀 등록/수정/삭제가 가능합니다.<br><span style="font-size:.75rem;color:var(--text3)">클럽 선택 후 연락처를 저장하거나, 로그인 시 전화번호 등록을 완료하세요.</span>';
-    ge('aoReg').style.display='none';
-  }else if(deadlinePassed && REG){
+  if(deadlinePassed && REG){
     // 기한 만료 - 경기이사 접근 차단
     msg.style.display='block';
     msg.innerHTML = `⛔ <b>등록 기한이 만료</b>되어 팀 등록·수정·삭제가 불가합니다.<br><span style="font-size:.75rem;color:var(--text3)">${regDeadlineLabel()}</span>`;
@@ -4082,7 +4049,6 @@ async function registerTeam(){
   if(!tid||!div){toast('대회/부서 선택','error');return;}
   const t=G.tournaments.find(t=>t.id===tid);if(t?.status&&t.status!=='open'){toast('접수중인 대회만 등록 가능','error');return;}
   if(!club){toast('클럽 선택','error');return;}
-  if(!AD && !requireDirectorPhone(REG_CLUB || club)) return;
   const dbl=getRegDoublesCount();
   const mainCount=dbl*2;
   const names=[];for(let i=1;i<=12;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
@@ -4195,8 +4161,6 @@ async function delTeam(key,idx){
 
   const team = (G.teams[key] || [])[idx];
   if(!team) return;
-  const teamClub = team.club || REG_CLUB || '';
-  if(!AD && !requireDirectorPhone(teamClub)) return;
 
   if(!confirm('팀을 삭제하면 해당 선수들의 참가 기록도 함께 삭제됩니다.\n삭제하시겠습니까?')) return;
 
@@ -4274,8 +4238,6 @@ function openETeam(key,idx){
 function etUpdateSlots(newDbl,origIdx){
   const team=(G.teams[CE_key]||[])[CE_idx];
   if(!team) return;
-  const teamClub = team.club || REG_CLUB || '';
-  if(!AD && !requireDirectorPhone(teamClub)) return;
   const p=team.players||[];
   const dbl=parseInt(newDbl,10);
   const mainCount=dbl*2;
@@ -4302,8 +4264,6 @@ async function saveETeam(){
   const teams = G.teams[CE_key] || [];
   const team = teams[CE_idx];
   if(!team) return;
-  const teamClub = team.club || REG_CLUB || '';
-  if(!AD && !requireDirectorPhone(teamClub)) return;
 
   const [,div] = CE_key.split('_');
   const dblEl = document.querySelector('input[name="etDbl"]:checked');
