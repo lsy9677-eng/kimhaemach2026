@@ -1742,33 +1742,46 @@ async function loadMeta(){
     const s=await getDoc(doc(db,'meta','config'));
     if(s.exists()){
       const d=s.data();
-      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},...d};
+      // memberRegistry2026은 meta/config에서 제외 → memberRegistries/2026 에서만 관리
+      const {memberRegistry2026:_mr, ...dClean}=d;
+      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},...dClean};
       if(d.clubs){
-        // Firebase 클럽 목록을 정규화된 2026 명단 기준으로 교체
-        const normalized=d.clubs.map(c=>CLUB_RENAME[c]||c);
-        // 2026 명단에 있는 클럽만 유지 + 정규화된 이름으로
         const reg2026Clubs=["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"];
-        const merged=[...new Set([...reg2026Clubs,...normalized])].sort((a,b)=>a.localeCompare(b,'ko'));
-        G.clubs=reg2026Clubs; // 2026 명단 기준 고정
+        G.clubs=reg2026Clubs;
       }
       if(!G.meta.adminPhone)G.meta.adminPhone='';
       if(!G.meta.regPw)G.meta.regPw='202601';
       if(!G.meta.clubContacts||typeof G.meta.clubContacts!=='object')G.meta.clubContacts={};
       if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
-      if(!Array.isArray(G.meta.memberRegistry2026))G.meta.memberRegistry2026=[];
     }else{
-      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',memberRegistry2026:[],clubContacts:{}});
+      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{}});
     }
   }catch(e){}
+
+  // 2026 명단은 memberRegistries/2026 에서만 로드
+  try{
+    const regSnap=await getDoc(doc(db,'memberRegistries','2026'));
+    if(regSnap.exists()){
+      const members=regSnap.data().members||[];
+      G.meta.memberRegistry2026=members;
+      if(!window.G_REGISTRY) window.G_REGISTRY={};
+      G_REGISTRY[2026]=members;
+      if(!REGISTRY_YEARS_LOADED.includes(2026)) REGISTRY_YEARS_LOADED.push(2026);
+    }else{
+      G.meta.memberRegistry2026=[];
+    }
+  }catch(e){
+    G.meta.memberRegistry2026=[];
+  }
 }
 async function saveMeta(){
+  // memberRegistry2026 제외 - saveRegistry(2026)으로만 관리 (1MB 초과 방지)
   try{
     await setDoc(doc(db,'meta','config'),{
       pw:G.meta.pw,
       regPw:(G.meta.regPw||'202601'),
       clubs:G.clubs,
       adminPhone:(G.meta.adminPhone||''),
-      memberRegistry2026:Array.isArray(G.meta.memberRegistry2026)?G.meta.memberRegistry2026:[],
       clubContacts:(G.meta.clubContacts||{}),
       clubEmails:(G.meta.clubEmails||{})
     });
