@@ -206,10 +206,11 @@ table tr:nth-child(even):hover td{background:var(--panel2);}
 .s-finished{background:#f0f0f0;color:#555;}
 
 /* PLAYER SLOT */
-.pslot{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--panel2);border-radius:var(--radius);border:1.5px solid var(--border);margin-bottom:6px;min-width:0;overflow:hidden;}
-.pslot-num{width:24px;height:24px;background:var(--primary);color:white;border-radius:50%;font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.pslot input{flex:1;min-width:0;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:.82rem;color:var(--text);outline:none;}
-.pslot input{min-width:0;}
+.pslot{display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--panel2);border-radius:var(--radius);border:1.5px solid var(--border);margin-bottom:5px;min-width:0;overflow:hidden;}
+.pslot-num{width:22px;height:22px;background:var(--primary);color:white;border-radius:50%;font-size:.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s;}
+.pslot-num[onclick]:hover{opacity:.75;}
+.pslot input{flex:1;min-width:0;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:.8rem;color:var(--text);outline:none;}
+.pslot input::placeholder{font-size:.75rem;color:var(--text3);}
 .pslot{min-width:0;}
 .pslot button{flex-shrink:0;}
 body{overflow-x:hidden;}
@@ -816,7 +817,7 @@ body{overflow-x:hidden;}
         <span>✅ 경기이사 로그인 상태입니다</span>
         <button class="btn btn-gray" style="font-size:.72rem;padding:2px 10px" onclick="toggleReg()">로그아웃</button>
       </div>
-      <div class="card-title">📝 팀 등록 <span id="regModeLabel" style="font-size:.73rem;font-weight:400;color:var(--text2)">— 5복식 | 최대 12명 (공오더 가능)</span></div>
+      <div class="card-title">📝 팀 등록 <span id="regModeLabel" style="font-size:.73rem;font-weight:400;color:var(--text2)">— 5복식 | 주전 10명 + 후보 최대 2명</span></div>
       <div class="frow">
         <div class="form-group"><label class="form-label">클럽<span class="req">*</span></label><select class="form-select" id="regClub" onchange="onRegClubChange()"></select></div>
         <div class="form-group"><label class="form-label">팀 번호</label><input class="form-input" id="regNo" readonly style="background:var(--bg2)"></div>
@@ -850,42 +851,46 @@ body{overflow-x:hidden;}
       <div id="terineeModeSel" style="display:none;margin-bottom:10px">
         <label class="form-label">복식 수 선택 <span style="color:var(--text3);font-size:.72rem;font-weight:400">(테린이부는 3~5복식 선택 가능)</span></label>
         <div style="display:flex;gap:10px;margin-top:6px">
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="3" checked onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 3복식 (6명+후보)</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="4" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 4복식 (8명+후보)</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="5" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 5복식 (10명+후보)</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="3" checked onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 3복식 (주전 6명+후보 2명)</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="4" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 4복식 (주전 8명+후보 2명)</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.85rem"><input type="radio" name="terineeMode" value="5" onchange="updateRegisterSlots()" style="accent-color:var(--primary)"> 5복식 (주전 10명+후보 2명)</label>
         </div>
       </div>
       <div class="form-group">
         <label class="form-label" id="regPlayerLabel">선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">페어는 경기 결과 입력 때 선택합니다</span></label>
-        <div id="regPlayerSlots" style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:6px">
-          <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">기본 명단</div>
-            <div class="pslot"><div class="pslot-num">1</div><input type="text" id="p1" placeholder="선수 1" autocomplete="off" oninput="phint(this,1)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p1')">기록</button></div><div class="phint" id="h1"></div>
-            <div class="pslot"><div class="pslot-num">2</div><input type="text" id="p2" placeholder="선수 2" autocomplete="off" oninput="phint(this,2)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p2')">기록</button></div><div class="phint" id="h2"></div>
+        <!-- 주전 명단: 1열 세로. 여성부/테린이는 조 레이블이 각 그룹 위에 표시 -->
+        <div id="regPlayerSlots" style="margin-top:6px">
+          <div id="pairCol1">
+            <div id="pairLabel1" style="display:none;font-size:.68rem;font-weight:700;color:#7c3aed;padding:3px 0 5px">1조 🌸 개나리</div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p1')" title="기록 보기" style="cursor:pointer">1</div><input type="text" id="p1" placeholder="선수 1" autocomplete="off" oninput="phint(this,1)"></div><div class="phint" id="h1"></div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p2')" title="기록 보기" style="cursor:pointer">2</div><input type="text" id="p2" placeholder="선수 2" autocomplete="off" oninput="phint(this,2)"></div><div class="phint" id="h2"></div>
           </div>
-          <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">기본 명단</div>
-            <div class="pslot"><div class="pslot-num">3</div><input type="text" id="p3" placeholder="선수 3" autocomplete="off" oninput="phint(this,3)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p3')">기록</button></div><div class="phint" id="h3"></div>
-            <div class="pslot"><div class="pslot-num">4</div><input type="text" id="p4" placeholder="선수 4" autocomplete="off" oninput="phint(this,4)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p4')">기록</button></div><div class="phint" id="h4"></div>
+          <div id="pairCol2">
+            <div id="pairLabel2" style="display:none;font-size:.68rem;font-weight:700;color:#7c3aed;padding:3px 0 5px">2조 🌼 국화</div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p3')" title="기록 보기" style="cursor:pointer">3</div><input type="text" id="p3" placeholder="선수 3" autocomplete="off" oninput="phint(this,3)"></div><div class="phint" id="h3"></div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p4')" title="기록 보기" style="cursor:pointer">4</div><input type="text" id="p4" placeholder="선수 4" autocomplete="off" oninput="phint(this,4)"></div><div class="phint" id="h4"></div>
           </div>
-          <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">기본 명단</div>
-            <div class="pslot"><div class="pslot-num">5</div><input type="text" id="p5" placeholder="선수 5" autocomplete="off" oninput="phint(this,5)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p5')">기록</button></div><div class="phint" id="h5"></div>
-            <div class="pslot"><div class="pslot-num">6</div><input type="text" id="p6" placeholder="선수 6" autocomplete="off" oninput="phint(this,6)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p6')">기록</button></div><div class="phint" id="h6"></div>
+          <div id="pairCol3">
+            <div id="pairLabel3" style="display:none;font-size:.68rem;font-weight:700;color:#7c3aed;padding:3px 0 5px">3조 🌱 테린이 (구력 4년↓)</div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p5')" title="기록 보기" style="cursor:pointer">5</div><input type="text" id="p5" placeholder="선수 5" autocomplete="off" oninput="phint(this,5)"></div><div class="phint" id="h5"></div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p6')" title="기록 보기" style="cursor:pointer">6</div><input type="text" id="p6" placeholder="선수 6" autocomplete="off" oninput="phint(this,6)"></div><div class="phint" id="h6"></div>
           </div>
-          <div id="slot4"><div style="font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">기본 명단</div>
-            <div class="pslot"><div class="pslot-num">7</div><input type="text" id="p7" placeholder="선수 7" autocomplete="off" oninput="phint(this,7)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p7')">기록</button></div><div class="phint" id="h7"></div>
-            <div class="pslot"><div class="pslot-num">8</div><input type="text" id="p8" placeholder="선수 8" autocomplete="off" oninput="phint(this,8)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p8')">기록</button></div><div class="phint" id="h8"></div>
+          <div id="slot4" style="display:none">
+            <div id="pairLabel4" style="display:none;font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">4조</div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p7')" title="기록 보기" style="cursor:pointer">7</div><input type="text" id="p7" placeholder="선수 7" autocomplete="off" oninput="phint(this,7)"></div><div class="phint" id="h7"></div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p8')" title="기록 보기" style="cursor:pointer">8</div><input type="text" id="p8" placeholder="선수 8" autocomplete="off" oninput="phint(this,8)"></div><div class="phint" id="h8"></div>
           </div>
-          <div id="slot5"><div style="font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">기본 명단</div>
-            <div class="pslot"><div class="pslot-num">9</div><input type="text" id="p9" placeholder="선수 9" autocomplete="off" oninput="phint(this,9)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p9')">기록</button></div><div class="phint" id="h9"></div>
-            <div class="pslot"><div class="pslot-num">10</div><input type="text" id="p10" placeholder="선수 10" autocomplete="off" oninput="phint(this,10)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p10')">기록</button></div><div class="phint" id="h10"></div>
+          <div id="slot5" style="display:none">
+            <div id="pairLabel5" style="display:none;font-size:.68rem;font-weight:700;color:var(--primary);padding:3px 0 5px">5조</div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p9')" title="기록 보기" style="cursor:pointer">9</div><input type="text" id="p9" placeholder="선수 9" autocomplete="off" oninput="phint(this,9)"></div><div class="phint" id="h9"></div>
+            <div class="pslot"><div class="pslot-num" onclick="openPHist('p10')" title="기록 보기" style="cursor:pointer">10</div><input type="text" id="p10" placeholder="선수 10" autocomplete="off" oninput="phint(this,10)"></div><div class="phint" id="h10"></div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px">
-          <div><div style="font-size:.68rem;font-weight:700;color:var(--text3);padding:3px 0 5px">추가 명단 (선택)</div>
-            <div class="pslot" style="border-style:dashed"><div class="pslot-num" style="background:var(--bg2);color:var(--text3)" id="subNum1">11</div><input type="text" id="p11" placeholder="선수 11" autocomplete="off" oninput="phint(this,11)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p11')">기록</button></div><div class="phint" id="h11"></div>
-          </div>
-          <div><div style="font-size:.68rem;font-weight:700;color:var(--text3);padding:3px 0 5px">추가 명단 (선택)</div>
-            <div class="pslot" style="border-style:dashed"><div class="pslot-num" style="background:var(--bg2);color:var(--text3)" id="subNum2">12</div><input type="text" id="p12" placeholder="선수 12" autocomplete="off" oninput="phint(this,12)"><button class="btn btn-gray" style="padding:3px 5px;font-size:.62rem" onclick="openPHist('p12')">기록</button></div><div class="phint" id="h12"></div>
-          </div>
+        <!-- 후보: 점선 구분 후 1열 -->
+        <div style="margin-top:8px;padding-top:8px;border-top:1.5px dashed var(--border)">
+          <div style="font-size:.68rem;font-weight:700;color:var(--text3);padding:3px 0 6px">후보 (선택, 최대 2명)</div>
+          <div class="pslot" style="border-style:dashed"><div class="pslot-num" onclick="openPHist('p11')" title="기록 보기" style="cursor:pointer;background:var(--bg2);color:var(--text3)" id="subNum1">7</div><input type="text" id="p11" placeholder="후보 1" autocomplete="off" oninput="phint(this,11)"></div><div class="phint" id="h11"></div>
+          <div class="pslot" style="border-style:dashed"><div class="pslot-num" onclick="openPHist('p12')" title="기록 보기" style="cursor:pointer;background:var(--bg2);color:var(--text3)" id="subNum2">8</div><input type="text" id="p12" placeholder="후보 2" autocomplete="off" oninput="phint(this,12)"></div><div class="phint" id="h12"></div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="registerTeam()">✅ 팀 등록</button></div>
@@ -3755,48 +3760,70 @@ function getRegDoublesCount(){
   return 5;
 }
 
-// 등록 폼 슬롯 업데이트 (테린이부 복식 수 변경 시)
+// 등록 폼 슬롯 업데이트 (부서/복식 수 변경 시)
 function updateRegisterSlots(){
   const div=ge('regDS')?.value||'';
   const isTerinee=(div==='terinee'||div==='테린이');
   const isWomen=(div==='여성부');
   const dbl=getRegDoublesCount();
-  const mainCount=dbl*2;
+  const mainCount=dbl*2; // 주전 수
 
+  /* ── 테린이부 복식 수 선택 라디오 표시 ── */
   const sel=ge('terineeModeSel');
-  // 테린이부만 라디오 선택 표시 (여성부는 3복식 고정이라 불필요)
   if(sel) sel.style.display=(isTerinee && !isWomen)?'block':'none';
 
+  /* ── 4조·5조 표시·숨김 ── */
   const s4=ge('slot4'),s5=ge('slot5');
   if(s4) s4.style.display=dbl>=4?'block':'none';
   if(s5) s5.style.display=dbl>=5?'block':'none';
 
+  /* ── 조 레이블: 여성부만 표시, 나머지는 숨김 ── */
+  const womenLabels=['1조 🌸 개나리','2조 🌼 국화','3조 🌱 테린이 (구력 4년↓)','4조','5조'];
+  for(let i=1;i<=5;i++){
+    const lbl=ge(`pairLabel${i}`);
+    if(!lbl) continue;
+    if(isWomen && i<=3){
+      lbl.textContent=womenLabels[i-1];
+      lbl.style.display='block';
+      lbl.style.color='#7c3aed';
+    } else {
+      lbl.style.display='none';
+    }
+  }
+
+  /* ── 후보 번호 업데이트 ── */
   const sn1=ge('subNum1'),sn2=ge('subNum2');
   if(sn1) sn1.textContent=mainCount+1;
   if(sn2) sn2.textContent=mainCount+2;
-  // placeholder도 실제 번호로 업데이트
   const p11=ge('p11'),p12=ge('p12');
-  if(p11) p11.placeholder=`선수 ${mainCount+1}`;
-  if(p12) p12.placeholder=`선수 ${mainCount+2}`;
+  if(p11) p11.placeholder=`후보 ${mainCount+1}`;
+  if(p12) p12.placeholder=`후보 ${mainCount+2}`;
 
+  /* ── regModeLabel 텍스트 ── */
   const lbl=ge('regModeLabel');
   if(lbl){
-    if(isWomen) lbl.textContent='— 3복식 고정 | 후보 포함 최대 12명 (공오더 가능)';
-    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 후보 포함 최대 12명 (공오더 가능)`;
-    else lbl.textContent='— 5복식 | 후보 포함 최대 12명 (공오더 가능)';
-  }
-  const pl=ge('regPlayerLabel');
-  if(pl){
-    pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">공오더 가능 · 후보 포함 최대 12명</span>`;
+    if(isWomen)        lbl.textContent=`— 3복식 고정 | 주전 6명 + 후보 최대 2명`;
+    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 주전 ${mainCount}명 + 후보 최대 2명`;
+    else               lbl.textContent=`— 5복식 | 주전 10명 + 후보 최대 2명`;
   }
 
-  // 여성부 조 편성 안내
+  /* ── 선수 명단 레이블 ── */
+  const pl=ge('regPlayerLabel');
+  if(pl){
+    if(isWomen)
+      pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 6명 (조별 2명씩) + 후보 최대 2명</span>`;
+    else if(isTerinee)
+      pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 ${mainCount}명 + 후보 최대 2명</span>`;
+    else
+      pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 10명 + 후보 최대 2명</span>`;
+  }
+
+  /* ── 여성부 조 편성 안내 박스 ── */
   let womenNotice=ge('womenPairNotice');
   if(isWomen){
     if(!womenNotice){
       womenNotice=document.createElement('div');
       womenNotice.id='womenPairNotice';
-      // regPlayerLabel 바로 위에 삽입
       const anchor=ge('regPlayerLabel')?.closest('.form-group')||ge('regPlayerLabel');
       if(anchor) anchor.insertAdjacentElement('beforebegin', womenNotice);
     }
@@ -3804,13 +3831,13 @@ function updateRegisterSlots(){
     womenNotice.innerHTML=`
       <div style="margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1.5px solid #c084fc;border-radius:10px;font-size:.78rem;line-height:1.7">
         <div style="font-weight:800;color:#6b21a8;margin-bottom:5px">👩 여성부 페어 고정 조건</div>
-        <div style="display:flex;flex-direction:column;gap:3px;color:#4a1772">
-          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">1조</span> 🌸 <b>개나리</b> — 구력 무관 페어</div>
-          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">2조</span> 🌼 <b>국화</b> — 구력 무관 페어</div>
-          <div><span style="display:inline-block;min-width:22px;font-weight:700;color:#7c3aed">3조</span> 🌱 <b>테린이</b> — 구력 <b>4년 이하</b> 페어 고정</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;color:#4a1772">
+          <div><span style="font-weight:700;color:#7c3aed">1조 🌸 개나리</span> — 구력 무관</div>
+          <div><span style="font-weight:700;color:#7c3aed">2조 🌼 국화</span> — 구력 무관</div>
+          <div style="grid-column:1/-1"><span style="font-weight:700;color:#7c3aed">3조 🌱 테린이</span> — 구력 <b>4년 이하</b> 페어 고정</div>
         </div>
         <div style="margin-top:6px;font-size:.7rem;color:#7c3aed;border-top:1px dashed #d8b4fe;padding-top:5px">
-          💡 순서대로 1~2번(1조), 3~4번(2조), 5~6번(3조)로 배정됩니다. 7번부터는 추가 명단으로 표시됩니다.
+          💡 1~2번 → 1조, 3~4번 → 2조, 5~6번 → 3조 순서로 배정됩니다.
         </div>
       </div>`;
   } else {
@@ -3845,19 +3872,18 @@ function buildRegisterRosterGrid(tid,div,teams,key){
     const bodyHTML = isWomen
       ? `<div style="padding:10px 12px">
           <div style="font-size:.65rem;color:#6b21a8;font-weight:700;letter-spacing:.03em;margin-bottom:8px">👩 여성부 조 편성</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
             ${womenGroups.map(g=>`
-              <div style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:8px;padding:6px 10px">
-                <div style="font-size:.68rem;font-weight:700;color:#7c3aed;margin-bottom:5px">${g.label}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px">
+              <div style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:8px;padding:5px 7px">
+                <div style="font-size:.62rem;font-weight:700;color:#7c3aed;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.label}</div>
+                <div style="display:flex;flex-direction:column;gap:3px">
                   ${g.players.length
-                    ? g.players.map((n,idx)=>`<div style="background:#fff;border:1px solid #d8b4fe;border-radius:6px;padding:4px 8px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:17px;height:17px;background:#7c3aed;color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.off+idx+1}</span>${rosterPlayerHTML(n,team.club||'',tid)}</div>`).join('')
-                    : '<span style="font-size:.72rem;color:#a78bda">미등록</span>'}
+                    ? g.players.map((n,idx)=>`<div style="background:#fff;border:1px solid #d8b4fe;border-radius:5px;padding:3px 5px;font-size:.75rem;display:flex;align-items:center;gap:3px;min-width:0"><span style="width:15px;height:15px;background:#7c3aed;color:#fff;border-radius:50%;font-size:.55rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.off+idx+1}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${rosterPlayerHTML(n,team.club||'',tid)}</span></div>`).join('')
+                    : '<span style="font-size:.7rem;color:#a78bda">미등록</span>'}
                 </div>
               </div>`).join('')}
-            ${subPlayers.length?`<div style="padding-top:4px;border-top:1px dashed #d8b4fe;font-size:.72rem;color:#7c3aed">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}
           </div>
-        </div>`
+          ${subPlayers.length?`<div style="margin-top:5px;padding-top:4px;border-top:1px dashed #d8b4fe;font-size:.72rem;color:#7c3aed">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}        </div>`
       : `<div style="padding:10px 12px">
           <div style="font-size:.65rem;color:var(--text3);font-weight:600;letter-spacing:.03em;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">
