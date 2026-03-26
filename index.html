@@ -3853,8 +3853,10 @@ function buildRegisterRosterGrid(tid,div,teams,key){
   return teams.map((team,i)=>{
     const dn=tdn(team,key,i);
     const p=(team.players||[]).filter(Boolean);
-    const dbl=team.doublesCount||((div==='테린이'||div==='여성부')?(p.length<=6?3:p.length<=8?4:5):5);
-    const mainCount=dbl*2;
+    const isWomenTeam=(div==='여성부');
+    const isTerineeTeam=(div==='테린이'||div==='terinee');
+    const dbl=team.doublesCount||((isTerineeTeam||isWomenTeam)?(p.length<=6?3:p.length<=8?4:5):5);
+    const mainCount=isWomenTeam?6:dbl*2;
     const mainPlayers=p.slice(0,mainCount);
     const subPlayers=p.slice(mainCount);
     const canManageTeam=AD||REG;
@@ -3870,20 +3872,20 @@ function buildRegisterRosterGrid(tid,div,teams,key){
     ];
 
     const bodyHTML = isWomen
-      ? `<div style="padding:10px 12px">
-          <div style="font-size:.65rem;color:#6b21a8;font-weight:700;letter-spacing:.03em;margin-bottom:8px">👩 여성부 조 편성</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+      ? `<div style="padding:8px 12px">
+          <div style="font-size:.65rem;color:#6b21a8;font-weight:700;letter-spacing:.03em;margin-bottom:6px">👩 여성부 조 편성</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
             ${womenGroups.map(g=>`
-              <div style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:8px;padding:5px 7px">
-                <div style="font-size:.62rem;font-weight:700;color:#7c3aed;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.label}</div>
-                <div style="display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:.65rem;font-weight:700;color:#7c3aed;white-space:nowrap;min-width:fit-content">${g.label}</span>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
                   ${g.players.length
-                    ? g.players.map((n,idx)=>`<div style="background:#fff;border:1px solid #d8b4fe;border-radius:5px;padding:3px 5px;font-size:.75rem;display:flex;align-items:center;gap:3px;min-width:0"><span style="width:15px;height:15px;background:#7c3aed;color:#fff;border-radius:50%;font-size:.55rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.off+idx+1}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${rosterPlayerHTML(n,team.club||'',tid)}</span></div>`).join('')
-                    : '<span style="font-size:.7rem;color:#a78bda">미등록</span>'}
+                    ? g.players.map((n,idx)=>`<div style="display:inline-flex;align-items:center;gap:3px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:3px 8px 3px 3px;font-size:.78rem"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.off+idx+1}</span>${rosterPlayerHTML(n,team.club||'',tid)}</div>`).join('')
+                    : '<span style="font-size:.72rem;color:#a78bda">미등록</span>'}
                 </div>
               </div>`).join('')}
           </div>
-          ${subPlayers.length?`<div style="margin-top:5px;padding-top:4px;border-top:1px dashed #d8b4fe;font-size:.72rem;color:#7c3aed">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}        </div>`
+          ${subPlayers.length?`<div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);font-size:.72rem;color:var(--text3)">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}        </div>`
       : `<div style="padding:10px 12px">
           <div style="font-size:.65rem;color:var(--text3);font-weight:600;letter-spacing:.03em;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">
@@ -4077,9 +4079,12 @@ async function registerTeam(){
   if(!club){toast('클럽 선택','error');return;}
   const dbl=getRegDoublesCount();
   const mainCount=dbl*2;
-  const names=[];for(let i=1;i<=12;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
+  const isRegW=(div==='여성부'), isRegT=(div==='테린이'||div==='terinee');
+  const regMainCount=isRegW?6:mainCount;
+  const regTotal=regMainCount+2;
+  const names=[];for(let i=1;i<=regTotal;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
   if(names.length<1){toast('선수를 1명 이상 입력해주세요','error');return;}
-  if(names.length>12){toast('최대 12명까지 등록할 수 있습니다','error');return;}
+  if(names.length>regTotal){toast(`최대 ${regTotal}명까지 등록할 수 있습니다`,'error');return;}
   const uniq=new Set(names);if(uniq.size!==names.length){toast('이름 중복 있음','error');return;}
   const missing2026=missingMembers2026(names, club, t);
   if(missing2026.length){showMissingMembers2026(missing2026);return;}
@@ -4225,12 +4230,26 @@ async function delTeam(key,idx){
     toast('팀 및 선수기록 삭제 완료','success');
   }
 }
-function buildRosterInputsHTML(prefix,count,values=[]){
-  let html='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">';
+function buildRosterInputsHTML(prefix,count,values=[],div,dbl){
+  div=div||''; dbl=dbl||5;
+  const isW=(div==='여성부');
+  const isT=(div==='테린이'||div==='terinee');
+  const mainCount=isW?6:isT?dbl*2:count-2;
+  const wLabels=['1조 🌸 개나리','2조 🌼 국화','3조 🌱 테린이 (구력 4년↓)'];
+  let html='';
   for(let i=1;i<=count;i++){
-    html+=`<input type="text" id="${prefix}${i}" class="form-input" value="${values[i-1]||''}" placeholder="선수 ${i}">`;
+    const isSub=i>mainCount;
+    if(isW && i<=6 && (i===1||i===3||i===5)){
+      const gi=(i-1)/2;
+      html+=`<div style="font-size:.68rem;font-weight:700;color:#7c3aed;padding:${i>1?'6px':'0px'} 0 3px">${wLabels[gi]}</div>`;
+    }
+    if(isSub && i===mainCount+1){
+      html+='<div style="font-size:.68rem;font-weight:700;color:var(--text3);padding:8px 0 3px;border-top:1.5px dashed var(--border);margin-top:2px">후보 (선택, 최대 2명)</div>';
+    }
+    const ph=isSub?`후보 ${i-mainCount}`:`선수 ${i}`;
+    const borderC=(isW&&!isSub&&i<=6)?'border-color:#d8b4fe;':isSub?'border-style:dashed;':'';;
+    html+=`<div class="pslot" style="${borderC}margin-bottom:4px"><div class="pslot-num" style="${isSub?'background:var(--bg2);color:var(--text3)':''}">${i}</div><input type="text" id="${prefix}${i}" value="${values[i-1]||''}" placeholder="${ph}" autocomplete="off" style="flex:1;min-width:0;border:none;background:transparent;font-family:inherit;font-size:.82rem;color:var(--text);outline:none"></div>`;
   }
-  html+='</div>';
   return html;
 }
 function openETeam(key,idx){
@@ -4248,15 +4267,17 @@ function openETeam(key,idx){
   const[,div]=key.split('_');
   const p=team.players||[];
   const isT=(div==='테린이'||div==='terinee');
-  const dbl=team.doublesCount||(isT?(p.length<=6?3:p.length<=8?4:5):5);
-  const mainCount=dbl*2;
+  const isW=(div==='여성부');
+  const dbl=team.doublesCount||((isT||isW)?(p.length<=6?3:p.length<=8?4:5):5);
+  const mainCount=isW?6:dbl*2;
   const totalCount=mainCount+2;
   const terineeSelHtml=isT?`<div style="margin-bottom:8px"><label class="form-label" style="font-size:.8rem">복식 수</label><div style="display:flex;gap:10px;margin-top:4px">${[3,4,5].map(n=>`<label style="font-size:.82rem;cursor:pointer"><input type="radio" name="etDbl" value="${n}" ${n===dbl?'checked':''} onchange="etUpdateSlots(this.value,${idx})"> ${n}복식</label>`).join('')}</div></div>`:'';
   ge('mETeamB').innerHTML=`<div style="margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius);font-weight:700">${tdn(team,key,idx)} — ${dl(div)}</div>
     ${terineeSelHtml}
     <div class="form-group"><label class="form-label">클럽</label><select class="form-select" id="etTC">${G.clubs.map(c=>`<option ${c===team.club?'selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="form-group"><label class="form-label" id="editRosterLabel">선수 명단 (후보 포함 최대 12명, 공오더 가능)</label>
-      <div id="etSlots">${buildRosterInputsHTML('ep',12,p)}</div>
+    <div class="form-group">
+      <label class="form-label" id="editRosterLabel">${isW?'주전 6명 + 후보 최대 2명':isT?`주전 ${mainCount}명 + 후보 최대 2명`:'주전 10명 + 후보 최대 2명'}</label>
+      <div id="etSlots">${buildRosterInputsHTML('ep',mainCount+2,p,div,dbl)}</div>
       <div style="font-size:.72rem;color:var(--text3);margin-top:6px">페어는 경기 결과 입력 때 선택합니다.</div>
     </div>`;
   om('mETeam');
@@ -4269,13 +4290,15 @@ function etUpdateSlots(newDbl,origIdx){
   const mainCount=dbl*2;
   const totalCount=mainCount+2;
   const curVals=[];
-  for(let i=1;i<=12;i++){
+  for(let i=1;i<=dbl*2+2;i++){
     const el=ge('ep'+i);
     if(el) curVals.push(el.value.trim());
   }
-  ge('etSlots').innerHTML=buildRosterInputsHTML('ep',12,curVals.length?curVals:p);
+  const[,eDiv]=CE_key.split('_');
+  const isEW=(eDiv==='여성부'), isET=(eDiv==='테린이'||eDiv==='terinee');
+  ge('etSlots').innerHTML=buildRosterInputsHTML('ep',dbl*2+2,curVals.length?curVals:p,eDiv,dbl);
   const lbl=ge('editRosterLabel');
-  if(lbl) lbl.textContent='선수 명단 (후보 포함 최대 12명, 공오더 가능)';
+  if(lbl) lbl.textContent=isEW?'주전 6명 + 후보 최대 2명':isET?`주전 ${dbl*2}명 + 후보 최대 2명`:'주전 10명 + 후보 최대 2명';
 }
 async function saveETeam(){
   if(!(AD || REG)){
@@ -4296,8 +4319,10 @@ async function saveETeam(){
   const dbl = dblEl ? parseInt(dblEl.value,10) : (team.doublesCount || 5);
   const mainCount = dbl * 2;
 
+  const isEW=(div==='여성부'), isET=(div==='테린이'||div==='terinee');
+  const totalSlots=(isEW?6:mainCount)+2;
   const np = [];
-  for(let i=1;i<=12;i++){
+  for(let i=1;i<=totalSlots;i++){
     const el = ge('ep'+i);
     if(el){
       const v = el.value.trim();
@@ -4309,8 +4334,8 @@ async function saveETeam(){
     toast('선수를 1명 이상 입력해주세요','error');
     return;
   }
-  if(np.length > 12){
-    toast('최대 12명까지 등록할 수 있습니다','error');
+  if(np.length > totalSlots){
+    toast(`최대 ${totalSlots}명까지 등록할 수 있습니다`,'error');
     return;
   }
 
@@ -8098,7 +8123,7 @@ function openRoster(tid,div){
   let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">팀</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div><div style="margin:-2px 0 12px;padding:8px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);font-size:.76rem;color:var(--text2)">밑줄 + ★ 표시는 첫 출전 선수입니다.</div>`;
   teams.forEach((team,i)=>{const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
     html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-    <div style="padding:10px 14px">${(()=>{const dbl=team.doublesCount||(div==='terinee'?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=dbl*2;const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
+    <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const dbl=team.doublesCount||((div==='terinee'||isWV)?(p.length<=6?3:p.length<=8?4:5):5);const mainCount=isWV?6:dbl*2;const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
