@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-27-v27-year-agnostic-registry";
+  const APP_VERSION = "2026-03-27-v28-remove-dup-addplayer";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -939,7 +939,6 @@ body{overflow-x:hidden;}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px">
     <div class="sec-title" style="margin-bottom:0" id="playerPageTitle">선수 현황</div>
     <div style="display:flex;gap:6px" id="playerPageBtns" style="display:none">
-      <button class="btn btn-primary admin-only" style="font-size:.75rem;padding:5px 12px" onclick="openQuickAddPlayer()">➕ 선수 추가</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="exportPlayersExcel()">📊 엑셀 저장</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 12px" onclick="exportPlayersCSV()">📄 CSV 저장</button>
     </div>
