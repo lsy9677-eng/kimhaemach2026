@@ -929,7 +929,7 @@ body{overflow-x:hidden;}
   <div class="card">
     <div class="frow">
       <div class="form-group"><label class="form-label">대회</label><select class="form-select" id="brTS" onchange="onBrTC()"><option value="">-- 대회 선택 --</option></select></div>
-      <div class="form-group"><label class="form-label">부서</label><select class="form-select" id="brDS" onchange="renderBracket()"><option value="__ALL__">전체</option></select></div>
+      <div class="form-group"><label class="form-label">부서</label><select class="form-select" id="brDS" style="display:none"><option value="__ALL__">전체</option></select><div id="brMultiDiv" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div><div style="font-size:.72rem;color:var(--text3);margin-top:8px">전체 또는 원하는 부서를 여러 개 선택해서 함께 볼 수 있습니다.</div></div>
     </div>
   </div>
   <div id="bracketContent"><div class="empty-state card"><div class="empty-icon">🎲</div><p>대회와 부서를 선택하세요</p></div></div>
@@ -4388,30 +4388,74 @@ async function saveETeam(){
   }
 }
 
+let BR_MULTI_DIVS = ['__ALL__'];
+function getBracketSelectedDivs(tid){
+  const t = G.tournaments.find(x=>x.id===tid);
+  const allDivs = t?.divisions || [];
+  const cur = Array.isArray(BR_MULTI_DIVS) ? BR_MULTI_DIVS.slice() : ['__ALL__'];
+  if(cur.includes('__ALL__') || !cur.length) return allDivs.slice();
+  return cur.filter(d=>allDivs.includes(d));
+}
+function setBracketSelectedDivs(divs, tid){
+  const t = G.tournaments.find(x=>x.id===tid);
+  const allDivs = t?.divisions || [];
+  let next = Array.isArray(divs) ? divs.filter(d=>allDivs.includes(d)) : [];
+  if(!next.length || next.length===allDivs.length) next=['__ALL__'];
+  BR_MULTI_DIVS = next;
+  const ds = ge('brDS');
+  if(ds) ds.value = (BR_MULTI_DIVS[0]||'__ALL__');
+  renderBracketDivisionChips(tid);
+}
+function toggleBracketDivision(div){
+  const tid = ge('brTS')?.value;
+  if(!tid) return;
+  const t = G.tournaments.find(x=>x.id===tid);
+  const allDivs = t?.divisions || [];
+  if(div==='__ALL__'){
+    setBracketSelectedDivs(['__ALL__'], tid);
+    renderBracket();
+    return;
+  }
+  let cur = BR_MULTI_DIVS.includes('__ALL__') ? [] : BR_MULTI_DIVS.slice();
+  if(cur.includes(div)) cur = cur.filter(x=>x!==div);
+  else cur.push(div);
+  if(!cur.length || cur.length===allDivs.length) cur=['__ALL__'];
+  setBracketSelectedDivs(cur, tid);
+  renderBracket();
+}
+function renderBracketDivisionChips(tid){
+  const box = ge('brMultiDiv');
+  if(!box) return;
+  const t = G.tournaments.find(x=>x.id===tid);
+  if(!t){ box.innerHTML=''; return; }
+  const allDivs = t.divisions || [];
+  const active = Array.isArray(BR_MULTI_DIVS) ? BR_MULTI_DIVS : ['__ALL__'];
+  const mk = (val, label, activeOn) => `<button type="button" onclick="toggleBracketDivision('${val.replace("'","\'")}')" style="padding:7px 14px;border-radius:999px;border:1.5px solid ${activeOn?'#0f1e3a':'var(--border)'};background:${activeOn?'#0f1e3a':'white'};color:${activeOn?'white':'var(--text2)'};font-size:.82rem;font-weight:${activeOn?'800':'600'};cursor:pointer">${label}</button>`;
+  box.innerHTML = [mk('__ALL__','전체', active.includes('__ALL__'))].concat(allDivs.map(d=>mk(d, dl(d), active.includes('__ALL__')?false:active.includes(d)))).join('');
+}
+
 function onBrTC(){
   const tid=ge('brTS').value, ds=ge('brDS');
-  // 기본: 전체 유지
-  const prev = ds.value || '__ALL__';
-
   if(!tid){
-    ds.innerHTML='<option value="__ALL__">전체</option>';
+    if(ds) ds.innerHTML='<option value="__ALL__">전체</option>';
+    BR_MULTI_DIVS=['__ALL__'];
+    renderBracketDivisionChips('');
     ge('bracketContent').innerHTML='<div class="empty-state card"><div class="empty-icon">🎲</div><p>대회를 선택하세요</p></div>';
     return;
   }
   const t=G.tournaments.find(t=>t.id===tid);
-  ds.innerHTML='<option value="__ALL__">전체</option>'+t.divisions.map(d=>`<option value="${d}">${dl(d)}</option>`).join('');
-  // 이전 선택 복원(없으면 전체)
-  const hasPrev=[...ds.options].some(o=>o.value===prev);
-  ds.value = hasPrev ? prev : '__ALL__';
+  if(ds) ds.innerHTML='<option value="__ALL__">전체</option>'+t.divisions.map(d=>`<option value="${d}">${dl(d)}</option>`).join('');
+  setBracketSelectedDivs(BR_MULTI_DIVS, tid);
   renderBracket();
 }
 
 function renderBracket(){
   const tid=ge('brTS').value;
-  const div=ge('brDS').value; // '__ALL__' = 전체
+  const selectedDivs=getBracketSelectedDivs(tid);
+  const isAll = !tid ? true : (BR_MULTI_DIVS.includes('__ALL__') || selectedDivs.length === (G.tournaments.find(t=>t.id===tid)?.divisions||[]).length);
+  const div=isAll?'__ALL__':(selectedDivs[0]||'__ALL__');
   const cont=ge('bracketContent');
 
-  // 필터 버튼 동기화 + 안내 배너
   updateFilterBtnUI('bracket', MY_CLUB_FILTER);
   let _bBanner=ge('bracketFilterBanner');
   if(!_bBanner){
@@ -4421,13 +4465,13 @@ function renderBracket(){
     if(_bp) _bp.insertBefore(_bBanner,_bp.firstChild);
   }
   if(MY_CLUB_FILTER&&REG_CLUB){
-    // 내 클럽 경기만 모아서 배너에 표시
     const _mbc=baseClub(REG_CLUB);
     const _atid=ge('brTS').value;
     const _at=G.tournaments.find(t=>t.id===_atid);
     let _myMatchCards='';
     if(_at){
-      (_at.divisions||[]).forEach(_div=>{
+      const _targetDivs = isAll ? (_at.divisions||[]) : selectedDivs;
+      _targetDivs.forEach(_div=>{
         const _key=_atid+'_'+_div;
         const _tms=G.teams[_key]||[];
         const _allMs=G.matches[_key]||[];
@@ -4481,28 +4525,12 @@ function renderBracket(){
     return;
   }
 
-  // ✅ 전체 부서 보기
-  if(div==='__ALL__'){
-    const parts = (t.divisions||[]).map(d=>{
-      return renderBracketHTMLForDiv(tid,d,true);
-    }).filter(Boolean);
-
-    cont.innerHTML = parts.length
-      ? parts.join('<div style="height:14px"></div>')
-      : '<div class="empty-state card"><div class="empty-icon">🎲</div><p>표시할 부서가 없습니다</p></div>';
-
-    const _eb=ge('bracketExportBar');
-    if(_eb) _eb.style.display = parts.length ? 'flex' : 'none';
-    return;
-  }
-
-  // ✅ 단일 부서 보기
-  const html = renderBracketHTMLForDiv(tid,div,false);
-  cont.innerHTML = html;
+  const targetDivs = isAll ? (t.divisions||[]) : selectedDivs;
+  const parts = targetDivs.map(d=>renderBracketHTMLForDiv(tid,d,isAll)).filter(Boolean);
+  cont.innerHTML = parts.length ? parts.join('<div style="height:14px"></div>') : '<div class="empty-state card"><div class="empty-icon">🎲</div><p>표시할 부서가 없습니다</p></div>';
   const _eb=ge('bracketExportBar');
-  if(_eb) _eb.style.display = html && html.length>200 ? 'flex' : 'none';
+  if(_eb) _eb.style.display = parts.length ? 'flex' : 'none';
 }
-
 
 function getBracketDisplayTeams(key, teams){
   return (teams||[]).map((tm,i)=>({name:tdn(tm,key,i), club:tm.club||'', idx:i}));
@@ -7242,8 +7270,8 @@ function goBracketMatch(tid,div,matchId){
   showPage('bracket');
   const brTS=ge('brTS'); if(brTS){ brTS.value=tid; onBrTC(); }
   setTimeout(()=>{
-    const brDS=ge('brDS');
-    if(brDS){ brDS.value=div; renderBracket(); }
+    setBracketSelectedDivs([div], tid);
+    renderBracket();
     let tries=0;
     const findAndScroll=()=>{
       const el = ge(getMatchCardDomId(tid+'_'+div, matchId)) || document.querySelector(`[data-match-id="${matchId}"]`);
@@ -8152,13 +8180,10 @@ async function saveDivS
 (tid){const t=G.tournaments.find(t=>t.id===tid);if(!t)return;const ds={...(t.divSettings||{})};(t.divisions||[]).forEach(div=>{const fe=ge(`dF_${tid}_${div}`),ge2=ge(`dG_${tid}_${div}`),ae=ge(`dA_${tid}_${div}`);const c=gDS(t,div);ds[div]={format:fe?fe.value:c.format,grpSize:ge2?parseInt(ge2.value):c.grpSize,advance:ae?parseInt(ae.value):c.advance};});sl(true);try{await updateDoc(doc(db,'tournaments',tid),{divSettings:ds});await fbLog(`설정 변경: ${t.name}`,'⚙️');sl(false);toast('저장 완료','success');}catch(e){sl(false);toast('저장 실패','error');}}
 
 function goBracket(tid,div){
-  // 대진표 페이지로 이동하고 해당 대회/부서 선택
   showPage('bracket');
-  // 대회 선택
   const brTS=ge('brTS');if(!brTS)return;
   brTS.value=tid;onBrTC();
-  // 부서 선택 (약간 딜레이)
-  setTimeout(()=>{const brDS=ge('brDS');if(brDS){brDS.value=div;renderBracket();}},100);
+  setTimeout(()=>{ setBracketSelectedDivs([div], tid); renderBracket(); },100);
 }
 function dl(d){return{'금':'🥇 금배부','은':'🥈 은배부','동':'🥉 동배부','테린이':'🌱 테린이부','여성부':'👩 여성부','직장부':'🏢 직장부','시니어부':'🎖 시니어부','gold':'🥇 금배부','silver':'🥈 은배부','bronze':'🥉 동배부','terinee':'🌱 테린이부','women':'👩 여성부'}[d]||d;}
 function dc(d){return{'금':'gold','은':'silver','동':'bronze','테린이':'blue','여성부':'purple','gold':'gold','silver':'silver','bronze':'bronze','terinee':'blue','women':'purple'}[d]||'purple';}
@@ -8954,11 +8979,10 @@ function openGroupCourtModal(key,gi){
 // ─── 경기순서 자동배열 실행 (현재 선택된 대회/부서) ─────────────────────
 function runAutoOrder(){
   const tid=ge('brTS')?.value;
-  const divSel=ge('brDS')?.value;
   if(!tid){ toast('대회를 먼저 선택하세요','info'); return; }
   const t=G.tournaments.find(t=>t.id===tid);
   if(!t){ return; }
-  const divs = (divSel && divSel!=='__ALL__') ? [divSel] : (t.divisions||[]);
+  const divs = getBracketSelectedDivs(tid);
   if(divs.length===0){ toast('부서가 없습니다','info'); return; }
   // 부서별 순차 실행
   (async()=>{
@@ -10489,7 +10513,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,spawnConfetti,celebrateGroupComplete,
+  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
