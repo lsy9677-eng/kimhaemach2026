@@ -6665,7 +6665,7 @@ function renderMainSeedSummary(plan, seed){
   MD.seedHash=hash;
   const el=ge('mainSeedSummary');
   if(el){
-    el.innerHTML=`변수값 <b>${seed}</b> → 본선 ${MD.bracketSize}강 / 검증번호 <b>#${hash}</b>`;
+    el.innerHTML=`변수값 <b>${seed}</b> → 본선 ${MD.bracketSize}강`; 
   }
 }
 function updateMainSeedPreview(){
@@ -6732,7 +6732,7 @@ async function startMainDraw(){
   const seed=setMainSeed(getMainSeed());
   MD.seed=seed;
   MD.plan=buildSeededMainSlots(MD.advT, MD.bracketSize, seed, MD.tid, MD.div);
-  ge('mainStageMeta').innerHTML=`공개 변수값 <b>${seed}</b> · 검증번호 <b>#${MD.seedHash||'-'}</b>`;
+  ge('mainStageMeta').innerHTML=`공개 변수값 <b>${seed}</b>`;
 
   ge('mainDrawBtn').disabled=true;
   ge('mainStep1').style.display='none';
