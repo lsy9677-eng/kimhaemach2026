@@ -425,8 +425,8 @@ body{overflow-x:hidden;}
 .op-banner-bronze{background:linear-gradient(135deg,#fff2e8,#efc29d);border-color:#a97142;color:#7c4220}
 .op-banner-green{background:linear-gradient(135deg,#edfdf2,#c8f2d4);border-color:#37a565;color:#14532d}
 .op-banner-blue{background:linear-gradient(135deg,#eef4ff,#d7e6ff);border-color:#4f7edc;color:#123a88}
-.op-side-ribbon{position:fixed;right:10px;top:112px;z-index:121;display:flex;align-items:center;gap:7px;margin:0;padding:7px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 6px 16px rgba(15,30,58,.12);font-weight:900;font-size:.82rem;line-height:1;background:rgba(255,255,255,.96);backdrop-filter:saturate(120%) blur(2px);max-width:min(260px,calc(100vw - 20px));flex-wrap:wrap;justify-content:flex-end}
-.op-side-ribbon .mini{font-size:.68rem;font-weight:800;opacity:.9}
+.op-side-ribbon{position:sticky;left:6px;top:84px;z-index:121;display:inline-flex;align-items:center;gap:6px;margin:0 0 10px 0;padding:6px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 6px 16px rgba(15,30,58,.10);font-weight:900;font-size:.8rem;line-height:1;background:rgba(255,255,255,.96);backdrop-filter:saturate(120%) blur(2px);max-width:min(220px,calc(100vw - 28px));flex-wrap:wrap;justify-content:flex-start}
+.op-side-ribbon .mini{font-size:.66rem;font-weight:800;opacity:.9}
 .op-side-ribbon .sub{display:none}
 .br-floating-notice{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:1700;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.22);font-weight:900}
 .br-floating-notice.show{display:flex}
@@ -437,7 +437,7 @@ body{overflow-x:hidden;}
 @keyframes noticeFlash{0%,100%{opacity:1}50%{opacity:.45}}
 @media(max-width:680px){
   .op-division-banner{top:84px;padding:9px 11px}
-  .op-side-ribbon{top:92px;right:8px;font-size:.74rem;padding:6px 8px;gap:5px;max-width:180px}
+  .op-side-ribbon{left:4px;top:76px;font-size:.7rem;padding:5px 8px;gap:4px;max-width:150px;border-radius:12px}
   .br-floating-notice{top:86px;min-width:calc(100vw - 12px);max-width:calc(100vw - 12px);padding:8px 10px;gap:7px;border-radius:12px}
   .br-floating-notice .tag{font-size:.66rem;padding:3px 8px}
   .br-floating-notice .text{font-size:.8rem}
@@ -1356,7 +1356,7 @@ body{overflow-x:hidden;}
 
 <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:6px;color:var(--primary-dark)">📢 대진표 떠다니는 공지</div>
-    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.5">관리자만 대진표 탭에서 볼 수 있는 테스트용 공지입니다. 켜두면 상단에 번쩍이며 계속 표시됩니다.</div>
+    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.5">관리자용 떠다니는 공지입니다. 켜두면 모든 페이지 상단에 번쩍이며 계속 표시됩니다.</div>
     <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;margin-bottom:8px;cursor:pointer"><input type="checkbox" id="adminFloatingNoticeEnabled"> 공지 표시 켜기</label>
     <textarea class="form-textarea" id="adminFloatingNoticeInput" rows="3" placeholder="예: 금배부 추첨 테스트 중 — 결과 입력 전 확인 바랍니다"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -3151,13 +3151,12 @@ function ensureFloatingNoticeEl(){
   el=document.createElement('div');
   el.id='brFloatingNotice';
   el.className='br-floating-notice';
-  el.innerHTML=`<span class="tag">📢 관리자 공지</span><span class="text"></span><div class="actions"><button class="btnx" onclick="hideFloatingNoticeForNow()">숨기기</button></div>`;
+  el.innerHTML=`<span class="tag">📢 전체 공지</span><span class="text"></span><div class="actions"><button class="btnx" onclick="hideFloatingNoticeForNow()">숨기기</button></div>`;
   document.body.appendChild(el);
   return el;
 }
 function shouldShowFloatingNotice(){
-  const page=document.querySelector('.nav-tab.active')?.dataset?.page||'';
-  return !!(AD && page==='bracket' && G.meta?.adminFloatingNoticeEnabled && (G.meta?.adminFloatingNotice||'').trim() && !window.__hideFloatingNoticeOnce);
+  return !!(AD && G.meta?.adminFloatingNoticeEnabled && (G.meta?.adminFloatingNotice||'').trim() && !window.__hideFloatingNoticeOnce);
 }
 function renderFloatingNotice(){
   const el=ensureFloatingNoticeEl();
