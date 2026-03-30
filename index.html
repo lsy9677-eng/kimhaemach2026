@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v47-img-debut";
+  const APP_VERSION = "2026-03-31-v27-login-fix2";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -2584,33 +2584,47 @@ function doRegLogin(){
 
   const passwords = G.meta.clubPasswords||{};
   const contacts  = G.meta.clubContacts||{};
-  const storedPw = passwords[club] || '';
-  const tempPw = getClubTempPassword(club);
-  const hasPhone = !!contacts[club];
-  const isCustom = isClubPasswordCustom(club);
+  const storedPw  = passwords[club] || '';
+  const tempPw    = getClubTempPassword(club);
+  const hasPhone  = !!contacts[club];
+  const isCustom  = isClubPasswordCustom(club);
 
-  if(isCustom && storedPw){
-    if(pw === storedPw){
-      _completeRegLogin(club);
-    } else {
-      toast('비밀번호 오류','error');
-      ge('regPwInput')?.select();
+  const matchStored = storedPw && pw === storedPw;
+  const matchTemp   = pw === tempPw;
+
+  // ── 케이스 1: 저장된 비번과 일치 ──
+  // isCustom 여부와 관계없이 storedPw가 맞으면 → 전화번호·비번 절차가 이미 완료된 것
+  if(matchStored){
+    if(!hasPhone){
+      // 전화번호 미등록 상태면 등록 절차
+      cm('mRegLogin');
+      ge('regPwInput').value='';
+      openFirstLoginPhoneModal(club);
+      return;
     }
+    // 전화번호 있고 비번도 맞음 → 바로 로그인
+    _completeRegLogin(club);
     return;
   }
 
-  if(pw === tempPw || (storedPw && pw === storedPw)){
+  // ── 케이스 2: 임시 비번과 일치 ──
+  if(matchTemp){
     cm('mRegLogin');
     ge('regPwInput').value='';
     if(!hasPhone){
       openFirstLoginPhoneModal(club);
     } else {
+      // 전화번호는 있는데 아직 전용 비번 미설정 → 비번 변경 강제
       openForceClubPwModal(club);
     }
     return;
   }
 
-  toast('비밀번호 오류','error');
+  // ── 케이스 3: 불일치 ──
+  const hint = isCustom
+    ? '설정하신 전용 비밀번호를 입력해주세요'
+    : `임시 비밀번호(전화번호 뒷 4자리)를 입력해주세요`;
+  toast('비밀번호 오류 — ' + hint, 'error');
   ge('regPwInput')?.select();
 }
 
@@ -2619,6 +2633,7 @@ function _completeRegLogin(club){
   REG_CLUB=club;
   localStorage.setItem('reg','1');
   localStorage.setItem('reg_club', club);
+  localStorage.setItem('reg_session_version', String(Number(G?.meta?.regSessionVersion||1)));
   localStorage.setItem('reg_session_version', String(getRegSessionVersion()));
   ge('regToggleBtn').textContent='로그아웃';
   ge('regToggleBtn').style.background='#388e3c';
@@ -2688,6 +2703,51 @@ function applyRegLoginUI(){
   const regCard = ge('homeRegViewerCard');
   if(regCard) regCard.style.display = 'block';
 }
+
+function isDirectorSessionValid(){
+  try{
+    const localVer = Number(localStorage.getItem('reg_session_version')||'1');
+    const remoteVer = Number(G?.meta?.regSessionVersion||1);
+    return localVer === remoteVer;
+  }catch(e){
+    return true;
+  }
+}
+function forceDirectorLogoutLocal(message='경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.'){
+  try{
+    REG=false;
+    REG_CLUB='';
+    localStorage.removeItem('reg');
+    localStorage.removeItem('reg_club');
+    localStorage.removeItem('reg_session_version');
+  }catch(e){}
+  const btn=ge('regToggleBtn');
+  if(btn){
+    btn.textContent='경기이사 로그인';
+    btn.style.background='var(--success)';
+  }
+  const badge=ge('regLoginBadge');
+  if(badge) badge.style.display='none';
+  applyRegLoginUI();
+  updateMyClubUI();
+  try{ renderRegisterDivisionOverview(); }catch(e){}
+  try{ renderRL(); }catch(e){}
+  try{ renderBracket(); }catch(e){}
+  if(message) toast(message,'info');
+}
+async function pollDirectorSessionVersion(){
+  try{
+    if(!REG || AD) return;
+    const remoteVer = Number(G?.meta?.regSessionVersion||1);
+    const localVer = Number(localStorage.getItem('reg_session_version')||'1');
+    if(remoteVer !== localVer){
+      forceDirectorLogoutLocal('관리자 설정으로 경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.');
+    }
+  }catch(e){}
+}
+window.forceDirectorLogoutLocal = forceDirectorLogoutLocal;
+window.pollDirectorSessionVersion = pollDirectorSessionVersion;
+window.isDirectorSessionValid = isDirectorSessionValid;
 
 async function saveRegPw(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
@@ -3640,21 +3700,30 @@ function shouldShowFloatingNotice(){
 function renderFloatingNotice(){
   const el=ensureFloatingNoticeEl();
   const textWrap=el.querySelector('.text');
+  const marquee=el.querySelector('.text .marquee');
   const msgs=el.querySelectorAll('.text .msg');
   const notice=(G.meta?.adminFloatingNotice||'').trim();
-  msgs.forEach(n=>n.textContent=notice);
-  if(textWrap){
-    requestAnimationFrame(()=>{
-      const marquee=textWrap.querySelector('.marquee');
-      const first=textWrap.querySelector('.msg');
-      if(!marquee||!first) return;
-      const needsScroll = first.scrollWidth > Math.max(120, textWrap.clientWidth - 6);
-      textWrap.classList.toggle('static', !needsScroll);
-    });
-  }
+  msgs.forEach(n=>n.textContent=notice || ' ');
   const show=shouldShowFloatingNotice();
   el.classList.toggle('show', show);
   el.style.display=show?'flex':'none';
+  if(textWrap && marquee){
+    requestAnimationFrame(()=>{
+      const first=el.querySelector('.text .msg');
+      const contentW=Math.max(first?.scrollWidth||0, notice.length*12);
+      const boxW=Math.max(1, textWrap.clientWidth||0);
+      const needsScroll = notice.length > 20 || contentW > boxW - 8;
+      textWrap.classList.toggle('static', !needsScroll);
+      if(needsScroll){
+        const seconds=Math.max(10, Math.min(28, Math.ceil((contentW + boxW)/55)));
+        marquee.style.animationDuration = seconds + 's';
+        marquee.style.animationPlayState = 'running';
+      }else{
+        marquee.style.animationDuration = '0s';
+        marquee.style.animationPlayState = 'paused';
+      }
+    });
+  }
 }
 async function saveFloatingNoticeSettings(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
@@ -3683,6 +3752,7 @@ async function clearFloatingNotice(){
     toast('공지 지움 완료','success');
   }catch(e){ console.error(e); toast('저장 실패: '+e.message,'error'); }
 }
+window.forceDirectorReLoginAll = forceDirectorReLoginAll;
 window.saveFloatingNoticeSettings = saveFloatingNoticeSettings;
 window.clearFloatingNotice = clearFloatingNotice;
 window.hideFloatingNoticeForNow = hideFloatingNoticeForNow;
