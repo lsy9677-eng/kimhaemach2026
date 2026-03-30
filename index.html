@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v47-img-debut";
+  const APP_VERSION = "2026-03-30-v48-homemetric-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -827,6 +827,14 @@ body{overflow-x:hidden;}
   padding:0 14px 12px !important;
 }
 @media(max-width:600px){
+  .rr-team-header{display:grid !important;grid-template-columns:minmax(0,1fr) auto !important;align-items:center !important;column-gap:8px !important;row-gap:6px !important;}
+  .rr-team-info{min-width:0 !important;}
+  .rr-admin-btns{display:flex !important;flex-wrap:nowrap !important;justify-content:flex-end !important;align-items:center !important;gap:6px !important;}
+  .rr-admin-btns .btn{min-width:0 !important;width:auto !important;flex:0 0 auto !important;padding:6px 9px !important;font-size:.74rem !important;line-height:1.05 !important;}
+  .rr-btn-edit,.rr-btn-del{padding:6px 9px !important;font-size:.74rem !important;min-height:34px !important;}
+}
+
+@media(max-width:600px){
   .rr-team-header{
     padding:10px 12px !important;
     gap:8px !important;
@@ -867,6 +875,20 @@ body{overflow-x:hidden;}
   }
 }
 
+
+
+/* v16: 홈 현황 클릭 이동 + 모바일 팀등록 버튼 한줄 고정 */
+.home-click-card,.home-click-chip{cursor:pointer;transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;}
+.home-click-card:hover,.home-click-chip:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,30,58,.12);}
+.home-click-card:active,.home-click-chip:active{transform:translateY(0);}
+.rr-admin-btns{display:flex !important;flex-wrap:nowrap !important;align-items:center !important;gap:8px !important;}
+.rr-admin-btns .btn{flex:0 0 auto;white-space:nowrap;}
+@media(max-width:600px){
+  .rr-team-header{align-items:center !important;}
+  .rr-admin-btns{display:flex !important;flex-wrap:nowrap !important;gap:6px !important;}
+  .rr-admin-btns .btn{min-width:82px !important;white-space:nowrap !important;padding:6px 10px !important;font-size:.78rem !important;}
+}
+
 </style>
 
 <!-- PWA -->
@@ -905,7 +927,7 @@ body{overflow-x:hidden;}
 <main class="main-content">
 
 <div class="page active" id="page-home">
-  <div class="hero fade-in"><h2 class="hero-title" id="heroTitle">김해시테니스협회</h2><p class="hero-sub" id="heroStatus">대회 준비중</p><div class="hero-chips" style="margin-top:10px"><span class="hero-chip" id="heroClubs">🏟 -</span><span class="hero-chip" id="heroTeams">👥 -</span></div></div>
+  <div class="hero fade-in"><h2 class="hero-title" id="heroTitle">김해시테니스협회</h2><p class="hero-sub" id="heroStatus">대회 준비중</p><div class="hero-chips" style="margin-top:10px"><span class="hero-chip home-click-chip" id="heroClubs" onclick="goHomeMetric('current_clubs')">🏟 -</span><span class="hero-chip home-click-chip" id="heroTeams" onclick="goHomeMetric('current_teams')">👥 -</span></div></div>
   <!-- 경기이사 로그인 시 내 클럽 현황 카드 -->
   <div id="myClubHomeCard" style="display:none;margin-bottom:10px">
     <div class="card fade-in" style="border:2px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
@@ -923,10 +945,10 @@ body{overflow-x:hidden;}
   <div class="card fade-in home-status-card">
     <div class="card-title">📊 김해시테니스협회 현황</div>
     <div class="g4 home-stats">
-      <div class="stat-card"><div class="stat-label">등록 클럽</div><div class="stat-val" id="sClubs">0</div></div>
-      <div class="stat-card"><div class="stat-label">등록 팀</div><div class="stat-val" id="sTeams">0</div></div>
-      <div class="stat-card"><div class="stat-label">등록 선수</div><div class="stat-val" id="sMatches">0</div></div>
-      <div class="stat-card"><div class="stat-label">2026 인원</div><div class="stat-val" id="sPlayers">0</div></div>
+      <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_clubs')"><div class="stat-label">등록 클럽</div><div class="stat-val" id="sClubs">0</div></div>
+      <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_teams')"><div class="stat-label">등록 팀</div><div class="stat-val" id="sTeams">0</div></div>
+      <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_players')"><div class="stat-label">등록 선수</div><div class="stat-val" id="sMatches">0</div></div>
+      <div class="stat-card home-click-card" onclick="goHomeMetric('reg2026')"><div class="stat-label">2026 인원</div><div class="stat-val" id="sPlayers">0</div></div>
     </div>
   </div>
   <div class="g2">
@@ -8338,6 +8360,36 @@ function upLog(){
   }).join('');
 }
 
+
+function goHomeMetric(kind){
+  const activeT = G.tournaments.find(t=>t.status==='ongoing') || G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
+  if(kind==='current_clubs' || kind==='current_teams'){
+    showPage('register');
+    if(ge('regTS') && activeT){ ge('regTS').value = activeT.id; onRegTC(); }
+    toast('현재 대회 팀등록 화면으로 이동합니다','info');
+    return;
+  }
+  if(kind==='assoc_teams'){
+    showPage('register');
+    if(ge('regTS') && activeT){ ge('regTS').value = activeT.id; onRegTC(); }
+    toast('팀등록 현황으로 이동합니다','info');
+    return;
+  }
+  if(kind==='assoc_clubs' || kind==='assoc_players' || kind==='reg2026'){
+    showPage('players');
+    switchPlayersTab('registry');
+    const y=ge('regYearSel'); if(y) y.value='2026';
+    const region=ge('regRegionSel'); if(region) region.value='';
+    const club=ge('regClubSel'); if(club) club.value='';
+    const subOnly=ge('regShowSubOnly'); if(subOnly) subOnly.checked=false;
+    const q=ge('regSearchInput'); if(q) q.value='';
+    renderRegistryTab();
+    toast('등록선수 현황으로 이동합니다','info');
+    return;
+  }
+}
+window.goHomeMetric = goHomeMetric;
+
 function upDash(){
   // ── 홈 현황판 4개: 2026년 협회 전체 기준 ──────────────────
   const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
@@ -8386,9 +8438,9 @@ function upDash(){
       <div style="font-weight:700;font-size:1rem">${at.name}</div>
       <div style="font-size:.82rem;color:var(--text2)">📅 ${at.date}${at.venue?' | 📍 '+at.venue:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🏟 ${currentClubSet.size}개 클럽</span>
-        <span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">👥 ${currentTeams.length}팀</span>
-        <span class="hero-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)">🧍 ${currentPlayerSet.size}명</span>
+        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_clubs')">🏟 ${currentClubSet.size}개 클럽</span>
+        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_teams')">👥 ${currentTeams.length}팀</span>
+        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_teams')">🧍 ${currentPlayerSet.size}명</span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
       <div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.78rem;padding:5px 11px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>
