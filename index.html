@@ -3983,7 +3983,8 @@ function buildRegisterRosterGrid(tid,div,teams,key){
   }
   const isWomen=(div==='여성부');
   return teams.map((team,i)=>{
-    const dn=tdn(team,key,i);
+    const realIdx=(typeof team._origIdx==='number')?team._origIdx:i;
+    const dn=tdn(team,key,realIdx);
     const p=(team.players||[]).filter(Boolean);
     const isWomenTeam=(div==='여성부');
     const isTerineeTeam=(div==='테린이'||div==='terinee');
@@ -3993,8 +3994,8 @@ function buildRegisterRosterGrid(tid,div,teams,key){
     const subPlayers=p.slice(mainCount);
     const canManageTeam=AD||REG;
     const adminBtns=canManageTeam?`<div class="rr-admin-btns">
-      <button class="btn rr-btn-edit" style="background:#f8fafc;color:#0f1e3a;border:1px solid #cbd5e1" onclick="openETeam('${esc(key)}',${i})">✏️ 수정</button>
-      <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${i})">🗑 삭제</button>
+      <button class="btn rr-btn-edit" style="background:#f8fafc;color:#0f1e3a;border:1px solid #cbd5e1" onclick="openETeam('${esc(key)}',${realIdx})">✏️ 수정</button>
+      <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${realIdx})">🗑 삭제</button>
     </div>`:'';
 
     const womenGroups=[
@@ -4062,7 +4063,7 @@ function renderRegisterDivisionOverview(){
   // 필터 안내 배너
   const _filterBanner = (MY_CLUB_FILTER && REG_CLUB)
     ? `<div style="padding:8px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;font-size:.8rem;color:#166534;font-weight:600;margin-bottom:10px">
-        🏆 ${REG_CLUB} 팀만 표시 중 &nbsp;<button onclick="toggleMyClubFilter('register')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+        🏆 ${REG_CLUB} 팀만 표시 중 (같은 클럽 다른 팀은 숨김) &nbsp;<button onclick="toggleMyClubFilter('register')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
       </div>` : '';
   box.innerHTML=_filterBanner+divisions.map(div=>{
     const key=tid+'_'+div;
@@ -4070,8 +4071,10 @@ function renderRegisterDivisionOverview(){
     // 내 클럽 필터 ON 시 내 클럽 팀만 표시
     const bc = REG_CLUB ? baseClub(REG_CLUB) : '';
     const teams = (MY_CLUB_FILTER && bc)
-      ? allTeams.filter(tm=>baseClub(tm.club||'')===bc || tm.club===REG_CLUB)
-      : allTeams;
+      ? allTeams
+          .map((tm,origIdx)=>({...tm,_origIdx:origIdx}))
+          .filter(tm=>baseClub(tm.club||'')===bc || tm.club===REG_CLUB)
+      : allTeams.map((tm,origIdx)=>({...tm,_origIdx:origIdx}));
     const totalPlayers=teams.reduce((s,tm)=>s+((tm.players||[]).length),0);
     const isSel=selected===div;
     const canRegister=(AD||REG) && (AD||isOpen) && (AD||!isRegDeadlinePassed());
