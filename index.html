@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v31-order-ui";
+  const APP_VERSION = "2026-03-30-v32-order-myteam-status-admin-submit";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4721,9 +4721,13 @@ function renderBracket(){
             const _st=getMatchResultState(_key,_m);
             const _done=_st.done;
             const _winNm=_done?(baseClub((_tms[_st.winner]??_tms.find(t=>t.id===_st.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):(_st.started?`⏳ 진행중 ${_st.sc1}:${_st.sc2}`:'⏳ 대기');
+            const _orderSummary=getMyClubOrderStatusSummaryHTML(_key,_m,_mbc);
             _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
-              <div style="font-size:.85rem;font-weight:700">${_n1} <span style="color:var(--text3)">vs</span> ${_n2}</div>
-              <div style="display:flex;gap:6px;align-items:center">
+              <div style="flex:1;min-width:220px">
+                <div style="font-size:.85rem;font-weight:700">${_n1} <span style="color:var(--text3)">vs</span> ${_n2}</div>
+                ${_orderSummary}
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
                 ${_courts?`<span style="font-size:.78rem;color:var(--primary)">${_courts}</span>`:''}
                 <span style="font-size:.78rem;font-weight:700;color:${_done?('#16a34a'):'#e67e22'}">${_winNm}</span>
               </div>
@@ -6937,8 +6941,9 @@ function openM3(key,mid){
 
   if(G.meta.onlineOrderEnabled){
     if(AD){
-      // 관리자: 임시저장 + 오더초기화(제출된 경우) + 결과저장
+      // 관리자: 임시저장 + 양팀 임의 제출/재제출 + 오더초기화 + 결과저장
       if(btnSave){ btnSave.style.display=''; btnSave.textContent='💾 임시저장'; }
+      if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
       if(btnUnlock && (st.s1||st.s2)){ btnUnlock.style.display=''; }
       if(btnSaveResult){ btnSaveResult.style.display=''; }
     } else if(mySide){
@@ -7047,7 +7052,7 @@ async function saveM3(){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
   const m=list[idx];
-  if(!canEditMatchByDirector(key,m)){toast('해당 경기 참가 클럽의 경기이사만 저장할 수 있습니다','error');return;}
+  if(!(AD||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사 또는 관리자만 저장할 수 있습니다','error');return;}
   const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];if(!t1||!t2)return;
   const [tid,div]=key.split('_');
   const tObj=G.tournaments.find(t=>t.id===tid);
@@ -7800,6 +7805,42 @@ function getOnlineOrderTeamStatusHTML(key,m){
   return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px">${chip(dn1,st.s1)}${chip(dn2,st.s2)}${pub}</div>`;
 }
 
+function getMyClubOrderStatusSummaryHTML(key,m,myBaseClub=''){
+  if(!G.meta.onlineOrderEnabled) return '';
+  const st=getOnlineOrderState(key,m);
+  const myBase=baseClub(myBaseClub||REG_CLUB||'')||(myBaseClub||REG_CLUB||'');
+  const isSide1=!!(myBase && st.c1===myBase);
+  const isSide2=!!(myBase && st.c2===myBase);
+  const mySubmitted=isSide1?st.s1:isSide2?st.s2:false;
+  const oppSubmitted=isSide1?st.s2:isSide2?st.s1:(st.s1||st.s2);
+  const myLabel=isSide1?'내팀 오더':isSide2?'내팀 오더':'오더';
+  const oppLabel=isSide1?'상대팀 오더':isSide2?'상대팀 오더':'상대 오더';
+  const chip=(label,submitted,accent)=>`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:.71rem;font-weight:800;border:1.5px solid ${submitted?(accent||'#16a34a'):'#cbd5e1'};background:${submitted?'#ecfdf5':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${label} · ${submitted?'제출완료':'미제출'}</span>`;
+  const pub=st.bothSubmitted?`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:.71rem;font-weight:900;border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 양팀 공개</span>`:'';
+  return `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:4px">${chip(myLabel,mySubmitted,'#2563eb')}${chip(oppLabel,oppSubmitted,'#16a34a')}${pub}</div>`;
+}
+
+function collectSideOrderFromModal(key, mid, side){
+  const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid); if(!m) return null;
+  if(!(side===1||side===2)) return null;
+  const st=getOnlineOrderState(key,m);
+  const base=side===1?st.c1:st.c2;
+  if(!base) return null;
+  const [tid,div]=key.split('_');
+  const tObj=G.tournaments.find(t=>t.id===tid);
+  const cfg=gDS(tObj,div);
+  const {t1}=getMatchTeamObjects(key,m);
+  const dbl=cfg.doublesCount||((t1&&t1.doublesCount)||5);
+  const rubbers=[];
+  for(let r=0;r<dbl;r++){
+    const cid=side===1?`rp1_${r}`:`rp2_${r}`;
+    const cont=ge(cid);
+    const players=[...(cont?.querySelectorAll('.p-chip.sel')||[])].map(c=>c.dataset.p.replace(/&quot;/g,'"'));
+    rubbers.push({players});
+  }
+  return {side,base,rubbers};
+}
+
 
 async function saveOnlineOrderSettings(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
@@ -7837,10 +7878,21 @@ function confirmSubmitOrder(){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const m=(G.matches[key]||[]).find(x=>x.id===mid); if(!m) return;
   const st=getOnlineOrderState(key,m);
-  const isResubmit=st.mySubmitted && !st.bothSubmitted;
-  const msg=isResubmit
-    ? '오더를 수정제출하시겠습니까?\n제출 후에도 양쪽 완료 전까지는 다시 수정제출할 수 있습니다.'
-    : '오더를 제출하시겠습니까?\n제출 후에도 양쪽 완료 전까지는 수정제출할 수 있습니다.';
+  let msg='';
+  if(AD){
+    msg=st.bothSubmitted
+      ? `관리자 권한으로 양팀 오더를 다시 제출하시겠습니까?
+현재 모달에 선택된 양쪽 오더가 제출 상태로 저장됩니다.`
+      : `관리자 권한으로 양팀 오더를 제출하시겠습니까?
+현재 모달에 선택된 양쪽 오더가 모두 제출된 상태로 저장됩니다.`;
+  }else{
+    const isResubmit=st.mySubmitted && !st.bothSubmitted;
+    msg=isResubmit
+      ? `오더를 수정제출하시겠습니까?
+제출 후에도 양쪽 완료 전까지는 다시 수정제출할 수 있습니다.`
+      : `오더를 제출하시겠습니까?
+제출 후에도 양쪽 완료 전까지는 수정제출할 수 있습니다.`;
+  }
   if(!confirm(msg)) return;
   submitOnlineOrder();
 }
@@ -7857,26 +7909,43 @@ async function submitOnlineOrder(){
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const m=list[idx];
   if(!G.meta.onlineOrderEnabled){ toast('온라인 오더 제출 기능이 비활성화되어 있습니다','info'); return; }
-  if(!canEditMatchByDirector(key,m)){ toast('해당 경기 참가 클럽의 경기이사만 제출할 수 있습니다','error'); return; }
+  if(!(AD || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사 또는 관리자만 제출할 수 있습니다','error'); return; }
   const st=getOnlineOrderState(key,m);
   if(st.bothSubmitted && !AD){ toast('양쪽 오더가 이미 공개되었습니다. 오더 수정은 관리자 초기화 후 가능합니다','info'); return; }
-  const payload=collectMyOnlineOrderFromModal(key,mid); if(!payload) return;
-  for(let r=0;r<payload.rubbers.length;r++){
-    if((payload.rubbers[r]?.players||[]).length!==2){
-      toast(`${r+1}복식은 내 클럽 선수 2명을 선택해야 제출할 수 있습니다`,'error');
-      return;
+  if(!m.orderSubmissions||typeof m.orderSubmissions!=='object') m.orderSubmissions={};
+
+  const payloads=[];
+  if(AD){
+    const p1=collectSideOrderFromModal(key,mid,1);
+    const p2=collectSideOrderFromModal(key,mid,2);
+    if(!p1||!p2){ toast('양팀 오더 정보를 읽을 수 없습니다','error'); return; }
+    payloads.push(p1,p2);
+  }else{
+    const payload=collectMyOnlineOrderFromModal(key,mid); if(!payload) return;
+    payloads.push({side:payload.mySide,base:payload.myBase,rubbers:payload.rubbers,club:REG_CLUB||payload.myBase});
+  }
+
+  for(const payload of payloads){
+    for(let r=0;r<payload.rubbers.length;r++){
+      if((payload.rubbers[r]?.players||[]).length!==2){
+        toast(`${r+1}복식은 ${AD?'양팀 모두 ':''}선수 2명을 선택해야 제출할 수 있습니다`,'error');
+        return;
+      }
     }
   }
-  if(!m.orderSubmissions||typeof m.orderSubmissions!=='object') m.orderSubmissions={};
-  m.orderSubmissions[payload.myBase]={
-    club:REG_CLUB||payload.myBase,
-    side:payload.mySide,
-    submittedAt:new Date().toISOString(),
-    rubbers:payload.rubbers
-  };
+
+  const nowIso=new Date().toISOString();
+  payloads.forEach(payload=>{
+    m.orderSubmissions[payload.base]={
+      club:payload.club||payload.base,
+      side:payload.side,
+      submittedAt:nowIso,
+      rubbers:payload.rubbers
+    };
+  });
   // legacy fields 유지
   m.orderSubmitted=true;
-  m.orderSubmittedAt=new Date().toISOString();
+  m.orderSubmittedAt=nowIso;
   m.orderSubmittedBy=AD?'관리자':(REG_CLUB||'경기이사');
   syncRevealedOrderIntoMatchRubbers(key,m);
   sl(true);
