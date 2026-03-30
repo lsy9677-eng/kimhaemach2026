@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v37-admin-ribbon-done-total-remaining";
+  const APP_VERSION = "2026-03-30-v39-register-roster-name-bigger";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -65,7 +65,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:linear-gradient(180deg,#f4
 .header-actions{display:flex;align-items:center;gap:8px;}
 .admin-badge{background:var(--accent);color:var(--text);font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;display:none;}
 .admin-badge.show{display:inline-block;}
-.btn-sm{padding:5px 12px;border:1px solid rgba(255,255,255,0.4);background:transparent;color:white;border-radius:20px;cursor:pointer;font-size:.72rem;font-family:'Noto Sans KR',sans-serif;transition:all .2s;}
+.btn-sm{padding:7px 14px;border:1px solid rgba(255,255,255,0.4);background:transparent;color:white;border-radius:20px;cursor:pointer;font-size:.82rem;font-family:'Noto Sans KR',sans-serif;transition:all .2s;min-height:40px;}
 .btn-sm:hover{background:rgba(255,255,255,0.15);}
 .btn-sm.active{background:var(--accent);border-color:var(--accent);color:var(--text);}
 .nav-tabs{display:flex;overflow-x:auto;gap:0;scrollbar-width:none;}
@@ -103,7 +103,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:linear-gradient(180deg,#f4
   .home-stats .stat-card{min-height:60px;}
   .home-stats .stat-val{font-size:1.35rem;}
 }
-.btn{padding:9px 18px;border:none;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:.82rem;font-weight:500;letter-spacing:.03em;transition:all .2s;display:inline-flex;align-items:center;gap:5px;}
+.btn{padding:12px 20px;border:none;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:.96rem;font-weight:700;letter-spacing:.02em;transition:all .2s;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;line-height:1.2;}
 .btn-primary{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(21,101,192,0.25);}
 .btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,107,60,.3);}
 .btn-accent{background:var(--accent);color:var(--text);font-weight:700;}
@@ -117,7 +117,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:linear-gradient(180deg,#f4
 .form-group{margin-bottom:14px;}
 .form-label{display:block;font-size:.78rem;font-weight:600;color:var(--text2);margin-bottom:5px;letter-spacing:.04em;}
 .form-label .req{color:var(--danger);margin-left:2px;}
-.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Noto Sans KR',sans-serif;font-size:.85rem;color:var(--text);background:white;outline:none;transition:border-color .2s;}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:'Noto Sans KR',sans-serif;font-size:.96rem;color:var(--text);background:white;outline:none;transition:border-color .2s;min-height:48px;}
 .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,107,60,.1);}
 .form-textarea{resize:vertical;min-height:80px;}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -209,8 +209,8 @@ table tr:nth-child(even):hover td{background:var(--panel2);}
 .pslot{display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--panel2);border-radius:var(--radius);border:1.5px solid var(--border);margin-bottom:5px;min-width:0;overflow:hidden;}
 .pslot-num{width:22px;height:22px;background:var(--primary);color:white;border-radius:50%;font-size:.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s;}
 .pslot-num[onclick]:hover{opacity:.75;}
-.pslot input{flex:1;min-width:0;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:.8rem;color:var(--text);outline:none;}
-.pslot input::placeholder{font-size:.75rem;color:var(--text3);}
+.pslot input{flex:1;min-width:0;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:1rem;color:var(--text);outline:none;font-weight:700;}
+.pslot input::placeholder{font-size:.92rem;color:var(--text3);font-weight:500;}
 .pslot{min-width:0;}
 .pslot button{flex-shrink:0;}
 body{overflow-x:hidden;}
@@ -504,11 +504,11 @@ body{overflow-x:hidden;}
 .rb-blk{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px;}
 .rb-bhdr{background:var(--primary);color:white;padding:7px 12px;font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:space-between;}
 .rb-bbdy{padding:10px 12px;}
-.p-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border:1.5px solid var(--border);border-radius:14px;cursor:pointer;font-size:.73rem;background:var(--panel2);margin:2px;transition:all .15s;}
+.p-chip{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1.5px solid var(--border);border-radius:16px;cursor:pointer;font-size:.98rem;font-weight:700;background:var(--panel2);margin:4px;transition:all .15s;line-height:1.2;}
 .p-chip:hover{border-color:var(--primary);}
 .p-chip.sel{background:var(--primary);color:white;border-color:var(--primary);}
 .rb-sc-row{display:grid;grid-template-columns:1fr 20px 1fr;gap:6px;align-items:center;margin-top:8px;}
-.rb-sc-in{width:100%;padding:11px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:1.45rem;font-weight:700;text-align:center;font-family:'Oswald',sans-serif;outline:none;transition:border-color .2s;min-height:54px;}
+.rb-sc-in{width:100%;padding:13px 10px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:1.75rem;font-weight:700;text-align:center;font-family:'Oswald',sans-serif;outline:none;transition:border-color .2s;min-height:62px;}
 .rb-sc-in:focus{border-color:var(--primary);}
 .tb-row{font-size:.72rem;color:var(--text3);margin-top:6px;padding-top:5px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:6px;}
 @media(max-width:680px){.t-bracket{flex-direction:column;}.t-round{min-width:100%;}}
@@ -657,6 +657,214 @@ body{overflow-x:hidden;}
 .match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
 @keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
+
+
+#mM3Footer{display:flex;flex-direction:column;align-items:stretch;gap:12px !important;padding-top:14px;}
+#mM3Footer > div[style*="flex:1"]{display:none !important;}
+#mM3Footer > .btn{width:100%;margin:0;}
+#mM3Footer > .btn-gray,#mM3Footer > #mM3SaveBtn{width:calc(50% - 6px);display:inline-flex;}
+#mM3Footer{position:relative;}
+#mM3Footer .m3-footer-top{display:flex;gap:12px;}
+#mM3Footer .m3-footer-main{display:flex;flex-direction:column;gap:10px;}
+.pslot{padding:7px 8px;min-height:52px;}
+.pslot-num,.team-num{width:30px;height:30px;font-size:.82rem;}
+.form-label{font-size:.88rem;}
+.match-team-name{font-size:1.14rem;}
+.match-team-players{font-size:1rem;line-height:1.55;}
+.rb-row{font-size:1rem;padding:9px 12px;}
+@media(max-width:680px){
+  .btn{font-size:1rem;min-height:50px;padding:12px 16px;}
+  .btn-sm{font-size:.78rem;min-height:38px;padding:6px 12px;}
+  .p-chip{font-size:1.02rem;padding:10px 14px;border-radius:18px;}
+  .p-chip small{font-size:.72em !important;}
+  .pslot input{font-size:1.05rem;}
+  .pslot input::placeholder{font-size:.96rem;}
+  #mM3Footer{gap:10px !important;}
+}
+
+/* v36: 내 경기 모아보기/경기목록 가독성 및 버튼 균형 조정 */
+.my-match-summary-wrap{display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:7px;}
+.my-match-summary-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:.82rem !important;font-weight:900 !important;line-height:1.15;border-width:1.5px;}
+.my-match-summary-pub{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:.82rem !important;font-weight:900 !important;line-height:1.15;border-width:1.5px;}
+.my-match-card-title{font-size:1.06rem !important;font-weight:900 !important;line-height:1.3;}
+.my-match-section-label{font-size:.92rem !important;font-weight:900 !important;color:#166534;}
+.my-match-panel-title{font-size:1rem !important;font-weight:900 !important;color:#166534;}
+.my-match-toggle-btn{font-size:.82rem !important;font-weight:800 !important;padding:5px 12px !important;min-height:auto !important;}
+.m3hdr .btn{min-height:40px !important;padding:7px 14px !important;font-size:.9rem !important;line-height:1.15 !important;border-radius:12px !important;box-shadow:none !important;}
+.m3hdr .btn.btn-accent,.m3hdr .btn.btn-primary,.m3hdr .btn.btn-gray,.m3hdr .btn.btn-outline{width:auto !important;}
+#mM3Footer .m3-footer-top .btn{min-height:46px !important;padding:10px 16px !important;font-size:1rem !important;border-radius:12px !important;}
+#mM3Footer .m3-footer-main{align-items:center;}
+#mM3Footer .m3-footer-main .btn{width:100%;max-width:420px;min-height:48px !important;padding:10px 18px !important;font-size:1.02rem !important;font-weight:900 !important;border-radius:12px !important;}
+@media(max-width:680px){
+  .my-match-panel-title{font-size:1.06rem !important;}
+  .my-match-section-label{font-size:.97rem !important;}
+  .my-match-card-title{font-size:1.12rem !important;}
+  .my-match-summary-chip,.my-match-summary-pub{font-size:.86rem !important;padding:6px 11px !important;}
+  .m3hdr .btn{min-height:38px !important;padding:6px 12px !important;font-size:.86rem !important;}
+  #mM3Footer .m3-footer-main .btn{min-height:46px !important;font-size:1rem !important;}
+}
+
+
+/* === v10 readability up: home/menu/register/players === */
+.nav-tab{font-size:.95rem !important;padding:12px 20px !important;font-weight:700 !important;}
+.nav-tab .nbadge{font-size:.72rem !important;padding:2px 7px !important;min-width:20px !important;}
+.swipe-indicator{padding:5px 0 6px !important;}
+
+#page-home .card-title{font-size:1.02rem !important;}
+#page-home .hero h2{font-size:1.82rem !important;}
+#page-home .hero p,
+#page-home .hero-sub,
+#page-home .hero-chip,
+#page-home #homeTournInfo,
+#page-home #recentLog,
+#page-home #homeDivStatus,
+#page-home #myClubHomeBody,
+#page-home #homeRegViewerCard button{font-size:.95rem !important;}
+#page-home .stat-label{font-size:.9rem !important;font-weight:700 !important;}
+#page-home .stat-val{font-size:2rem !important;}
+#page-home .home-stats .stat-card{min-height:82px !important;padding:14px 16px !important;}
+#page-home .ri{font-size:.9rem !important;}
+#page-home .ri-meta,
+#page-home .ri-time{font-size:.78rem !important;}
+
+#page-register .card-title{font-size:1.04rem !important;}
+#page-register .form-label{font-size:.92rem !important;}
+#page-register .form-input,
+#page-register .form-select,
+#page-register .form-textarea{font-size:.98rem !important;padding:11px 13px !important;}
+#page-register #regModeLabel{font-size:.84rem !important;}
+#page-register #regPlayerLabel{font-size:1rem !important;font-weight:800 !important;}
+#page-register .pslot{padding:7px 8px !important;min-height:44px !important;}
+#page-register .pslot-num,
+#page-register .team-num{width:30px !important;height:30px !important;font-size:.84rem !important;}
+#page-register .pslot input{font-size:1.14rem !important;line-height:1.35 !important;}
+#page-register .pslot input::placeholder{font-size:1rem !important;}
+#page-register .phint{font-size:.8rem !important;min-height:18px !important;}
+#page-register .btn{font-size:.92rem !important;padding:10px 16px !important;}
+#page-register #regDivisionOverview,
+#page-register #regSection,
+#page-register #regRosterPreviewBody{font-size:.95rem !important;}
+
+#page-players .card-title{font-size:1.02rem !important;}
+#page-players .players-tab-btn{font-size:.98rem !important;padding:10px 18px !important;}
+#page-players .form-input,
+#page-players .form-select{font-size:.95rem !important;padding:10px 12px !important;}
+#page-players .table-wrap table th{font-size:.88rem !important;padding:10px 12px !important;}
+#page-players .table-wrap table td{font-size:.92rem !important;padding:10px 12px !important;line-height:1.4 !important;}
+#page-players #regTabStat,
+#page-players #pFInfo,
+#page-players .empty-state p{font-size:.9rem !important;}
+
+@media(max-width:680px){
+  .nav-tab{font-size:.9rem !important;padding:11px 16px !important;}
+  #page-home .stat-val{font-size:1.75rem !important;}
+  #page-home .stat-label{font-size:.84rem !important;}
+  #page-home .hero h2{font-size:1.55rem !important;}
+  #page-home .hero p,
+  #page-home .hero-sub,
+  #page-home .hero-chip,
+  #page-home #homeTournInfo,
+  #page-home #recentLog,
+  #page-home #homeDivStatus,
+  #page-home #myClubHomeBody,
+  #page-home #homeRegViewerCard button{font-size:.9rem !important;}
+  #page-register .pslot input{font-size:1.08rem !important;}
+  #page-register .form-label{font-size:.88rem !important;}
+  #page-players .table-wrap table th{font-size:.82rem !important;}
+  #page-players .table-wrap table td{font-size:.86rem !important;}
+}
+
+
+/* === v38 team registration roster readability balance === */
+.rr-team-header{
+  padding:10px 14px !important;
+}
+.rr-team-name{
+  font-size:1.08rem !important;
+  font-weight:900 !important;
+  line-height:1.25 !important;
+}
+.rr-team-count{
+  font-size:.82rem !important;
+  padding:3px 8px !important;
+}
+.rr-admin-btns{
+  gap:8px !important;
+}
+.rr-admin-btns .btn{
+  min-height:40px !important;
+}
+.rr-btn-edit,
+.rr-btn-del{
+  padding:6px 12px !important;
+  font-size:.84rem !important;
+  line-height:1.15 !important;
+  min-height:40px !important;
+  border-radius:10px !important;
+  font-weight:800 !important;
+}
+.rr-rub-grid{
+  gap:8px !important;
+  padding:12px 14px !important;
+}
+.rr-rub-card{
+  padding:10px 12px !important;
+}
+.rr-rub-label{
+  font-size:.9rem !important;
+  margin-bottom:6px !important;
+  font-weight:800 !important;
+}
+.rr-rub-names{
+  font-size:1.2rem !important;
+  line-height:1.75 !important;
+  font-weight:900 !important;
+  word-break:keep-all !important;
+}
+.rr-sub{
+  font-size:.84rem !important;
+  padding:0 14px 12px !important;
+}
+@media(max-width:600px){
+  .rr-team-header{
+    padding:10px 12px !important;
+    gap:8px !important;
+  }
+  .rr-team-name{
+    font-size:1rem !important;
+  }
+  .rr-team-count{
+    font-size:.78rem !important;
+  }
+  .rr-admin-btns{
+    gap:6px !important;
+  }
+  .rr-admin-btns .btn{
+    min-height:36px !important;
+  }
+  .rr-btn-edit,
+  .rr-btn-del{
+    padding:5px 10px !important;
+    font-size:.8rem !important;
+    min-height:36px !important;
+  }
+  .rr-rub-grid{
+    gap:6px !important;
+    padding:10px !important;
+  }
+  .rr-rub-card{
+    padding:9px 10px !important;
+  }
+  .rr-rub-label{
+    font-size:.84rem !important;
+    font-weight:800 !important;
+  }
+  .rr-rub-names{
+    font-size:1.15rem !important;
+    line-height:1.7 !important;
+    font-weight:900 !important;
+  }
+}
 
 </style>
 
@@ -1138,7 +1346,7 @@ body{overflow-x:hidden;}
 </div>
 
 <div class="modal-overlay" id="mPHist"><div class="modal-box"><div class="modal-header"><h3>👤 선수 기록</h3><button class="modal-close" onclick="cm('mPHist')">✕</button></div><div class="modal-body" id="mPHistBody"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPHist')">닫기</button></div></div></div>
-<div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">📝 오더 입력·제출</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer" id="mM3Footer" style="flex-wrap:wrap;gap:8px"><button class="btn btn-gray" onclick="cm('mM3')">닫기</button><div style="flex:1"></div><button class="btn btn-outline" id="mM3SaveBtn" onclick="saveM3()" style="display:none">💾 임시저장</button><button class="btn btn-danger" id="mM3UnlockBtn" onclick="confirmUnlockOrder()" style="display:none;font-size:.8rem">🔓 오더 초기화</button><button class="btn btn-accent" id="mM3SubmitBtn" onclick="confirmSubmitOrder()" style="display:none">📤 오더 제출</button><button class="btn btn-primary" id="mM3SaveResultBtn" onclick="saveM3()" style="display:none">💾 결과 저장</button></div></div></div>
+<div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">📝 오더 입력·제출</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer" id="mM3Footer"><div class="m3-footer-top"><button class="btn btn-gray" onclick="cm('mM3')">닫기</button><button class="btn btn-outline" id="mM3SaveBtn" onclick="saveM3()" style="display:none">💾 임시저장</button></div><div class="m3-footer-main"><button class="btn btn-danger" id="mM3UnlockBtn" onclick="confirmUnlockOrder()" style="display:none">🔓 오더 초기화</button><button class="btn btn-accent" id="mM3SubmitBtn" onclick="confirmSubmitOrder()" style="display:none">📤 오더 제출</button><button class="btn btn-primary" id="mM3SaveResultBtn" onclick="saveM3()" style="display:none">💾 결과 저장</button></div></div></div></div>
 <div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:900px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
 <div class="modal-body" style="max-height:85vh;overflow-y:auto;padding:14px 16px">
 
@@ -4762,7 +4970,7 @@ function renderBracket(){
           return !_m.bye&&((_t1&&baseClub(_t1.club||'')===_mbc)||(_t2&&baseClub(_t2.club||'')===_mbc));
         });
         if(_myMs.length){
-          _myMatchCards+=`<div style="font-size:.75rem;font-weight:700;color:#166534;margin:8px 0 4px">${dl(_div)}</div>`;
+          _myMatchCards+=`<div class="my-match-section-label" style="margin:10px 0 6px">${dl(_div)}</div>`;
           _myMs.forEach(_m=>{
             const _t1=_tms[_m.t1]??_tms.find(t=>t.id===_m.t1);
             const _t2=_tms[_m.t2]??_tms.find(t=>t.id===_m.t2);
@@ -4776,7 +4984,7 @@ function renderBracket(){
             const _orderSummary=getMyClubOrderStatusSummaryHTML(_key,_m,_mbc);
             _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
               <div style="flex:1;min-width:220px">
-                <div style="font-size:.85rem;font-weight:700">${_n1} <span style="color:var(--text3)">vs</span> ${_n2}</div>
+                <div class="my-match-card-title">${_n1} <span style="color:var(--text3);font-weight:700">vs</span> ${_n2}</div>
                 ${_orderSummary}
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
@@ -4790,10 +4998,10 @@ function renderBracket(){
     }
     _bBanner.innerHTML=`<div style="padding:10px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${_myMatchCards?'8px':'0'}">
-        <span style="font-size:.88rem;font-weight:700;color:#166534">🏆 ${REG_CLUB} 내 경기 모아보기</span>
-        <button onclick="toggleMyClubFilter('bracket')" style="font-size:.74rem;padding:3px 10px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+        <span class="my-match-panel-title">🏆 ${REG_CLUB} 내 경기 모아보기</span>
+        <button class="my-match-toggle-btn" onclick="toggleMyClubFilter('bracket')" style="border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
       </div>
-      ${_myMatchCards||'<div style="font-size:.78rem;color:#166534">등록된 경기가 없습니다</div>'}
+      ${_myMatchCards||'<div style="font-size:.9rem;color:#166534;font-weight:700">등록된 경기가 없습니다</div>'}
     </div>`;
   } else {
     _bBanner.innerHTML='';
@@ -7936,9 +8144,9 @@ function getMyClubOrderStatusSummaryHTML(key,m,myBaseClub=''){
   const oppSubmitted=isSide1?st.s2:isSide2?st.s1:(st.s1||st.s2);
   const myLabel=isSide1?'내팀 오더':isSide2?'내팀 오더':'오더';
   const oppLabel=isSide1?'상대팀 오더':isSide2?'상대팀 오더':'상대 오더';
-  const chip=(label,submitted,accent)=>`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:.71rem;font-weight:800;border:1.5px solid ${submitted?(accent||'#16a34a'):'#cbd5e1'};background:${submitted?'#ecfdf5':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${label} · ${submitted?'제출완료':'미제출'}</span>`;
-  const pub=st.bothSubmitted?`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:.71rem;font-weight:900;border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 양팀 공개</span>`:'';
-  return `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:4px">${chip(myLabel,mySubmitted,'#2563eb')}${chip(oppLabel,oppSubmitted,'#16a34a')}${pub}</div>`;
+  const chip=(label,submitted,accent)=>`<span class="my-match-summary-chip" style="border:1.5px solid ${submitted?(accent||'#16a34a'):'#cbd5e1'};background:${submitted?'#ecfdf5':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${label} · ${submitted?'제출완료':'미제출'}</span>`;
+  const pub=st.bothSubmitted?`<span class="my-match-summary-pub" style="border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 양팀 공개</span>`:'';
+  return `<div class="my-match-summary-wrap">${chip(myLabel,mySubmitted,'#2563eb')}${chip(oppLabel,oppSubmitted,'#16a34a')}${pub}</div>`;
 }
 
 function collectSideOrderFromModal(key, mid, side){
