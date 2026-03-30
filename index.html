@@ -3888,8 +3888,8 @@ function isFirstAppearancePlayer(name, club, currentTid){
   const nn = normName(name);
   if(!nn) return false;
 
-  // 첫 출전 표시는 "현재 클럽 기준"이 아니라 "대회 전체 참가 이력 기준"으로 판정한다.
-  // 같은 이름의 과거 참가 흔적이 하나라도 있으면 첫 출전이 아니다.
+  // 첫 출전은 "현재 대회 이전에 실제 출전 기록이 전혀 없는 경우"만 인정한다.
+  // 이름만 등록돼 있거나 임시 승/패 값이 있는 정도로는 첫 출전을 지우지 않는다.
 
   // 1) 과거 엑셀/히스토리 대회
   for(const t of (HIST_DATA||[])){
@@ -3897,17 +3897,16 @@ function isFirstAppearancePlayer(name, club, currentTid){
     if((t?.teams||[]).some(tm => (tm?.players||[]).some(pn => normName(pn) === nn))) return false;
   }
 
-  // 2) players 마스터 이력/클럽 정보
+  // 2) players 마스터의 명시적 history만 인정
   for(const k of Object.keys(G.players||{})){
     const p = G.players[k] || {};
     const playerName = normName(p.name || pKeyParse(k).name || '');
     if(playerName !== nn) continue;
-    if((p.history||[]).some(h => h && h.tid !== currentTid)) return false;
-    if(Array.isArray(p.history) && p.history.length>0) return false;
-    if((p.wins||0)>0 || (p.losses||0)>0) return false;
+    const hist = Array.isArray(p.history) ? p.history.filter(h => h && h.tid && h.tid !== currentTid) : [];
+    if(hist.length > 0) return false;
   }
 
-  // 3) 현재 시스템에 저장된 다른 대회 팀등록 데이터까지 확인
+  // 3) 현재 시스템에 저장된 다른 대회 팀등록 데이터
   for(const key of Object.keys(G.teams||{})){
     const idx = key.lastIndexOf('_');
     const tid = idx>0 ? key.slice(0, idx) : '';
@@ -5248,6 +5247,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const orderStatusLabel=getOnlineOrderStatusLabel(key,m);
   const btn=(AD||canDirEdit)?`<button class="btn ${(done||isOrderLocked)?'btn-gray':'btn-accent'}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${done?'✏️ 수정':(isOrderLocked?'📝 오더/기록':'⚡ 결과입력')}</button>`:'';
   const orderBadge=getOnlineOrderStatusBadgeHTML(key,m);
+  const orderTeamStatus=getOnlineOrderTeamStatusHTML(key,m);
   const unlockBtn=(AD&&G.meta.onlineOrderEnabled&&isOrderLocked)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="unlockOnlineOrder('${key}','${m.id}')">🔓 오더초기화</button>`:'';
   const _bc2=REG_CLUB?baseClub(REG_CLUB):'';
   const _tms2=G.teams[key]||[];
@@ -5256,7 +5256,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const _isMyCM=MY_CLUB_FILTER&&_bc2&&((_tm1x&&baseClub(_tm1x.club||'')===_bc2)||(_tm2x&&baseClub(_tm2x.club||'')===_bc2));
   const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
   return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)':''}${_isOtherM?'opacity:0.35;':''}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.03rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.sc1}:${st2.sc2}</span>`:'<span style="font-size:.82rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
-    <div class="m3body">${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin-bottom:6px">경기 대기중</div>`}
+    <div class="m3body">${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
 }
@@ -6908,7 +6908,7 @@ function openM3(key,mid){
   }
   let html=`<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:14px;padding:14px 16px;background:var(--primary);color:white;border-radius:var(--radius-lg)" class="${divisionHeaderClass(div)}"><div style="font-weight:800;font-size:1.08rem;line-height:1.35">${dn1}</div><div style="font-size:1.25rem;font-weight:900;opacity:.9">VS</div><div style="font-weight:800;font-size:1.08rem;text-align:right;line-height:1.35">${dn2}</div></div>
   <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.</div>
-  ${(G.meta.onlineOrderEnabled?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1.5px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#cbd5e1')};background:${st.bothSubmitted?'#ecfdf5':(st.mySubmitted?'#fff7dd':'#f8fafc')}"><div style="font-size:.82rem;line-height:1.55;color:var(--text2)">${statusText}<div style="margin-top:4px;font-weight:800;color:var(--text)">상태: ${st.s1?'제출완료':'미제출'} / ${st.s2?'제출완료':'미제출'} ${st.bothSubmitted?'→ 공개됨':''}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${(!AD&&mySide&&!st.mySubmitted?`<button class="btn btn-primary" style="padding:7px 12px;font-size:.78rem" onclick="submitOnlineOrder()">📝 온라인 오더 제출</button>`:'')}${(AD&&(st.s1||st.s2)?`<button class="btn btn-outline" style="padding:7px 12px;font-size:.78rem;background:#fff;color:#8a6412;border-color:#d4a017" onclick="unlockOnlineOrder('${key}','${mid}')">🔓 관리자 초기화</button>`:'')}</div></div>`:'')}`;
+  ${(G.meta.onlineOrderEnabled?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1.5px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#cbd5e1')};background:${st.bothSubmitted?'#ecfdf5':(st.mySubmitted?'#fff7dd':'#f8fafc')}"><div style="font-size:.82rem;line-height:1.55;color:var(--text2)">${statusText}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'제출완료':'미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'제출완료':'미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 공개됨</span>':''}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${(!AD&&mySide&&!st.mySubmitted?`<button class="btn btn-primary" style="padding:7px 12px;font-size:.78rem" onclick="submitOnlineOrder()">📝 온라인 오더 제출</button>`:'')}${(AD&&(st.s1||st.s2)?`<button class="btn btn-outline" style="padding:7px 12px;font-size:.78rem;background:#fff;color:#8a6412;border-color:#d4a017" onclick="unlockOnlineOrder('${key}','${mid}')">🔓 관리자 초기화</button>`:'')}</div></div>`:'')}`;
   for(let r=0;r<dbl;r++){
     const rb=exRb[r]||{};
     const submitted1=getSubmittedPlayersForSide(key,m,1,r);
@@ -6930,8 +6930,8 @@ function openM3(key,mid){
     html+=`<div class="rb-blk"><div class="rb-bhdr"><span>${r+1}복식 <small style="opacity:.75">(기본: ${defSlotLabels[r]})</small></span>${rb.winner!=null?`<span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:.7rem">${rb.winner===0?dn1:dn2} ✓</span>`:''}</div>
     <div class="rb-bbdy">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px">${dn1} (2명 선택)</div>${showSide1?`<div id="rp1_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p1,selP1,`rp1_${r}`,canEditSide1)}</div>`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p1,selP1,`rp1_${r}`)}`}</div>
-        <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px">${dn2} (2명 선택)</div>${showSide2?`<div id="rp2_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p2,selP2,`rp2_${r}`,canEditSide2)}</div>`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p2,selP2,`rp2_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn1} (2명 선택)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'제출완료':'미제출'}</span></div>${showSide1?`<div id="rp1_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p1,selP1,`rp1_${r}`,canEditSide1)}</div>`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p1,selP1,`rp1_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn2} (2명 선택)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'제출완료':'미제출'}</span></div>${showSide2?`<div id="rp2_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p2,selP2,`rp2_${r}`,canEditSide2)}</div>`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p2,selP2,`rp2_${r}`)}`}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
         <div>
@@ -7675,6 +7675,18 @@ function getOnlineOrderStatusBadgeHTML(key,m){
   if(st.s1||st.s2) return `<span class="badge bg-gold" style="font-size:.76rem;padding:3px 9px">📝 제출완료</span>`;
   return `<span class="badge bg-gray" style="font-size:.76rem;padding:3px 9px">⏳ 미제출</span>`;
 }
+
+function getOnlineOrderTeamStatusHTML(key,m){
+  if(!G.meta.onlineOrderEnabled) return '';
+  const st=getOnlineOrderState(key,m);
+  const {t1,t2}=getMatchTeamObjects(key,m);
+  const dn1=t1?tdn(t1,key,m.t1):'팀1';
+  const dn2=t2?tdn(t2,key,m.t2):'팀2';
+  const chip=(name,submitted)=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:.73rem;font-weight:800;border:1.5px solid ${submitted?'#16a34a':'#cbd5e1'};background:${submitted?'#ecfdf5':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${name} · ${submitted?'제출완료':'미제출'}</span>`;
+  const pub=st.bothSubmitted?`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:.73rem;font-weight:800;border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 공개됨</span>`:'';
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px">${chip(dn1,st.s1)}${chip(dn2,st.s2)}${pub}</div>`;
+}
+
 
 async function saveOnlineOrderSettings(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
