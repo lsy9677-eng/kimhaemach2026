@@ -8102,17 +8102,10 @@ function upDash(){
         }
       }
       const onClickFn=isOngoing?`goBracket('${at.id}','${d}')`:`openRoster('${at.id}','${d}')`;
-      // 오더 현황 (onlineOrderEnabled + 진행중 대회만)
+      // 홈 부서별 현황에는 상세 오더 목록 대신 요약만 표시
       let orderHtml='';
       if(G.meta.onlineOrderEnabled && isOngoing && allMs.length>0){
         const allMatchMs=allMs.filter(m=>!m.bye);
-        const totalSides=allMatchMs.length*2;
-        let submitted=0;
-        allMatchMs.forEach(m=>{
-          if(m.orderSubmitted1||m.orderSubmissions?.[(()=>{const t=G.teams[k]||[];const tm=t[m.t1];return tm?baseClub(tm.club||''):''})()]) submitted++;
-          if(m.orderSubmitted2||m.orderSubmissions?.[(()=>{const t=G.teams[k]||[];const tm=t[m.t2];return tm?baseClub(tm.club||''):''})()]) submitted++;
-        });
-        // 더 정확한 계산: getOnlineOrderState 사용
         let s1cnt=0,s2cnt=0,bothCnt=0;
         allMatchMs.forEach(m=>{
           const ost=getOnlineOrderState(k,m);
@@ -8120,18 +8113,18 @@ function upDash(){
           if(ost.s2) s2cnt++;
           if(ost.bothSubmitted) bothCnt++;
         });
+        const totalSides=allMatchMs.length*2;
         const totalSubmitted=s1cnt+s2cnt;
-        const color=bothCnt===allMatchMs.length?'#166534':(totalSubmitted>0?'#b45309':'#475569');
-        orderHtml=`<div style="margin-top:6px;padding:5px 8px;border-radius:8px;background:${bothCnt===allMatchMs.length?'#dcfce7':(totalSubmitted>0?'#fef3c7':'#f1f5f9')};border:1px solid ${bothCnt===allMatchMs.length?'#86efac':(totalSubmitted>0?'#fde68a':'#e2e8f0')}">
-          <div style="font-size:.65rem;font-weight:800;color:${color}">📋 오더 제출 현황</div>
-          <div style="font-size:.68rem;color:${color};margin-top:2px">${allMatchMs.map(m=>{
-            const ost=getOnlineOrderState(k,m);
-            const tms=G.teams[k]||[];
-            const tm1=tms[m.t1],tm2=tms[m.t2];
-            const n1=tm1?tdn(tm1,k,m.t1):'팀1', n2=tm2?tdn(tm2,k,m.t2):'팀2';
-            const chip=(name,done)=>`<span style="display:inline-block;padding:1px 5px;border-radius:4px;font-size:.6rem;font-weight:700;background:${done?'#dcfce7':'#fee2e2'};color:${done?'#166534':'#991b1b'};border:1px solid ${done?'#86efac':'#fca5a5'}">${name} ${done?'✅':'⏳'}</span>`;
-            return `<div style="margin-top:3px">${chip(n1,ost.s1)} ${chip(n2,ost.s2)}</div>`;
-          }).join('')}</div>
+        const pendingSides=Math.max(0,totalSides-totalSubmitted);
+        const allDone=allMatchMs.length>0 && bothCnt===allMatchMs.length;
+        const someDone=totalSubmitted>0;
+        const color=allDone?'#166534':(someDone?'#b45309':'#475569');
+        const bg=allDone?'#dcfce7':(someDone?'#fef3c7':'#f1f5f9');
+        const bd=allDone?'#86efac':(someDone?'#fde68a':'#e2e8f0');
+        orderHtml=`<div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:${bg};border:1px solid ${bd}">
+          <div style="font-size:.65rem;font-weight:800;color:${color}">📋 오더 제출 요약</div>
+          <div style="font-size:.72rem;color:${color};margin-top:3px;font-weight:700">제출 ${totalSubmitted}/${totalSides} · 미제출 ${pendingSides}</div>
+          <div style="font-size:.66rem;color:${color};margin-top:2px">양팀 제출 완료 경기 ${bothCnt}/${allMatchMs.length}</div>
         </div>`;
       }
       return`<div class="stat-card" style="cursor:pointer;padding:20px 18px;min-height:158px;border-width:2px" onclick="${onClickFn}"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span class="dpill ${dc(d)}" style="font-size:.9rem;padding:6px 14px">${dl(d)}</span>${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite;font-size:.78rem;padding:5px 10px">진행중</span>':hd?'<span class="badge bg-green" style="font-size:.78rem;padding:5px 10px">추첨완료</span>':'<span class="badge bg-gray" style="font-size:.78rem;padding:5px 10px">대기</span>'}</div><div class="stat-val" style="margin-top:12px;font-size:2.25rem">${tc}<span style="font-size:1.08rem;font-weight:500"> 팀</span></div><div class="stat-label" style="font-size:.9rem;margin-top:2px">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>${summary}${orderHtml}${isOngoing?'<div style="margin-top:10px;font-size:.78rem;color:var(--primary);font-weight:700">👆 탭하면 대진표 실시간 보기</div>':''}</div>`;
