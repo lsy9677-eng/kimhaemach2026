@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v36-mobile-op-ribbon-lowered";
+  const APP_VERSION = "2026-03-30-v37-admin-ribbon-done-total-remaining";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -426,7 +426,9 @@ body{overflow-x:hidden;}
 .op-banner-green{background:linear-gradient(135deg,#edfdf2,#c8f2d4);border-color:#37a565;color:#14532d}
 .op-banner-blue{background:linear-gradient(135deg,#eef4ff,#d7e6ff);border-color:#4f7edc;color:#123a88}
 .op-side-ribbon{display:none}.op-sticky-ribbon{position:fixed;left:8px;top:118px;z-index:1650;display:none;align-items:center;gap:6px;padding:8px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 10px 22px rgba(15,30,58,.16);font-weight:900;font-size:.78rem;line-height:1.1;background:rgba(255,255,255,.97);backdrop-filter:saturate(120%) blur(2px);max-width:min(220px,calc(100vw - 18px));flex-wrap:wrap;justify-content:flex-start}.op-sticky-ribbon.show{display:inline-flex}.op-div-marker{display:block;height:1px;opacity:0;pointer-events:none}.op-sticky-ribbon .mini{font-size:.66rem;padding:2px 7px;border-radius:999px;background:rgba(15,30,58,.08)}.op-sticky-ribbon .sub{display:block;flex-basis:100%;font-size:.62rem;opacity:.78;font-weight:700;line-height:1.2}
-.op-sticky-ribbon.mobile-lowered{top:auto;bottom:max(78px,calc(env(safe-area-inset-bottom,0px) + 62px));left:8px;right:8px;max-width:calc(100vw - 16px);}
+.op-sticky-ribbon.mobile-lowered{top:auto;bottom:max(78px,calc(env(safe-area-inset-bottom,0px) + 62px));left:8px;right:8px;max-width:calc(100vw - 16px);} 
+.op-sticky-ribbon .closex{margin-left:auto;border:none;background:rgba(15,30,58,.12);color:inherit;border-radius:999px;padding:2px 8px;font-size:.72rem;font-weight:900;cursor:pointer;line-height:1.2;} 
+.op-sticky-ribbon .closex:hover{background:rgba(15,30,58,.2);} 
 .op-side-ribbon .mini{font-size:.66rem;font-weight:800;opacity:.9}
 .op-side-ribbon .sub{display:none}
 .br-floating-notice{position:fixed;left:50%;top:148px;transform:translateX(-50%);z-index:3000;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.28);font-weight:900}
@@ -2110,6 +2112,7 @@ function toggleAdmin(){
     const curPage=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(curPage==='players') showPage('home');
     cm('mAdminSettings');
+    renderOpStickyRibbonFromMarker(null);
     toast('로그아웃','info');
     const _ap=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(_ap==='register'){renderRegisterDivisionOverview();renderRL();}
@@ -2118,6 +2121,8 @@ function toggleAdmin(){
 function applyAdminUI(){
   AD=true;
   document.body.classList.add('admin-mode');
+  try{ if(sessionStorage.getItem('hideOpStickyRibbon')!=='1') window.__hideOpStickyRibbon=false; }catch(e){}
+  setTimeout(updateOperationSticky,0);
   ge('adminBadge').classList.add('show');
   ge('adminToggleBtn').classList.add('active');
   ge('adminToggleBtn').textContent='로그아웃';
@@ -3273,17 +3278,34 @@ function ensureOpStickyRibbonEl(){
   document.body.appendChild(el);
   return el;
 }
+function canShowOpStickyRibbon(){
+  return !!AD && !window.__hideOpStickyRibbon;
+}
+function hideOpStickyRibbon(){
+  window.__hideOpStickyRibbon=true;
+  try{ sessionStorage.setItem('hideOpStickyRibbon','1'); }catch(e){}
+  renderOpStickyRibbonFromMarker(null);
+}
+function resetOpStickyRibbon(){
+  window.__hideOpStickyRibbon=false;
+  try{ sessionStorage.removeItem('hideOpStickyRibbon'); }catch(e){}
+  updateOperationSticky();
+}
+try{ window.__hideOpStickyRibbon = sessionStorage.getItem('hideOpStickyRibbon')==='1'; }catch(e){ window.__hideOpStickyRibbon=false; }
 function renderOpStickyRibbonFromMarker(marker){
   const el=ensureOpStickyRibbonEl();
-  if(!marker){ el.classList.remove('show'); el.innerHTML=''; return; }
+  if(!marker || !canShowOpStickyRibbon()){ el.classList.remove('show'); el.style.display='none'; el.innerHTML=''; return; }
   const cls=(marker.className||'').split(/\s+/).find(x=>/^op-banner-/.test(x))||'op-banner-blue';
   const mobileLowered = window.innerWidth <= 680 ? ' mobile-lowered' : '';
   el.className='op-sticky-ribbon show '+cls+mobileLowered;
   const label=marker.dataset.opLabel||'운영';
   const stats=marker.dataset.opStats||'';
   const sub=marker.dataset.opSub||'';
-  el.innerHTML=`<span>🏁 ${label}</span><span class="mini">운영중</span>${stats?`<span class="mini">${stats}</span>`:''}${sub?`<span class="sub">${sub}</span>`:''}`;
+  el.style.display='inline-flex';
+  el.innerHTML=`<span>🏁 ${label}</span><span class="mini">운영중</span>${stats?`<span class="mini">${stats}</span>`:''}${sub?`<span class="sub">${sub}</span>`:''}<button class="closex" onclick="hideOpStickyRibbon()">숨기기</button>`;
 }
+window.hideOpStickyRibbon = hideOpStickyRibbon;
+window.resetOpStickyRibbon = resetOpStickyRibbon;
 function updateOperationSticky(){
   const page=document.querySelector('.nav-tab.active')?.dataset?.page;
   if(page!=='bracket'){ renderOpStickyRibbonFromMarker(null); return; }
@@ -9112,10 +9134,12 @@ function divisionHeaderClass(div){
 function renderOperationDivisionBanner(tid,div,key,teams){
   const t=G.tournaments.find(x=>x.id===tid);
   const allMs=G.matches[key]||[];
+  const total=allMs.length;
   const done=allMs.filter(m=>getMatchResultState(key,m).done).length;
   const playing=allMs.filter(m=>!getMatchResultState(key,m).done && getMatchResultState(key,m).started).length;
+  const remain=Math.max(0,total-done);
   const label=dl(div).replace(/^[^\s]+\s*/,'').trim()||dl(div);
-  const stats=`${teams.length}팀 · 완료 ${done} · 진행 ${playing}`;
+  const stats=`${teams.length}팀 · 완료 ${done}/${total} · 진행 ${playing} · 잔여 ${remain}`;
   return `<div class="op-div-marker ${divisionBannerClass(div)}" data-op-label="${esc(label)}" data-op-stats="${esc(stats)}" data-op-sub="${esc(t?.name||'')}" aria-hidden="true"></div>`;
 }
 function renderFinalSummaryCard(label,items){
