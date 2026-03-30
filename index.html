@@ -8207,7 +8207,7 @@ async function saveEditPlayer(){
   const newName=ge('epNewName').value.trim();
   const mainClub=(ge('epMainClub')?.value||'').trim() || (oldPk.club||'').trim();
   const subRaw=(ge('epSubClubs')?.value||'').trim();
-  const subClubs=subRaw?subRaw.split(',').map(c=>c.trim()).filter(Boolean):[];
+  const subClubs=subRaw?subRaw.split(',').map(c=>normalizeClub(c.trim())).filter(Boolean):[];
   const clubs=[mainClub, ...subClubs.filter(c=>c && c!==mainClub)];
   ge('epClubs').value=clubs.filter(Boolean).join(', ');
   const finalDisplayName=newName||oldDisplayName;
@@ -8216,6 +8216,40 @@ async function saveEditPlayer(){
   const finalKey=pKey(finalDisplayName, finalClub);
   const phone=(ge('epPhone')?.value||'').trim();
   const delIdxs=[...document.querySelectorAll('.ep-del-hist:checked')].map(el=>parseInt(el.dataset.idx));
+  const finalSubClubStr=subClubs.join(', ');
+
+  async function syncRegistryRow(){
+    const year = REG_YEAR;
+    if(!window.G_REGISTRY) window.G_REGISTRY={};
+    const members = Array.isArray(G_REGISTRY[year]) ? G_REGISTRY[year] : await loadRegistry(year);
+    if(!Array.isArray(members) || !members.length) return false;
+
+    const oldNormName = normName(cleanName(oldDisplayName));
+    const finalNormName = normName(cleanName(finalDisplayName));
+    const oldMain = normalizeClub(oldPk.club || '');
+    const finalMain = normalizeClub(finalClub || '');
+
+    let idx = members.findIndex(r=> normName(cleanName(r.name||''))===oldNormName && normalizeClub(r.club||'')===oldMain);
+    if(idx<0) idx = members.findIndex(r=> normName(cleanName(r.name||''))===oldNormName && normalizeClub(r.club||'')===finalMain);
+    if(idx<0){
+      const sameNameIdx = members.map((r,i)=>({r,i})).filter(x=> normName(cleanName(x.r.name||''))===oldNormName);
+      if(sameNameIdx.length===1) idx = sameNameIdx[0].i;
+    }
+    if(idx<0){
+      const sameNewNameIdx = members.map((r,i)=>({r,i})).filter(x=> normName(cleanName(x.r.name||''))===finalNormName);
+      if(sameNewNameIdx.length===1) idx = sameNewNameIdx[0].i;
+    }
+    if(idx<0) return false;
+
+    const row = {...members[idx]};
+    row.name = finalDisplayName;
+    row.club = finalClub;
+    row.subClub = finalSubClubStr;
+    members[idx] = row;
+    G_REGISTRY[year] = members;
+    await saveRegistry(year);
+    return true;
+  }
 
   // HIST 전용 선수(Firebase 없음) → HIST 이름만 수정
   if(!G.players[oldKey]){
@@ -8235,6 +8269,7 @@ async function saveEditPlayer(){
 
   sl(true);
   try{
+    let registrySynced = false;
     if(finalKey!==oldKey){
       const existing=G.players[finalKey];
       let mergedHist=[...myHist];
@@ -8250,7 +8285,7 @@ async function saveEditPlayer(){
         await deleteDoc(doc(db,'players',finalKey.replace(/[/.#$[\]]/g,'_')));
       }
 
-      const newP={...p,key:finalKey,name:finalDisplayName,club:finalClub,clubs:mergedClubs,history:mergedHist,wins:mergedWins,losses:mergedLosses,phone:phone||p.phone||''};
+      const newP={...p,key:finalKey,name:finalDisplayName,club:finalClub,clubs:mergedClubs,subClub:finalSubClubStr,history:mergedHist,wins:mergedWins,losses:mergedLosses,phone:phone||p.phone||''};
       await setDoc(doc(db,'players',finalKey.replace(/[/.#$[\]]/g,'_')),newP);
       await deleteDoc(doc(db,'players',oldKey.replace(/[/.#$[\]]/g,'_')));
       delete G.players[oldKey];
@@ -8260,14 +8295,17 @@ async function saveEditPlayer(){
       HIST_DATA.forEach(t=>t.teams.forEach(tm=>{
         tm.players=tm.players.map(pn=>pn===oldDisplayName?finalDisplayName:pn);
       }));
+      registrySynced = await syncRegistryRow();
       toast(existing?'"'+oldDisplayName+'"과 "'+finalDisplayName+'" 합치기 완료 ✅':'"'+finalDisplayName+'"으로 변경 완료 ✅','success');
     } else {
-      G.players[oldKey]={...p,key:oldKey,name:oldDisplayName,club:finalClub,clubs:(clubs.length?clubs:(p.clubs||[])),history:myHist,phone};
+      G.players[oldKey]={...p,key:oldKey,name:oldDisplayName,club:finalClub,clubs:(clubs.length?clubs:(p.clubs||[])),subClub:finalSubClubStr,history:myHist,phone};
       await stP(oldKey);
+      registrySynced = await syncRegistryRow();
       toast('저장 완료 ✅','success');
     }
     sl(false);cm('mEditP');renderAllP();
-    await fbLog('선수수정: '+oldDisplayName+'→'+finalDisplayName,'✏️');
+    if(window.renderRegistryTab) renderRegistryTab();
+    await fbLog('선수수정: '+oldDisplayName+'→'+finalDisplayName+(registrySynced?' (등록명단 동기화)':''),'✏️');
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');console.error(e);}
 }
 
