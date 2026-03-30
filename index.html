@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v27-login-fix2";
+  const APP_VERSION = "2026-03-31-v31-export-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -2505,24 +2505,21 @@ function onRegLoginClubChange(){
   const hint = ge('regLoginHint');
   if(!hint) return;
   if(!club){ hint.textContent=''; return; }
-  const passwords = G.meta.clubPasswords||{};
-  const contacts  = G.meta.clubContacts||{};
-  if(passwords[club] && isClubPasswordCustom(club)){
-    hint.textContent='클럽 전용 비밀번호가 설정되어 있습니다.';
+  const storedPw = (G.meta.clubPasswords||{})[club]||'';
+  if(storedPw){
+    hint.textContent='✅ 클럽 전용 비밀번호로 로그인하세요.';
     hint.style.color='var(--success)';
-  } else if(contacts[club]){
-    const phone = contacts[club].replace(/[^0-9]/g,'');
-    const last4 = phone.slice(-4);
-    hint.textContent=`현재는 임시 비밀번호 상태입니다. 전화번호 뒷 4자리(${last4})로 로그인하면 전용 비밀번호를 반드시 새로 설정해야 합니다.`;
-    hint.style.color='#e67e22';
   } else {
-    hint.textContent='전화번호 미등록 → 공용 비밀번호(202601)로 로그인 후 전화번호 등록과 전용 비밀번호 설정이 필요합니다.';
+    hint.textContent=`공용 비밀번호(${G.meta.regPw||'202601'})로 로그인하세요.`;
     hint.style.color='#e67e22';
   }
 }
 
 let FORCE_PW_CLUB='';
 Object.defineProperty(window,'FORCE_PW_CLUB',{get:()=>FORCE_PW_CLUB,set:(v)=>{FORCE_PW_CLUB=v;}});
+function getRegSessionVersion(){
+  return Number(G?.meta?.regSessionVersion||1);
+}
 function isClubPasswordCustom(club){
   return !!((G.meta.clubPasswordCustom||{})[club]);
 }
@@ -2582,50 +2579,16 @@ function doRegLogin(){
   if(!club){ toast('클럽을 선택해주세요','error'); return; }
   if(!pw)  { toast('비밀번호를 입력해주세요','error'); return; }
 
-  const passwords = G.meta.clubPasswords||{};
-  const contacts  = G.meta.clubContacts||{};
-  const storedPw  = passwords[club] || '';
-  const tempPw    = getClubTempPassword(club);
-  const hasPhone  = !!contacts[club];
-  const isCustom  = isClubPasswordCustom(club);
+  const storedPw = (G.meta.clubPasswords||{})[club] || '';
+  const fallback = G.meta.regPw || '202601';
+  const valid    = storedPw || fallback;
 
-  const matchStored = storedPw && pw === storedPw;
-  const matchTemp   = pw === tempPw;
-
-  // ── 케이스 1: 저장된 비번과 일치 ──
-  // isCustom 여부와 관계없이 storedPw가 맞으면 → 전화번호·비번 절차가 이미 완료된 것
-  if(matchStored){
-    if(!hasPhone){
-      // 전화번호 미등록 상태면 등록 절차
-      cm('mRegLogin');
-      ge('regPwInput').value='';
-      openFirstLoginPhoneModal(club);
-      return;
-    }
-    // 전화번호 있고 비번도 맞음 → 바로 로그인
+  if(pw === valid){
     _completeRegLogin(club);
-    return;
+  } else {
+    toast('비밀번호가 틀렸습니다', 'error');
+    ge('regPwInput')?.select();
   }
-
-  // ── 케이스 2: 임시 비번과 일치 ──
-  if(matchTemp){
-    cm('mRegLogin');
-    ge('regPwInput').value='';
-    if(!hasPhone){
-      openFirstLoginPhoneModal(club);
-    } else {
-      // 전화번호는 있는데 아직 전용 비번 미설정 → 비번 변경 강제
-      openForceClubPwModal(club);
-    }
-    return;
-  }
-
-  // ── 케이스 3: 불일치 ──
-  const hint = isCustom
-    ? '설정하신 전용 비밀번호를 입력해주세요'
-    : `임시 비밀번호(전화번호 뒷 4자리)를 입력해주세요`;
-  toast('비밀번호 오류 — ' + hint, 'error');
-  ge('regPwInput')?.select();
 }
 
 function _completeRegLogin(club){
@@ -2633,19 +2596,33 @@ function _completeRegLogin(club){
   REG_CLUB=club;
   localStorage.setItem('reg','1');
   localStorage.setItem('reg_club', club);
-  localStorage.setItem('reg_session_version', String(Number(G?.meta?.regSessionVersion||1)));
   localStorage.setItem('reg_session_version', String(getRegSessionVersion()));
-  ge('regToggleBtn').textContent='로그아웃';
-  ge('regToggleBtn').style.background='#388e3c';
+
+  // ── 헤더 버튼·뱃지 업데이트 ──
+  const toggleBtn = ge('regToggleBtn');
+  if(toggleBtn){ toggleBtn.textContent='로그아웃'; toggleBtn.style.background='#388e3c'; }
   const badge = ge('regLoginBadge');
-  if(badge){ badge.textContent=`${club} 경기이사`; badge.style.display='inline'; }
+  if(badge){
+    badge.textContent=`${club} 경기이사`;
+    badge.style.cssText='display:inline-flex;align-items:center;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;margin-right:4px';
+  }
+
+  // ── 모달 닫기 ──
   cm('mRegLogin');
+  cm('mForceClubPw');
+  cm('mFirstLogin');
+
+  // ── UI 갱신 ──
   applyRegLoginUI();
-  updateMyClubUI(); // 내 클럽 카드/버튼 표시
+
+  // ── 팀등록 탭으로 자동 이동 ──
   toast(`${club} 경기이사 로그인 ✅`,'success');
-  const pg = document.querySelector('.nav-tab.active')?.dataset?.page;
-  if(pg==='register'){renderRegisterDivisionOverview();renderRL();}
-  if(pg==='bracket'){renderBracket();}
+  setTimeout(()=>{
+    showPage('register');
+    renderRegisterDivisionOverview();
+    renderRL();
+    updateMyClubUI();
+  }, 150);
 }
 
 // 최초 로그인 시 전화번호 등록 모달
@@ -2681,8 +2658,11 @@ async function saveFirstLoginPhone(){
     await saveMeta();
     sl(false);
     cm('mFirstLogin');
-    toast('전화번호 저장 완료. 이제 클럽 전용 비밀번호를 설정해야 로그인할 수 있습니다.','success');
-    openForceClubPwModal(FIRST_LOGIN_CLUB);
+    // 전화번호 뒷4자리가 storedPw로 저장됐으므로 바로 로그인
+    toast('전화번호 등록 완료 ✅','success');
+    const _loginClub = FIRST_LOGIN_CLUB;
+    FIRST_LOGIN_CLUB = '';
+    _completeRegLogin(_loginClub);
   }catch(e){
     sl(false);
     if(msg){ msg.textContent='저장 실패: '+e.message; msg.style.color='var(--danger)'; }
@@ -12329,7 +12309,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
+  toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
