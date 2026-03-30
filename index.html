@@ -425,11 +425,11 @@ body{overflow-x:hidden;}
 .op-banner-bronze{background:linear-gradient(135deg,#fff2e8,#efc29d);border-color:#a97142;color:#7c4220}
 .op-banner-green{background:linear-gradient(135deg,#edfdf2,#c8f2d4);border-color:#37a565;color:#14532d}
 .op-banner-blue{background:linear-gradient(135deg,#eef4ff,#d7e6ff);border-color:#4f7edc;color:#123a88}
-.op-side-ribbon{position:sticky;left:6px;top:84px;z-index:121;display:inline-flex;align-items:center;gap:6px;margin:0 0 10px 0;padding:6px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 6px 16px rgba(15,30,58,.10);font-weight:900;font-size:.8rem;line-height:1;background:rgba(255,255,255,.96);backdrop-filter:saturate(120%) blur(2px);max-width:min(220px,calc(100vw - 28px));flex-wrap:wrap;justify-content:flex-start}
+.op-side-ribbon{display:none}.op-sticky-ribbon{position:fixed;left:8px;top:118px;z-index:1650;display:none;align-items:center;gap:6px;padding:8px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 10px 22px rgba(15,30,58,.16);font-weight:900;font-size:.78rem;line-height:1.1;background:rgba(255,255,255,.97);backdrop-filter:saturate(120%) blur(2px);max-width:min(220px,calc(100vw - 18px));flex-wrap:wrap;justify-content:flex-start}.op-sticky-ribbon.show{display:inline-flex}.op-div-marker{display:block;height:1px;opacity:0;pointer-events:none}.op-sticky-ribbon .mini{font-size:.66rem;padding:2px 7px;border-radius:999px;background:rgba(15,30,58,.08)}.op-sticky-ribbon .sub{display:block;flex-basis:100%;font-size:.62rem;opacity:.78;font-weight:700;line-height:1.2}
 .op-side-ribbon .mini{font-size:.66rem;font-weight:800;opacity:.9}
 .op-side-ribbon .sub{display:none}
-.br-floating-notice{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:1700;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.22);font-weight:900}
-.br-floating-notice.show{display:flex}
+.br-floating-notice{position:fixed;left:50%;top:104px;transform:translateX(-50%);z-index:3000;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.28);font-weight:900}
+.br-floating-notice.show{display:flex !important}
 .br-floating-notice .tag{flex:0 0 auto;padding:4px 10px;border-radius:999px;background:#0f1e3a;color:#fff;font-size:.76rem;letter-spacing:.02em}
 .br-floating-notice .text{flex:1;min-width:0;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:noticeFlash 1s ease-in-out infinite}
 .br-floating-notice .actions{display:flex;gap:6px;flex:0 0 auto}
@@ -438,10 +438,13 @@ body{overflow-x:hidden;}
 @media(max-width:680px){
   .op-division-banner{top:84px;padding:9px 11px}
   .op-side-ribbon{left:4px;top:76px;font-size:.7rem;padding:5px 8px;gap:4px;max-width:150px;border-radius:12px}
-  .br-floating-notice{top:86px;min-width:calc(100vw - 12px);max-width:calc(100vw - 12px);padding:8px 10px;gap:7px;border-radius:12px}
+  .br-floating-notice{top:92px;min-width:calc(100vw - 12px);max-width:calc(100vw - 12px);padding:8px 10px;gap:7px;border-radius:12px}
   .br-floating-notice .tag{font-size:.66rem;padding:3px 8px}
   .br-floating-notice .text{font-size:.8rem}
   .br-floating-notice .btnx{font-size:.66rem;padding:5px 8px}
+  .op-sticky-ribbon{left:6px;top:104px;padding:7px 9px;font-size:.72rem;max-width:160px;border-radius:12px}
+  .op-sticky-ribbon .mini{font-size:.6rem;padding:2px 6px}
+  .op-sticky-ribbon .sub{font-size:.58rem}
 }
   .g2,.g3,.g4{grid-template-columns:1fr;}
   .frow,.frow3{grid-template-columns:1fr;}
@@ -1992,6 +1995,7 @@ function onDU(){
   if(p==='ranking'){ try{ renderRanking(); }catch(e){ console.warn('onDU renderRanking failed', e); } }
   try{ popSel(); }catch(e){ console.warn('onDU popSel failed', e); }
   renderFloatingNotice();
+  updateOperationSticky();
 }
 function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend','<style>@keyframes ldA{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}</style>');document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
@@ -2028,6 +2032,7 @@ function showPage(n){
 
   window.scrollTo(0,0);
   renderFloatingNotice();
+  setTimeout(updateOperationSticky,0);
 }
 
 function toggleAdmin(){
@@ -3156,24 +3161,29 @@ function ensureFloatingNoticeEl(){
   return el;
 }
 function shouldShowFloatingNotice(){
-  return !!(AD && G.meta?.adminFloatingNoticeEnabled && (G.meta?.adminFloatingNotice||'').trim() && !window.__hideFloatingNoticeOnce);
+  return !!(G.meta?.adminFloatingNoticeEnabled && (G.meta?.adminFloatingNotice||'').trim() && !window.__hideFloatingNoticeOnce);
 }
 function renderFloatingNotice(){
   const el=ensureFloatingNoticeEl();
   const txt=el.querySelector('.text');
   if(txt) txt.textContent=(G.meta?.adminFloatingNotice||'').trim();
-  el.classList.toggle('show', shouldShowFloatingNotice());
+  const show=shouldShowFloatingNotice();
+  el.classList.toggle('show', show);
+  el.style.display=show?'flex':'none';
 }
 async function saveFloatingNoticeSettings(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  G.meta.adminFloatingNotice=(ge('adminFloatingNoticeInput')?.value||'').trim();
-  G.meta.adminFloatingNoticeEnabled=!!ge('adminFloatingNoticeEnabled')?.checked;
+  const input=ge('adminFloatingNoticeInput');
+  const check=ge('adminFloatingNoticeEnabled');
+  G.meta.adminFloatingNotice=(input?.value||'').trim();
+  G.meta.adminFloatingNoticeEnabled=!!check?.checked;
   window.__hideFloatingNoticeOnce=false;
   try{
     await saveMeta();
     renderFloatingNotice();
-    toast('떠다니는 공지 저장 완료 ✅','success');
-  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+    setTimeout(renderFloatingNotice, 80);
+    toast('공지 저장 완료 ✅','success');
+  }catch(e){ console.error(e); toast('저장 실패: '+e.message,'error'); }
 }
 async function clearFloatingNotice(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
@@ -3185,13 +3195,53 @@ async function clearFloatingNotice(){
   try{
     await saveMeta();
     renderFloatingNotice();
-    toast('떠다니는 공지를 지웠습니다','success');
-  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+    toast('공지 지움 완료','success');
+  }catch(e){ console.error(e); toast('저장 실패: '+e.message,'error'); }
 }
+window.saveFloatingNoticeSettings = saveFloatingNoticeSettings;
+window.clearFloatingNotice = clearFloatingNotice;
+window.hideFloatingNoticeForNow = hideFloatingNoticeForNow;
 function hideFloatingNoticeForNow(){
   window.__hideFloatingNoticeOnce=true;
   renderFloatingNotice();
 }
+function ensureOpStickyRibbonEl(){
+  let el=ge('opStickyRibbon');
+  if(el) return el;
+  el=document.createElement('div');
+  el.id='opStickyRibbon';
+  el.className='op-sticky-ribbon';
+  document.body.appendChild(el);
+  return el;
+}
+function renderOpStickyRibbonFromMarker(marker){
+  const el=ensureOpStickyRibbonEl();
+  if(!marker){ el.classList.remove('show'); el.innerHTML=''; return; }
+  const cls=(marker.className||'').split(/\s+/).find(x=>/^op-banner-/.test(x))||'op-banner-blue';
+  el.className='op-sticky-ribbon show '+cls;
+  const label=marker.dataset.opLabel||'운영';
+  const stats=marker.dataset.opStats||'';
+  const sub=marker.dataset.opSub||'';
+  el.innerHTML=`<span>🏁 ${label}</span><span class="mini">운영중</span>${stats?`<span class="mini">${stats}</span>`:''}${sub?`<span class="sub">${sub}</span>`:''}`;
+}
+function updateOperationSticky(){
+  const page=document.querySelector('.nav-tab.active')?.dataset?.page;
+  if(page!=='bracket'){ renderOpStickyRibbonFromMarker(null); return; }
+  const markers=[...document.querySelectorAll('#bracketContent .op-div-marker')];
+  if(!markers.length){ renderOpStickyRibbonFromMarker(null); return; }
+  const anchorY=(window.innerWidth<=680?118:138);
+  let chosen=null;
+  for(const m of markers){
+    const r=m.getBoundingClientRect();
+    if(r.top<=anchorY && r.bottom>=0) chosen=m;
+  }
+  if(!chosen){
+    chosen=markers.find(m=>m.getBoundingClientRect().top>anchorY) || markers[markers.length-1];
+  }
+  renderOpStickyRibbonFromMarker(chosen||null);
+}
+window.addEventListener('scroll',()=>{ try{ updateOperationSticky(); }catch(e){} }, {passive:true});
+window.addEventListener('resize',()=>{ try{ updateOperationSticky(); }catch(e){} });
 
 // ✅ 기본 대회 선택: "접수중(open)" 우선 → 없으면 "진행중(ongoing)" → 최신 1개
 function pickDefaultTournamentId(){
@@ -4997,7 +5047,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
             html+=`<div style="margin-top:8px">
               <button class="btn btn-outline" style="font-size:.72rem;padding:4px 12px" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'🌳 조별 본선 연결구조 보기':'🌳 조별 본선 연결구조 접기'">🌳 조별 본선 연결구조 보기</button>
               <div style="display:none;margin-top:8px">
-                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">각 조 몇 위가 어느 본선 슬롯으로 배정되었는지 확인합니다.</div>
+                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">실제 조 번호는 추첨 전까지 숨김 처리됩니다. 본선 추첨 후에만 자리 배정이 확정됩니다.</div>
                 <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:12px">
                   ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
                 </div>
@@ -6553,9 +6603,8 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
     if(!slot) return '예선 통과';
     const gn = Number(slot.gn||0);
     const rk = Number(slot.rk||0);
-    if(gn && rk) return `${grpLabel(gn-1)} ${rk}위`;
-    if(rk) return `조 ${rk}위`;
-    return '예선 통과';
+    if(rk) return `( )조 ${rk}위`;
+    return '( )조 통과';
   };
 
   const firstCol=[];
@@ -7530,7 +7579,7 @@ function upDash(){
         }
       }
       const onClickFn=isOngoing?`goBracket('${at.id}','${d}')`:`openRoster('${at.id}','${d}')`;
-      return`<div class="stat-card" style="cursor:pointer" onclick="${onClickFn}"><div style="display:flex;align-items:center;justify-content:space-between"><span class="dpill ${dc(d)}">${dl(d)}</span>${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite">진행중</span>':hd?'<span class="badge bg-green">추첨완료</span>':'<span class="badge bg-gray">대기</span>'}</div><div class="stat-val" style="margin-top:6px">${tc}<span style="font-size:1rem;font-weight:400"> 팀</span></div><div class="stat-label">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>${summary}${isOngoing?'<div style="margin-top:6px;font-size:.65rem;color:var(--primary);font-weight:600">👆 탭하면 대진표 실시간 보기</div>':''}</div>`;
+      return`<div class="stat-card" style="cursor:pointer;padding:20px 18px;min-height:158px;border-width:2px" onclick="${onClickFn}"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span class="dpill ${dc(d)}" style="font-size:.9rem;padding:6px 14px">${dl(d)}</span>${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite;font-size:.78rem;padding:5px 10px">진행중</span>':hd?'<span class="badge bg-green" style="font-size:.78rem;padding:5px 10px">추첨완료</span>':'<span class="badge bg-gray" style="font-size:.78rem;padding:5px 10px">대기</span>'}</div><div class="stat-val" style="margin-top:12px;font-size:2.25rem">${tc}<span style="font-size:1.08rem;font-weight:500"> 팀</span></div><div class="stat-label" style="font-size:.9rem;margin-top:2px">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>${summary}${isOngoing?'<div style="margin-top:10px;font-size:.78rem;color:var(--primary);font-weight:700">👆 탭하면 대진표 실시간 보기</div>':''}</div>`;
     }).join('');
   } else {
     ge('heroTitle').textContent='김해시테니스협회';
@@ -8330,7 +8379,9 @@ function renderOperationDivisionBanner(tid,div,key,teams){
   const allMs=G.matches[key]||[];
   const done=allMs.filter(m=>getMatchResultState(key,m).done).length;
   const playing=allMs.filter(m=>!getMatchResultState(key,m).done && getMatchResultState(key,m).started).length;
-  return `<div class="op-side-ribbon ${divisionBannerClass(div)}" title="현재 운영 부서"><span>🏁 ${dl(div)}</span><span class="mini">운영중</span><span class="mini">${teams.length}팀</span><span class="mini">완료 ${done}</span><span class="mini">진행 ${playing}</span><span class="sub">${t?.name||''}</span></div>`;
+  const label=dl(div).replace(/^[^\s]+\s*/,'').trim()||dl(div);
+  const stats=`${teams.length}팀 · 완료 ${done} · 진행 ${playing}`;
+  return `<div class="op-div-marker ${divisionBannerClass(div)}" data-op-label="${esc(label)}" data-op-stats="${esc(stats)}" data-op-sub="${esc(t?.name||'')}" aria-hidden="true"></div>`;
 }
 function renderFinalSummaryCard(label,items){
   return `<div class="card" style="margin-bottom:12px"><div class="card-title">🏅 ${label} 최종 결과 요약</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">${items.map(it=>`<div style="padding:14px 12px;border-radius:14px;background:${it.bg};border:1.5px solid ${it.border};text-align:center"><div style="font-size:1.35rem;margin-bottom:6px">${it.emoji}</div><div style="font-size:.78rem;color:var(--text2);font-weight:700;margin-bottom:4px">${it.title}</div><div style="font-size:1rem;font-weight:900;line-height:1.35">${it.value||'-'}</div></div>`).join('')}</div></div>`;
@@ -10700,7 +10751,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   openClubMgr,addClub,delClub,renderCL,
   toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,toggleShowRegPw,
   onRegClubChange,onRegContactInput,saveRegContact,
-  renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,
+  renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListKakao44,saveRegListPDF44,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
