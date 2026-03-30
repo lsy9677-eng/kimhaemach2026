@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v31-export-fix";
+  const APP_VERSION = "2026-03-31-v33-deadline-guard";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4620,7 +4620,10 @@ function buildRegisterRosterGrid(tid,div,teams,key){
     const mainCount=isWomenTeam?6:dbl*2;
     const mainPlayers=p.slice(0,mainCount);
     const subPlayers=p.slice(mainCount);
-    const canManageTeam=AD||REG;
+    const _myClub = REG_CLUB ? baseClub(REG_CLUB) : '';
+    const _teamClub = baseClub(team.club||'')||'';
+    const _deadlinePassed = !AD && isRegDeadlinePassed();
+    const canManageTeam = AD || (REG && _myClub && _myClub === _teamClub && !_deadlinePassed);
     const adminBtns=canManageTeam?`<div class="rr-admin-btns">
       <button class="btn rr-btn-edit" style="background:#f8fafc;color:#0f1e3a;border:1px solid #cbd5e1" onclick="openETeam('${esc(key)}',${realIdx})">✏️ 수정</button>
       <button class="btn btn-danger rr-btn-del" onclick="delTeam('${esc(key)}',${realIdx})">🗑 삭제</button>
@@ -4948,6 +4951,12 @@ async function delTeam(key,idx){
     toast('경기이사 로그인 후 삭제할 수 있습니다','error');
     return;
   }
+  if(!AD && REG){
+    const _t=(G.teams[key]||[])[idx];
+    if(!_t||baseClub(_t.club||'')!==baseClub(REG_CLUB||'')){
+      toast('내 클럽 팀만 삭제할 수 있습니다','error'); return;
+    }
+  }
   if(!AD && isRegDeadlinePassed()){
     toast(`등록 기한이 만료되어 삭제할 수 없습니다.\n${regDeadlineLabel()}`,'error');
     return;
@@ -5023,6 +5032,9 @@ function openETeam(key,idx){
   if(!canManage){
     toast('경기이사 로그인 후 수정할 수 있습니다','error');
     return;
+  }
+  if(!AD && REG && baseClub(team.club||'')!==baseClub(REG_CLUB||'')){
+    toast('내 클럽 팀만 수정할 수 있습니다','error'); return;
   }
 
   CE_key=key;
