@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-30-v35-main-draw-audio-up";
+  const APP_VERSION = "2026-03-30-v36-mobile-op-ribbon-lowered";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -426,6 +426,7 @@ body{overflow-x:hidden;}
 .op-banner-green{background:linear-gradient(135deg,#edfdf2,#c8f2d4);border-color:#37a565;color:#14532d}
 .op-banner-blue{background:linear-gradient(135deg,#eef4ff,#d7e6ff);border-color:#4f7edc;color:#123a88}
 .op-side-ribbon{display:none}.op-sticky-ribbon{position:fixed;left:8px;top:118px;z-index:1650;display:none;align-items:center;gap:6px;padding:8px 10px;border-radius:14px;border:2px solid var(--border);box-shadow:0 10px 22px rgba(15,30,58,.16);font-weight:900;font-size:.78rem;line-height:1.1;background:rgba(255,255,255,.97);backdrop-filter:saturate(120%) blur(2px);max-width:min(220px,calc(100vw - 18px));flex-wrap:wrap;justify-content:flex-start}.op-sticky-ribbon.show{display:inline-flex}.op-div-marker{display:block;height:1px;opacity:0;pointer-events:none}.op-sticky-ribbon .mini{font-size:.66rem;padding:2px 7px;border-radius:999px;background:rgba(15,30,58,.08)}.op-sticky-ribbon .sub{display:block;flex-basis:100%;font-size:.62rem;opacity:.78;font-weight:700;line-height:1.2}
+.op-sticky-ribbon.mobile-lowered{top:auto;bottom:max(78px,calc(env(safe-area-inset-bottom,0px) + 62px));left:8px;right:8px;max-width:calc(100vw - 16px);}
 .op-side-ribbon .mini{font-size:.66rem;font-weight:800;opacity:.9}
 .op-side-ribbon .sub{display:none}
 .br-floating-notice{position:fixed;left:50%;top:148px;transform:translateX(-50%);z-index:3000;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.28);font-weight:900}
@@ -442,7 +443,7 @@ body{overflow-x:hidden;}
   .br-floating-notice .tag{font-size:.66rem;padding:3px 8px}
   .br-floating-notice .text{font-size:.8rem}
   .br-floating-notice .btnx{font-size:.66rem;padding:5px 8px}
-  .op-sticky-ribbon{left:6px;top:104px;padding:7px 9px;font-size:.72rem;max-width:160px;border-radius:12px}
+  .op-sticky-ribbon{left:8px;top:auto;bottom:max(84px,calc(env(safe-area-inset-bottom,0px) + 68px));right:8px;padding:8px 10px;font-size:.72rem;max-width:calc(100vw - 16px);border-radius:12px}
   .op-sticky-ribbon .mini{font-size:.6rem;padding:2px 6px}
   .op-sticky-ribbon .sub{font-size:.58rem}
 }
@@ -3276,7 +3277,8 @@ function renderOpStickyRibbonFromMarker(marker){
   const el=ensureOpStickyRibbonEl();
   if(!marker){ el.classList.remove('show'); el.innerHTML=''; return; }
   const cls=(marker.className||'').split(/\s+/).find(x=>/^op-banner-/.test(x))||'op-banner-blue';
-  el.className='op-sticky-ribbon show '+cls;
+  const mobileLowered = window.innerWidth <= 680 ? ' mobile-lowered' : '';
+  el.className='op-sticky-ribbon show '+cls+mobileLowered;
   const label=marker.dataset.opLabel||'운영';
   const stats=marker.dataset.opStats||'';
   const sub=marker.dataset.opSub||'';
