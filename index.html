@@ -1205,7 +1205,9 @@ body{overflow-x:hidden;}
 <div class="modal-body">
   <div class="form-group"><label class="form-label">현재 이름</label><input class="form-input" id="epOldName" disabled style="background:var(--bg2);color:var(--text3)"></div>
   <div class="form-group"><label class="form-label">새 이름</label><input class="form-input" id="epNewName" placeholder="변경할 이름 입력 (유지 시 공백)"></div>
-  <div class="form-group"><label class="form-label">소속 클럽 (쉼표로 구분)</label><input class="form-input" id="epClubs" placeholder="예: 하모니, 능동"></div>
+  <div class="form-group"><label class="form-label">주 클럽</label><select class="form-select" id="epMainClub"></select></div>
+  <div class="form-group"><label class="form-label">부클럽 (쉼표로 구분)</label><input class="form-input" id="epSubClubs" placeholder="예: 능동, 하모니"></div>
+  <input type="hidden" id="epClubs">
   <div class="form-group"><label class="form-label">📱 핸드폰 (선택)</label><input class="form-input" id="epPhone" placeholder="예: 010-1234-5678" inputmode="tel"></div>
   <div id="epHistSection"></div>
   <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
@@ -7831,8 +7833,43 @@ function openPHist(iid){
   om('mPHist');
 }
 // ── 선수 상세 카드 빌더 (Firebase + 내장 과거 데이터 통합) ──
+function getPlayerRegistryRow(name,p,preferClub=''){
+  const yr=REG_YEAR||new Date().getFullYear();
+  const rows=(G_REGISTRY&&(G_REGISTRY[yr]||G_REGISTRY[2026]))||[];
+  const nm=_m26Name(name);
+  const candidates=rows.filter(r=>_m26Name(r.name)===nm);
+  if(!candidates.length) return null;
+
+  const preferSet=new Set([
+    preferClub,
+    p?.club,
+    pKeyParse(p?.key||'').club,
+    ...((p?.clubs)||[])
+  ].map(c=>normalizeClub((c||'').trim())).filter(Boolean));
+
+  const pick=candidates.find(r=>{
+    const main=normalizeClub(r.club||'');
+    const subs=String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean);
+    return preferSet.has(main) || subs.some(sc=>preferSet.has(sc));
+  });
+
+  return pick || (candidates.length===1 ? candidates[0] : null);
+}
+function resolvePlayerDisplayClubInfo(name,p,preferClub=''){
+  const regRow=getPlayerRegistryRow(name,p,preferClub);
+  if(regRow){
+    const mainClub=normalizeClub(regRow.club||'');
+    const subClubs=[...new Set(String(regRow.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean))]
+      .filter(c=>c && c!==mainClub);
+    return {mainClub, subClubs, registryRow:regRow, registryDriven:true};
+  }
+
+  const fallbackMain=normalizeClub((preferClub||p?.club||pKeyParse(p?.key||'').club||((p?.clubs||[])[0])||'').trim());
+  return {mainClub:fallbackMain, subClubs:[], registryRow:null, registryDriven:false};
+}
 function buildPH(name,p){
   const wr=p.wins+p.losses>0?Math.round(p.wins/(p.wins+p.losses)*100):0;
+  const clubInfo=resolvePlayerDisplayClubInfo(name,p,p?.club||'');
 
   // ① Firebase 저장 이력
   const fbHist=(p.history||[]).map(h=>({
@@ -7903,8 +7940,8 @@ function buildPH(name,p){
       <div style="width:46px;height:46px;background:var(--primary);color:white;border-radius:50%;font-size:1.2rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${name.charAt(0)}</div>
       <div style="flex:1">
         <b style="font-size:1.1rem">${name}</b>
-        <div style="font-size:.75rem;color:var(--text2);margin-top:2px">주클럽: ${(p.clubs||[]).join(', ')||'-'}</div>
-        ${(()=>{ const yr=new Date().getFullYear(); const rm=(G_REGISTRY&&(G_REGISTRY[yr]||G_REGISTRY[2026]))||[]; const re2=rm.find(x=>_m26Name(x.name)===_m26Name(name)); return re2&&re2.subClub?`<div style="font-size:.75rem;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="color:#7c3aed;font-weight:600">부클럽:</span><span class="sub-badge" style="font-size:.72rem">${re2.subClub}</span></div>`:''; })()}
+        <div style="font-size:.75rem;color:var(--text2);margin-top:2px">주클럽: ${clubInfo.mainClub||'-'}</div>
+        ${clubInfo.subClubs.length?`<div style="font-size:.75rem;margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span style="color:#7c3aed;font-weight:600">부클럽:</span><span class="sub-badge" style="font-size:.72rem">${clubInfo.subClubs.join(', ')}</span></div>`:''}
         ${AD&&p.phone?`<div style="font-size:.75rem;color:var(--text2);margin-top:2px">📱 ${p.phone}</div>`:''}
         ${divTags?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${divTags}</div>`:''}
       </div>
@@ -8117,9 +8154,20 @@ function openEditPlayer(name){
   const p=G.players[name]||{clubs:[],history:[]};
   const pk=pKeyParse(name);
   const displayName=cleanName(pk.name||name);
+  const clubList=(p.clubs&&p.clubs.length?(p.clubs||[]):(pk.club?[pk.club]:[])).filter(Boolean);
+  const clubInfo=resolvePlayerDisplayClubInfo(displayName,p,pk.club||p.club||'');
+  const mainClub=((clubInfo.mainClub||p.club||pk.club||clubList[0]||'').trim());
+  const subClubs=(clubInfo.subClubs||[]).filter(c=>c&&c!==mainClub);
   ge('epOldName').value=displayName;
   ge('epNewName').value='';
-  ge('epClubs').value=(p.clubs&&p.clubs.length?(p.clubs||[]):(pk.club?[pk.club]:[])).join(', ');
+  const mainSel=ge('epMainClub');
+  if(mainSel){
+    const opts=[...new Set([...(G.clubs||[]), ...clubList, ...(mainClub?[mainClub]:[])])].filter(Boolean);
+    mainSel.innerHTML='<option value="">-- 주 클럽 선택 --</option>'+opts.map(c=>`<option value="${esc(c)}">${c}</option>`).join('');
+    mainSel.value=mainClub;
+  }
+  ge('epSubClubs').value=subClubs.join(', ');
+  ge('epClubs').value=[mainClub,...subClubs].filter(Boolean).join(', ');
   ge('epPhone').value=p.phone||'';
   // 이력 편집 UI
   const hist=(p.history||[]);
@@ -8157,10 +8205,14 @@ async function saveEditPlayer(){
   const oldPk=pKeyParse(oldKey);
   const oldDisplayName=cleanName(oldPk.name||oldKey);
   const newName=ge('epNewName').value.trim();
-  const clubsRaw=ge('epClubs').value.trim();
-  const clubs=clubsRaw?clubsRaw.split(',').map(c=>c.trim()).filter(Boolean):[];
+  const mainClub=(ge('epMainClub')?.value||'').trim() || (oldPk.club||'').trim();
+  const subRaw=(ge('epSubClubs')?.value||'').trim();
+  const subClubs=subRaw?subRaw.split(',').map(c=>c.trim()).filter(Boolean):[];
+  const clubs=[mainClub, ...subClubs.filter(c=>c && c!==mainClub)];
+  ge('epClubs').value=clubs.filter(Boolean).join(', ');
   const finalDisplayName=newName||oldDisplayName;
-  const finalClub=(clubs[0]||oldPk.club||'').trim();
+  const finalClub=(mainClub||oldPk.club||'').trim();
+  if(!finalClub){ toast('주 클럽을 선택하세요','error'); return; }
   const finalKey=pKey(finalDisplayName, finalClub);
   const phone=(ge('epPhone')?.value||'').trim();
   const delIdxs=[...document.querySelectorAll('.ep-del-hist:checked')].map(el=>parseInt(el.dataset.idx));
