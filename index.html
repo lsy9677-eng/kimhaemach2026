@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-27-v28-remove-dup-addplayer";
+  const APP_VERSION = "2026-03-30-v29-scroll-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -648,6 +648,12 @@ body{overflow-x:hidden;}
 .logo-icon{background:var(--accent);color:white;} 
 .nav-tab .nbadge{color:white;} 
 .hero-chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);} 
+
+
+.match-focus-pulse{position:relative;transform:scale(1.02);border:3px solid #2563eb !important;box-shadow:0 0 0 5px rgba(37,99,235,.18),0 18px 36px rgba(37,99,235,.22) !important;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+.match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
+@keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
+.match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
 
 </style>
 
@@ -2012,7 +2018,12 @@ function onDU(){
   renderFloatingNotice();
   updateOperationSticky();
 }
-function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend','<style>@keyframes ldA{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}</style>');document.body.appendChild(el);}el.style.display=s?'block':'none';}
+function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend',`<style>@keyframes ldA{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.match-focus-pulse{position:relative;transform:scale(1.02);border:3px solid #2563eb !important;box-shadow:0 0 0 5px rgba(37,99,235,.18),0 18px 36px rgba(37,99,235,.22) !important;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+.match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
+@keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
+.match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
+</style>`);document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
 function showPage(n){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -7548,29 +7559,53 @@ function goMyClubBracket(){
   setTimeout(()=>toggleMyClubFilter('bracket', true), 300);
 }
 
+function focusMatchCardElement(el){
+  if(!el) return false;
+  const header=document.querySelector('.app-header');
+  const notice=ge('brFloatingNotice');
+  const headerH=header?header.getBoundingClientRect().height:0;
+  const noticeH=(notice && getComputedStyle(notice).display!=='none')?notice.getBoundingClientRect().height:0;
+  const top=window.scrollY + el.getBoundingClientRect().top - headerH - noticeH - 24;
+  window.scrollTo({top: Math.max(0, top), behavior:'smooth'});
+  el.classList.remove('match-focus-pulse');
+  void el.offsetWidth;
+  el.classList.add('match-focus-pulse');
+  setTimeout(()=>el.classList.remove('match-focus-pulse'), 2600);
+  return true;
+}
+
 function goBracketMatch(tid,div,matchId){
+  const matchKey=tid+'_'+div;
   showPage('bracket');
-  const brTS=ge('brTS'); if(brTS){ brTS.value=tid; onBrTC(); }
-  setTimeout(()=>{
+  const brTS=ge('brTS');
+  if(brTS) brTS.value=tid;
+  if(typeof onBrTC==='function') onBrTC();
+
+  const applyAndFocus=()=>{
     setBracketSelectedDivs([div], tid);
+    MY_CLUB_FILTER=true;
+    updateFilterBtnUI('bracket', true);
     renderBracket();
+
     let tries=0;
-    const findAndScroll=()=>{
-      const el = ge(getMatchCardDomId(tid+'_'+div, matchId)) || document.querySelector(`[data-match-id="${matchId}"]`);
+    const finder=()=>{
+      const el=ge(getMatchCardDomId(matchKey, matchId)) || document.querySelector(`[data-match-id="${matchId}"]`);
       if(el){
-        el.scrollIntoView({behavior:'smooth', block:'center'});
-        const prev=el.style.boxShadow;
-        const prevBorder=el.style.border;
-        el.style.boxShadow='0 0 0 4px rgba(37,99,235,.25), 0 12px 28px rgba(37,99,235,.18)';
-        el.style.border='2.5px solid #2563eb';
-        setTimeout(()=>{ el.style.boxShadow=prev; el.style.border=prevBorder; }, 2200);
+        focusMatchCardElement(el);
         return;
       }
-      if(tries<12){ tries++; setTimeout(findAndScroll, 180); }
+      tries++;
+      if(tries<18) setTimeout(finder, 180);
     };
-    findAndScroll();
-  }, 120);
+    setTimeout(finder, 120);
+  };
+
+  requestAnimationFrame(()=>{
+    setTimeout(applyAndFocus, 260);
+  });
 }
+
+window.goBracketMatch = goBracketMatch;
 
 // 내 클럽 필터 토글
 function toggleMyClubFilter(tab, forceOn){
@@ -7785,6 +7820,23 @@ function updateFilterBtnUI(tab, isOn){
     btn.style.background = isOn ? '#166534' : '#f0fdf4';
     btn.style.color = isOn ? 'white' : '#166534';
   }
+}
+
+
+function upLog(){
+  const el=ge('recentLog');
+  if(!el) return;
+  const logs=(Array.isArray(G.log)?G.log:[]).slice(0,8);
+  if(!logs.length){
+    el.innerHTML='<li class="ri"><div class="ri-icon">⏳</div><div class="ri-text"><div>활동 없음</div></div></li>';
+    return;
+  }
+  el.innerHTML = logs.map(x=>{
+    const icon = x?.icon || '📌';
+    const text = x?.text || '활동';
+    const time = x?.time ? fmtDt(x.time) : '';
+    return `<li class="ri"><div class="ri-icon">${icon}</div><div class="ri-text"><div>${esc(text)}</div></div><div class="ri-time">${time}</div></li>`;
+  }).join('');
 }
 
 function upDash(){
@@ -11402,6 +11454,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 .rub-opt{display:inline-block;padding:4px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;user-select:none;}
 .rub-opt:hover{border-color:var(--primary);color:var(--primary);}
 .rub-opt.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+.match-focus-pulse{position:relative;transform:scale(1.02);border:3px solid #2563eb !important;box-shadow:0 0 0 5px rgba(37,99,235,.18),0 18px 36px rgba(37,99,235,.22) !important;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+.match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
+@keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
+.match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
+
 </style>
 
 <script>
