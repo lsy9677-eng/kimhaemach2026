@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v65-order-fix-terinee-sub";
+  const APP_VERSION = "2026-03-31-v67-reg-excel-registry-admin-image";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1051,6 +1051,7 @@ body{overflow-x:hidden;}
     <div class="sec-title" style="margin-bottom:0">팀 등록</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListImage44()">🖼️ 이미지 저장</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListExcel44()">📊 엑셀 저장</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px;background:#fee500;border-color:#f9c400;color:#3c1e1e;font-weight:700" onclick="saveRegListKakao44()">💛 카톡용 이미지</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListPDF44()">📄 PDF 저장</button>
     </div>
@@ -1237,10 +1238,11 @@ body{overflow-x:hidden;}
         <select class="form-select" id="regClubSel" style="min-width:110px" onchange="renderRegistryTab()"><option value="">전체 클럽</option></select>
         <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;cursor:pointer"><input type="checkbox" id="regShowSubOnly" onchange="renderRegistryTab()"> 부클럽 선수만</label>
         <input type="text" class="form-input" id="regSearchInput" placeholder="🔍 이름 검색" oninput="renderRegistryTab()" style="flex:1;min-width:120px">
-        <div style="margin-left:auto;display:flex;gap:6px">
+        <div id="registryActionBtns" style="margin-left:auto;display:none;gap:6px">
+          <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegistryFilteredImageHQ()">🖼️ 이미지 저장(고화질)</button>
           <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="exportRegistryFiltered('xlsx')">📊 엑셀</button>
           <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="exportRegistryFiltered('csv')">📄 CSV</button>
-          <button class="btn btn-outline admin-only" style="font-size:.75rem;padding:5px 10px" onclick="openRegistryMgr()">✏️ 명단 관리</button>
+          <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openRegistryMgr()">✏️ 명단 관리</button>
         </div>
       </div>
       <div id="regTabStat" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
@@ -2351,6 +2353,16 @@ function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
 </style>`);document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
+
+function updatePlayersAdminControls(){
+  const recBtns=ge('playerPageBtns');
+  const regBtns=ge('registryActionBtns');
+  const recActive=!!ge('ptab-records')?.classList.contains('active');
+  const regActive=!!ge('ptab-registry')?.classList.contains('active');
+  if(recBtns) recBtns.style.display=(AD && recActive)?'flex':'none';
+  if(regBtns) regBtns.style.display=(AD && regActive)?'flex':'none';
+}
+
 function showPage(n){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -2407,6 +2419,7 @@ function toggleAdmin(){
     const curPage=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(curPage==='players') showPage('home');
     cm('mAdminSettings');
+    updatePlayersAdminControls();
     renderOpStickyRibbonFromMarker(null);
     toast('로그아웃','info');
     const _ap=document.querySelector('.nav-tab.active')?.dataset?.page;
@@ -2432,6 +2445,7 @@ function applyAdminUI(){
   if(rtSel && G.clubs && G.clubs.length){
     rtSel.innerHTML='<option value="">-- 클럽 선택 --</option>'+(G.clubs||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
   }
+  updatePlayersAdminControls();
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -10437,6 +10451,83 @@ async function saveRegListPDF44(){
   }catch(e){toast('PDF 저장 실패: '+e.message,'error');}
 }
 
+async function saveRegListExcel44(){
+  const tid=ge('regTS')?.value||'';
+  if(!tid){toast('대회를 먼저 선택해 주세요','info');return;}
+  const t=G.tournaments.find(x=>x.id===tid);
+  if(!t){toast('대회를 먼저 선택해 주세요','info');return;}
+  try{
+    await ensureXLSX();
+    const selDiv=ge('regDS')?.value||'';
+    const allDivs=[...(t.divisions||[])].sort((a,b)=>divOrder44(a)-divOrder44(b));
+    const targetDivs=(selDiv&&allDivs.includes(selDiv))?[selDiv]:allDivs;
+    const rows=[['부서','팀순번','클럽명','구분','번호','선수명']];
+    targetDivs.forEach(div=>{
+      const key=tid+'_'+div;
+      const teams=(G.teams[key]||[]).slice();
+      const sorted=teams.map((team,i)=>({team,sortIdx:i})).sort((x,y)=>(x.team.club||'').localeCompare(y.team.club||'','ko'));
+      if(!sorted.length){
+        rows.push([dl(div),'','','등록팀없음','','']);
+        return;
+      }
+      sorted.forEach(({team},idx)=>{
+        const teamName=tdn(team,key,idx);
+        const players=(team.players||[]).filter(Boolean);
+        const dbl=Number(team.mainPlayerCount||team.doublesCount||5);
+        const main=players.slice(0,dbl*2);
+        const sub=players.slice(dbl*2);
+        main.forEach((p,pidx)=>rows.push([dl(div),idx+1,teamName,'주전',pidx+1,p]));
+        sub.forEach((p,sidx)=>rows.push([dl(div),idx+1,teamName,'후보',sidx+1,p]));
+      });
+      rows.push(['','','','','','']);
+    });
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:12},{wch:8},{wch:18},{wch:10},{wch:8},{wch:18}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'팀등록명단');
+    const divLabel=selDiv?dl(selDiv):'전체';
+    const fname=`팀등록명단_${(t?.name||'').replace(/\s/g,'')}_${divLabel}_${new Date().toISOString().substring(0,10)}.xlsx`;
+    XLSX.writeFile(wb,fname);
+    toast('엑셀 저장 완료 📊','success');
+  }catch(e){toast('엑셀 저장 실패: '+e.message,'error');}
+}
+
+async function saveRegistryFilteredImageHQ(){
+  if(!AD){ toast('관리자만 저장 가능','info'); return; }
+  const body=ge('regTabBody');
+  if(!body || !body.innerHTML.trim()){ toast('저장할 등록선수 현황이 없습니다','info'); return; }
+  try{
+    await _loadH2c44();
+    toast('고화질 이미지 생성 중...','info');
+    const year=parseInt(ge('regYearSel')?.value||2026);
+    const selRegion=ge('regRegionSel')?.value||'';
+    const selClub=ge('regClubSel')?.value||'';
+    const showSubOnly=ge('regShowSubOnly')?.checked||false;
+    const keyword=(ge('regSearchInput')?.value||'').trim();
+    const stat=(ge('regTabStat')?.textContent||'').trim();
+    const wrap=document.createElement('div');
+    wrap.style.cssText='position:fixed;left:-9999px;top:0;width:1100px;background:#f0f4fa;padding:18px 18px 24px;font-family:inherit;z-index:-1';
+    const filters=[];
+    if(selRegion) filters.push(`지역: ${selRegion}`);
+    if(selClub) filters.push(`클럽: ${selClub}`);
+    if(showSubOnly) filters.push('부클럽만');
+    if(keyword) filters.push(`검색: ${keyword}`);
+    wrap.innerHTML=`<div style="background:#fff;border:1px solid #d5dbea;border-radius:16px;padding:18px;box-shadow:0 4px 18px rgba(15,30,58,.08)">      <div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #1e40af">        <div style="font-size:1.22rem;font-weight:900;color:#0f1e3a">${year}년 선수 등록 현황</div>        <div style="font-size:.82rem;color:#475569;margin-top:4px">${filters.length?filters.join(' · '):'전체'}</div>        <div style="font-size:.8rem;color:#1e40af;font-weight:700;margin-top:6px">${stat||''}</div>      </div>      <div id="registryImageInner"></div>      <div style="text-align:right;font-size:.68rem;color:#94a3b8;margin-top:12px;border-top:1px solid #e2e8f0;padding-top:8px">출력일시: ${new Date().toLocaleString('ko-KR')}</div>    </div>`;
+    const inner=wrap.querySelector('#registryImageInner');
+    inner.innerHTML=body.innerHTML;
+    document.body.appendChild(wrap);
+    await new Promise(r=>setTimeout(r,100));
+    const canvas=await html2canvas(wrap,{backgroundColor:'#f0f4fa',scale:4,useCORS:true,logging:false,windowWidth:1300});
+    document.body.removeChild(wrap);
+    const fname=`등록선수현황_${year}_${new Date().toISOString().substring(0,10)}.png`;
+    const a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download=fname;
+    a.click();
+    toast('고화질 이미지 저장 완료 🖼️','success');
+  }catch(e){toast('이미지 저장 실패: '+e.message,'error');}
+}
+
 // ═══════════════════════════════════════════════════════
 //  📌 대회요강(텍스트/링크/파일) 업로드 & 표시
 // ═══════════════════════════════════════════════════════
@@ -12125,15 +12216,16 @@ function switchPlayersTab(tab){
     const btn=ge('ptab-'+t); if(btn) btn.classList.toggle('active',t===tab);
     const c=ge('ptab-'+t+'-content'); if(c) c.style.display=(t===tab)?'':'none';
   });
-  const recBtns=ge('playerPageBtns'); if(recBtns) recBtns.style.display=(tab==='records')?'flex':'none';
+  updatePlayersAdminControls();
   if(tab==='registry') initRegistryTab();
   if(tab==='records'){
     // 2026 명단 로드 보장 후 렌더
-    loadRegistry(2026).then(()=>{ renderAllP(); popCF(); });
+    loadRegistry(2026).then(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
   }
 }
 
 async function initRegistryTab(){
+  updatePlayersAdminControls();
   const years=await getRegistryYears();
   const yearSel=ge('regYearSel');
   if(yearSel){ yearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join(''); yearSel.value=years.includes(new Date().getFullYear())?new Date().getFullYear():years[years.length-1]; }
@@ -12204,6 +12296,7 @@ async function renderRegistryTab(){
 }
 
 async function exportRegistryFiltered(fmt){
+  if(!AD){ toast('관리자만 저장 가능','info'); return; }
   fmt = fmt || 'xlsx';
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
@@ -12465,7 +12558,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
-  saveRegListImage44,saveRegListKakao44,saveRegListPDF44,
+  saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
   gDS,om,cm,toast,ge,esc,setRbSc,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
