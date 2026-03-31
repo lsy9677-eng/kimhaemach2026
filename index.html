@@ -1438,9 +1438,17 @@ body{overflow-x:hidden;}
     <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
       <div style="flex:1;min-width:220px">
         <label class="form-label">추첨 제목</label>
-        <input class="form-input" id="drawTitleInput" placeholder="예: 테스트1 / 추첨1 / 4월 1일 예선 추첨">
+        <input class="form-input" id="drawTitleInput" placeholder="예: 추첨1 / 4월 1일 예선 추첨">
       </div>
-      <div style="font-size:.74rem;color:var(--text3);padding-bottom:10px">저장된 제목으로 나중에 다시 열어볼 수 있습니다.</div>
+      <div style="min-width:220px;padding-bottom:6px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:800;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="drawIsTestInput" style="accent-color:var(--accent)">
+          테스트용 추첨
+        </label>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:6px;line-height:1.5">
+          선택한 경우에만 삭제 가능합니다. 선택하지 않으면 실운영 추첨으로 저장되며 삭제할 수 없습니다.
+        </div>
+      </div>
     </div>
     <div id="drawTeamList" style="margin-bottom:14px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
@@ -6671,9 +6679,11 @@ function openDraw(tid,div){
   ge('sameClubWarn').classList.toggle('show',hasSameClub);
   DW.candidates=[];
   DW.plan=null;
-  const histCnt=(G.drawHistories[key]||[]).length;
+  const histCnt=(G.drawHistories[key]||[]).filter(x=>!x.deleted).length;
   const titleInput=ge('drawTitleInput');
   if(titleInput) titleInput.value=`${dl(div)} 추첨 ${histCnt+1}`;
+  const drawIsTestInput=ge('drawIsTestInput');
+  if(drawIsTestInput) drawIsTestInput.checked=false;
   // 설정화면 표시, 진행화면 숨김
   const cfgScr=ge('drawCfgScreen'); if(cfgScr) cfgScr.style.display='block';
   const runScr=ge('drawRunScreen');  if(runScr) runScr.style.display='none';
@@ -7349,15 +7359,70 @@ async function saveElementAsPng(el, filename){
   const ok=await ensureHtml2CanvasReady();
   if(!ok) return;
   toast('이미지 생성 중...','info');
+  let stage=null;
   try{
-    const canvas = await html2canvas(el,{scale:3,backgroundColor:'#f4f6fb',useCORS:true,logging:false});
+    const clone = el.cloneNode(true);
+    const srcNodes=[el, ...el.querySelectorAll('*')];
+    const cloneNodes=[clone, ...clone.querySelectorAll('*')];
+
+    clone.style.maxHeight='none';
+    clone.style.height='auto';
+    clone.style.overflow='visible';
+    clone.style.width=Math.ceil(Math.max(el.scrollWidth, el.clientWidth))+'px';
+
+    srcNodes.forEach((src, idx)=>{
+      const dst=cloneNodes[idx];
+      if(!dst) return;
+      let cs=null;
+      try{ cs=getComputedStyle(src); }catch(_e){}
+      const scrollY = src.scrollHeight > src.clientHeight + 2;
+      const scrollX = src.scrollWidth > src.clientWidth + 2;
+      const oy = (cs?.overflowY||'') + ' ' + (cs?.overflow||'');
+      const ox = (cs?.overflowX||'') + ' ' + (cs?.overflow||'');
+      if(scrollY || /(auto|scroll|hidden)/i.test(oy)){
+        dst.style.maxHeight='none';
+        dst.style.height='auto';
+        dst.style.overflowY='visible';
+      }
+      if(scrollX || /(auto|scroll|hidden)/i.test(ox)){
+        dst.style.maxWidth='none';
+        dst.style.width=Math.ceil(Math.max(src.scrollWidth, src.clientWidth))+'px';
+        dst.style.overflowX='visible';
+      }
+    });
+
+    stage=document.createElement('div');
+    stage.style.cssText='position:fixed;left:-100000px;top:0;z-index:-1;background:#f4f6fb;padding:0;margin:0;overflow:visible;';
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+    const targetW=Math.ceil(Math.max(clone.scrollWidth, clone.offsetWidth, el.scrollWidth, el.clientWidth));
+    const targetH=Math.ceil(Math.max(clone.scrollHeight, clone.offsetHeight, el.scrollHeight, el.clientHeight));
+
+    const canvas = await html2canvas(clone,{
+      scale:3,
+      backgroundColor:'#f4f6fb',
+      useCORS:true,
+      logging:false,
+      width:targetW,
+      height:targetH,
+      windowWidth:targetW,
+      windowHeight:targetH,
+      scrollX:0,
+      scrollY:0
+    });
     const a=document.createElement('a');
     a.href=canvas.toDataURL('image/png');
     a.download=filename||('draw_'+Date.now()+'.png');
     a.click();
     toast('이미지 저장 완료 🖼️','success');
   }catch(e){
+    console.error('saveElementAsPng failed', e);
     toast('이미지 저장 실패','error');
+  }finally{
+    if(stage && stage.parentNode) stage.parentNode.removeChild(stage);
   }
 }
 async function saveDrawModalImage(){
@@ -7370,6 +7435,8 @@ async function saveDrawModalImage(){
 function normalizeDrawHistoryEntry(entry){
   return {
     ...entry,
+    isTest: !!entry.isTest,
+    deleted: !!entry.deleted,
     groups: (entry.groups||[]).map((g,gi)=>({
       label:g.label||grpLabel(gi),
       teams:(g.teams||[]).map(tm=>typeof tm==='string'?{name:tm, club:''}:tm)
@@ -7403,6 +7470,7 @@ function renderSavedDrawView(entry){
         <div style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge ${norm.isTest?'bg-bronze':'bg-green'}">${norm.isTest?'🧪 테스트':'🔒 실운영'}</span>
         <span class="badge bg-blue">${(norm.groups||[]).length}조</span>
         <span class="badge bg-green">본선 ${norm.mainSize||0}강</span>
       </div>
@@ -7440,7 +7508,7 @@ function openSavedDrawHistory(id, key){
 }
 function openDrawHistory(tid,div){
   const key=tid+'_'+div;
-  const list=(G.drawHistories[key]||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const list=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   const box=ge('drawHistoryList');
   if(!box) return;
   if(!list.length){
@@ -7453,16 +7521,68 @@ function openDrawHistory(tid,div){
     return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div>
-          <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
+            <span class="badge ${it.isTest?'bg-bronze':'bg-green'}">${it.isTest?'🧪 테스트':'🔒 실운영'}</span>
+          </div>
           <div style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px" onclick="openSavedDrawHistory('${it.id}','${key}')">👁 다시보기</button>
+          ${AD && it.isTest ? `<button class="btn btn-danger" style="font-size:.76rem;padding:5px 12px" onclick="deleteSavedDrawHistory('${it.id}','${key}')">🗑 삭제</button>` : ``}
         </div>
       </div>
     </div>`;
   }).join('');
   om('mDrawHistory');
+}
+
+async function deleteSavedDrawHistory(id,key){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const entry=(G.drawHistories[key]||[]).find(x=>x.id===id);
+  if(!entry){ toast('추첨 기록을 찾을 수 없습니다','error'); return; }
+  if(!entry.isTest){
+    toast('실운영 추첨은 삭제할 수 없습니다','error');
+    return;
+  }
+  if(!confirm(`테스트 추첨 "${entry.title||'제목 없음'}" 을(를) 삭제하시겠습니까?\n삭제 기록은 남고 목록에서는 숨겨집니다.`)) return;
+  sl(true);
+  try{
+    const deletedAt = new Date().toISOString();
+    await updateDoc(doc(db,'drawHistory',id),{
+      deleted:true,
+      deletedAt,
+      deletedBy:'admin',
+      deleteReason:'test cleanup'
+    });
+    try{
+      await addDoc(collection(db,'drawDeleteLog'),{
+        drawHistoryId:id,
+        key:key||entry.key||'',
+        title:entry.title||'',
+        tournamentId:entry.tournamentId||'',
+        tournamentName:entry.tournamentName||'',
+        division:entry.division||entry.div||'',
+        isTest:true,
+        deletedAt,
+        deletedBy:'admin',
+        reason:'test cleanup'
+      });
+    }catch(logErr){
+      console.warn('draw delete log save failed', logErr);
+    }
+    const arr=G.drawHistories[key]||[];
+    const idx=arr.findIndex(x=>x.id===id);
+    if(idx>=0){
+      arr[idx]={...arr[idx], deleted:true, deletedAt, deletedBy:'admin', deleteReason:'test cleanup'};
+    }
+    sl(false);
+    toast('테스트 추첨 기록을 삭제했습니다','success');
+    openDrawHistory(entry.tournamentId||DW.tid, entry.division||entry.div||DW.div);
+  }catch(e){
+    sl(false);
+    toast('삭제 실패: '+(e?.message||e),'error');
+  }
 }
 
 
@@ -7476,6 +7596,7 @@ async function startDraw(){
 
   const key=DW.key, teams=DW.teams, {groups:ng,grpSizes,advance}=DW.cfg;
   const drawTitle=(ge('drawTitleInput')?.value||`${dl(DW.div)} 추첨`).trim()||`${dl(DW.div)} 추첨`;
+  const drawIsTest=!!ge('drawIsTestInput')?.checked;
   await resetMatchRecords(key);
 
   // 완전 무작위 추첨 (같은 클럽 분리 포함)
@@ -7556,6 +7677,7 @@ async function startDraw(){
       division: DW.div,
       div: DW.div,
       title: drawTitle,
+      isTest: drawIsTest,
       createdAt: drawTime.toISOString(),
       groupCount: ng,
       groupSizes: grpSizes,
@@ -7567,7 +7689,7 @@ async function startDraw(){
         teams: g.teams.map(ti=>({name:tdn(teams[ti],key,ti), club:String(teams[ti]?.club||'')}))
       }))
     });
-    await fbLog(`추첨완료: ${t?.name||''} ${dl(DW.div)} ${ng}조 / 무작위 / ${drawTitle} / ${drawTime.toLocaleString('ko-KR')}`,'🎲');
+    await fbLog(`추첨완료: ${t?.name||''} ${dl(DW.div)} ${ng}조 / ${drawIsTest?'테스트':'실운영'} / 무작위 / ${drawTitle} / ${drawTime.toLocaleString('ko-KR')}`,'🎲');
     sl(false);
     ge('confirmDrawBtn').textContent='✅ 닫기';
     ge('confirmDrawBtn').onclick=()=>{cm('mDraw');renderBracket();};
