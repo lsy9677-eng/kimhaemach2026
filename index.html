@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v36-pw-change";
+  const APP_VERSION = "2026-03-31-v63-home-nav";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -2603,9 +2603,8 @@ function _completeRegLogin(club){
   // ── 팀등록 탭으로 자동 이동 ──
   toast(`${club} 경기이사 로그인 ✅`,'success');
   setTimeout(()=>{
-    showPage('register');
-    renderRegisterDivisionOverview();
-    renderRL();
+    showPage('home');
+    upDash();
     updateMyClubUI();
     // 비번 미변경 클럽이면 변경 권장 팝업
     openChangePwIfNeeded(club);
@@ -8617,16 +8616,18 @@ function updateMyClubHomeCard(){
         const opIdx=m.t1===idx?m.t2:m.t1;
         const opTeam=tms[opIdx];
         const opName=opTeam?tdn(opTeam,key,opIdx):'?';
-        if(ost.bothSubmitted) return `<span style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#dcfce7;color:#166534;font-weight:700">vs ${opName} 🔓공개</span>`;
-        if(myDone) return `<span style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:700">vs ${opName} ✅내오더제출·상대대기</span>`;
-        return `<span style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#fee2e2;color:#991b1b;font-weight:700">vs ${opName} ⏳오더미제출</span>`;
+        const _mid2 = m.id||'';
+        const _clickStyle = "cursor:pointer;text-decoration:underline;text-underline-offset:2px";
+        if(ost.bothSubmitted) return `<span onclick="goBracketMatch('${at.id}','${div}','${_mid2}')" style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#dcfce7;color:#166534;font-weight:700;cursor:pointer" title="경기로 이동">vs ${opName} 🔓공개</span>`;
+        if(myDone) return `<span onclick="goBracketMatch('${at.id}','${div}','${_mid2}')" style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:700;cursor:pointer" title="경기로 이동">vs ${opName} ✅내오더제출·상대대기</span>`;
+        return `<span onclick="goBracketMatch('${at.id}','${div}','${_mid2}')" style="font-size:.68rem;padding:2px 6px;border-radius:4px;background:#fee2e2;color:#991b1b;font-weight:700;cursor:pointer" title="경기로 이동">vs ${opName} ⏳오더미제출</span>`;
       });
       if(orderSummary.length>0){
         orderStatus=`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${orderSummary.join('')}</div>`;
       }
     }
     html += `<div style="padding:6px 10px;background:white;border-radius:8px;margin-bottom:6px;border:1px solid #bbf7d0">
-      <div style="font-weight:700">${dl(div)} — ${tdn(team,key,idx)}</div>
+      <div style="font-weight:700;cursor:pointer;color:var(--primary)" onclick="goBracket('${at.id}','${div}')" title="${dl(div)} 대진표로 이동">⛳ ${dl(div)} — ${tdn(team,key,idx)} <span style="font-size:.68rem;color:var(--text3);font-weight:400">▶ 대진표</span></div>
       <div style="font-size:.8rem;color:#166534">🧍 ${(team.players||[]).length}명 등록${total>0?` · 🏅 ${wins}승 ${done-wins}패 (${done}/${total}경기)`:''}</div>
       ${orderStatus}
       ${nextInfo}
