@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v33-deadline-guard";
+  const APP_VERSION = "2026-03-31-v35-simple-draw";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1394,19 +1394,14 @@ body{overflow-x:hidden;}
 
 <div class="modal-overlay" id="mPHist"><div class="modal-box"><div class="modal-header"><h3>👤 선수 기록</h3><button class="modal-close" onclick="cm('mPHist')">✕</button></div><div class="modal-body" id="mPHistBody"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPHist')">닫기</button></div></div></div>
 <div class="modal-overlay" id="mM3"><div class="modal-box" style="max-width:680px"><div class="modal-header"><h3 id="mM3T">📝 오더 입력·제출</h3><button class="modal-close" onclick="cm('mM3')">✕</button></div><div class="modal-body" id="mM3B" style="max-height:72vh;overflow-y:auto"></div><div class="modal-footer" id="mM3Footer"><button class="btn btn-gray" id="mM3CloseBtn" onclick="cm('mM3')">닫기</button><button class="btn btn-outline" id="mM3SaveBtn" onclick="saveM3()" style="display:none">💾 임시저장</button><button class="btn btn-danger" id="mM3UnlockBtn" onclick="confirmUnlockOrder()" style="display:none">🔓 초기화</button><button class="btn btn-primary" id="mM3SaveResultBtn" onclick="saveM3()" style="display:none">💾 결과저장</button><button class="btn btn-accent" id="mM3SubmitBtn" onclick="confirmSubmitOrder()" style="display:none">📤 오더 제출</button></div></div></div>
-<div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:900px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
+<div class="modal-overlay" id="mDraw"><div class="modal-box" style="max-width:820px;width:96vw"><div class="modal-header"><h3>🎲 예선 조 추첨</h3><button class="modal-close" onclick="cm('mDraw')">✕</button></div>
 <div class="modal-body" style="max-height:85vh;overflow-y:auto;padding:14px 16px">
 
-  <!-- ── 설정 화면 (추첨 전) ── -->
   <div id="drawCfgScreen">
-    <!-- 팀 목록 -->
     <div id="drawTeamList" style="margin-bottom:14px"></div>
-
-    <!-- 조 편성 설정 + 본선 미리보기 2단 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
-      <!-- 왼쪽: 편성 설정 -->
       <div class="draw-cfg" id="drawCfgBox" style="margin-bottom:0">
-        <div style="font-weight:700;font-size:.85rem;margin-bottom:10px">⚙️ 조 편성 설정</div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:10px">⚙️ 조 편성 설정</div>
         <div class="draw-cfg-row">
           <span class="draw-cfg-label">편성 방식</span>
           <div id="grpPresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
@@ -1423,52 +1418,30 @@ body{overflow-x:hidden;}
           <span class="draw-cfg-label">본선 규모</span>
           <div id="mainSizeDisplay" style="font-size:.82rem;color:var(--text2)"></div>
         </div>
-        <div style="font-size:.74rem;color:#92400e;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fb923c;padding:8px 10px;border-radius:8px;line-height:1.6;margin-top:8px">
-          ⚖️ <b>조 추첨 규칙</b><br>
-          • 같은 클럽 팀은 서로 다른 조에 우선 배정됩니다.<br>
-          • 불가피한 경우를 제외하고 동일 클럽 간 조 편성을 최소화합니다.
-        </div>
         <div class="same-club-warn" id="sameClubWarn">⚠️ 같은 클럽 팀이 많아 완전 분리가 어려울 수 있습니다. 추첨 시 같은 조 배정을 최소화합니다.</div>
-        <div style="margin-top:10px;padding:10px;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:12px">
-          <div style="font-weight:800;font-size:.82rem;color:var(--primary-dark);margin-bottom:8px">🎲 예선 공개형 추첨 방식</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-            <span style="font-size:.76rem;font-weight:700;color:var(--text2)">외부값</span>
-            <select class="form-select" id="drawExternalMode" onchange="prepareDrawExternalPlan(true)" style="width:150px;padding:7px 10px;font-weight:700">
-              <option value="time">현재 시각 초</option>
-              <option value="random">브라우저 난수</option>
-            </select>
-            <span style="font-size:.76rem;font-weight:700;color:var(--text2)">채택</span>
-            <input class="form-input" type="number" id="drawNthPick" min="1" max="10" step="1" value="1" style="width:86px;padding:7px 10px;font-weight:800;text-align:center" oninput="updateDrawMainPreview()">
-            <span style="font-size:.76rem;color:var(--text2)">번째 결과</span>
-            <button class="btn btn-outline" style="font-size:.74rem;padding:5px 10px" onclick="prepareDrawExternalPlan(true)">🔄 다시 계산</button>
-          </div>
-          <div style="font-size:.74rem;color:var(--text2);line-height:1.6">
-            • 외부값과 <b>N번째 결과</b>를 사용합니다.<br>
-            • 추첨 시작 전에는 1번째부터 N-1번째까지 빠르게 확인하고, 마지막 N번째만 실제 추첨처럼 천천히 진행합니다.<br>• 방식과 계산 시각은 추첨 로그에 저장됩니다.
-          </div>
-          <div id="drawExternalSnapshot" style="margin-top:8px;font-size:.74rem;color:var(--text2)"></div><div id="drawCandidatePreview" style="margin-top:8px"></div>
+        <div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:12px;font-size:.82rem;line-height:1.75;color:#166534">
+          <div style="font-weight:800;font-size:.88rem;margin-bottom:6px">⚖️ 공정 추첨 방식</div>
+          <div>🎲 추첨 시작 버튼을 누르는 순간 <b>완전 무작위</b>로 추첨됩니다</div>
+          <div>🏟 <b>같은 클럽 팀</b>은 서로 다른 조로 우선 배정됩니다</div>
+          <div>📋 추첨 시각과 결과는 <b>추첨 로그</b>에 자동 저장됩니다</div>
+          <div>🔄 불공정하다고 느끼면 관리자가 <b>재추첨</b>할 수 있습니다</div>
         </div>
       </div>
-      <!-- 오른쪽: 본선 미리보기 -->
       <div id="drawMainPreviewBox" style="display:none">
         <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
-        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">설정에 따른 본선 나무구조 예시 — 실제 본선 자리는 예선 종료 후 추첨으로 확정됩니다.</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">설정에 따른 본선 구조 예시 — 실제 자리는 예선 후 추첨됩니다.</div>
         <div id="drawMainPreviewContent" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
       </div>
     </div>
   </div>
 
-  <!-- ── 추첨 진행 화면 (추첨 중) ── -->
   <div id="drawRunScreen" style="display:none">
-    <!-- 2단: 왼쪽=룰렛+착지, 오른쪽=본선 미리보기 고정 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
-      <!-- 왼쪽: 추첨 액션 -->
       <div>
         <div id="drawStageContent"></div>
         <div class="draw-progress" style="margin:8px 0"><div class="draw-progress-bar" id="drawProgressBar" style="width:0%"></div></div>
         <div id="drawGroupRows"></div>
       </div>
-      <!-- 오른쪽: 본선 대진 미리보기 (추첨 중 항상 표시) -->
       <div>
         <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 배정 구조</div>
         <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">예선 종료 후 본선 추첨이 완료되면 실제 팀명으로 채워집니다.</div>
@@ -1698,40 +1671,20 @@ body{overflow-x:hidden;}
       <div class="draw-cfg" id="mainCfgBox" style="margin-bottom:0">
         <div style="font-weight:700;font-size:.85rem;margin-bottom:10px">🎯 본선 추첨 설정</div>
         <div id="mainBracketInfo" style="padding:10px;background:var(--panel);border-radius:var(--radius);border:1px solid var(--border);font-size:.82rem;line-height:1.7"></div>
-        <div style="margin-top:10px;padding:10px;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:12px">
-          <div style="font-weight:800;font-size:.82rem;color:var(--primary-dark);margin-bottom:8px">🎯 공정 추첨 설정</div>
-          <input type="hidden" id="mainSeedInput" value="1">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;margin-bottom:8px">
-            <div>
-              <div style="font-size:.74rem;font-weight:700;color:var(--text2);margin-bottom:4px">외부값 방식</div>
-              <select class="form-select" id="mainExternalMode" onchange="prepareMainExternalDraw(true)">
-                <option value="time">현재 시각 초</option>
-                <option value="random">브라우저 난수</option>
-              </select>
-            </div>
-            <div>
-              <div style="font-size:.74rem;font-weight:700;color:var(--text2);margin-bottom:4px">채택 결과</div>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input class="form-input" type="number" id="mainDrawNth" min="1" max="10" step="1" value="1" style="width:86px;padding:7px 10px;font-weight:800;text-align:center" oninput="updateMainSeedPreview()">
-                <span style="font-size:.76rem;font-weight:700;color:var(--text2)">번째</span>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-            <button class="btn btn-outline" style="font-size:.74rem;padding:5px 10px" onclick="prepareMainExternalDraw(true)">🎲 외부값 다시 확정</button>
-            <span id="mainExternalSnapshot" style="font-size:.74rem;color:var(--text2)"></span>
-          </div>
-          <div style="font-size:.74rem;color:var(--text2);line-height:1.6">
-            • 변수값은 화면에 직접 노출하지 않고 <b>외부값</b>으로 내부 계산만 합니다.<br>
-            • 외부값과 <b>N번째 결과</b>를 사용합니다.<br>
-            • 추첨 시작 전에는 1번째부터 N-1번째까지 빠르게 확인하고, 마지막 N번째만 실제 추첨처럼 천천히 진행합니다.<br>• 방식과 계산 시각은 <b>추첨 로그</b>로 저장합니다.
-          </div>
-          <div id="mainSeedSummary" style="margin-top:8px;font-size:.76rem;font-weight:700;color:var(--primary)"></div><div id="mainCandidatePreview" style="margin-top:8px"></div>
+        <input type="hidden" id="mainSeedInput" value="1">
+        <input type="hidden" id="mainExternalMode" value="random">
+        <input type="hidden" id="mainDrawNth" value="1">
+        <div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:12px;font-size:.82rem;line-height:1.75;color:#166534">
+          <div style="font-weight:800;font-size:.88rem;margin-bottom:6px">⚖️ 공정 추첨 방식</div>
+          <div>🎲 <b>추첨 시작</b> 버튼을 누르는 순간 완전 무작위로 추첨됩니다</div>
+          <div>👑 <b>조 1위팀끼리</b>는 첫 경기에서 서로 만나지 않도록 배치됩니다</div>
+          <div>🎫 부전승 자리는 1위팀에게 우선 배정됩니다</div>
+          <div>📋 추첨 시각과 결과는 <b>추첨 로그</b>에 자동 저장됩니다</div>
         </div>
       </div>
       <div>
-        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 공정 추첨 구조 미리보기</div>
-        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">외부값 방식과 N번째 채택 기준만 정하면 됩니다. 실제 추첨 때 N번째가 최종 적용됩니다.</div>
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">추첨 후 실제 팀명으로 채워집니다.</div>
         <div id="mainSeedPreview" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
       </div>
     </div>
@@ -5495,6 +5448,10 @@ function sortGroupMatchesForDisplay(key, gi, list){
 function renderMatchProgressSummary(key){
   const list = G.matches[key] || [];
   if(!list.length) return '';
+  const [tid,div] = key.split('_');
+  const teams = G.teams[key]||[];
+  const useOrder = G.meta.onlineOrderEnabled;
+
   function isDone(m){ return !!getMatchResultState(key,m).done; }
   function isPlaying(m){
     if(!m || isDone(m)) return false;
@@ -5505,50 +5462,101 @@ function renderMatchProgressSummary(key){
       (Array.isArray(rb.players2) && rb.players2.length)
     ));
   }
+
   const totalAll = list.length;
   const doneAll = list.filter(isDone).length;
   const playingAll = list.filter(isPlaying).length;
   const remainAll = Math.max(0, totalAll - doneAll);
+
+  // 오더 제출 현황 (전체)
+  let orderSubmitted=0, orderTotal=0;
+  const pendingOrderMatches=[]; // 미제출 경기 목록
+  if(useOrder){
+    list.filter(m=>!m.bye&&!isDone(m)).forEach(m=>{
+      const st=getOnlineOrderState(key,m);
+      orderTotal+=2;
+      if(st.s1) orderSubmitted++;
+      if(st.s2) orderSubmitted++;
+      if(!st.bothSubmitted) pendingOrderMatches.push(m);
+    });
+  }
+
+  // 오더 현황 카드 생성
+  function buildOrderChips(matchList){
+    if(!useOrder||!matchList.length) return '';
+    return matchList.map(m=>{
+      const st=getOnlineOrderState(key,m);
+      const t1=teams[m.t1], t2=teams[m.t2];
+      const n1=t1?tdn(t1,key,m.t1):'?', n2=t2?tdn(t2,key,m.t2):'?';
+      const mid=m._id||m.id||'';
+      const chip=(name,done)=>`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.7rem;font-weight:800;background:${done?'#dcfce7':'#fee2e2'};color:${done?'#166534':'#991b1b'};border:1px solid ${done?'#86efac':'#fca5a5'}">${name} ${done?'✅':'⏳'}</span>`;
+      const label = st.bothSubmitted?'🔓 양팀완료':(!st.s1&&!st.s2?'⏳ 미제출':'📝 제출중');
+      return `<div onclick="goBracketMatch('${tid}','${div}','${mid}')" style="cursor:pointer;padding:7px 10px;border-radius:10px;background:${st.bothSubmitted?'#f0fdf4':'#fffbeb'};border:1.5px solid ${st.bothSubmitted?'#86efac':'#fde68a'};display:flex;align-items:center;gap:8px;flex-wrap:wrap;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
+        <span style="font-size:.75rem;font-weight:700;color:var(--text2);white-space:nowrap">${label}</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${chip(n1,st.s1)}${chip(n2,st.s2)}</div>
+        <span style="margin-left:auto;font-size:.68rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
+      </div>`;
+    }).join('');
+  }
+
   const groups = {};
-  const main = { total:0, done:0, playing:0 };
+  const main = { total:0, done:0, playing:0, matches:[] };
   list.forEach(m=>{
     if(m.phase === 'group' && m.group != null){
       const gi = Number(m.group);
-      if(!groups[gi]) groups[gi] = { total:0, done:0, playing:0 };
+      if(!groups[gi]) groups[gi] = { total:0, done:0, playing:0, matches:[] };
       groups[gi].total++;
+      groups[gi].matches.push(m);
       if(isDone(m)) groups[gi].done++;
       else if(isPlaying(m)) groups[gi].playing++;
     }else if(m.phase === 'main'){
       main.total++;
+      main.matches.push(m);
       if(isDone(m)) main.done++;
       else if(isPlaying(m)) main.playing++;
     }
   });
+
   const groupHtml = Object.keys(groups).map(Number).sort((a,b)=>a-b).map(gi=>{
     const s = groups[gi];
     const remain = Math.max(0, s.total - s.done);
     const liveCls = s.playing > 0 ? ' live-card' : '';
     const liveBadgeCls = s.playing > 0 ? ' live-blink' : '';
+    // 이 조에서 미제출 경기
+    const pendingInGrp = useOrder ? s.matches.filter(m=>!m.bye&&!isDone(m)&&!getOnlineOrderState(key,m).bothSubmitted) : [];
+    const orderHtml = buildOrderChips(pendingInGrp);
     return `<div class="card${liveCls}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <div style="font-weight:900;color:var(--primary-dark)">${grpLabel(gi)} 현황</div>
-        ${s.playing > 0 ? `<span class="badge${liveBadgeCls}" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행중</span>` : ''}
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${s.playing > 0 ? `<span class="badge${liveBadgeCls}" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행중</span>` : ''}
+          <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remain}</span>
+        </div>
       </div>
-      <div style="font-size:.86rem;font-weight:800;color:var(--primary-dark);margin-top:6px">
-        진행중 ${s.playing} / 잔여 ${remain}
-      </div>
+      ${useOrder&&pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#92400e;margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${orderHtml}</div>`:''}
+      ${useOrder&&pendingInGrp.length===0&&s.total>0?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료</div>`:''}
     </div>`;
   }).join('');
+
   const mainRemain = Math.max(0, main.total - main.done);
+  const mainPending = useOrder ? main.matches.filter(m=>!m.bye&&!isDone(m)&&!getOnlineOrderState(key,m).bothSubmitted) : [];
+  const mainOrderHtml = buildOrderChips(mainPending);
   const mainHtml = main.total ? `<div class="card${main.playing>0?' live-card':''}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <div style="font-weight:900;color:var(--primary-dark)">본선 현황</div>
-        ${main.playing > 0 ? `<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행중</span>` : ''}
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${main.playing > 0 ? `<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행중</span>` : ''}
+          <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${mainRemain}</span>
+        </div>
       </div>
-      <div style="font-size:.86rem;font-weight:800;color:var(--primary-dark);margin-top:6px">
-        진행중 ${main.playing} / 잔여 ${mainRemain}
-      </div>
+      ${useOrder&&mainPending.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#92400e;margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${mainOrderHtml}</div>`:''}
+      ${useOrder&&mainPending.length===0&&main.total>0?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료</div>`:''}
     </div>` : '';
+
+  // 오더 요약 뱃지
+  const orderBadgeHtml = useOrder && orderTotal>0 ? `
+    <span class="badge" style="background:${orderSubmitted===orderTotal?'#dcfce7':'#fef3c7'};color:${orderSubmitted===orderTotal?'#166534':'#92400e'};border:1px solid ${orderSubmitted===orderTotal?'#86efac':'#fde68a'}">📋 오더 ${orderSubmitted}/${orderTotal} 제출</span>` : '';
+
   return `<div class="card" style="margin-top:12px;background:linear-gradient(135deg,#f9fbff,#eef4ff);border:1.5px solid #d7e3ff">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-weight:900;color:var(--primary-dark);font-size:.92rem">📊 경기 진행 현황</div>
@@ -5556,9 +5564,10 @@ function renderMatchProgressSummary(key){
         <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${totalAll}경기</span>
         <span class="badge ${playingAll>0?'live-blink':''}" style="background:#fff7e8;color:#9a6400">${playingAll}경기 진행중</span>
         <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remainAll}경기</span>
+        ${orderBadgeHtml}
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px">
       ${groupHtml}
       ${mainHtml}
     </div>
@@ -6448,16 +6457,8 @@ function openDraw(tid,div){
   ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
   buildDrawPresets(teams.length,t,div);
   ge('sameClubWarn').classList.toggle('show',hasSameClub);
-  if(ge('drawExternalMode')) ge('drawExternalMode').value='time';
-  if(ge('drawNthPick')) ge('drawNthPick').value='1';
-  DW.seedMethod='time';
-  DW.seedPreparedAt='';
-  DW.seedSourceLabel='';
-  DW.seedSnapshotLabel='';
-  DW.nthPick=1;
   DW.candidates=[];
   DW.plan=null;
-  prepareDrawExternalPlan(true);
   // 설정화면 표시, 진행화면 숨김
   const cfgScr=ge('drawCfgScreen'); if(cfgScr) cfgScr.style.display='block';
   const runScr=ge('drawRunScreen');  if(runScr) runScr.style.display='none';
@@ -7022,47 +7023,28 @@ async function startDraw(){
   if(DW.isRunning)return;
   if(!DW.key||DW.teams.length<2){toast('최소 2팀 필요','error');return;}
   DW.isRunning=true;
-  ge('confirmDrawBtn').disabled=true;ge('confirmDrawBtn').textContent='추첨 중...';
-  // 설정화면 → 진행화면 전환
+  ge('confirmDrawBtn').disabled=true;
+  ge('confirmDrawBtn').textContent='추첨 중...';
   switchToRunScreen();
 
   const key=DW.key, teams=DW.teams, {groups:ng,grpSizes,advance}=DW.cfg;
   await resetMatchRecords(key);
-  const preparedPlan=prepareDrawExternalPlan(false);
-  const shuffled=(preparedPlan?.shuffled||[]).length?preparedPlan.shuffled:smartShuffle(teams.map((_,i)=>i),teams);
-  const revealCandidates=(DW.candidates||[]).slice(0, Math.max(1, DW.nthPick||1));
-  if(revealCandidates.length){
-    for(const cand of revealCandidates){
-      const chosen=cand.index===(DW.nthPick||1);
-      ge('drawStageContent').innerHTML=renderDrawCandidateStage(cand.index, cand, chosen);
-      ge('drawProgressBar').style.width=`${Math.round((cand.index/revealCandidates.length)*10)}%`;
-      await sleep(chosen?700:260);
-    }
-  }
-  const audit={
-    mode: DW.seedMethod,
-    modeLabel: DW.seedSourceLabel,
-    nth: DW.nthPick||1,
-    baseSeed: DW.seed,
-    chosenSeed: (DW.candidates||[])[Math.max(0,(DW.nthPick||1)-1)]?.seed || DW.seed,
-    preparedAt: DW.seedPreparedAt || new Date().toISOString(),
-    snapshotLabel: DW.seedSnapshotLabel || '',
-    candidateSeeds: (DW.candidates||[]).map(x=>x.seed),
-    loggedAt: new Date().toISOString()
-  };
-  DW.drawAudit=audit;
-  const grps=grpSizes.map(size=>({teams:[],size}));
-  // 추첨 순서: A조1번→B조1번→C조1번→A조2번→B조2번... (라운드로빈)
-  const assignOrder = [];
-  const maxSize = Math.max(...grps.map(g=>g.size));
-  for(let slot=0; slot<maxSize; slot++){
-    for(let gi=0; gi<grps.length; gi++){
-      if(slot < grps[gi].size) assignOrder.push(gi);
+
+  // 완전 무작위 추첨 (같은 클럽 분리 포함)
+  const drawTime = new Date();
+  const indices = teams.map((_,i)=>i);
+  const shuffled = smartShuffle(indices, teams);
+
+  const grps = grpSizes.map(size=>({teams:[],size}));
+  const assignOrder=[];
+  const maxSize=Math.max(...grps.map(g=>g.size));
+  for(let slot=0;slot<maxSize;slot++){
+    for(let gi=0;gi<grps.length;gi++){
+      if(slot<grps[gi].size) assignOrder.push(gi);
     }
   }
 
-  // 조 슬롯 행 초기화 (고정 width 슬롯)
-  ge('drawGroupRows').innerHTML = grps.map((_,gi)=>`
+  ge('drawGroupRows').innerHTML=grps.map((_,gi)=>`
     <div class="draw-group-row" id="dg_${gi}" style="overflow:visible">
       <div class="draw-group-label">${grpLabel(gi)}</div>
       <div id="dg_slots_${gi}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -7070,59 +7052,43 @@ async function startDraw(){
       </div>
     </div>`).join('');
 
-  const allNames = teams.map((t,i)=>tdn(t,key,i));
-
-  for(let i=0; i<assignOrder.length; i++){
+  for(let i=0;i<assignOrder.length;i++){
     const gi=assignOrder[i];
     const ti=shuffled[i];
     const team=teams[ti];
     const dn=tdn(team,key,ti);
     ge('drawProgressBar').style.width=`${Math.round((i+1)/shuffled.length*100)}%`;
-
-    // 1) 해당 조 빈 슬롯 반짝임
     activateSlot(gi);
-
-    // 2) 스테이지 초기화 (동적 ID)
     initDrawStage(i+1, shuffled.length, gi);
-
-    // 3) DOM 렌더 완료 대기
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-
-    // 4) 룰렛 실행
     const stageEl=ge('drawStageContent');
-    const rWrap=stageEl ? document.getElementById(stageEl._rouletteId) : null;
+    const rWrap=stageEl?document.getElementById(stageEl._rouletteId):null;
     const pool=shuffled.slice(i).map(tj=>tdn(teams[tj],key,tj));
-    const spinMs=1600+randInt(900);
-    await runRoulette(rWrap, pool, dn, spinMs);
-
-    await sleep(200);
-
-    // 5) 낙엽 착지
+    await runRoulette(rWrap, pool, dn, 1400+randInt(800));
+    await sleep(180);
     const sameClub=grps[gi].teams.some(idx=>teams[idx].club===team.club);
-    const leafEl=stageEl ? document.getElementById(stageEl._leafId) : null;
+    const leafEl=stageEl?document.getElementById(stageEl._leafId):null;
     await leafLandReveal(leafEl, dn, sameClub);
-
-    // 6) 슬롯 채우기
     fillSlotWithLeaf(gi, dn, sameClub);
     grps[gi].teams.push(ti);
-
-    // 7) 조 완성?
-    if(grps[gi].teams.length >= grps[gi].size){
-      await sleep(280);
-      await celebrateGroupComplete(gi);
-    } else {
-      await sleep(160);
-    }
+    if(grps[gi].teams.length>=grps[gi].size){ await sleep(260); await celebrateGroupComplete(gi); }
+    else { await sleep(140); }
   }
 
   ge('drawProgressBar').style.width='100%';
-  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 모든 조 추첨 완료!</div><div style="font-size:.78rem;color:var(--text2);text-align:center">빠른 후보 확인 후 <b>${DW.nthPick||1}번째 결과</b>로 추첨 완료</div>`;
-  await sleep(500);
+  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 무작위 추첨</div>`;
+  await sleep(400);
 
+  const audit={mode:'random',modeLabel:'완전 무작위',loggedAt:drawTime.toISOString()};
+  DW.drawAudit=audit;
   const groupData=grps.map(g=>({teams:g.teams,courts:[]}));
   G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit};
   const mlist=[];
-  groupData.forEach((grp,gi)=>{for(let a=0;a<grp.teams.length;a++)for(let b=a+1;b<grp.teams.length;b++)mlist.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:grp.teams[a],t2:grp.teams[b],winner:null,rubbers:[],court:''});});
+  groupData.forEach((grp,gi)=>{
+    for(let a=0;a<grp.teams.length;a++)
+      for(let b=a+1;b<grp.teams.length;b++)
+        mlist.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:grp.teams[a],t2:grp.teams[b],winner:null,rubbers:[],court:''});
+  });
   G.matches[key]=mlist;
 
   const t=G.tournaments.find(t=>t.id===DW.tid);
@@ -7131,22 +7097,27 @@ async function startDraw(){
     if(!t.divSettings[DW.div])t.divSettings[DW.div]={};
     t.divSettings[DW.div].advance=advance;
   }
-
   sl(true);
   try{
-    await stD(key);await stM(key);
-    await fbLog(`추첨완료: ${t?.name||''} ${dl(DW.div)} ${ng}조 / ${audit.modeLabel||'외부값'} / ${audit.nth||1}번째 결과`,'🎲');
+    await stD(key); await stM(key);
+    await fbLog(`추첨완료: ${t?.name||''} ${dl(DW.div)} ${ng}조 / 무작위 / ${drawTime.toLocaleString('ko-KR')}`,'🎲');
     sl(false);
     ge('confirmDrawBtn').textContent='✅ 닫기';
     ge('confirmDrawBtn').onclick=()=>{cm('mDraw');renderBracket();};
-    ge('confirmDrawBtn').disabled=false;DW.isRunning=false;
+    ge('confirmDrawBtn').disabled=false;
+    DW.isRunning=false;
     SFX.finale();
     toast('추첨 완료 🎲','success');
-    // 오른쪽 패널 실제팀명으로 갱신
     refreshRunPreview(key);
-  }catch(e){sl(false);toast('저장 실패: '+e.message,'error');DW.isRunning=false;}
+  }catch(e){
+    sl(false); DW.isRunning=false;
+    const msg=e?.code==='permission-denied'?'권한 없음 — 관리자 로그인 필요':(e?.message||'저장 실패');
+    toast('저장 실패: '+msg,'error');
+    ge('confirmDrawBtn').textContent='⚠️ 다시 시도';
+    ge('confirmDrawBtn').onclick=()=>{DW.isRunning=false;startDraw();};
+    ge('confirmDrawBtn').disabled=false;
+  }
 }
-
 async function confirmDraw(){startDraw();}
 
 // ═══════════════════════════════════════════════════════
@@ -7507,15 +7478,7 @@ function openMainDraw(tid,div){
   ge('mainCancelBtn').textContent='취소';
   ge('mainCancelBtn').style.display='';
   ge('mainCancelBtn').onclick=()=>cm('mMain');
-  if(ge('mainExternalMode')) ge('mainExternalMode').value='time';
-  if(ge('mainDrawNth')) ge('mainDrawNth').value='1';
-  setMainSeed(1);
-  MD.seedMethod='time';
-  MD.seedPreparedAt='';
-  MD.seedSourceLabel='';
-  MD.seedSnapshotLabel='';
   MD.nthPick=1;
-  prepareMainExternalDraw(true);
   updateMainSeedPreview();
   om('mMain');
 }
@@ -7525,7 +7488,7 @@ async function startMainDraw(){
   const planPrepared=prepareMainExternalDraw(false);
   const seed=MD.seed;
   MD.plan=planPrepared || MD.plan;
-  ge('mainStageMeta').innerHTML=`${MD.seedSourceLabel||'외부값'} · <b>${MD.nthPick||1}번째 결과 최종 추첨</b>`;
+  ge('mainStageMeta').innerHTML='완전 무작위 본선 추첨 진행 중...';
 
   ge('mainDrawBtn').disabled=true;
   ge('mainStep1').style.display='none';
