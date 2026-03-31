@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-03-31-v35-simple-draw";
+  const APP_VERSION = "2026-03-31-v36-pw-change";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1081,7 +1081,10 @@ body{overflow-x:hidden;}
       <!-- 경기이사 로그인 상태 표시 -->
       <div id="regLoginStatusBar" style="display:none;padding:8px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:8px;margin-bottom:10px;font-size:.8rem;color:#2e7d32;display:flex;align-items:center;justify-content:space-between">
         <span>✅ 경기이사 로그인 상태입니다</span>
-        <button class="btn btn-gray" style="font-size:.72rem;padding:2px 10px" onclick="toggleReg()">로그아웃</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-outline" style="font-size:.72rem;padding:2px 10px;border-color:#388e3c;color:#2e7d32" onclick="openChangePwDirect()">🔐 비번 변경</button>
+          <button class="btn btn-gray" style="font-size:.72rem;padding:2px 10px" onclick="toggleReg()">로그아웃</button>
+        </div>
       </div>
       <div class="card-title">📝 팀 등록 <span id="regModeLabel" style="font-size:.73rem;font-weight:400;color:var(--text2)">— 5복식 | 주전 10명 + 후보 최대 2명</span></div>
       <div class="frow">
@@ -1388,6 +1391,35 @@ body{overflow-x:hidden;}
     <div class="modal-footer" style="justify-content:space-between">
       <button class="btn btn-gray" onclick="cancelForcedClubPassword()">취소</button>
       <button class="btn btn-primary" onclick="saveForcedClubPassword()">🔐 변경 후 로그인</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mChangePw">
+  <div class="modal-box" style="max-width:440px">
+    <div class="modal-header">
+      <h3>🔐 비밀번호 변경</h3>
+      <button class="modal-close" onclick="cm('mChangePw')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:10px 12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:10px;margin-bottom:14px;font-size:.82rem;color:#1e40af;line-height:1.65">
+        🔒 온라인 오더 보안을 위해 <b>클럽 전용 비밀번호</b>로 변경해 주세요.<br>
+        변경 후에는 새 비밀번호로만 로그인됩니다.
+      </div>
+      <div style="font-size:.74rem;color:var(--text2);margin-bottom:12px">권장: 숫자 6자리 이상 또는 숫자+문자 조합</div>
+      <div class="form-group">
+        <label class="form-label">새 비밀번호</label>
+        <input class="form-input" type="password" id="changePw1" placeholder="6자리 이상" onkeydown="if(event.key==='Enter')ge('changePw2').focus()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">새 비밀번호 확인</label>
+        <input class="form-input" type="password" id="changePw2" placeholder="한 번 더 입력" onkeydown="if(event.key==='Enter')saveChangePw()">
+      </div>
+      <div id="changePwMsg" style="font-size:.78rem;margin-top:4px;min-height:18px"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-gray" onclick="skipChangePw()">나중에</button>
+      <button class="btn btn-primary" onclick="saveChangePw()">🔐 변경 완료</button>
     </div>
   </div>
 </div>
@@ -2575,10 +2607,95 @@ function _completeRegLogin(club){
     renderRegisterDivisionOverview();
     renderRL();
     updateMyClubUI();
+    // 비번 미변경 클럽이면 변경 권장 팝업
+    openChangePwIfNeeded(club);
   }, 150);
 }
 
 // 최초 로그인 시 전화번호 등록 모달
+// ── 비밀번호 변경 (로그인 후 권장) ──────────────────────────
+let CHANGE_PW_CLUB = '';
+Object.defineProperty(window,'CHANGE_PW_CLUB',{get:()=>CHANGE_PW_CLUB,set:(v)=>{CHANGE_PW_CLUB=v;}});
+
+function shouldPromptPwChange(club){
+  // isCustom=false면 아직 전용 비번 미설정
+  const isCustom = !!(G.meta.clubPasswordCustom||{})[club];
+  if(isCustom) return false;
+  // localStorage로 "이미 건너뜀" 체크 (기기별)
+  const skipped = localStorage.getItem('pw_skip_'+club);
+  const skipTime = skipped ? Number(skipped) : 0;
+  // 건너뛴 후 3일 이내면 다시 안 뜸
+  if(Date.now() - skipTime < 3*24*60*60*1000) return false;
+  return true;
+}
+
+function openChangePwIfNeeded(club){
+  if(!shouldPromptPwChange(club)) return;
+  CHANGE_PW_CLUB = club;
+  ge('changePw1').value='';
+  ge('changePw2').value='';
+  ge('changePwMsg').textContent='';
+  setTimeout(()=>{ om('mChangePw'); ge('changePw1')?.focus(); }, 400);
+}
+
+// 직접 비번 변경 (로그인 상태에서 버튼 클릭)
+function openChangePwDirect(){
+  if(!REG_CLUB){ toast('경기이사 로그인 상태에서만 가능합니다','info'); return; }
+  CHANGE_PW_CLUB = REG_CLUB;
+  ge('changePw1').value='';
+  ge('changePw2').value='';
+  ge('changePwMsg').textContent='';
+  om('mChangePw');
+  setTimeout(()=>ge('changePw1')?.focus(), 200);
+}
+
+function skipChangePw(){
+  // 3일간 건너뛰기
+  localStorage.setItem('pw_skip_'+CHANGE_PW_CLUB, String(Date.now()));
+  CHANGE_PW_CLUB='';
+  cm('mChangePw');
+  toast('나중에 변경할 수 있습니다. 보안을 위해 변경을 권장합니다 🔒','info');
+}
+
+async function saveChangePw(){
+  const club = CHANGE_PW_CLUB;
+  const pw1 = (ge('changePw1')?.value||'').trim();
+  const pw2 = (ge('changePw2')?.value||'').trim();
+  const msg = ge('changePwMsg');
+  if(!club){ cm('mChangePw'); return; }
+  if(!pw1 || pw1.length<6){
+    if(msg){msg.textContent='6자리 이상 입력해 주세요.'; msg.style.color='var(--danger)';}
+    return;
+  }
+  if(pw1!==pw2){
+    if(msg){msg.textContent='비밀번호 확인이 일치하지 않습니다.'; msg.style.color='var(--danger)';}
+    return;
+  }
+  // 현재 비번과 동일한지 체크
+  const curPw = (G.meta.clubPasswords||{})[club]||'';
+  if(pw1===curPw){
+    if(msg){msg.textContent='현재 비밀번호와 동일합니다. 다른 비밀번호를 입력해 주세요.'; msg.style.color='var(--danger)';}
+    return;
+  }
+  sl(true);
+  try{
+    if(!G.meta.clubPasswords) G.meta.clubPasswords={};
+    if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
+    G.meta.clubPasswords[club]=pw1;
+    G.meta.clubPasswordCustom[club]=true;
+    await saveMeta();
+    sl(false);
+    localStorage.removeItem('pw_skip_'+club);
+    CHANGE_PW_CLUB='';
+    cm('mChangePw');
+    toast(`비밀번호 변경 완료 ✅ 다음 로그인부터 새 비밀번호를 사용하세요.`,'success');
+    try{ renderAdminContactList(); }catch(e){}
+  }catch(e){
+    sl(false);
+    if(msg){msg.textContent='저장 실패: '+e.message; msg.style.color='var(--danger)';}
+  }
+}
+
 function openFirstLoginPhoneModal(club){
   ge('firstLoginClubName').textContent = club;
   ge('firstLoginPhone').value='';
@@ -3011,15 +3128,25 @@ function renderAdminContactList(){
   const sorted = [...withPhone, ...noPhone];
   if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
   const passwords = G.meta.clubPasswords||{};
-  el.innerHTML = sorted.map(club=>{
+  const customMap = G.meta.clubPasswordCustom||{};
+  const notChanged = sorted.filter(c=>!customMap[c]);
+  const summary = notChanged.length
+    ? `<div style="margin-bottom:12px;padding:10px 12px;background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1.5px solid #fca5a5;border-radius:10px;font-size:.82rem;color:#991b1b">
+        <div style="font-weight:800;margin-bottom:4px">⚠️ 비밀번호 미변경 클럽: ${notChanged.length}개</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${notChanged.map(c=>`<span style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:2px 8px;font-size:.76rem;font-weight:700">${c}</span>`).join('')}</div>
+        <div style="font-size:.72rem;margin-top:6px;color:#b91c1c">해당 클럽 경기이사가 로그인하면 비번 변경 안내가 자동으로 표시됩니다.</div>
+      </div>`
+    : `<div style="margin-bottom:12px;padding:8px 12px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:.82rem;color:#166534;font-weight:700">✅ 전체 클럽 비밀번호 변경 완료</div>`;
+  el.innerHTML = summary + sorted.map(club=>{
     const phone = contacts[club]||'';
     const email = emails[club]||'';
     const phone4 = phone.replace(/[^0-9]/g,'').slice(-4);
     const pw = passwords[club]||(phone4.length===4?phone4:'');
     const isCustom = !!((G.meta.clubPasswordCustom||{})[club]);
-    const statusTxt = isCustom ? '전용 비밀번호 설정됨' : '임시 비밀번호 상태';
-    const statusColor = isCustom ? 'var(--success)' : '#d97706';
-    return `<div style="padding:7px 0;border-bottom:1px dashed var(--border)">
+    const statusTxt = isCustom ? '✅ 전용 비번 설정' : '⚠️ 미변경';
+    const statusColor = isCustom ? 'var(--success)' : '#dc2626';
+    const statusBg = isCustom ? '' : 'background:linear-gradient(135deg,#fff1f2,#ffe4e6);border-radius:8px;padding:2px 0;';
+    return `<div style="padding:7px 0;border-bottom:1px dashed var(--border);${statusBg}">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span style="min-width:65px;font-size:.82rem;font-weight:${phone?'700':'400'};color:${phone?'var(--text1)':'var(--text3)'}">${club}</span>
         <input class="form-input" value="${phone}" placeholder="번호 없음" id="cc_${club}" inputmode="tel"
@@ -12284,7 +12411,7 @@ Object.assign(window,{ openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, 
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
+  toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
