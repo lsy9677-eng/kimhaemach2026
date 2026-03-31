@@ -2092,7 +2092,7 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},regDeadlineDt:'',onlineOrderEnabled:false,regSessionVersion:1},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},regDeadlineDt:'',onlineOrderEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
@@ -2224,6 +2224,8 @@ async function initFB(){
       G.drawHistories = G.drawHistories || {};
     }
 
+    await purgeLegacyDrawHistoryOnce();
+
     sl(false);toast('🔥 연결 완료','success');
     // 홈 등록선수 현황 초기 렌더
     if(window.renderHomeReg) window.renderHomeReg();
@@ -2258,7 +2260,7 @@ async function loadMeta(){
       if(typeof G.meta.onlineOrderEnabled!=='boolean') G.meta.onlineOrderEnabled=!!G.meta.onlineOrderEnabled;
       if(!Number.isFinite(Number(G.meta.regSessionVersion))) G.meta.regSessionVersion=1;
     }else{
-      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,regSessionVersion:1});
+      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0});
     }
   }catch(e){}
 
@@ -2294,11 +2296,32 @@ async function saveMeta(){
       adminFloatingNotice:(G.meta.adminFloatingNotice||''),
       adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,
       onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
-      regSessionVersion:Number(G.meta.regSessionVersion||1)
+      regSessionVersion:Number(G.meta.regSessionVersion||1),
+      drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0)
     });
   }catch(e){
     console.error('saveMeta 오류:', e);
     throw e;
+  }
+}
+async function purgeLegacyDrawHistoryOnce(){
+  try{
+    const ver=Number(G?.meta?.drawHistoryPolicyVersion||0);
+    if(ver>=1) return;
+    const targets=['drawHistory','drawDeleteLog'];
+    for(const colName of targets){
+      const snap=await getDocs(collection(db,colName));
+      if(snap.empty) continue;
+      const batch=writeBatch(db);
+      snap.forEach(d=>batch.delete(doc(db,colName,d.id)));
+      await batch.commit();
+    }
+    G.drawHistories={};
+    G.meta.drawHistoryPolicyVersion=1;
+    await saveMeta();
+    toast('기존 추첨기록 정리 완료 — 이제부터 새 기록만 남깁니다','success');
+  }catch(e){
+    console.warn('purgeLegacyDrawHistoryOnce failed',e);
   }
 }
 async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new Date().toISOString()});}
@@ -5808,11 +5831,11 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=mMs.length>0&&mMs.every(m=>getMatchResultState(key,m).done||m.bye);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
-  const topActions=AD?`<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
+  const topActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>
-    </div>`:'';
+      ${AD?`<button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
+    </div>`;
 
   let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
