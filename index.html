@@ -887,6 +887,29 @@ body{overflow-x:hidden;}
 .home-click-card:hover,.home-click-chip:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,30,58,.12);}
 .home-click-card:active,.home-click-chip:active{transform:translateY(0);}
 
+
+/* === page slider motion === */
+body.slider-ready .page-viewport{
+  width:100%;
+  overflow:hidden;
+  position:relative;
+}
+body.slider-ready .page-slider{
+  display:flex;
+  align-items:flex-start;
+  width:100%;
+  will-change:transform;
+  transition:transform .34s cubic-bezier(.22,.61,.36,1);
+}
+body.slider-ready .page{
+  display:block !important;
+  flex:0 0 100%;
+  width:100%;
+}
+body.slider-ready .page:not(.active){
+  opacity:.999;
+}
+
 </style>
 
 <!-- PWA -->
@@ -2468,6 +2491,7 @@ function showPage(n){
   // 활성 탭이 화면 중앙에 오도록 스크롤
   const activeTab=document.querySelector(`.nav-tab[data-page="${n}"]`);
   if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+  if(window.goPageSheet) window.goPageSheet(n);
   if(n==='home')upDash();if(n==='tournament')renderTL();if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();
   if(n==='players'){ const act=ge('ptab-registry')?.classList.contains('active'); if(!act) switchPlayersTab('registry'); else initRegistryTab(); }
@@ -2487,9 +2511,10 @@ function showPage(n){
     if(el && !el.value){ el.value = pickDefaultTournamentId(); onRankTC(); }
   }
 
-  window.scrollTo(0,0);
+  window.scrollTo({top:0,behavior:'smooth'});
   renderFloatingNotice();
   setTimeout(updateOperationSticky,0);
+  setTimeout(()=>window.updatePageSliderHeight && window.updatePageSliderHeight(),30);
 }
 
 function toggleAdmin(){
@@ -13495,6 +13520,82 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 <!-- ====== BV 본선 브라켓(가지형) 오버라이드 끝 ====== -->
+
+
+<script>
+(function(){
+  const PAGE_ORDER=['home','tournament','register','bracket','players','ranking'];
+
+  function buildPageSlider(){
+    const main=document.querySelector('main.main-content');
+    if(!main || main.querySelector('.page-viewport')) return;
+    const pages=[...main.querySelectorAll(':scope > .page')];
+    if(!pages.length) return;
+
+    const viewport=document.createElement('div');
+    viewport.className='page-viewport';
+    viewport.id='pageViewport';
+
+    const slider=document.createElement('div');
+    slider.className='page-slider';
+    slider.id='pageSlider';
+
+    pages.forEach(p=>slider.appendChild(p));
+    viewport.appendChild(slider);
+    main.appendChild(viewport);
+    document.body.classList.add('slider-ready');
+  }
+
+  function pageIndex(name){
+    const idx=PAGE_ORDER.indexOf(name);
+    return idx<0 ? 0 : idx;
+  }
+
+  function updatePageSliderHeight(){
+    const viewport=document.getElementById('pageViewport');
+    const active=document.querySelector('.page.active');
+    if(!viewport || !active) return;
+    requestAnimationFrame(()=>{
+      const h=Math.max(active.scrollHeight, active.offsetHeight, 300);
+      viewport.style.height=h+'px';
+    });
+  }
+
+  function goPageSheet(name, instant){
+    const slider=document.getElementById('pageSlider');
+    if(!slider) return;
+    const idx=pageIndex(name);
+    slider.style.transition = instant ? 'none' : 'transform .34s cubic-bezier(.22,.61,.36,1)';
+    slider.style.transform = 'translate3d(-'+(idx*100)+'%,0,0)';
+    if(instant){
+      requestAnimationFrame(()=>{ slider.style.transition='transform .34s cubic-bezier(.22,.61,.36,1)'; });
+    }
+    updatePageSliderHeight();
+  }
+
+  window.updatePageSliderHeight=updatePageSliderHeight;
+  window.goPageSheet=goPageSheet;
+
+  buildPageSlider();
+  const active=document.querySelector('.page.active')?.id?.replace('page-','') || 'home';
+  goPageSheet(active, true);
+
+  window.addEventListener('resize', updatePageSliderHeight);
+  window.addEventListener('load', updatePageSliderHeight);
+  document.addEventListener('click', function(e){
+    if(e.target.closest('.nav-tab,[onclick*="showPage("],button[onclick*="showPage("]')){
+      setTimeout(updatePageSliderHeight, 60);
+      setTimeout(updatePageSliderHeight, 220);
+    }
+  }, true);
+  const mo=new MutationObserver(()=>updatePageSliderHeight());
+  const activePage=document.querySelector('.page.active');
+  if(activePage) mo.observe(activePage,{childList:true,subtree:true,attributes:true});
+  document.addEventListener('transitionend', function(e){
+    if(e.target && e.target.id==='pageSlider') updatePageSliderHeight();
+  });
+})();
+</script>
 
 </body>
 </html>
