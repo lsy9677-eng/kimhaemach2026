@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v70-draw-history-fullscreen";
+  const APP_VERSION = "2026-04-01-v70-players-fast";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -933,15 +933,19 @@ body{overflow-x:hidden;}
 /* === page slider motion === */
 body.slider-ready .page-viewport{
   width:100%;
-  overflow:hidden;
+  overflow-x:hidden;
+  overflow-y:visible;
   position:relative;
+  min-height:300px;
 }
 body.slider-ready .page-slider{
   display:flex;
   align-items:flex-start;
   width:100%;
-  will-change:transform;
-  transition:transform .18s ease-out;transform:translate3d(0,0,0);backface-visibility:hidden;
+  will-change:auto;
+  transition:transform .10s linear;
+  transform:translate3d(0,0,0);
+  backface-visibility:hidden;
 }
 body.slider-ready .page{
   display:block !important;
@@ -950,60 +954,6 @@ body.slider-ready .page{
 }
 body.slider-ready .page:not(.active){
   opacity:.999;
-}
-
-/* === draw history fullscreen / compact === */
-.modal-box.draw-history-fullscreen.fullscreen,
-.modal-box.draw-history-view-fullscreen.fullscreen{
-  background:linear-gradient(180deg,#f8fafd 0%,#eef3f9 100%);
-}
-.modal-box.draw-history-fullscreen.fullscreen .modal-body,
-.modal-box.draw-history-view-fullscreen.fullscreen .modal-body{
-  padding:14px 16px;
-}
-.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .card{
-  padding:12px 14px !important;
-  margin-bottom:8px !important;
-}
-.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .draw-history-title{
-  font-size:1rem !important;
-}
-.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .draw-history-meta{
-  font-size:.82rem !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea{
-  transform-origin:top center;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-grid{
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
-  gap:12px !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-title{
-  font-size:1rem !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-meta{
-  font-size:.78rem !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-section-title{
-  font-size:.82rem !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-group-row{
-  padding:8px !important;
-  margin-bottom:6px !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-group-label{
-  width:34px !important;
-  font-size:.92rem !important;
-}
-.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-team-slot{
-  min-width:72px !important;
-  padding:4px 10px !important;
-  font-size:.76rem !important;
-}
-@media(max-width:900px){
-  .modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-grid{
-    grid-template-columns:1fr !important;
-  }
 }
 
 </style>
@@ -2026,15 +1976,12 @@ body.slider-ready .page:not(.active){
 
 
 <div class="modal-overlay" id="mDrawHistory">
-  <div class="modal-box draw-history-fullscreen" style="max-width:960px;width:96vw">
+  <div class="modal-box" style="max-width:760px">
     <div class="modal-header">
       <h3>🗂 추첨 기록</h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="modal-close" type="button" id="drawHistoryFullscreenBtn" onclick="toggleModalFullscreen('mDrawHistory', this)" title="전체화면">⛶</button>
-        <button class="modal-close" onclick="cm('mDrawHistory')">✕</button>
-      </div>
+      <button class="modal-close" onclick="cm('mDrawHistory')">✕</button>
     </div>
-    <div class="modal-body" style="max-height:84vh;overflow:auto">
+    <div class="modal-body">
       <div id="drawHistoryList"></div>
     </div>
     <div class="modal-footer">
@@ -2044,11 +1991,10 @@ body.slider-ready .page:not(.active){
 </div>
 
 <div class="modal-overlay" id="mDrawHistoryView">
-  <div class="modal-box draw-history-view-fullscreen" style="max-width:1200px;width:96vw">
+  <div class="modal-box" style="max-width:1200px;width:96vw">
     <div class="modal-header">
       <h3 id="drawHistoryViewTitle">🎲 저장된 추첨 보기</h3>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="modal-close" type="button" id="drawHistoryViewFullscreenBtn" onclick="toggleModalFullscreen('mDrawHistoryView', this)" title="전체화면">⛶</button>
         <button class="modal-close" type="button" onclick="saveSavedDrawImage()">🖼️</button>
         <button class="modal-close" onclick="cm('mDrawHistoryView')">✕</button>
       </div>
@@ -2580,24 +2526,32 @@ function updatePlayersAdminControls(){
 }
 
 function showPage(n){
+  const prev=document.querySelector('.page.active')?.id?.replace('page-','')||'home';
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   ge('page-'+n).classList.add('active');
   document.querySelector(`.nav-tab[data-page="${n}"]`).classList.add('active');
-  // 스와이프 인디케이터 업데이트
   document.querySelectorAll('.swipe-dot').forEach(d=>
     d.classList.toggle('active', d.dataset.page===n)
   );
-  // 활성 탭이 화면 중앙에 오도록 스크롤
   const activeTab=document.querySelector(`.nav-tab[data-page="${n}"]`);
-  if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
-  if(window.goPageSheet) window.goPageSheet(n);
+  if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'auto'});
+  if(window.goPageSheet) window.goPageSheet(n, ['players','ranking','bracket'].includes(n) || ['players','ranking','bracket'].includes(prev));
   if(n==='home')upDash();if(n==='tournament')renderTL();if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();
-  if(n==='players'){ const act=ge('ptab-registry')?.classList.contains('active'); if(!act) switchPlayersTab('registry'); else initRegistryTab(); }
+  if(n==='players'){
+    const act=ge('ptab-registry')?.classList.contains('active');
+    if(!act) switchPlayersTab('registry');
+    else {
+      const b=ge('regTabBody');
+      if(b && !b.dataset.ready){
+        b.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">선수 명단을 불러오는 중입니다…</div>';
+      }
+      setTimeout(()=>initRegistryTab(),0);
+    }
+  }
   if(n==='ranking')popSel();
 
-  // ✅ 페이지 진입 시 기본 대회(접수중) 자동 선택
   if(n==='register'){
     const el=ge('regTS');
     if(el && !el.value){ el.value = pickDefaultTournamentId(); onRegTC(); }
@@ -2611,10 +2565,10 @@ function showPage(n){
     if(el && !el.value){ el.value = pickDefaultTournamentId(); onRankTC(); }
   }
 
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior:'auto'});
   renderFloatingNotice();
   setTimeout(updateOperationSticky,0);
-  setTimeout(()=>window.updatePageSliderHeight && window.updatePageSliderHeight(),30);
+  setTimeout(()=>window.updatePageSliderHeight && window.updatePageSliderHeight(), 0);
 }
 
 function toggleAdmin(){
@@ -5956,10 +5910,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=mMs.length>0&&mMs.every(m=>getMatchResultState(key,m).done||m.bye);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
-  const latestDrawHistory=((G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null);
+  const latestSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
   const topActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestDrawHistory?'':'disabled style=\"padding:6px 14px;font-size:.78rem;opacity:.45;cursor:not-allowed\"'}>📋 추첨화면 보기</button>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem;${latestSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestSavedDraw?'':'disabled'}>📋 추첨화면 보기</button>
       ${AD?`<button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
     </div>`;
@@ -7614,10 +7568,10 @@ function renderSavedDrawView(entry){
     ? renderMainPreviewHTML(norm.mainPreviewSlots, norm.mainSize, false)
     : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>';
   body.innerHTML = `<div id="savedDrawCaptureArea">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div>
-        <div class="saved-draw-title" style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
-        <div class="saved-draw-meta" style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
+        <div style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
+        <div style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge ${norm.isTest?'bg-bronze':'bg-green'}">${norm.isTest?'🧪 테스트':'🔒 실운영'}</span>
@@ -7625,9 +7579,9 @@ function renderSavedDrawView(entry){
         <span class="badge bg-green">본선 ${norm.mainSize||0}강</span>
       </div>
     </div>
-    <div class="saved-draw-grid" style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
+    <div style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
       <div>
-        <div class="saved-draw-section-title" style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
         ${(norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
             <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -7636,7 +7590,7 @@ function renderSavedDrawView(entry){
           </div>`).join('')}
       </div>
       <div>
-        <div class="saved-draw-section-title" style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
@@ -7644,8 +7598,8 @@ function renderSavedDrawView(entry){
     </div>
   </div>`;
   ge('drawHistoryViewTitle').textContent = `🎲 ${norm.title||'저장된 추첨 보기'}`;
-  om('mDrawHistoryView');
   setModalFullscreenState('mDrawHistoryView', true);
+  om('mDrawHistoryView');
 }
 async function saveSavedDrawImage(){
   const area=ge('savedDrawCaptureArea');
@@ -7657,24 +7611,6 @@ function openSavedDrawHistory(id, key){
   if(!entry){ toast('추첨 기록을 찾을 수 없습니다','error'); return; }
   renderSavedDrawView(entry);
 }
-function setModalFullscreenState(id, shouldFull=true){
-  const overlay=ge(id);
-  const box=overlay?.querySelector('.modal-box');
-  if(!box) return;
-  box.classList.toggle('fullscreen', !!shouldFull);
-  const btn=overlay.querySelector('.modal-close[onclick*="toggleModalFullscreen"]');
-  if(btn) btn.textContent = shouldFull ? '🗗' : '⛶';
-}
-function openLatestSavedDraw(tid,div){
-  const key=tid+'_'+div;
-  const entry=((G.drawHistories[key]||[]).filter(x=>!x.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null);
-  if(!entry){ toast('저장된 추첨 기록이 없습니다','info'); return; }
-  renderSavedDrawView(entry);
-}
-
-window.openLatestSavedDraw = openLatestSavedDraw;
-window.openSavedDrawHistory = openSavedDrawHistory;
-window.openDrawHistory = openDrawHistory;
 function openDrawHistory(tid,div){
   const key=tid+'_'+div;
   const list=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
@@ -7682,6 +7618,7 @@ function openDrawHistory(tid,div){
   if(!box) return;
   if(!list.length){
     box.innerHTML='<div class="empty-state"><div class="empty-icon">🗂</div><p>저장된 추첨 기록이 없습니다</p></div>';
+    setModalFullscreenState('mDrawHistory', true);
     om('mDrawHistory');
     return;
   }
@@ -7691,10 +7628,10 @@ function openDrawHistory(tid,div){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <div class="draw-history-title" style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
+            <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
             <span class="badge ${it.isTest?'bg-bronze':'bg-green'}">${it.isTest?'🧪 테스트':'🔒 실운영'}</span>
           </div>
-          <div class="draw-history-meta" style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
+          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px" onclick="openSavedDrawHistory('${it.id}','${key}')">📋 내용 보기</button>
@@ -7703,8 +7640,15 @@ function openDrawHistory(tid,div){
       </div>
     </div>`;
   }).join('');
-  om('mDrawHistory');
   setModalFullscreenState('mDrawHistory', true);
+  om('mDrawHistory');
+}
+
+function openLatestSavedDraw(tid,div){
+  const key=tid+'_'+div;
+  const entry=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
+  if(!entry){ toast('저장된 추첨 기록이 없습니다','info'); return; }
+  renderSavedDrawView(entry);
 }
 
 async function deleteSavedDrawHistory(id,key){
@@ -8909,6 +8853,7 @@ function renderRanking(){
   } else {
     renderLiveRanking(tid,div,cont);
   }
+  if(window.queueStablePageHeight) window.queueStablePageHeight();
 }
 
 
@@ -9035,6 +8980,7 @@ function renderHistRanking(tid,div,cont){
   });
 
   cont.innerHTML=html;
+  if(window.queueStablePageHeight) window.queueStablePageHeight();
 }
 
 // ── Firebase 실시간 대회 시합결과 렌더링 ──────────────────
@@ -9076,6 +9022,7 @@ function renderLiveRanking(tid,div,cont){
     }
   });
   cont.innerHTML=html||'<div class="empty-state card"><p>데이터 없음</p></div>';
+  if(window.queueStablePageHeight) window.queueStablePageHeight();
 }
 
 function getAssociationSummary(){
@@ -10761,6 +10708,7 @@ function ge(id){return document.getElementById(id);}
 function om(id){document.getElementById(id)?.classList.add('open');}
 function cm(id){const el=document.getElementById(id);if(!el)return;el.classList.remove('open');const box=el.querySelector('.modal-box');if(box)box.classList.remove('fullscreen');el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');}
 function toggleModalFullscreen(id,btn){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;const isFull=box.classList.toggle('fullscreen');if(btn)btn.textContent=isFull?'🗗':'⛶';}
+function setModalFullscreenState(id,on=true){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;box.classList.toggle('fullscreen',!!on);overlay.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent=on?'🗗':'⛶');}
 function toast(msg,type='info'){const c=ge('TC');const el=document.createElement('div');el.className='toast '+type;el.innerHTML=`${type==='success'?'✅':type==='error'?'❌':'ℹ️'} ${msg}`;c.appendChild(el);setTimeout(()=>{el.style.cssText='opacity:0;transform:translateX(30px);transition:all .3s';setTimeout(()=>el.remove(),300)},3000);}
 
 window.addEventListener('scroll',()=>ge('stBtn').classList.toggle('show',window.scrollY>300));
@@ -12822,36 +12770,64 @@ function normalizeClub(club){
 }
 
 // 탭 전환
+const REGISTRY_TAB_CACHE={ yearsLoaded:false, yearsKey:'', filterKey:'' };
 function switchPlayersTab(tab){
   ['records','registry'].forEach(t=>{
     const btn=ge('ptab-'+t); if(btn) btn.classList.toggle('active',t===tab);
     const c=ge('ptab-'+t+'-content'); if(c) c.style.display=(t===tab)?'':'none';
   });
   updatePlayersAdminControls();
-  if(tab==='registry') initRegistryTab();
+  if(tab==='registry'){
+    const b=ge('regTabBody');
+    if(b && !b.dataset.ready){
+      b.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">선수 명단을 불러오는 중입니다…</div>';
+    }
+    setTimeout(()=>initRegistryTab(),0);
+  }
   if(tab==='records'){
-    // 2026 명단 로드 보장 후 렌더
     loadRegistry(2026).then(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
   }
 }
 
-async function initRegistryTab(){
+async function initRegistryTab(force){
   updatePlayersAdminControls();
   const years=await getRegistryYears();
+  const yearsKey=years.join('|');
   const yearSel=ge('regYearSel');
-  if(yearSel){ yearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join(''); yearSel.value=years.includes(new Date().getFullYear())?new Date().getFullYear():years[years.length-1]; }
-  await renderRegistryTab();
+  if(yearSel && (!REGISTRY_TAB_CACHE.yearsLoaded || REGISTRY_TAB_CACHE.yearsKey!==yearsKey || force)){
+    const prev=parseInt(yearSel.value||0);
+    yearSel.innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join('');
+    const preferred=(prev && years.includes(prev))?prev:(years.includes(new Date().getFullYear())?new Date().getFullYear():years[years.length-1]);
+    yearSel.value=preferred;
+    REGISTRY_TAB_CACHE.yearsLoaded=true;
+    REGISTRY_TAB_CACHE.yearsKey=yearsKey;
+  }
+  await renderRegistryTab(force);
 }
 
-async function renderRegistryTab(){
+async function renderRegistryTab(force){
+  const regTabBody=ge('regTabBody');
+  if(regTabBody && !regTabBody.dataset.ready){
+    regTabBody.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">선수 명단을 불러오는 중입니다…</div>';
+  }
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   const regions=[...new Set(members.map(m=>m.region).filter(Boolean))].sort();
   const clubs=[...new Set(members.map(m=>m.club).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const filterKey=year+'__'+regions.join('|')+'__'+clubs.join('|');
   const regSel=ge('regRegionSel');
-  if(regSel){ const p=regSel.value; regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${r}">${r}</option>`).join(''); if(p) regSel.value=p; }
+  if(regSel && (force || REGISTRY_TAB_CACHE.filterKey!==filterKey)){
+    const p=regSel.value;
+    regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${r}">${r}</option>`).join('');
+    if(p) regSel.value=p;
+  }
   const clubSel=ge('regClubSel');
-  if(clubSel){ const p=clubSel.value; clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join(''); if(p) clubSel.value=p; }
+  if(clubSel && (force || REGISTRY_TAB_CACHE.filterKey!==filterKey)){
+    const p=clubSel.value;
+    clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if(p) clubSel.value=p;
+  }
+  REGISTRY_TAB_CACHE.filterKey=filterKey;
   const selRegion=ge('regRegionSel')?.value||'';
   const selClub=ge('regClubSel')?.value||'';
   const showSubOnly=ge('regShowSubOnly')?.checked||false;
@@ -12881,7 +12857,7 @@ async function renderRegistryTab(){
       rtSel2.innerHTML='<option value="">-- 클럽 선택 --</option>'+(G.clubs||[]).map(c=>`<option value="${c}">${c}</option>`).join('');
     }
   }
-  if(!clubMap.size){ body.innerHTML=`<div class="empty-state card" style="padding:24px;text-align:center"><p style="font-size:1rem;font-weight:600;margin-bottom:8px">📋 등록된 선수 명단이 없습니다</p><p style="font-size:.82rem;color:var(--text3);line-height:1.6">관리자 로그인 후 <b>관리자 설정 → 등록선수 관리</b>에서<br>엑셀 파일로 명단을 업로드해 주세요.</p></div>`; return; }
+  if(!clubMap.size){ body.dataset.ready='1'; body.innerHTML=`<div class="empty-state card" style="padding:24px;text-align:center"><p style="font-size:1rem;font-weight:600;margin-bottom:8px">📋 등록된 선수 명단이 없습니다</p><p style="font-size:.82rem;color:var(--text3);line-height:1.6">관리자 로그인 후 <b>관리자 설정 → 등록선수 관리</b>에서<br>엑셀 파일로 명단을 업로드해 주세요.</p></div>`; return; }
   const regionMap=new Map();
   [...clubMap.entries()].forEach(([club,ms])=>{ const region=ms[0]?.region||'미확인'; if(!regionMap.has(region)) regionMap.set(region,[]); regionMap.get(region).push({club,members:ms}); });
   body.innerHTML=[...regionMap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko')).map(([region,clubList])=>{
@@ -12904,6 +12880,7 @@ async function renderRegistryTab(){
       }).join('')}
     </div>`;
   }).join('');
+  body.dataset.ready='1';
 }
 
 async function exportRegistryFiltered(fmt){
@@ -13147,11 +13124,11 @@ function exportRegistryExcelMgr(){ exportRegistryExcel(); }
 
 // showPage 수정 - players는 누구나 접근
 
-Object.assign(window,{ toggleModalFullscreen, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openSavedDrawHistory,openLatestSavedDraw,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
+  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
@@ -13674,13 +13651,30 @@ document.addEventListener('DOMContentLoaded',()=>{
     return idx<0 ? 0 : idx;
   }
 
+  let __pageHeightTimer=null;
   function updatePageSliderHeight(){
     const viewport=document.getElementById('pageViewport');
     const active=document.querySelector('.page.active');
     if(!viewport || !active) return;
-    requestAnimationFrame(()=>{
-      const h=Math.max(active.scrollHeight, active.offsetHeight, 300);
+    const pageName=(active.id||'').replace('page-','');
+    const freeScrollPages=['players','ranking','bracket'];
+    clearTimeout(__pageHeightTimer);
+    __pageHeightTimer=setTimeout(()=>{
+      if(freeScrollPages.includes(pageName)){
+        viewport.style.height='auto';
+        viewport.style.minHeight=Math.max(active.scrollHeight||0, active.offsetHeight||0, 300)+'px';
+        return;
+      }
+      const h=Math.max(active.scrollHeight||0, active.offsetHeight||0, 300);
       viewport.style.height=h+'px';
+      viewport.style.minHeight=h+'px';
+    }, 0);
+  }
+
+  function queueStablePageHeight(){
+    requestAnimationFrame(()=>{
+      updatePageSliderHeight();
+      requestAnimationFrame(updatePageSliderHeight);
     });
   }
 
@@ -13688,12 +13682,14 @@ document.addEventListener('DOMContentLoaded',()=>{
     const slider=document.getElementById('pageSlider');
     if(!slider) return;
     const idx=pageIndex(name);
-    slider.style.transition = instant ? 'none' : 'transform .18s ease-out';
+    const noAnimPages=['players','ranking','bracket'];
+    const immediate = !!instant || noAnimPages.includes(name);
+    slider.style.transition = immediate ? 'none' : 'transform .10s linear';
     slider.style.transform = 'translate3d(-'+(idx*100)+'%,0,0)';
-    if(instant){
-      requestAnimationFrame(()=>{ slider.style.transition='transform .18s ease-out'; });
+    if(immediate){
+      requestAnimationFrame(()=>{ slider.style.transition='transform .10s linear'; });
     }
-    updatePageSliderHeight();
+    queueStablePageHeight();
   }
 
   function isMobileSwipeUI(){
@@ -13808,6 +13804,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 
   window.updatePageSliderHeight=updatePageSliderHeight;
+  window.queueStablePageHeight=queueStablePageHeight;
   window.goPageSheet=goPageSheet;
 
   buildPageSlider();
