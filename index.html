@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v69-ultralight-draw-readable";
+  const APP_VERSION = "2026-04-01-v69-page-slider-fast";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -162,39 +162,6 @@ table tr:nth-child(even):hover td{background:var(--panel2);}
 .modal-box.fullscreen{width:100vw !important;height:100vh !important;max-width:none !important;max-height:none !important;border-radius:0 !important;resize:none !important;}
 .modal-box.fullscreen .modal-body{max-height:calc(100vh - 120px) !important;overflow-y:auto !important;}
 .modal-box.fullscreen .modal-header{border-radius:0 !important;}
-#mDrawHistoryView .modal-box.fullscreen,
-#mDraw .modal-box.fullscreen{background:#fbfcff;}
-#mDrawHistoryView .modal-box.fullscreen .modal-body,
-#mDraw .modal-box.fullscreen .modal-body{padding:10px 12px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea,
-#mDraw .modal-box.fullscreen .modal-body{font-size:14px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea > div:first-child{margin-bottom:10px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea > div:nth-child(2){grid-template-columns:minmax(280px,1fr) minmax(280px,1fr) !important;gap:10px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .draw-group-row,
-#mDraw .modal-box.fullscreen .draw-group-row{padding:8px 10px !important;margin-bottom:6px !important;border-radius:10px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .draw-group-label,
-#mDraw .modal-box.fullscreen .draw-group-label{font-size:.98rem !important;width:42px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .draw-team-slot,
-#mDraw .modal-box.fullscreen .draw-team-slot{font-size:.84rem !important;min-width:84px !important;padding:5px 11px !important;border-radius:11px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .br-round-title,
-#mDraw .modal-box.fullscreen .br-round-title{font-size:.68rem !important;padding:5px 0 !important;margin-bottom:6px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .br-team,
-#mDraw .modal-box.fullscreen .br-team{padding:6px 8px !important;font-size:.73rem !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea .badge,
-#mDraw .modal-box.fullscreen .badge{font-size:.76rem !important;padding:3px 8px !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea [style*="font-size:1.18rem"]{font-size:1.02rem !important;}
-#mDrawHistoryView .modal-box.fullscreen #savedDrawCaptureArea [style*="font-size:.96rem"]{font-size:.84rem !important;}
-#mDraw .modal-box.fullscreen .form-label{font-size:.82rem !important;}
-#mDraw .modal-box.fullscreen .form-input{font-size:.92rem !important;min-height:40px !important;}
-#mDraw .modal-box.fullscreen .draw-cfg{padding:14px !important;border-radius:14px !important;}
-#mDraw .modal-box.fullscreen .draw-cfg-label{font-size:.82rem !important;min-width:104px !important;}
-#mDraw .modal-box.fullscreen .grp-preset{font-size:.82rem !important;padding:6px 10px !important;}
-#mDraw .modal-box.fullscreen #drawTeamList .badge{font-size:.84rem !important;padding:4px 9px !important;}
-#mDraw .modal-box.fullscreen #drawMainPreviewBox > div:first-child,
-#mDraw .modal-box.fullscreen #drawRunScreen > div > div:last-child > div:first-child{font-size:.88rem !important;}
-#mDraw .modal-box.fullscreen #drawMainPreviewBox > div:nth-child(2),
-#mDraw .modal-box.fullscreen #drawRunScreen > div > div:last-child > div:nth-child(2){font-size:.76rem !important;}
-
 @keyframes mIn{from{transform:translateY(20px) scale(.97);opacity:0}to{transform:none;opacity:1}}
 .modal-header{background:var(--primary);color:white;padding:16px 20px;border-radius:var(--radius-lg) var(--radius-lg) 0 0;display:flex;align-items:center;justify-content:space-between;}
 .modal-header h3{font-size:1.02rem;font-weight:700;}
@@ -974,7 +941,7 @@ body.slider-ready .page-slider{
   align-items:flex-start;
   width:100%;
   will-change:transform;
-  transition:transform .12s ease-out;
+  transition:transform .18s ease-out;transform:translate3d(0,0,0);backface-visibility:hidden;
 }
 body.slider-ready .page{
   display:block !important;
@@ -983,65 +950,6 @@ body.slider-ready .page{
 }
 body.slider-ready .page:not(.active){
   opacity:.999;
-}
-
-
-
-/* === ultra-light slider + readable draw modal === */
-body.slider-ready .page-slider{
-  transform:translate3d(0,0,0);
-  backface-visibility:hidden;
-  perspective:1000px;
-  contain:layout paint style;
-}
-body.slider-ready .page-viewport{
-  contain:layout paint;
-}
-#mDraw .modal-body,
-#drawHistoryViewBody{
-  font-size:16px;
-}
-#mDraw .form-label{font-size:.9rem;font-weight:800;}
-#mDraw .form-input{font-size:1rem;min-height:46px;}
-#mDraw #drawTeamList > div{padding:12px 14px !important;}
-#mDraw #drawTeamList .badge{font-size:.92rem !important;padding:5px 11px !important;border-radius:999px !important;}
-#mDraw .draw-cfg{padding:18px;border-radius:16px;}
-#mDraw .draw-cfg-label{font-size:.9rem;font-weight:900;min-width:118px;}
-#mDraw .grp-preset{font-size:.9rem;padding:7px 13px;border-width:2px;}
-#mDraw #grpConfigDisplay,
-#mDraw #mainSizeDisplay{font-size:.95rem !important;font-weight:800 !important;}
-#mDraw .same-club-warn{font-size:.84rem;padding:8px 12px;}
-#mDraw .draw-group-row{padding:12px 12px;border-radius:12px;margin-bottom:8px;}
-#mDraw .draw-group-label{font-size:1.08rem;width:46px;}
-#mDraw .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#mDraw #drawMainPreviewBox > div:first-child,
-#mDraw #drawRunScreen > div > div:last-child > div:first-child{font-size:.95rem !important;font-weight:900 !important;}
-#mDraw #drawMainPreviewBox > div:nth-child(2),
-#mDraw #drawRunScreen > div > div:last-child > div:nth-child(2){font-size:.8rem !important;line-height:1.55 !important;}
-#mDraw #drawMainPreviewContent,
-#mDraw #drawRunPreviewContent{padding:14px !important;}
-#mDraw .t-rtitle{font-size:.8rem;padding:7px 0;}
-#mDraw .t-slot{font-size:.84rem;padding:8px 10px;}
-#mDraw .t-ss{font-size:.9rem;}
-#mDraw #drawCfgScreen [style*="font-size:.82rem"],
-#mDraw #drawRunScreen [style*="font-size:.82rem"],
-#savedDrawCaptureArea [style*="font-size:.84rem"],
-#savedDrawCaptureArea [style*="font-size:.8rem"],
-#savedDrawCaptureArea [style*="font-size:.76rem"]{font-size:.95rem !important;}
-#savedDrawCaptureArea{font-size:16px;}
-#savedDrawCaptureArea .draw-group-row{padding:12px 12px;border-radius:12px;}
-#savedDrawCaptureArea .draw-group-label{font-size:1.08rem;width:46px;}
-#savedDrawCaptureArea .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#savedDrawCaptureArea .badge{font-size:.86rem;padding:4px 10px;}
-#savedDrawCaptureArea .t-rtitle{font-size:.8rem;padding:7px 0;}
-#savedDrawCaptureArea .t-slot{font-size:.84rem;padding:8px 10px;}
-#savedDrawCaptureArea .t-ss{font-size:.9rem;}
-@media(max-width:900px){
-  #mDraw .modal-body, #drawHistoryViewBody, #savedDrawCaptureArea{font-size:15px;}
-  #mDraw #drawCfgScreen > div[style*="grid-template-columns"],
-  #mDraw #drawRunScreen > div[style*="grid-template-columns"],
-  #savedDrawCaptureArea > div[style*="grid-template-columns"]{grid-template-columns:1fr !important;}
-  #mDraw .draw-team-slot, #savedDrawCaptureArea .draw-team-slot{font-size:.88rem;min-width:92px;}
 }
 
 </style>
@@ -1610,7 +1518,7 @@ body.slider-ready .page-viewport{
     <div id="drawTeamList" style="margin-bottom:14px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
       <div class="draw-cfg" id="drawCfgBox" style="margin-bottom:0">
-        <div style="font-weight:900;font-size:1rem;margin-bottom:12px">⚙️ 조 편성 설정</div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:10px">⚙️ 조 편성 설정</div>
         <div class="draw-cfg-row">
           <span class="draw-cfg-label">편성 방식</span>
           <div id="grpPresets" style="display:flex;flex-wrap:wrap;gap:3px"></div>
@@ -1637,8 +1545,8 @@ body.slider-ready .page-viewport{
         </div>
       </div>
       <div id="drawMainPreviewBox" style="display:none">
-        <div style="font-weight:900;font-size:1rem;margin-bottom:8px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
-        <div style="font-size:.86rem;color:var(--text2);margin-bottom:8px;line-height:1.55">설정에 따른 본선 구조 예시 — 실제 자리는 예선 후 추첨됩니다.</div>
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">설정에 따른 본선 구조 예시 — 실제 자리는 예선 후 추첨됩니다.</div>
         <div id="drawMainPreviewContent" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
       </div>
     </div>
@@ -1653,7 +1561,7 @@ body.slider-ready .page-viewport{
       </div>
       <div>
         <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 배정 구조</div>
-        <div style="font-size:.86rem;color:var(--text2);margin-bottom:8px;line-height:1.55">예선 종료 후 본선 추첨이 완료되면 실제 팀명으로 채워집니다.</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">예선 종료 후 본선 추첨이 완료되면 실제 팀명으로 채워집니다.</div>
         <div id="drawRunPreviewContent" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
       </div>
     </div>
@@ -1893,7 +1801,7 @@ body.slider-ready .page-viewport{
         </div>
       </div>
       <div>
-        <div style="font-weight:900;font-size:1rem;margin-bottom:8px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px;color:var(--primary-dark)">🌳 본선 대진표 구조 미리보기</div>
         <div style="font-size:.72rem;color:var(--text2);margin-bottom:6px">추첨 후 실제 팀명으로 채워집니다.</div>
         <div id="mainSeedPreview" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto"></div>
       </div>
@@ -2083,8 +1991,7 @@ body.slider-ready .page-viewport{
     <div class="modal-header">
       <h3 id="drawHistoryViewTitle">🎲 저장된 추첨 보기</h3>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="modal-close" type="button" onclick="saveSavedDrawImage()" title="이미지 저장">🖼️</button>
-        <button class="modal-close" type="button" onclick="toggleModalFullscreen('mDrawHistoryView', this)" title="전체화면">⛶</button>
+        <button class="modal-close" type="button" onclick="saveSavedDrawImage()">🖼️</button>
         <button class="modal-close" onclick="cm('mDrawHistoryView')">✕</button>
       </div>
     </div>
@@ -2602,65 +2509,6 @@ function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='
 .match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
 @keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
-
-
-/* === ultra-light slider + readable draw modal === */
-body.slider-ready .page-slider{
-  transform:translate3d(0,0,0);
-  backface-visibility:hidden;
-  perspective:1000px;
-  contain:layout paint style;
-}
-body.slider-ready .page-viewport{
-  contain:layout paint;
-}
-#mDraw .modal-body,
-#drawHistoryViewBody{
-  font-size:16px;
-}
-#mDraw .form-label{font-size:.9rem;font-weight:800;}
-#mDraw .form-input{font-size:1rem;min-height:46px;}
-#mDraw #drawTeamList > div{padding:12px 14px !important;}
-#mDraw #drawTeamList .badge{font-size:.92rem !important;padding:5px 11px !important;border-radius:999px !important;}
-#mDraw .draw-cfg{padding:18px;border-radius:16px;}
-#mDraw .draw-cfg-label{font-size:.9rem;font-weight:900;min-width:118px;}
-#mDraw .grp-preset{font-size:.9rem;padding:7px 13px;border-width:2px;}
-#mDraw #grpConfigDisplay,
-#mDraw #mainSizeDisplay{font-size:.95rem !important;font-weight:800 !important;}
-#mDraw .same-club-warn{font-size:.84rem;padding:8px 12px;}
-#mDraw .draw-group-row{padding:12px 12px;border-radius:12px;margin-bottom:8px;}
-#mDraw .draw-group-label{font-size:1.08rem;width:46px;}
-#mDraw .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#mDraw #drawMainPreviewBox > div:first-child,
-#mDraw #drawRunScreen > div > div:last-child > div:first-child{font-size:.95rem !important;font-weight:900 !important;}
-#mDraw #drawMainPreviewBox > div:nth-child(2),
-#mDraw #drawRunScreen > div > div:last-child > div:nth-child(2){font-size:.8rem !important;line-height:1.55 !important;}
-#mDraw #drawMainPreviewContent,
-#mDraw #drawRunPreviewContent{padding:14px !important;}
-#mDraw .t-rtitle{font-size:.8rem;padding:7px 0;}
-#mDraw .t-slot{font-size:.84rem;padding:8px 10px;}
-#mDraw .t-ss{font-size:.9rem;}
-#mDraw #drawCfgScreen [style*="font-size:.82rem"],
-#mDraw #drawRunScreen [style*="font-size:.82rem"],
-#savedDrawCaptureArea [style*="font-size:.84rem"],
-#savedDrawCaptureArea [style*="font-size:.8rem"],
-#savedDrawCaptureArea [style*="font-size:.76rem"]{font-size:.95rem !important;}
-#savedDrawCaptureArea{font-size:16px;}
-#savedDrawCaptureArea .draw-group-row{padding:12px 12px;border-radius:12px;}
-#savedDrawCaptureArea .draw-group-label{font-size:1.08rem;width:46px;}
-#savedDrawCaptureArea .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#savedDrawCaptureArea .badge{font-size:.86rem;padding:4px 10px;}
-#savedDrawCaptureArea .t-rtitle{font-size:.8rem;padding:7px 0;}
-#savedDrawCaptureArea .t-slot{font-size:.84rem;padding:8px 10px;}
-#savedDrawCaptureArea .t-ss{font-size:.9rem;}
-@media(max-width:900px){
-  #mDraw .modal-body, #drawHistoryViewBody, #savedDrawCaptureArea{font-size:15px;}
-  #mDraw #drawCfgScreen > div[style*="grid-template-columns"],
-  #mDraw #drawRunScreen > div[style*="grid-template-columns"],
-  #savedDrawCaptureArea > div[style*="grid-template-columns"]{grid-template-columns:1fr !important;}
-  #mDraw .draw-team-slot, #savedDrawCaptureArea .draw-team-slot{font-size:.88rem;min-width:92px;}
-}
-
 </style>`);document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
 
@@ -6050,10 +5898,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=mMs.length>0&&mMs.every(m=>getMatchResultState(key,m).done||m.bye);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
-  const latestSavedDraw=getLatestSavedDrawEntry(tid,div);
   const topActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem;${latestSavedDraw?'':'opacity:.45;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestSavedDraw?'':'disabled'}>📋 추첨화면 보기</button>
       ${AD?`<button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
     </div>`;
@@ -6918,7 +6764,7 @@ function openDraw(tid,div){
   const t=G.tournaments.find(t=>t.id===tid);
   DW={key,tid,div,teams,cfg:{},isRunning:false};
   const hasSameClub=checkSameClub(teams);
-  ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:900;font-size:1rem;margin-bottom:10px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
+  ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
   buildDrawPresets(teams.length,t,div);
   ge('sameClubWarn').classList.toggle('show',hasSameClub);
   DW.candidates=[];
@@ -7710,8 +7556,8 @@ function renderSavedDrawView(entry){
   body.innerHTML = `<div id="savedDrawCaptureArea">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div>
-        <div style="font-size:1.18rem;font-weight:900;color:var(--primary-dark);line-height:1.35">${norm.title||'추첨 기록'}</div>
-        <div style="font-size:.96rem;color:var(--text2);margin-top:6px;line-height:1.55">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
+        <div style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
+        <div style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge ${norm.isTest?'bg-bronze':'bg-green'}">${norm.isTest?'🧪 테스트':'🔒 실운영'}</span>
@@ -7721,7 +7567,7 @@ function renderSavedDrawView(entry){
     </div>
     <div style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
       <div>
-        <div style="font-weight:900;font-size:1.02rem;color:var(--primary-dark);margin-bottom:10px">📋 예선 추첨 결과</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
         ${(norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
             <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -7730,7 +7576,7 @@ function renderSavedDrawView(entry){
           </div>`).join('')}
       </div>
       <div>
-        <div style="font-weight:900;font-size:1.02rem;color:var(--primary-dark);margin-bottom:10px">🌳 본선 배정 구조</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
@@ -7748,19 +7594,6 @@ async function saveSavedDrawImage(){
 function openSavedDrawHistory(id, key){
   const entry=(G.drawHistories[key]||[]).find(x=>x.id===id);
   if(!entry){ toast('추첨 기록을 찾을 수 없습니다','error'); return; }
-  renderSavedDrawView(entry);
-}
-function getLatestSavedDrawEntry(tid, div){
-  const key=tid+'_'+div;
-  const list=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-  return list[0]||null;
-}
-function openLatestSavedDraw(tid, div){
-  const entry=getLatestSavedDrawEntry(tid, div);
-  if(!entry){
-    toast('저장된 추첨 기록이 없습니다','info');
-    return;
-  }
   renderSavedDrawView(entry);
 }
 function openDrawHistory(tid,div){
@@ -13238,7 +13071,7 @@ Object.assign(window,{ toggleModalFullscreen, openQuickAddPlayer, quickAddPlayer
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openSavedDrawHistory,openLatestSavedDraw,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
+  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
@@ -13519,65 +13352,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 @keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
 
-
-
-/* === ultra-light slider + readable draw modal === */
-body.slider-ready .page-slider{
-  transform:translate3d(0,0,0);
-  backface-visibility:hidden;
-  perspective:1000px;
-  contain:layout paint style;
-}
-body.slider-ready .page-viewport{
-  contain:layout paint;
-}
-#mDraw .modal-body,
-#drawHistoryViewBody{
-  font-size:16px;
-}
-#mDraw .form-label{font-size:.9rem;font-weight:800;}
-#mDraw .form-input{font-size:1rem;min-height:46px;}
-#mDraw #drawTeamList > div{padding:12px 14px !important;}
-#mDraw #drawTeamList .badge{font-size:.92rem !important;padding:5px 11px !important;border-radius:999px !important;}
-#mDraw .draw-cfg{padding:18px;border-radius:16px;}
-#mDraw .draw-cfg-label{font-size:.9rem;font-weight:900;min-width:118px;}
-#mDraw .grp-preset{font-size:.9rem;padding:7px 13px;border-width:2px;}
-#mDraw #grpConfigDisplay,
-#mDraw #mainSizeDisplay{font-size:.95rem !important;font-weight:800 !important;}
-#mDraw .same-club-warn{font-size:.84rem;padding:8px 12px;}
-#mDraw .draw-group-row{padding:12px 12px;border-radius:12px;margin-bottom:8px;}
-#mDraw .draw-group-label{font-size:1.08rem;width:46px;}
-#mDraw .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#mDraw #drawMainPreviewBox > div:first-child,
-#mDraw #drawRunScreen > div > div:last-child > div:first-child{font-size:.95rem !important;font-weight:900 !important;}
-#mDraw #drawMainPreviewBox > div:nth-child(2),
-#mDraw #drawRunScreen > div > div:last-child > div:nth-child(2){font-size:.8rem !important;line-height:1.55 !important;}
-#mDraw #drawMainPreviewContent,
-#mDraw #drawRunPreviewContent{padding:14px !important;}
-#mDraw .t-rtitle{font-size:.8rem;padding:7px 0;}
-#mDraw .t-slot{font-size:.84rem;padding:8px 10px;}
-#mDraw .t-ss{font-size:.9rem;}
-#mDraw #drawCfgScreen [style*="font-size:.82rem"],
-#mDraw #drawRunScreen [style*="font-size:.82rem"],
-#savedDrawCaptureArea [style*="font-size:.84rem"],
-#savedDrawCaptureArea [style*="font-size:.8rem"],
-#savedDrawCaptureArea [style*="font-size:.76rem"]{font-size:.95rem !important;}
-#savedDrawCaptureArea{font-size:16px;}
-#savedDrawCaptureArea .draw-group-row{padding:12px 12px;border-radius:12px;}
-#savedDrawCaptureArea .draw-group-label{font-size:1.08rem;width:46px;}
-#savedDrawCaptureArea .draw-team-slot{font-size:.92rem;min-width:98px;padding:6px 14px;border-radius:13px;}
-#savedDrawCaptureArea .badge{font-size:.86rem;padding:4px 10px;}
-#savedDrawCaptureArea .t-rtitle{font-size:.8rem;padding:7px 0;}
-#savedDrawCaptureArea .t-slot{font-size:.84rem;padding:8px 10px;}
-#savedDrawCaptureArea .t-ss{font-size:.9rem;}
-@media(max-width:900px){
-  #mDraw .modal-body, #drawHistoryViewBody, #savedDrawCaptureArea{font-size:15px;}
-  #mDraw #drawCfgScreen > div[style*="grid-template-columns"],
-  #mDraw #drawRunScreen > div[style*="grid-template-columns"],
-  #savedDrawCaptureArea > div[style*="grid-template-columns"]{grid-template-columns:1fr !important;}
-  #mDraw .draw-team-slot, #savedDrawCaptureArea .draw-team-slot{font-size:.88rem;min-width:92px;}
-}
-
 </style>
 
 <script>
@@ -13795,21 +13569,11 @@ body.slider-ready .page-viewport{
   const PAGE_ORDER=['home','tournament','register','bracket','players','ranking'];
   const SWIPE_ALLOWED=['home','tournament','register'];
 
-  function isLocalPreview(){
-    try{ return location.protocol === 'file:'; }catch(e){ return false; }
-  }
-
   function buildPageSlider(){
     const main=document.querySelector('main.main-content');
     if(!main || main.querySelector('.page-viewport')) return;
     const pages=[...main.querySelectorAll(':scope > .page')];
     if(!pages.length) return;
-
-    if(isLocalPreview()){
-      document.body.classList.remove('slider-ready');
-      pages.forEach(p=>{ p.style.transform=''; p.style.transition=''; });
-      return;
-    }
 
     const viewport=document.createElement('div');
     viewport.className='page-viewport';
@@ -13831,7 +13595,6 @@ body.slider-ready .page-viewport{
   }
 
   function updatePageSliderHeight(){
-    if(isLocalPreview()) return;
     const viewport=document.getElementById('pageViewport');
     const active=document.querySelector('.page.active');
     if(!viewport || !active) return;
@@ -13842,17 +13605,15 @@ body.slider-ready .page-viewport{
   }
 
   function goPageSheet(name, instant){
-    if(isLocalPreview()) return;
     const slider=document.getElementById('pageSlider');
     if(!slider) return;
     const idx=pageIndex(name);
-    const motion = isMobileSwipeUI() ? 'transform .10s linear' : 'transform .12s ease-out';
-    slider.style.transition = instant ? 'none' : motion;
+    slider.style.transition = instant ? 'none' : 'transform .18s ease-out';
     slider.style.transform = 'translate3d(-'+(idx*100)+'%,0,0)';
     if(instant){
-      requestAnimationFrame(()=>{ slider.style.transition=motion; });
+      requestAnimationFrame(()=>{ slider.style.transition='transform .18s ease-out'; });
     }
-    setTimeout(updatePageSliderHeight, 16);
+    updatePageSliderHeight();
   }
 
   function isMobileSwipeUI(){
@@ -13875,7 +13636,6 @@ body.slider-ready .page-viewport{
   }
 
   function setupMobileSwipe(){
-    if(isLocalPreview()) return;
     const viewport=document.getElementById('pageViewport');
     if(!viewport || viewport.dataset.swipeBound==='1') return;
     viewport.dataset.swipeBound='1';
@@ -13972,7 +13732,7 @@ body.slider-ready .page-viewport{
 
   buildPageSlider();
   const active=document.querySelector('.page.active')?.id?.replace('page-','') || 'home';
-  if(!isLocalPreview()) goPageSheet(active, true);
+  goPageSheet(active, true);
   setupMobileSwipe();
 
   window.addEventListener('resize', updatePageSliderHeight);
@@ -13991,22 +13751,8 @@ body.slider-ready .page-viewport{
   });
 })();
 </script>
-<script>
-(function(){
-  if(location.protocol !== 'file:') return;
-  window.addEventListener('load', function(){
-    try{
-      const main=document.querySelector('main.main-content');
-      if(!main || document.getElementById('localPreviewNotice')) return;
-      const box=document.createElement('div');
-      box.id='localPreviewNotice';
-      box.style.cssText='margin:10px 0 14px;padding:10px 12px;border:1.5px solid #f59e0b;background:linear-gradient(135deg,#fff7ed,#fffbeb);border-radius:12px;font-size:.78rem;color:#92400e;line-height:1.6';
-      box.innerHTML='⚠️ 로컬 파일 미리보기에서는 manifest, 공유, 일부 저장 기능이 제한될 수 있습니다. 화면 확인은 가능하지만 최종 테스트는 배포 주소에서 해주세요.';
-      main.insertBefore(box, main.firstChild);
-    }catch(e){}
-  });
-})();
-</script>
+
+
 <script>
 (function(){
   const HINT_KEYS = {
