@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v03-header-restore";
+  const APP_VERSION = "2026-04-01-v04-compact-save-buttons-no-dup-bracket-settings";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1166,12 +1166,12 @@ body.slider-ready .page:not(.active){
 </div>
 
 <div class="page" id="page-register">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-    <div class="sec-title" style="margin-bottom:0">팀 등록</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListImage44()">🖼️ 이미지 저장</button>
-      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListExcel44()">📊 엑셀 저장</button>
-      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListPDF44()">📄 PDF 저장</button>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:8px;margin-bottom:4px;overflow-x:auto">
+    <div class="sec-title" style="margin-bottom:0;flex:0 0 auto">팀 등록</div>
+    <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
+      <button class="btn btn-outline" style="font-size:.68rem;padding:4px 8px;min-height:32px;white-space:nowrap" onclick="saveRegListImage44()">🖼️ 이미지 저장</button>
+      <button class="btn btn-outline" style="font-size:.68rem;padding:4px 8px;min-height:32px;white-space:nowrap" onclick="saveRegListExcel44()">📊 엑셀 저장</button>
+      <button class="btn btn-outline" style="font-size:.68rem;padding:4px 8px;min-height:32px;white-space:nowrap" onclick="saveRegListPDF44()">📄 PDF 저장</button>
     </div>
   </div>
   <!-- 경기이사 로그인 안내 (비로그인 상태) -->
@@ -6062,11 +6062,11 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=mMs.length>0&&mMs.every(m=>getMatchResultState(key,m).done||m.bye);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
   const latestSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
-  const topActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem;${latestSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestSavedDraw?'':'disabled'}>📋 추첨화면 보기</button>
-      ${AD?`<button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
-      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
+  const topActions=`<div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;padding-bottom:2px;max-width:100%">
+      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
+      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto;${latestSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestSavedDraw?'':'disabled'}>📋 추첨화면 보기</button>
+      ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
+      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
     </div>`;
 
   let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
@@ -6080,7 +6080,6 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     <div style="padding:10px 12px;background:var(--panel2);border-radius:14px;border:1px solid var(--border);margin-bottom:12px">
       ${teamHeader}
     </div>
-    ${buildBracketAdminSettingsCard(tid,div,cfg,teams)}
     <div class="sf-flow" style="margin-top:12px">
       <div class="sf-step"><div class="sf-dot ${s1?'sf-done':'sf-pend'}">${s1?'✓':1}</div><div class="sf-lbl">팀등록<br>${teams.length}팀</div></div>
       <div class="sf-step"><div class="sf-dot ${s2?'sf-done':'sf-pend'}">${s2?'✓':2}</div><div class="sf-lbl">추첨<br>${s2?'완료':'대기'}</div></div>
