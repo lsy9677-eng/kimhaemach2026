@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v74-operator-score-name-fix";
+  const APP_VERSION = "2026-04-01-v75-operator-single-side-submit";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -968,6 +968,15 @@ body.slider-ready .page{
 }
 body.slider-ready .page:not(.active){
   opacity:.999;
+}
+
+
+/* fix: 선수 이름 가로 정렬 유지 */
+.m3-picked-item{
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
 }
 
 </style>
@@ -2545,6 +2554,15 @@ function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='
 .match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
 @keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
+
+/* fix: 선수 이름 가로 정렬 유지 */
+.m3-picked-item{
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+}
+
 </style>`);document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
 
@@ -5903,14 +5921,14 @@ function renderMatchProgressSummary(key){
 
   // 오더 제출 현황 (전체)
   let orderSubmitted=0, orderTotal=0;
-  const pendingOrderMatches=[]; // 미제출 경기 목록
+  const pendingOrderMatches=[]; // 미완료 경기 목록(제출완료 포함 표시 유지)
   if(useOrder){
     list.filter(m=>!m.bye&&!isDone(m)).forEach(m=>{
       const st=getOnlineOrderState(key,m);
       orderTotal+=2;
       if(st.s1) orderSubmitted++;
       if(st.s2) orderSubmitted++;
-      if(!st.bothSubmitted) pendingOrderMatches.push(m);
+      pendingOrderMatches.push(m);
     });
   }
 
@@ -5955,8 +5973,8 @@ function renderMatchProgressSummary(key){
     const remain = Math.max(0, s.total - s.done);
     const liveCls = s.playing > 0 ? ' live-card' : '';
     const liveBadgeCls = s.playing > 0 ? ' live-blink' : '';
-    // 이 조에서 미제출 경기
-    const pendingInGrp = useOrder ? s.matches.filter(m=>!m.bye&&!isDone(m)&&!getOnlineOrderState(key,m).bothSubmitted) : [];
+    // 이 조의 오더 현황은 제출 완료 경기까지 그대로 유지해서 보여줌
+    const pendingInGrp = useOrder ? s.matches.filter(m=>!m.bye&&!isDone(m)) : [];
     const orderHtml = buildOrderChips(pendingInGrp);
     return `<div class="card${liveCls}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -5966,13 +5984,13 @@ function renderMatchProgressSummary(key){
           <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remain}</span>
         </div>
       </div>
-      ${useOrder&&pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#92400e;margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${orderHtml}</div>`:''}
-      ${useOrder&&pendingInGrp.length===0&&s.total>0?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료</div>`:''}
+      ${useOrder&&pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:${pendingInGrp.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${orderHtml}</div>`:''}
+      ${useOrder&&pendingInGrp.length>0&&pendingInGrp.every(m=>getOnlineOrderState(key,m).bothSubmitted)?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료 (기록 유지)</div>`:''}
     </div>`;
   }).join('');
 
   const mainRemain = Math.max(0, main.total - main.done);
-  const mainPending = useOrder ? main.matches.filter(m=>!m.bye&&!isDone(m)&&!getOnlineOrderState(key,m).bothSubmitted) : [];
+  const mainPending = useOrder ? main.matches.filter(m=>!m.bye&&!isDone(m)) : [];
   const mainOrderHtml = buildOrderChips(mainPending);
   const mainHtml = main.total ? `<div class="card${main.playing>0?' live-card':''}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -5982,8 +6000,8 @@ function renderMatchProgressSummary(key){
           <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${mainRemain}</span>
         </div>
       </div>
-      ${useOrder&&mainPending.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#92400e;margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${mainOrderHtml}</div>`:''}
-      ${useOrder&&mainPending.length===0&&main.total>0?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료</div>`:''}
+      ${useOrder&&mainPending.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:${mainPending.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${mainOrderHtml}</div>`:''}
+      ${useOrder&&mainPending.length>0&&mainPending.every(m=>getOnlineOrderState(key,m).bothSubmitted)?`<div style="margin-top:6px;font-size:.74rem;font-weight:700;color:#166534">✅ 오더 제출 완료 (기록 유지)</div>`:''}
     </div>` : '';
 
   // 오더 요약 뱃지
@@ -8732,6 +8750,31 @@ function seedAdv(advT){
 }
 
 
+
+function ensureM3OperatorSubmitButtons(){
+  const footer=ge('mM3Footer');
+  if(!footer) return {};
+  let homeBtn=ge('mM3SubmitOperatorHomeBtn');
+  let awayBtn=ge('mM3SubmitOperatorAwayBtn');
+  if(!homeBtn){
+    homeBtn=document.createElement('button');
+    homeBtn.id='mM3SubmitOperatorHomeBtn';
+    homeBtn.className='btn btn-outline';
+    homeBtn.style.display='none';
+    homeBtn.onclick=()=>confirmSubmitOrderForSide(1);
+    footer.insertBefore(homeBtn, ge('mM3SubmitBtn')||null);
+  }
+  if(!awayBtn){
+    awayBtn=document.createElement('button');
+    awayBtn.id='mM3SubmitOperatorAwayBtn';
+    awayBtn.className='btn btn-outline';
+    awayBtn.style.display='none';
+    awayBtn.onclick=()=>confirmSubmitOrderForSide(2);
+    footer.insertBefore(awayBtn, ge('mM3SubmitBtn')||null);
+  }
+  return {homeBtn,awayBtn};
+}
+
 function ensureM3AdminSubmitButtons(){
   const footer=ge('mM3Footer');
   if(!footer) return {};
@@ -8792,12 +8835,17 @@ function openM3(key,mid){
   const adminSubmitBtns=ensureM3AdminSubmitButtons();
   const btnSubmitHome=adminSubmitBtns.homeBtn;
   const btnSubmitAway=adminSubmitBtns.awayBtn;
+  const operatorSubmitBtns=ensureM3OperatorSubmitButtons();
+  const btnOpSubmitHome=operatorSubmitBtns.homeBtn;
+  const btnOpSubmitAway=operatorSubmitBtns.awayBtn;
   if(btnSave) btnSave.style.display='none';
   if(btnUnlock) btnUnlock.style.display='none';
   if(btnSubmit) btnSubmit.style.display='none';
   if(btnSaveResult) btnSaveResult.style.display='none';
   if(btnSubmitHome) btnSubmitHome.style.display='none';
   if(btnSubmitAway) btnSubmitAway.style.display='none';
+  if(btnOpSubmitHome) btnOpSubmitHome.style.display='none';
+  if(btnOpSubmitAway) btnOpSubmitAway.style.display='none';
 
   if(G.meta.onlineOrderEnabled){
     if(AD){
@@ -8810,11 +8858,23 @@ function openM3(key,mid){
       if(btnSaveResult){ btnSaveResult.style.display=''; }
     } else if(isOperator){
       if(btnSaveResult){ btnSaveResult.style.display=''; }
-      if(!st.bothSubmitted && (!st.s1 || !st.s2)){
-        if(btnSubmit){
+      if(!st.bothSubmitted){
+        const missingHome = !st.s1;
+        const missingAway = !st.s2;
+        if(missingHome && btnOpSubmitHome){
+          btnOpSubmitHome.style.display='';
+          btnOpSubmitHome.textContent=`📤 ${dn1}만 대리제출`;
+          btnOpSubmitHome.title='홈팀 오더만 대신 제출합니다';
+        }
+        if(missingAway && btnOpSubmitAway){
+          btnOpSubmitAway.style.display='';
+          btnOpSubmitAway.textContent=`📤 ${dn2}만 대리제출`;
+          btnOpSubmitAway.title='원정팀 오더만 대신 제출합니다';
+        }
+        if((missingHome && missingAway) && btnSubmit){
           btnSubmit.style.display='';
-          btnSubmit.textContent = (!st.s1 && !st.s2) ? '📤 미제출팀 대리제출(양팀 가능)' : `📤 미제출팀 대리제출(${!st.s1?dn1:dn2})`;
-          btnSubmit.title='아직 제출하지 않은 팀만 대신 제출할 수 있습니다';
+          btnSubmit.textContent='📤 양팀 모두 대리제출';
+          btnSubmit.title='양팀을 한 번에 대신 제출합니다';
         }
       }
     } else if(mySide){
@@ -13834,6 +13894,15 @@ document.addEventListener('DOMContentLoaded',()=>{
 .match-focus-pulse .m3hdr{background:linear-gradient(90deg,#1d4ed8,#2563eb) !important;}
 @keyframes matchFocusBlink{0%,100%{box-shadow:0 0 0 5px rgba(37,99,235,.16),0 18px 36px rgba(37,99,235,.18)}50%{box-shadow:0 0 0 9px rgba(37,99,235,.28),0 22px 42px rgba(37,99,235,.28)}}
 .match-focus-pulse{animation:matchFocusBlink 1.1s ease-in-out 2;}
+
+
+/* fix: 선수 이름 가로 정렬 유지 */
+.m3-picked-item{
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+}
 
 </style>
 
