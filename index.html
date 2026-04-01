@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v06-main-draw-fix-progress-mainjump";
+  const APP_VERSION = "2026-04-02-v08-main-draw-render-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -6111,11 +6111,26 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=shownMainTotal>0&&shownMainDone===shownMainTotal;
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
   const latestSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
-  const topActions=`<div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;padding-bottom:2px;max-width:100%">
-      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
-      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto;${latestSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestSavedDraw?'':'disabled'}>📋 추첨화면 보기</button>
-      ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
-      <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;flex:0 0 auto" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
+  const latestMainSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')==='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const canMainRedraw = cfg.format==='group_knockout' && s3;
+  const prelimRedrawLabel = draw ? '예선 재추첨' : '예선 추첨';
+  const prelimRedrawAction = `openDraw('${tid}','${div}')`;
+  const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
+  const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const topActions=`<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:100%">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <span style="font-size:.72rem;font-weight:800;color:var(--primary-dark);padding:4px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--border)">📊 예선</span>
+        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','prelim')">🗂 예선 추첨기록</button>
+        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestPrelimSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','prelim')" ${latestPrelimSavedDraw?'':'disabled'}>📋 예선 추첨 보기</button>
+        ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="${prelimRedrawAction}">🎲 ${prelimRedrawLabel}</button>`:''}
+      </div>
+      ${cfg.format==='group_knockout' ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <span style="font-size:.72rem;font-weight:800;color:#166534;padding:4px 8px;border-radius:999px;background:linear-gradient(135deg,#eefbf3,#dcfce7);border:1px solid #86efac">🌳 본선</span>
+        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','main')">🗂 본선 추첨기록</button>
+        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestMainSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','main')" ${latestMainSavedDraw?'':'disabled'}>🌳 본선 추첨 보기</button>
+        ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="buildMain('${tid}','${div}')" ${canMainRedraw?'':'disabled'}>🎲 ${mainRedrawLabel}</button>`:''}
+      </div>` : ``}
+      ${AD?`<div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button></div>`:''}
     </div>`;
 
   let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
@@ -6247,7 +6262,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     html+=`<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <span id="mainStageTitle_${tid}_${div}">🏆 본선 토너먼트 대진표</span>
       ${canManageBracket()?`<div style="display:flex;gap:6px">
-        <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🔄 재생성</button>
+        <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 재추첨</button>
         <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">✏️ 수동수정</button>
       </div>`:''}
     </div>`;
@@ -6287,6 +6302,65 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   return html;
 }
+
+function calcFinalRanks(key,teams,mMs){
+  try{
+    const list=Array.isArray(mMs)?mMs.filter(Boolean):[];
+    if(!list.length) return [];
+    const done=list.filter(m=>m && m.winner!==null && m.winner!==undefined);
+    if(!done.length) return [];
+    const maxRound=Math.max(...list.map(m=>Number(m.round||0)));
+    const finalMatch=list.find(m=>Number(m.round||0)===maxRound);
+    const ranks=[];
+    const added=new Set();
+    const pushRank=(teamIdx, rank, label)=>{
+      if(teamIdx===null || teamIdx===undefined || added.has(teamIdx)) return;
+      const tm=teams?.[teamIdx];
+      if(!tm) return;
+      added.add(teamIdx);
+      ranks.push({teamIdx, rank, label, club: tm.club||tdn(tm,key,teamIdx)});
+    };
+    if(finalMatch && finalMatch.winner!==null && finalMatch.winner!==undefined){
+      const loser = finalMatch.t1===finalMatch.winner ? finalMatch.t2 : finalMatch.t1;
+      pushRank(finalMatch.winner,1,'우승');
+      pushRank(loser,2,'준우승');
+    }
+    const semiRound=maxRound-1;
+    if(semiRound>=0){
+      list.filter(m=>Number(m.round||0)===semiRound).forEach(m=>{
+        if(m && m.winner!==null && m.winner!==undefined){
+          const loser = m.t1===m.winner ? m.t2 : m.t1;
+          pushRank(loser,3,'공동 3위');
+        }
+      });
+    }
+    return ranks.sort((a,b)=>a.rank-b.rank || String(a.club).localeCompare(String(b.club),'ko'));
+  }catch(e){
+    console.warn('calcFinalRanks fallback error', e);
+    return [];
+  }
+}
+function renderRankingCard(key,ranks,teams){
+  try{
+    if(!Array.isArray(ranks) || !ranks.length) return '';
+    const medal={1:'🥇',2:'🥈',3:'🥉'};
+    const rows=ranks.map(r=>{
+      const tm=teams?.[r.teamIdx]||null;
+      const name=tm?tdn(tm,key,r.teamIdx):(r.club||'-');
+      return `<div class="gs-row ${r.rank===1?'adv-1st':r.rank===2?'adv-2nd':'adv'}">
+        <div class="gs-rk">${medal[r.rank]||'🏅'}</div>
+        <div class="gs-nm">${name}${r.label?` <span class="adv-chip">${r.label}</span>`:''}</div>
+        <div class="gs-stats"><span>${r.label||''}</span></div>
+      </div>`;
+    }).join('');
+    return `<div class="sec-title" style="margin-top:14px">🏅 최종 결과</div>
+      <div class="grp-card"><div class="grp-body">${rows}</div></div>`;
+  }catch(e){
+    console.warn('renderRankingCard fallback error', e);
+    return '';
+  }
+}
+
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
   const rbs=m.rubbers||[];
@@ -6366,7 +6440,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const btn=(AD||canDirEdit)?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
   const orderBadge=getOnlineOrderStatusBadgeHTML(key,m);
   const orderTeamStatus=getOnlineOrderTeamStatusHTML(key,m);
-  const unlockBtn=(AD&&G.meta.onlineOrderEnabled&&isOrderLocked)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="CM_key='${key}';CM_id='${m.id}';confirmUnlockOrder()">🔓 오더초기화</button>`:'';
+  const unlockBtn=(AD&&G.meta.onlineOrderEnabled)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="CM_key='${key}';CM_id='${m.id}';confirmUnlockOrder()">🔓 오더초기화</button>`:'';
   const _bc2=REG_CLUB?baseClub(REG_CLUB):'';
   const _tms2=G.teams[key]||[];
   const _tm1x=_tms2[m.t1]??_tms2.find(t=>t.id===m.t1||t.name===m.t1);
@@ -7786,14 +7860,21 @@ async function saveDrawModalImage(){
   await saveElementAsPng(box, fname);
 }
 function normalizeDrawHistoryEntry(entry){
+  const plan = entry?.plan && typeof entry.plan==='object' ? entry.plan : null;
+  const matchSlots = Array.isArray(plan?.matchSlots) ? plan.matchSlots : [];
   return {
     ...entry,
+    mode: String(entry?.mode||'group'),
     isTest: !!entry.isTest,
     deleted: !!entry.deleted,
     groups: (entry.groups||[]).map((g,gi)=>({
       label:g.label||grpLabel(gi),
       teams:(g.teams||[]).map(tm=>typeof tm==='string'?{name:tm, club:''}:tm)
-    }))
+    })),
+    plan,
+    mainPreviewSlots: Array.isArray(entry?.mainPreviewSlots) && entry.mainPreviewSlots.length ? entry.mainPreviewSlots : matchSlots,
+    mainSize: Number(entry?.mainSize||plan?.n||0),
+    groupCount: Number(entry?.groupCount || (entry?.groups||[]).length || 0)
   };
 }
 async function saveDrawHistoryEntry(entry){
@@ -7813,9 +7894,35 @@ function renderSavedDrawView(entry){
   const body=ge('drawHistoryViewBody');
   if(!body) return;
   const infoDate = new Date(norm.createdAt||Date.now());
-  const mainHtml = (norm.mainPreviewSlots && norm.mainPreviewSlots.length && norm.mainSize>=2)
-    ? renderMainPreviewHTML(norm.mainPreviewSlots, norm.mainSize, false)
+  const isMainMode = String(norm.mode||'')==='main';
+  const savedMainSlots = (Array.isArray(norm.mainPreviewSlots) && norm.mainPreviewSlots.length)
+    ? norm.mainPreviewSlots
+    : (Array.isArray(norm.plan?.matchSlots) && norm.plan.matchSlots.length ? norm.plan.matchSlots : []);
+  const savedMainSize = Number(norm.mainSize || norm.plan?.n || 0);
+  const mainHtml = (savedMainSlots.length && savedMainSize>=2)
+    ? renderMainPreviewHTML(savedMainSlots, savedMainSize, false)
     : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>';
+  const groupsHtml = (norm.groups||[]).length ? (norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
+            <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+              ${(g.teams||[]).map(tm=>`<span class="draw-team-slot slot-filled ${tm.club&&((g.teams||[]).filter(x=>x.club===tm.club).length>1)?'same-club':''}" style="animation:none">${tm.name}</span>`).join('')}
+            </div>
+          </div>`).join('') : '<div style="font-size:.8rem;color:var(--text3)">예선 추첨 정보 없음</div>';
+  const mainSummaryHtml = norm.summaryHtml
+    ? `<div style="font-size:.84rem;line-height:1.8;color:var(--text);padding:12px 14px;background:linear-gradient(135deg,#f8fbff,#eef5ff);border:1px solid var(--border);border-radius:12px">${norm.summaryHtml}</div>`
+    : (() => {
+        const slots = Array.isArray(norm.plan?.matchSlots) ? norm.plan.matchSlots : [];
+        const chips = [];
+        slots.forEach((slot, idx) => {
+          if(slot?.t1?.nm) chips.push(`<span class="badge" style="font-size:.8rem;padding:5px 12px;background:linear-gradient(135deg,#fff7dd,#f6d365);color:#7a5600;border:1px solid #d4a017">👑 ${idx+1}. ${slot.t1.nm}</span>`);
+          if(slot?.t2?.nm) chips.push(`<span class="badge" style="font-size:.8rem;padding:5px 12px;background:linear-gradient(135deg,#eef2f7,#d8e0ea);color:#425466;border:1px solid #b8c3d1">🥈 ${chips.length+1}. ${slot.t2.nm}</span>`);
+          if(slot?.bye) chips.push(`<span class="badge" style="font-size:.8rem;padding:5px 12px;background:linear-gradient(135deg,#fff7dd,#ffe8a3);color:#7a5600;border:1px solid #d4a017">🎫 자동 진출</span>`);
+        });
+        return chips.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${chips.join('')}</div>` : '<div style="font-size:.8rem;color:var(--text3)">본선 추첨 요약 정보 없음</div>';
+      })();
+  const leftTitle = isMainMode ? '📋 본선 추첨 결과' : '📋 예선 추첨 결과';
+  const leftHtml = isMainMode ? mainSummaryHtml : groupsHtml;
+  const leftBadge = isMainMode ? `<span class="badge bg-blue">본선 기록</span>` : `<span class="badge bg-blue">${(norm.groups||[]).length}조</span>`;
   body.innerHTML = `<div id="savedDrawCaptureArea">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div>
@@ -7824,19 +7931,14 @@ function renderSavedDrawView(entry){
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge ${norm.isTest?'bg-bronze':'bg-green'}">${norm.isTest?'🧪 테스트':'🔒 실운영'}</span>
-        <span class="badge bg-blue">${(norm.groups||[]).length}조</span>
+        ${leftBadge}
         <span class="badge bg-green">본선 ${norm.mainSize||0}강</span>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
-        ${(norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
-            <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-              ${(g.teams||[]).map(tm=>`<span class="draw-team-slot slot-filled ${tm.club&&((g.teams||[]).filter(x=>x.club===tm.club).length>1)?'same-club':''}" style="animation:none">${tm.name}</span>`).join('')}
-            </div>
-          </div>`).join('')}
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">${leftTitle}</div>
+        ${leftHtml}
       </div>
       <div>
         <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
@@ -7846,7 +7948,7 @@ function renderSavedDrawView(entry){
       </div>
     </div>
   </div>`;
-  ge('drawHistoryViewTitle').textContent = `🎲 ${norm.title||'저장된 추첨 보기'}`;
+  ge('drawHistoryViewTitle').textContent = isMainMode ? `🌳 ${norm.title||'저장된 본선 추첨 보기'}` : `🎲 ${norm.title||'저장된 예선 추첨 보기'}`;
   setModalFullscreenState('mDrawHistoryView', true);
   om('mDrawHistoryView');
 }
@@ -7862,32 +7964,45 @@ function openSavedDrawHistory(id, key){
   if(!entry){ toast('추첨 기록을 찾을 수 없습니다','error'); return; }
   renderSavedDrawView(entry);
 }
-function openDrawHistory(tid,div){
+function openDrawHistory(tid,div,mode='prelim'){
   const key=tid+'_'+div;
   DRAW_HISTORY_CTX_KEY=key;
-  const list=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const wantMain = String(mode||'prelim')==='main';
+  const list=(G.drawHistories[key]||[])
+    .filter(it=>!it.deleted)
+    .filter(it=> wantMain ? String(it.mode||'')==='main' : String(it.mode||'')!=='main')
+    .slice()
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   const box=ge('drawHistoryList');
   if(!box) return;
   const footer=ge('mDrawHistory')?.querySelector('.modal-footer');
   if(footer){
     footer.innerHTML=`${AD?'<button class="btn btn-outline" type="button" onclick="openDrawDeleteLog()">🧾 삭제 로그 보기</button>':''}<button class="btn btn-gray" onclick="cm(\'mDrawHistory\')">닫기</button>`;
   }
+  const titleEl = ge('mDrawHistory')?.querySelector('.modal-header h3');
+  if(titleEl) titleEl.textContent = wantMain ? '🌳 본선 추첨 기록' : '🎲 예선 추첨 기록';
   if(!list.length){
-    box.innerHTML='<div class="empty-state"><div class="empty-icon">🗂</div><p>저장된 추첨 기록이 없습니다</p></div>';
+    box.innerHTML=`<div class="empty-state"><div class="empty-icon">${wantMain?'🌳':'🗂'}</div><p>${wantMain?'저장된 본선 추첨 기록이 없습니다':'저장된 예선 추첨 기록이 없습니다'}</p></div>`;
     setModalFullscreenState('mDrawHistory', true);
     om('mDrawHistory');
     return;
   }
   box.innerHTML=list.map((it,idx)=>{
     const d=new Date(it.createdAt||Date.now());
+    const isMain = String(it.mode||'')==='main';
+    const rowTitle = it.title || ((isMain?'본선 추첨 ':'예선 추첨 ')+(list.length-idx));
+    const metaText = isMain
+      ? `${d.toLocaleString('ko-KR')} · 본선 ${(it.mainSize||it.plan?.n||0)}강`
+      : `${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강`;
     return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
+            <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${rowTitle}</div>
             <span class="badge ${it.isTest?'bg-bronze':'bg-green'}">${it.isTest?'🧪 테스트':'🔒 실운영'}</span>
+            <span class="badge ${isMain?'bg-blue':'bg-gray'}">${isMain?'본선':'예선'}</span>
           </div>
-          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
+          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">${metaText}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px" onclick="openSavedDrawHistory('${it.id}','${key}')">📋 내용 보기</button>
@@ -7901,11 +8016,20 @@ function openDrawHistory(tid,div){
   om('mDrawHistory');
 }
 
-function openLatestSavedDraw(tid,div){
+function openLatestSavedDraw(tid,div,mode='prelim'){
   const key=tid+'_'+div;
-  const entry=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
-  if(!entry){ toast('저장된 추첨 기록이 없습니다','info'); return; }
+  const wantMain = String(mode||'prelim')==='main';
+  const entry=(G.drawHistories[key]||[])
+    .filter(it=>!it.deleted)
+    .filter(it=> wantMain ? String(it.mode||'')==='main' : String(it.mode||'')!=='main')
+    .slice()
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
+  if(!entry){ toast(wantMain?'저장된 본선 추첨 기록이 없습니다':'저장된 예선 추첨 기록이 없습니다','info'); return; }
   renderSavedDrawView(entry);
+}
+
+function openLatestMainSavedDraw(tid,div){
+  openLatestSavedDraw(tid,div,'main');
 }
 
 async function deleteSavedDrawHistory(id,key){
@@ -8525,9 +8649,30 @@ function getMainDrawMetaValues(){
     isTest: !!ge('mainDrawIsTestInput')?.checked
   };
 }
+function cloneMainDrawPlan(plan){
+  if(!plan) return null;
+  try{
+    return JSON.parse(JSON.stringify(plan));
+  }catch(e){
+    const slots=((plan?.matchSlots)||[]).map(s=>({
+      ...s,
+      t1:s?.t1?{...s.t1}:null,
+      t2:s?.t2?{...s.t2}:null
+    }));
+    const reveal=((plan?.revealOrder)||[]).map(step=>({
+      ...step,
+      team:step?.team?{...step.team}:null
+    }));
+    return {
+      ...(typeof plan==='object'?plan:{}),
+      matchSlots:slots,
+      revealOrder:reveal
+    };
+  }
+}
 function getMainDrawPlanStorageValue(plan, isTest){
   if(isTest) return null;
-  return (plan||[]).map(m=>({...m}));
+  return cloneMainDrawPlan(plan);
 }
 async function saveMainDrawHistoryEntry(opts={}){
   const key = opts.key || MD.key;
@@ -8546,7 +8691,7 @@ async function saveMainDrawHistoryEntry(opts={}){
     deleted: false,
     createdAt: opts.createdAt || new Date().toISOString(),
     createdBy: AD ? 'admin' : (OP ? 'operator' : 'unknown'),
-    plan: (opts.plan || []).map(m=>({...m})),
+    plan: cloneMainDrawPlan(opts.plan),
     seedInfo: opts.seedInfo || {},
     previewHtml: opts.previewHtml || '',
     summaryHtml: opts.summaryHtml || '',
@@ -8643,12 +8788,79 @@ function openMainDraw(tid,div){
     const btn = document.createElement('button');
     btn.className = 'btn btn-outline';
     btn.id = 'mainHistoryBtn';
-    btn.textContent = '🗂 추첨 기록';
-    btn.onclick = ()=>openDrawHistory(MD.tid, MD.div);
+    btn.textContent = '🗂 본선 추첨기록';
+    btn.onclick = ()=>openDrawHistory(MD.tid, MD.div, 'main');
     footer.insertBefore(btn, ge('mainDrawBtn'));
   }
   om('mMain');
 }
+
+async function runMainExternalDrawAnimation(plan,audit={}){
+  const slots=(plan?.matchSlots)||[];
+  const revealOrder=(plan?.revealOrder)||[];
+  const n=plan?.n || MD?.bracketSize || Math.max(2, slots.length*2);
+  const stage=ge('mainStageContent');
+  const progress=ge('mainProgressBar');
+  if(stage) stage.innerHTML='';
+  const liveSlots=slots.map(s=>({
+    id:s?.id,
+    t1:null,
+    t2:null,
+    bye:!!s?.bye
+  }));
+
+  const total=Math.max(1,revealOrder.length);
+  renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false);
+  renderMainSeedSummary(plan, audit?.chosenSeed || audit?.baseSeed || MD?.seed || 1);
+
+  if(!revealOrder.length){
+    renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true);
+    if(progress) progress.style.width='100%';
+    showMainStageMsg(tennisRevealHTML('본선 대진표 확정','success','추첨할 슬롯이 없어 바로 확정했습니다'));
+    await sleep(280);
+    return;
+  }
+
+  for(let i=0;i<revealOrder.length;i++){
+    const step=revealOrder[i]||{};
+    const slotIdx=step.slotIdx;
+    const side=step.side==='t2'?'t2':'t1';
+    const team=step.team||null;
+    const rk=Math.max(1, parseInt(team?.rk||1,10));
+    const title=side==='t1'
+      ? `🎯 ${slotIdx+1}번 매치 상단 배정`
+      : `🎯 ${slotIdx+1}번 매치 하단 배정`;
+    const sub=step.bye
+      ? '부전승 자리 우선 배정'
+      : (rk===1 ? '조 1위팀 우선 배정' : '상대 자리 무작위 배정');
+    const pool=team ? [team.nm] : slots.flatMap(s=>[s?.t1?.nm,s?.t2?.nm]).filter(Boolean);
+    await runMainStageSlotSpin({
+      title,
+      pool,
+      finalText:team?.nm||'미정',
+      totalMs: (i===0?2100:1650),
+      accent: rk===1 ? 'var(--accent)' : 'var(--primary)',
+      rk
+    });
+
+    if(!liveSlots[slotIdx]) liveSlots[slotIdx]={id:slotIdx,t1:null,t2:null,bye:false};
+    if(side==='t1') liveSlots[slotIdx].t1 = team ? {...team} : null;
+    else liveSlots[slotIdx].t2 = team ? {...team} : null;
+    if(step.bye) liveSlots[slotIdx].bye = true;
+
+    renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false);
+    if(progress) progress.style.width=`${Math.round(((i+1)/total)*100)}%`;
+    ge('mainStageMeta').innerHTML=`완전 무작위 본선 추첨 진행 중... (${i+1}/${total})`;
+    await sleep(i===revealOrder.length-1 ? 260 : 120);
+  }
+
+  renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true);
+  showMainStageMsg(tennisRevealHTML('본선 대진표 확정','success','모든 슬롯 배정이 완료되었습니다'));
+  if(progress) progress.style.width='100%';
+  try{ spawnConfetti(ge('mainStageContent')); }catch(e){}
+  await sleep(420);
+}
+
 async function startMainDraw(){
   if(!canManageBracket()){ toast('본선 추첨 권한이 없습니다','error'); return; }
   if(MD.isRunning)return;
@@ -8681,6 +8893,10 @@ async function startMainDraw(){
     const summaryHtml = compactMainSummaryFromPlan(plan);
 
     if(!meta.isTest){
+      const mainMatches = buildMainMatches((plan?.matchSlots)||[], plan?.n||0);
+      const prevMatches = Array.isArray(G.matches[key]) ? G.matches[key] : [];
+      const nonMainMatches = prevMatches.filter(m=>m.phase!=='main');
+      G.matches[key] = [...nonMainMatches, ...mainMatches];
       G.draws[key]={
         ...(G.draws[key]||{}),
         mainPlan:getMainDrawPlanStorageValue(plan,false),
@@ -8688,6 +8904,7 @@ async function startMainDraw(){
         mainUpdatedAt:new Date().toISOString()
       };
       await stD(key);
+      await stM(key);
       try{ renderBracket(); }catch(e){}
     }
 
@@ -8705,12 +8922,12 @@ async function startMainDraw(){
 
     ge('mainStageMeta').innerHTML = meta.isTest
       ? '테스트용 본선 추첨 완료 — 기록만 저장했습니다.'
-      : '본선 추첨 완료 — 실제 대진표에 반영되었습니다.';
+      : '본선 추첨 완료 — 실제 대진표와 본선 시합 생성이 완료되었습니다.';
     ge('mainProgressBar').style.width='100%';
     ge('mainDrawBtn').disabled=false;
     ge('mainDrawBtn').textContent='🎲 다시 추첨';
     ge('mainDrawBtn').onclick=startMainDraw;
-    toast(meta.isTest ? '테스트 본선 추첨 저장 완료 ✅' : '본선 추첨 저장 완료 ✅','success');
+    toast(meta.isTest ? '테스트 본선 추첨 저장 완료 ✅' : '본선 추첨 저장 및 본선 시합 생성 완료 ✅','success');
     try{ openDrawHistory(tid, div); }catch(e){}
   }catch(e){
     console.error(e);
@@ -9020,7 +9237,7 @@ function openM3(key,mid){
       if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
       if(btnSubmitHome){ btnSubmitHome.style.display=''; btnSubmitHome.textContent=`📤 ${dn1}만 제출`; btnSubmitHome.title='홈팀 오더만 제출 또는 재제출'; }
       if(btnSubmitAway){ btnSubmitAway.style.display=''; btnSubmitAway.textContent=`📤 ${dn2}만 제출`; btnSubmitAway.title='원정팀 오더만 제출 또는 재제출'; }
-      if(btnUnlock && (st.s1||st.s2)){ btnUnlock.style.display=''; }
+      if(btnUnlock){ btnUnlock.style.display=''; btnUnlock.textContent='🔓 초기화'; btnUnlock.title='오더 제출 상태와 제출 내용을 초기화합니다'; }
       if(btnSaveResult){ btnSaveResult.style.display=''; }
     } else if(isOperator){
       if(btnSaveResult){ btnSaveResult.style.display=''; }
@@ -13781,7 +13998,7 @@ Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuick
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
+  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
