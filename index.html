@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v70-players-fast";
+  const APP_VERSION = "2026-04-01-v74-operator-score-name-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -511,6 +511,20 @@ body{overflow-x:hidden;}
 .rb-blk{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:8px;}
 .rb-bhdr{background:var(--primary);color:white;padding:7px 12px;font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:space-between;}
 .rb-bbdy{padding:10px 12px;}
+
+.m3-pick-wrap{display:flex;flex-direction:column;gap:8px}
+.m3-picked{display:flex;flex-wrap:wrap;gap:6px;min-height:36px}
+.m3-picked-empty{font-size:.76rem;color:var(--text3);padding:6px 2px}
+.m3-picked-item{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;background:var(--primary);color:#fff;font-size:.9rem;font-weight:800;line-height:1;border:1.5px solid var(--primary)}
+.m3-picked-item .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.16);font-size:.72rem;font-weight:900}
+.m3-picked-item .rm{border:none;background:rgba(255,255,255,.15);color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:.8rem;font-weight:900;line-height:1}
+.m3-picker-toggle{width:100%;justify-content:space-between;padding:10px 12px !important;font-size:.9rem !important;font-weight:800 !important}
+.m3-picker-list{display:none;border:1.5px solid var(--border);border-radius:12px;background:#fff;max-height:200px;overflow:auto}
+.m3-picker-list.open{display:block}
+.m3-picker-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:.92rem;font-weight:700}
+.m3-picker-row:last-child{border-bottom:none}
+.m3-picker-row .meta{font-size:.72rem;color:var(--text3);font-weight:700;margin-right:auto}
+.m3-picker-row button{padding:5px 10px !important;min-height:30px !important;font-size:.76rem !important}
 .p-chip{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1.5px solid var(--border);border-radius:16px;cursor:pointer;font-size:1.06rem;font-weight:700;background:var(--panel2);margin:4px;transition:all .15s;line-height:1.2;}
 .p-chip:hover{border-color:var(--primary);}
 .p-chip.sel{background:var(--primary);color:white;border-color:var(--primary);}
@@ -8718,6 +8732,30 @@ function seedAdv(advT){
 }
 
 
+function ensureM3AdminSubmitButtons(){
+  const footer=ge('mM3Footer');
+  if(!footer) return {};
+  let homeBtn=ge('mM3SubmitHomeBtn');
+  let awayBtn=ge('mM3SubmitAwayBtn');
+  if(!homeBtn){
+    homeBtn=document.createElement('button');
+    homeBtn.id='mM3SubmitHomeBtn';
+    homeBtn.className='btn btn-outline';
+    homeBtn.style.display='none';
+    homeBtn.onclick=()=>confirmSubmitOrderForSide(1);
+    footer.insertBefore(homeBtn, ge('mM3SubmitBtn')||null);
+  }
+  if(!awayBtn){
+    awayBtn=document.createElement('button');
+    awayBtn.id='mM3SubmitAwayBtn';
+    awayBtn.className='btn btn-outline';
+    awayBtn.style.display='none';
+    awayBtn.onclick=()=>confirmSubmitOrderForSide(2);
+    footer.insertBefore(awayBtn, ge('mM3SubmitBtn')||null);
+  }
+  return {homeBtn,awayBtn};
+}
+
 function openM3(key,mid){
   const m=(G.matches[key]||[]).find(m=>m.id===mid);if(!m)return;
   if(!(AD||canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 열 수 있습니다','error'); return; }
@@ -8751,16 +8789,23 @@ function openM3(key,mid){
   const btnUnlock=ge('mM3UnlockBtn');
   const btnSubmit=ge('mM3SubmitBtn');
   const btnSaveResult=ge('mM3SaveResultBtn');
+  const adminSubmitBtns=ensureM3AdminSubmitButtons();
+  const btnSubmitHome=adminSubmitBtns.homeBtn;
+  const btnSubmitAway=adminSubmitBtns.awayBtn;
   if(btnSave) btnSave.style.display='none';
   if(btnUnlock) btnUnlock.style.display='none';
   if(btnSubmit) btnSubmit.style.display='none';
   if(btnSaveResult) btnSaveResult.style.display='none';
+  if(btnSubmitHome) btnSubmitHome.style.display='none';
+  if(btnSubmitAway) btnSubmitAway.style.display='none';
 
   if(G.meta.onlineOrderEnabled){
     if(AD){
-      // 관리자: 임시저장 + 양팀 임의 제출/재제출 + 오더초기화 + 결과저장
+      // 관리자: 임시저장 + 한팀 제출/양팀 제출 + 오더초기화 + 결과저장
       if(btnSave){ btnSave.style.display=''; btnSave.textContent='💾 임시저장'; }
       if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
+      if(btnSubmitHome){ btnSubmitHome.style.display=''; btnSubmitHome.textContent=`📤 ${dn1}만 제출`; btnSubmitHome.title='홈팀 오더만 제출 또는 재제출'; }
+      if(btnSubmitAway){ btnSubmitAway.style.display=''; btnSubmitAway.textContent=`📤 ${dn2}만 제출`; btnSubmitAway.title='원정팀 오더만 제출 또는 재제출'; }
       if(btnUnlock && (st.s1||st.s2)){ btnUnlock.style.display=''; }
       if(btnSaveResult){ btnSaveResult.style.display=''; }
     } else if(isOperator){
@@ -8813,25 +8858,28 @@ function openM3(key,mid){
     const submittedRow2=((st.subs[st.c2]||{}).rubbers||[])[r]||{};
     const defP1=[p1[r*2],p1[r*2+1]].filter(Boolean);
     const defP2=[p2[r*2],p2[r*2+1]].filter(Boolean);
-    const selP1=submitted1.length?submitted1:((submittedRow1.blankOrder||rb.blankOrder1)?[]:(rb.players1?.length?rb.players1:defP1));
-    const selP2=submitted2.length?submitted2:((submittedRow2.blankOrder||rb.blankOrder2)?[]:(rb.players2?.length?rb.players2:defP2));
+    const savedP1=Array.isArray(rb.players1)?rb.players1.filter(Boolean):[];
+    const savedP2=Array.isArray(rb.players2)?rb.players2.filter(Boolean):[];
+    // 초기 진입 시 기본 슬롯 선수(1·2번, 3·4번 ...)를 자동 선택하지 않음.
+    // 이미 제출되었거나 임시저장된 값만 복원하고, 처음 작성은 빈 상태로 시작한다.
+    const selP1=submitted1.length?submitted1:((submittedRow1.blankOrder||rb.blankOrder1)?[]:savedP1);
+    const selP2=submitted2.length?submitted2:((submittedRow2.blankOrder||rb.blankOrder2)?[]:savedP2);
     const sv1=rb.score1!=null?rb.score1:'';
     const sv2=rb.score2!=null?rb.score2:'';
     const scBtns=(id,cur)=>[0,1,2,3,4,5,6].map(n=>`<button type="button" onclick="setRbSc('${id}',${n})" style="width:32px;height:32px;border-radius:6px;border:1.5px solid ${cur===n?'var(--primary)':'var(--border)'};background:${cur===n?'var(--primary)':'white'};color:${cur===n?'white':'var(--text)'};font-weight:700;font-size:.85rem;cursor:pointer;transition:.15s" id="${id}_btn${n}">${n}</button>`).join('');
-    const mainMax=dbl*2;
     const canEditSide1=AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted);
     const canEditSide2=AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted);
     const showSide1=isOperator || revealBoth || mySide===1 || AD;
     const showSide2=isOperator || revealBoth || mySide===2 || AD;
     const displaySelP1=(isOperator && !st.bothSubmitted && st.s1)?[]:selP1;
     const displaySelP2=(isOperator && !st.bothSubmitted && st.s2)?[]:selP2;
-    const chipsHtml=(arr,selArr,cid,editable)=>arr.map((p,i)=>`<span class="p-chip ${selArr.includes(p)?'sel':''}" ${editable?`onclick="tC('${cid}','${esc(p)}')"`:'style="opacity:.6;cursor:not-allowed"'} data-p="${esc(p)}"><small style="opacity:.6;font-size:.6em">${i<mainMax?i+1:'후'}</small>${p}</span>`).join('');
-    const hiddenHtml=(arr,selArr,cid)=>`<div id="${cid}" style="display:none">${arr.map((p,i)=>`<span class="p-chip ${selArr.includes(p)?'sel':''}" data-p="${esc(p)}"><small style="opacity:.6;font-size:.6em">${i<mainMax?i+1:'후'}</small>${p}</span>`).join('')}</div>`;
+    const pickerHtml=(arr,selArr,cid,editable)=>`<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"><div class="m3-picked"></div>${editable?`<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`:''}</div>`;
+    const hiddenHtml=(selArr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"></div>`;
     html+=`<div class="rb-blk"><div class="rb-bhdr"><span>${r+1}복식 <small style="opacity:.75">(기본: ${defSlotLabels[r]})</small></span>${rb.winner!=null?`<span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:.7rem">${rb.winner===0?dn1:dn2} ✓</span>`:''}</div>
     <div class="rb-bbdy">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn1} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide1?`<div id="rp1_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)}</div>${(isOperator && !st.bothSubmitted && st.s1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow1.blankOrder||rb.blankOrder1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p1,displaySelP1,`rp1_${r}`)}`}</div>
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn2} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide2?`<div id="rp2_${r}" style="display:flex;flex-wrap:wrap;gap:3px">${chipsHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)}</div>${(isOperator && !st.bothSubmitted && st.s2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow2.blankOrder||rb.blankOrder2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(p2,displaySelP2,`rp2_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn1} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide1?`${pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)}${(isOperator && !st.bothSubmitted && st.s1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow1.blankOrder||rb.blankOrder1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(displaySelP1,`rp1_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn2} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide2?`${pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)}${(isOperator && !st.bothSubmitted && st.s2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow2.blankOrder||rb.blankOrder2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml(displaySelP2,`rp2_${r}`)}`}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
         <div>
@@ -8849,7 +8897,10 @@ function openM3(key,mid){
     </div></div>`;
   }
   ge('mM3B').innerHTML=html;om('mM3');
+  refreshAllOrderChipAvailability();
 }
+
+
 function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 // 스코어 버튼 클릭 핸들러
 function setRbSc(inputId, val){
@@ -8866,13 +8917,95 @@ function setRbSc(inputId, val){
   }
 }
 
+function getPickerSelected(cid){
+  const cont=ge(cid); if(!cont) return [];
+  if(cont.dataset.selected){
+    try{ return JSON.parse(decodeURIComponent(cont.dataset.selected)); }catch(e){}
+  }
+  return [...(cont.querySelectorAll('.p-chip.sel')||[])].map(c=>String(c.dataset.p||'')).filter(Boolean);
+}
+function setPickerSelected(cid, arr){
+  const cont=ge(cid); if(!cont) return;
+  cont.dataset.selected=encodeURIComponent(JSON.stringify((arr||[]).filter(Boolean).slice(0,2)));
+}
+function getPickerPlayers(cid){
+  const cont=ge(cid); if(!cont) return [];
+  if(cont.dataset.players){
+    try{ return JSON.parse(decodeURIComponent(cont.dataset.players)); }catch(e){}
+  }
+  return [...(cont.querySelectorAll('.p-chip')||[])].map(c=>String(c.dataset.p||'')).filter(Boolean);
+}
+function getPickerOtherUsed(cid){
+  const prefix=(cid||'').startsWith('rp2_')?'rp2_':'rp1_';
+  const out=[];
+  document.querySelectorAll(`[id^="${prefix}"]`).forEach(el=>{
+    if(!el || !/^rp[12]_\d+$/.test(el.id) || el.id===cid) return;
+    getPickerSelected(el.id).forEach(p=>{ if(p && !out.includes(p)) out.push(p); });
+  });
+  return out;
+}
+function renderPlayerDropdown(cid){
+  const cont=ge(cid); if(!cont) return;
+  const list=ge(cid+'_list');
+  const players=getPickerPlayers(cid);
+  const selected=getPickerSelected(cid);
+  const otherUsed=getPickerOtherUsed(cid);
+  const available=players.filter(p=>!otherUsed.includes(p) && !selected.includes(p));
+  const editable=!!list;
+  const picked=cont.querySelector('.m3-picked');
+  if(picked){
+    picked.innerHTML=selected.length
+      ? selected.map((p,idx)=>`<span class="m3-picked-item"><span class="num">${idx+1}</span>${p}${editable?`<button type="button" class="rm" onclick="removeSelectedPlayerFromDropdown('${cid}','${esc(p)}')">✕</button>`:''}</span>`).join('')
+      : '<div class="m3-picked-empty">선수 2명 선택 또는 공오더</div>';
+  }
+  if(!list) return;
+  const btn=cont.querySelector('.m3-picker-toggle');
+  if(btn){
+    const label=selected.length?`${selected.join(' · ')} (${selected.length}/2)`:'선수 선택';
+    btn.innerHTML=`<span>${label}</span><span>${list.classList.contains('open')?'▲':'▼'}</span>`;
+  }
+  list.innerHTML=available.length
+    ? available.map((p,idx)=>`<div class="m3-picker-row"><span>${p}</span><span class="meta">${idx+1}</span><button type="button" class="btn btn-outline" onclick="choosePlayerFromDropdown('${cid}','${esc(p)}')">선택</button></div>`).join('')
+    : '<div class="m3-picker-row"><span>선택 가능한 선수가 없습니다</span><span class="meta">다른 복식조 사용중</span></div>';
+}
+function togglePlayerDropdown(cid){
+  const list=ge(cid+'_list'); if(!list) return;
+  const willOpen=!list.classList.contains('open');
+  document.querySelectorAll('.m3-picker-list.open').forEach(el=>el.classList.remove('open'));
+  if(willOpen) list.classList.add('open');
+  renderPlayerDropdown(cid);
+}
+function choosePlayerFromDropdown(cid, player){
+  const selected=getPickerSelected(cid);
+  if(selected.includes(player)) return;
+  if(selected.length>=2){ toast('이 복식조는 이미 2명 선택되었습니다','info'); return; }
+  selected.push(player);
+  setPickerSelected(cid, selected);
+  refreshAllOrderChipAvailability();
+  const list=ge(cid+'_list');
+  if(list && selected.length>=2){
+    list.classList.remove('open');
+    renderPlayerDropdown(cid);
+  }
+}
+function removeSelectedPlayerFromDropdown(cid, player){
+  setPickerSelected(cid, getPickerSelected(cid).filter(p=>p!==player));
+  refreshAllOrderChipAvailability();
+}
+function refreshOrderChipAvailability(sidePrefix){
+  document.querySelectorAll(`[id^="${sidePrefix}"]`).forEach(el=>{
+    if(!el || !/^rp[12]_\d+$/.test(el.id) || !el.dataset.players) return;
+    renderPlayerDropdown(el.id);
+  });
+}
+function refreshAllOrderChipAvailability(){
+  refreshOrderChipAvailability('rp1_');
+  refreshOrderChipAvailability('rp2_');
+}
 function tC(cid,player){
-  const cont=ge(cid);if(!cont)return;
-  const chips=[...cont.querySelectorAll('.p-chip')];
-  const tgt=chips.find(c=>c.dataset.p===player||c.dataset.p===player.replace(/&quot;/g,'"'));if(!tgt)return;
-  const sel=chips.filter(c=>c.classList.contains('sel'));
-  if(tgt.classList.contains('sel'))tgt.classList.remove('sel');
-  else{if(sel.length>=2)sel[0].classList.remove('sel');tgt.classList.add('sel');}
+  const sel=getPickerSelected(cid);
+  if(sel.includes(player)) removeSelectedPlayerFromDropdown(cid,player);
+  else choosePlayerFromDropdown(cid,player);
 }
 
 async function saveM3(){
@@ -8891,8 +9024,8 @@ async function saveM3(){
   const prevRb=Array.isArray(m.rubbers)?m.rubbers:[];
   for(let r=0;r<dbl;r++){
     const c1=ge('rp1_'+r),c2=ge('rp2_'+r);
-    const pl1=[...(c1?.querySelectorAll('.p-chip.sel')||[])].map(c=>c.dataset.p.replace(/&quot;/g,'"'));
-    const pl2=[...(c2?.querySelectorAll('.p-chip.sel')||[])].map(c=>c.dataset.p.replace(/&quot;/g,'"'));
+    const pl1=getPickerSelected('rp1_'+r);
+    const pl2=getPickerSelected('rp2_'+r);
     const s1v=ge('rs1_'+r)?.value,s2v=ge('rs2_'+r)?.value;
     const hasPair=(pl1.length>0||pl2.length>0);
     const noScore=(s1v===''&&s2v==='');
@@ -9677,7 +9810,7 @@ function collectSideOrderFromModal(key, mid, side){
   for(let r=0;r<dbl;r++){
     const cid=side===1?`rp1_${r}`:`rp2_${r}`;
     const cont=ge(cid);
-    const players=[...(cont?.querySelectorAll('.p-chip.sel')||[])].map(c=>c.dataset.p.replace(/&quot;/g,'"'));
+    const players=getPickerSelected(cid);
     rubbers.push({players,blankOrder:players.length===0});
   }
   return {side,base,rubbers};
@@ -9709,10 +9842,38 @@ function collectMyOnlineOrderFromModal(key, mid){
   for(let r=0;r<dbl;r++){
     const cid=mySide===1?`rp1_${r}`:`rp2_${r}`;
     const cont=ge(cid);
-    const players=[...(cont?.querySelectorAll('.p-chip.sel')||[])].map(c=>c.dataset.p.replace(/&quot;/g,'"'));
+    const players=getPickerSelected(cid);
     rubbers.push({players,blankOrder:players.length===0});
   }
   return {mySide,myBase:st.myBase,rubbers};
+}
+
+// ── 관리자 한 팀 제출 확인 ──
+function confirmSubmitOrderForSide(side){
+  const key=CM_key, mid=CM_id; if(!key||!mid) return;
+  const m=(G.matches[key]||[]).find(x=>x.id===mid); if(!m) return;
+  if(!AD){ toast('관리자만 사용할 수 있습니다','error'); return; }
+  const teams=G.teams[key]||[];
+  const teamObj=side===1?teams[m.t1]:teams[m.t2];
+  const teamName=teamObj?tdn(teamObj,key,side===1?m.t1:m.t2):(side===1?'홈팀':'원정팀');
+  const payload=collectSideOrderFromModal(key,mid,side);
+  if(!payload){ toast('오더 정보를 읽을 수 없습니다','error'); return; }
+  const blankOrders=[];
+  (payload.rubbers||[]).forEach((rb,idx)=>{ const len=(rb?.players||[]).length; if(len===0 || rb?.blankOrder) blankOrders.push(idx+1); });
+  if(blankOrders.length){
+    const label=[...new Set(blankOrders)].sort((a,b)=>a-b).map(n=>`${n}복식`).join(', ');
+    if(!confirm(`${teamName}의 ${label}에 선수 이름이 입력되지 않았습니다.
+해당 조 공오더 제출 하시겠습니까?`)) return;
+  }
+  const st=getOnlineOrderState(key,m);
+  const already=(side===1?st.s1:st.s2);
+  const msg=already
+    ? `관리자 권한으로 ${teamName} 오더만 다시 제출하시겠습니까?
+현재 모달에 선택된 ${teamName} 오더만 제출 상태로 다시 저장됩니다.`
+    : `관리자 권한으로 ${teamName} 오더만 제출하시겠습니까?
+상대팀은 그대로 두고 ${teamName}만 제출 상태로 저장됩니다.`;
+  if(!confirm(msg)) return;
+  submitOnlineOrder(side);
 }
 
 // ── 오더 제출 확인 팝업 ──
@@ -9783,7 +9944,7 @@ function confirmUnlockOrder(){
   unlockOnlineOrder(CM_key, CM_id);
 }
 
-async function submitOnlineOrder(){
+async function submitOnlineOrder(sideOnly=null){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const m=list[idx];
@@ -9795,10 +9956,16 @@ async function submitOnlineOrder(){
 
   const payloads=[];
   if(AD){
-    const p1=collectSideOrderFromModal(key,mid,1);
-    const p2=collectSideOrderFromModal(key,mid,2);
-    if(!p1||!p2){ toast('양팀 오더 정보를 읽을 수 없습니다','error'); return; }
-    payloads.push(p1,p2);
+    if(sideOnly===1 || sideOnly===2){
+      const p=collectSideOrderFromModal(key,mid,sideOnly);
+      if(!p){ toast('선택한 팀 오더 정보를 읽을 수 없습니다','error'); return; }
+      payloads.push(p);
+    }else{
+      const p1=collectSideOrderFromModal(key,mid,1);
+      const p2=collectSideOrderFromModal(key,mid,2);
+      if(!p1||!p2){ toast('양팀 오더 정보를 읽을 수 없습니다','error'); return; }
+      payloads.push(p1,p2);
+    }
   }else if(OP){
     if(!st.s1){ const p1=collectSideOrderFromModal(key,mid,1); if(!p1){ toast('홈팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p1, club:getMatchTeamObjects(key,m).t1?.club||p1.base, proxy:true}); }
     if(!st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(!p2){ toast('원정팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p2, club:getMatchTeamObjects(key,m).t2?.club||p2.base, proxy:true}); }
@@ -9838,7 +10005,15 @@ async function submitOnlineOrder(){
     await stM(key);
     sl(false);
     const st2=getOnlineOrderState(key,m);
-    toast(st2.bothSubmitted?'양팀 제출 완료 — 오더가 자동 공개되었고 이제 수정할 수 없습니다 ✅':(OP?'미제출 팀 대리제출 완료 — 상대/나머지 팀 제출 시 자동 공개됩니다 ✅':'내 클럽 오더 제출 완료 — 상대 제출 시 자동 공개됩니다 ✅'),'success');
+    const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
+    const submittedTeamName = submittedOneSide ? ((sideOnly===1?getMatchTeamObjects(key,m).t1:getMatchTeamObjects(key,m).t2)?.club || (sideOnly===1?st.c1:st.c2) || '선택 팀') : '';
+    toast(
+      st2.bothSubmitted
+        ? '양팀 제출 완료 — 오더가 자동 공개되었고 이제 수정할 수 없습니다 ✅'
+        : submittedOneSide
+          ? `${submittedTeamName} 한팀 제출 완료 — 상대팀 제출 시 자동 공개됩니다 ✅`
+          : (OP?'미제출 팀 대리제출 완료 — 상대/나머지 팀 제출 시 자동 공개됩니다 ✅':'내 클럽 오더 제출 완료 — 상대 제출 시 자동 공개됩니다 ✅')
+    ,'success');
     cm('mM3');
     renderBracket();
   }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
@@ -13398,7 +13573,7 @@ Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuick
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,
-  gDS,om,cm,toast,ge,esc,setRbSc,
+  gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
   activateSlot,celebrateGroupComplete,refreshRunPreview,buildRouletteStrip,updateDrawMainPreview,
