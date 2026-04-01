@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v69-page-slider-fast";
+  const APP_VERSION = "2026-04-01-v70-draw-history-fullscreen";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -950,6 +950,60 @@ body.slider-ready .page{
 }
 body.slider-ready .page:not(.active){
   opacity:.999;
+}
+
+/* === draw history fullscreen / compact === */
+.modal-box.draw-history-fullscreen.fullscreen,
+.modal-box.draw-history-view-fullscreen.fullscreen{
+  background:linear-gradient(180deg,#f8fafd 0%,#eef3f9 100%);
+}
+.modal-box.draw-history-fullscreen.fullscreen .modal-body,
+.modal-box.draw-history-view-fullscreen.fullscreen .modal-body{
+  padding:14px 16px;
+}
+.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .card{
+  padding:12px 14px !important;
+  margin-bottom:8px !important;
+}
+.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .draw-history-title{
+  font-size:1rem !important;
+}
+.modal-box.draw-history-fullscreen.fullscreen #drawHistoryList .draw-history-meta{
+  font-size:.82rem !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea{
+  transform-origin:top center;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-grid{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:12px !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-title{
+  font-size:1rem !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-meta{
+  font-size:.78rem !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-section-title{
+  font-size:.82rem !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-group-row{
+  padding:8px !important;
+  margin-bottom:6px !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-group-label{
+  width:34px !important;
+  font-size:.92rem !important;
+}
+.modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .draw-team-slot{
+  min-width:72px !important;
+  padding:4px 10px !important;
+  font-size:.76rem !important;
+}
+@media(max-width:900px){
+  .modal-box.draw-history-view-fullscreen.fullscreen #savedDrawCaptureArea .saved-draw-grid{
+    grid-template-columns:1fr !important;
+  }
 }
 
 </style>
@@ -1972,12 +2026,15 @@ body.slider-ready .page:not(.active){
 
 
 <div class="modal-overlay" id="mDrawHistory">
-  <div class="modal-box" style="max-width:760px">
+  <div class="modal-box draw-history-fullscreen" style="max-width:960px;width:96vw">
     <div class="modal-header">
       <h3>🗂 추첨 기록</h3>
-      <button class="modal-close" onclick="cm('mDrawHistory')">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="modal-close" type="button" id="drawHistoryFullscreenBtn" onclick="toggleModalFullscreen('mDrawHistory', this)" title="전체화면">⛶</button>
+        <button class="modal-close" onclick="cm('mDrawHistory')">✕</button>
+      </div>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:84vh;overflow:auto">
       <div id="drawHistoryList"></div>
     </div>
     <div class="modal-footer">
@@ -1987,10 +2044,11 @@ body.slider-ready .page:not(.active){
 </div>
 
 <div class="modal-overlay" id="mDrawHistoryView">
-  <div class="modal-box" style="max-width:1200px;width:96vw">
+  <div class="modal-box draw-history-view-fullscreen" style="max-width:1200px;width:96vw">
     <div class="modal-header">
       <h3 id="drawHistoryViewTitle">🎲 저장된 추첨 보기</h3>
       <div style="display:flex;gap:8px;align-items:center">
+        <button class="modal-close" type="button" id="drawHistoryViewFullscreenBtn" onclick="toggleModalFullscreen('mDrawHistoryView', this)" title="전체화면">⛶</button>
         <button class="modal-close" type="button" onclick="saveSavedDrawImage()">🖼️</button>
         <button class="modal-close" onclick="cm('mDrawHistoryView')">✕</button>
       </div>
@@ -5898,8 +5956,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=mMs.length>0&&mMs.every(m=>getMatchResultState(key,m).done||m.bye);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
+  const latestDrawHistory=((G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null);
   const topActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openDrawHistory('${tid}','${div}')">🗂 추첨기록</button>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="openLatestSavedDraw('${tid}','${div}')" ${latestDrawHistory?'':'disabled style=\"padding:6px 14px;font-size:.78rem;opacity:.45;cursor:not-allowed\"'}>📋 추첨화면 보기</button>
       ${AD?`<button class="btn btn-accent" style="padding:6px 14px;font-size:.78rem" onclick="openDraw('${tid}','${div}')">🎲 ${draw?'재추첨':'추첨 실행'}</button>
       <button class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button>`:''}
     </div>`;
@@ -7554,10 +7614,10 @@ function renderSavedDrawView(entry){
     ? renderMainPreviewHTML(norm.mainPreviewSlots, norm.mainSize, false)
     : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>';
   body.innerHTML = `<div id="savedDrawCaptureArea">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <div>
-        <div style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
-        <div style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
+        <div class="saved-draw-title" style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
+        <div class="saved-draw-meta" style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge ${norm.isTest?'bg-bronze':'bg-green'}">${norm.isTest?'🧪 테스트':'🔒 실운영'}</span>
@@ -7565,9 +7625,9 @@ function renderSavedDrawView(entry){
         <span class="badge bg-green">본선 ${norm.mainSize||0}강</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
+    <div class="saved-draw-grid" style="display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:14px;align-items:start">
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
+        <div class="saved-draw-section-title" style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">📋 예선 추첨 결과</div>
         ${(norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
             <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -7576,7 +7636,7 @@ function renderSavedDrawView(entry){
           </div>`).join('')}
       </div>
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
+        <div class="saved-draw-section-title" style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 본선 배정 구조</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
@@ -7585,6 +7645,7 @@ function renderSavedDrawView(entry){
   </div>`;
   ge('drawHistoryViewTitle').textContent = `🎲 ${norm.title||'저장된 추첨 보기'}`;
   om('mDrawHistoryView');
+  setModalFullscreenState('mDrawHistoryView', true);
 }
 async function saveSavedDrawImage(){
   const area=ge('savedDrawCaptureArea');
@@ -7596,6 +7657,24 @@ function openSavedDrawHistory(id, key){
   if(!entry){ toast('추첨 기록을 찾을 수 없습니다','error'); return; }
   renderSavedDrawView(entry);
 }
+function setModalFullscreenState(id, shouldFull=true){
+  const overlay=ge(id);
+  const box=overlay?.querySelector('.modal-box');
+  if(!box) return;
+  box.classList.toggle('fullscreen', !!shouldFull);
+  const btn=overlay.querySelector('.modal-close[onclick*="toggleModalFullscreen"]');
+  if(btn) btn.textContent = shouldFull ? '🗗' : '⛶';
+}
+function openLatestSavedDraw(tid,div){
+  const key=tid+'_'+div;
+  const entry=((G.drawHistories[key]||[]).filter(x=>!x.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null);
+  if(!entry){ toast('저장된 추첨 기록이 없습니다','info'); return; }
+  renderSavedDrawView(entry);
+}
+
+window.openLatestSavedDraw = openLatestSavedDraw;
+window.openSavedDrawHistory = openSavedDrawHistory;
+window.openDrawHistory = openDrawHistory;
 function openDrawHistory(tid,div){
   const key=tid+'_'+div;
   const list=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
@@ -7612,19 +7691,20 @@ function openDrawHistory(tid,div){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <div style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
+            <div class="draw-history-title" style="font-weight:900;font-size:.94rem;color:var(--primary-dark)">${it.title||('추첨 '+(list.length-idx))}</div>
             <span class="badge ${it.isTest?'bg-bronze':'bg-green'}">${it.isTest?'🧪 테스트':'🔒 실운영'}</span>
           </div>
-          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
+          <div class="draw-history-meta" style="font-size:.76rem;color:var(--text2);margin-top:4px">${d.toLocaleString('ko-KR')} · ${(it.groupCount||0)}조 · 본선 ${(it.mainSize||0)}강</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px" onclick="openSavedDrawHistory('${it.id}','${key}')">👁 다시보기</button>
+          <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px" onclick="openSavedDrawHistory('${it.id}','${key}')">📋 내용 보기</button>
           ${AD && it.isTest ? `<button class="btn btn-danger" style="font-size:.76rem;padding:5px 12px" onclick="deleteSavedDrawHistory('${it.id}','${key}')">🗑 삭제</button>` : ``}
         </div>
       </div>
     </div>`;
   }).join('');
   om('mDrawHistory');
+  setModalFullscreenState('mDrawHistory', true);
 }
 
 async function deleteSavedDrawHistory(id,key){
@@ -13071,7 +13151,7 @@ Object.assign(window,{ toggleModalFullscreen, openQuickAddPlayer, quickAddPlayer
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
-  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
+  onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetDrawOnly,openDraw,openDrawHistory,openSavedDrawHistory,openLatestSavedDraw,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
