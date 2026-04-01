@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-01-v68-draw-history-sameclub-fix";
+  const APP_VERSION = "2026-04-01-v69-page-slider-fast";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -888,6 +888,48 @@ body{overflow-x:hidden;}
 .home-click-card:active,.home-click-chip:active{transform:translateY(0);}
 
 
+
+/* === mobile gesture hints === */
+.page-gesture-hint{
+  position:fixed;
+  left:50%;
+  bottom:max(88px,calc(env(safe-area-inset-bottom,0px) + 74px));
+  transform:translateX(-50%) translateY(16px);
+  z-index:3200;
+  max-width:min(calc(100vw - 24px), 420px);
+  padding:10px 14px;
+  border-radius:14px;
+  border:1.5px solid rgba(255,255,255,.18);
+  background:rgba(15,30,58,.94);
+  color:#fff;
+  box-shadow:0 12px 28px rgba(15,30,58,.28);
+  font-size:.84rem;
+  font-weight:800;
+  line-height:1.45;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .24s ease, transform .24s ease;
+  text-align:center;
+  backdrop-filter:blur(6px) saturate(120%);
+}
+.page-gesture-hint.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.page-gesture-hint .sub{
+  display:block;
+  margin-top:3px;
+  font-size:.72rem;
+  font-weight:600;
+  opacity:.86;
+}
+.page-gesture-hint.swipe{
+  background:linear-gradient(135deg,rgba(15,30,58,.97),rgba(27,47,90,.97));
+}
+.page-gesture-hint.bracket{
+  background:linear-gradient(135deg,rgba(133,100,4,.98),rgba(15,30,58,.96));
+}
+
 /* === page slider motion === */
 body.slider-ready .page-viewport{
   width:100%;
@@ -899,7 +941,7 @@ body.slider-ready .page-slider{
   align-items:flex-start;
   width:100%;
   will-change:transform;
-  transition:transform .34s cubic-bezier(.22,.61,.36,1);
+  transition:transform .18s ease-out;transform:translate3d(0,0,0);backface-visibility:hidden;
 }
 body.slider-ready .page{
   display:block !important;
@@ -13525,6 +13567,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 (function(){
   const PAGE_ORDER=['home','tournament','register','bracket','players','ranking'];
+  const SWIPE_ALLOWED=['home','tournament','register'];
 
   function buildPageSlider(){
     const main=document.querySelector('main.main-content');
@@ -13565,12 +13608,123 @@ document.addEventListener('DOMContentLoaded',()=>{
     const slider=document.getElementById('pageSlider');
     if(!slider) return;
     const idx=pageIndex(name);
-    slider.style.transition = instant ? 'none' : 'transform .34s cubic-bezier(.22,.61,.36,1)';
+    slider.style.transition = instant ? 'none' : 'transform .18s ease-out';
     slider.style.transform = 'translate3d(-'+(idx*100)+'%,0,0)';
     if(instant){
-      requestAnimationFrame(()=>{ slider.style.transition='transform .34s cubic-bezier(.22,.61,.36,1)'; });
+      requestAnimationFrame(()=>{ slider.style.transition='transform .18s ease-out'; });
     }
     updatePageSliderHeight();
+  }
+
+  function isMobileSwipeUI(){
+    try{
+      return window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 900;
+    }catch(e){
+      return window.innerWidth <= 900;
+    }
+  }
+
+  function isSwipeBlockedTarget(target){
+    if(!target) return false;
+    return !!target.closest('input, textarea, select, button, a, label, .modal-overlay.open, .modal-box, [contenteditable="true"], .bracket-wrap, .table-wrap, .roulette-strip-wrap');
+  }
+
+  function canSwipeOnCurrentPage(){
+    const active=document.querySelector('.page.active');
+    const pageName=active?.id?.replace('page-','') || '';
+    return SWIPE_ALLOWED.includes(pageName);
+  }
+
+  function setupMobileSwipe(){
+    const viewport=document.getElementById('pageViewport');
+    if(!viewport || viewport.dataset.swipeBound==='1') return;
+    viewport.dataset.swipeBound='1';
+
+    const state={
+      startX:0,
+      startY:0,
+      dx:0,
+      dy:0,
+      tracking:false,
+      locked:false,
+      pageName:'',
+      startTime:0
+    };
+
+    viewport.addEventListener('touchstart', function(e){
+      if(!isMobileSwipeUI()) return;
+      if(e.touches.length!==1) return;
+      if(!canSwipeOnCurrentPage()) return;
+      if(isSwipeBlockedTarget(e.target)) return;
+
+      const t=e.touches[0];
+      state.startX=t.clientX;
+      state.startY=t.clientY;
+      state.dx=0;
+      state.dy=0;
+      state.tracking=true;
+      state.locked=false;
+      state.pageName=document.querySelector('.page.active')?.id?.replace('page-','') || '';
+      state.startTime=Date.now();
+    }, {passive:true});
+
+    viewport.addEventListener('touchmove', function(e){
+      if(!state.tracking || !isMobileSwipeUI()) return;
+      const t=e.touches[0];
+      state.dx=t.clientX - state.startX;
+      state.dy=t.clientY - state.startY;
+
+      if(!state.locked){
+        if(Math.abs(state.dx) < 14 && Math.abs(state.dy) < 14) return;
+        if(Math.abs(state.dy) > Math.abs(state.dx) * 0.9){
+          state.tracking=false;
+          return;
+        }
+        state.locked=true;
+      }
+    }, {passive:true});
+
+    viewport.addEventListener('touchend', function(){
+      if(!state.tracking || !state.locked) {
+        state.tracking=false;
+        state.locked=false;
+        return;
+      }
+
+      const elapsed=Date.now()-state.startTime;
+      const absX=Math.abs(state.dx);
+      const absY=Math.abs(state.dy);
+      const fastSwipe=(elapsed < 260 && absX > 45);
+      const strongSwipe=absX > 80;
+
+      if(absX <= absY || (!fastSwipe && !strongSwipe)){
+        state.tracking=false;
+        state.locked=false;
+        return;
+      }
+
+      const current=state.pageName;
+      let next='';
+      if(state.dx < 0){
+        if(current==='home') next='tournament';
+        else if(current==='tournament') next='register';
+      }else{
+        if(current==='register') next='tournament';
+        else if(current==='tournament') next='home';
+      }
+
+      state.tracking=false;
+      state.locked=false;
+
+      if(next && typeof window.showPage==='function'){
+        window.showPage(next);
+      }
+    }, {passive:true});
+
+    viewport.addEventListener('touchcancel', function(){
+      state.tracking=false;
+      state.locked=false;
+    }, {passive:true});
   }
 
   window.updatePageSliderHeight=updatePageSliderHeight;
@@ -13579,6 +13733,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   buildPageSlider();
   const active=document.querySelector('.page.active')?.id?.replace('page-','') || 'home';
   goPageSheet(active, true);
+  setupMobileSwipe();
 
   window.addEventListener('resize', updatePageSliderHeight);
   window.addEventListener('load', updatePageSliderHeight);
@@ -13596,6 +13751,94 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 })();
 </script>
+
+
+<script>
+(function(){
+  const HINT_KEYS = {
+    swipe: 'kimhae_mobile_swipe_hint_v1',
+    bracket: 'kimhae_bracket_scroll_hint_v1'
+  };
+  let hintTimer = null;
+
+  function isMobileHintUI(){
+    try{
+      return window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 900;
+    }catch(e){
+      return window.innerWidth <= 900;
+    }
+  }
+
+  function ensureHintEl(){
+    let el = document.getElementById('pageGestureHint');
+    if(el) return el;
+    el = document.createElement('div');
+    el.id = 'pageGestureHint';
+    el.className = 'page-gesture-hint';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function hideGestureHint(){
+    const el = document.getElementById('pageGestureHint');
+    if(!el) return;
+    el.classList.remove('show');
+  }
+
+  function showGestureHint(kind, mainText, subText, duration){
+    if(!isMobileHintUI()) return;
+    const el = ensureHintEl();
+    el.className = 'page-gesture-hint ' + (kind || '');
+    el.innerHTML = `${mainText}${subText ? `<span class="sub">${subText}</span>` : ''}`;
+    clearTimeout(hintTimer);
+    requestAnimationFrame(()=>el.classList.add('show'));
+    hintTimer = setTimeout(hideGestureHint, duration || 2400);
+  }
+
+  function maybeShowSwipeHint(page){
+    if(!['home','tournament','register'].includes(page)) return;
+    if(localStorage.getItem(HINT_KEYS.swipe) === '1') return;
+    localStorage.setItem(HINT_KEYS.swipe, '1');
+    showGestureHint('swipe','↔ 좌우로 넘겨서 이동할 수 있어요','홈 · 대회관리 · 팀등록에서만 지원됩니다.',2600);
+  }
+
+  function maybeShowBracketHint(page){
+    if(page !== 'bracket') return;
+    if(localStorage.getItem(HINT_KEYS.bracket) === '1') return;
+    localStorage.setItem(HINT_KEYS.bracket, '1');
+    showGestureHint('bracket','👉 대진표는 좌우로 드래그해서 보세요','대진표 · 선수현황 · 시합결과는 페이지 스와이프가 꺼져 있습니다.',2800);
+  }
+
+  function runPageHints(page){
+    if(!isMobileHintUI()) return;
+    if(['players','ranking'].includes(page)) hideGestureHint();
+    setTimeout(()=>{
+      maybeShowSwipeHint(page);
+      maybeShowBracketHint(page);
+    }, 180);
+  }
+
+  const originalShowPage = window.showPage;
+  if(typeof originalShowPage === 'function'){
+    window.showPage = function(name){
+      const res = originalShowPage.apply(this, arguments);
+      runPageHints(name);
+      return res;
+    };
+  }
+
+  window.hideGestureHint = hideGestureHint;
+  window.runPageHints = runPageHints;
+
+  const initialPage = document.querySelector('.page.active')?.id?.replace('page-','') || 'home';
+  if(document.readyState === 'complete'){
+    runPageHints(initialPage);
+  }else{
+    window.addEventListener('load', ()=>runPageHints(initialPage), {once:true});
+  }
+})();
+</script>
+
 
 </body>
 </html>
