@@ -5948,8 +5948,7 @@ function renderMatchProgressSummary(key){
     const t=teams[idx];
     return t ? tdn(t,key,idx) : '?';
   }
-  
-function resultLine(m){
+  function resultLine(m){
   const st=getMatchResultState(key,m);
   if(!st.done || m.bye) return '';
   const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
@@ -5957,18 +5956,142 @@ function resultLine(m){
   const leftWin = s1 > s2;
   const rightWin = s2 > s1;
 
-  const leftName = `<span style="font-weight:${leftWin?900:500};color:${leftWin?'var(--text)':'var(--text2)'}">${n1}</span>`;
-  const rightName = `<span style="font-weight:${rightWin?900:500};color:${rightWin?'var(--text)':'var(--text2)'}">${n2}</span>`;
-
   return `<div onclick="goBracketMatch('${tid}','${div}','${m.id||m._id||''}')" style="cursor:pointer;padding:7px 10px;border-radius:10px;background:#f8fafc;border:1px solid #dbe4f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <span style="font-size:.7rem;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:2px 8px">결과</span>
-    ${leftName}
+    <span style="font-size:.82rem;font-weight:${leftWin?900:500};color:${leftWin?'var(--text)':'var(--text2)'}">${n1}</span>
     <span style="font-size:.78rem;font-weight:900;color:#1d4ed8">${st.sc1}:${st.sc2}</span>
-    <span style="font-size:.74rem;color:var(--text2)">vs ${rightName}</span>
+    <span style="font-size:.74rem;color:var(--text2)">vs <span style="font-weight:${rightWin?900:500};color:${rightWin?'var(--text)':'var(--text2)'}">${n2}</span></span>
     <span style="margin-left:auto;font-size:.68rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
   </div>`;
-}
+  }
+  function buildOrderChips(matchList){
+    if(!useOrder||!matchList.length) return '';
+    return matchList.map(m=>{
+      const st=getOnlineOrderState(key,m);
+      const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
+      const mid=m.id||m._id||'';
+      const chip=(name,done)=>`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.7rem;font-weight:800;background:${done?'#dcfce7':'#fee2e2'};color:${done?'#166534':'#991b1b'};border:1px solid ${done?'#86efac':'#fca5a5'}">${name} ${done?'✅':'⏳'}</span>`;
+      const label = st.bothSubmitted?'🔓 양팀완료':(!st.s1&&!st.s2?'⏳ 미제출':'📝 제출중');
+      return `<div onclick="goBracketMatch('${tid}','${div}','${mid}')" style="cursor:pointer;padding:7px 10px;border-radius:10px;background:${st.bothSubmitted?'#f0fdf4':'#fffbeb'};border:1.5px solid ${st.bothSubmitted?'#86efac':'#fde68a'};display:flex;align-items:center;gap:8px;flex-wrap:wrap;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
+        <span style="font-size:.75rem;font-weight:700;color:var(--text2);white-space:nowrap">${label}</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${chip(n1,st.s1)}${chip(n2,st.s2)}</div>
+        <span style="margin-left:auto;font-size:.68rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
+      </div>`;
+    }).join('');
+  }
+  function standingsHtml(gi, grpMatches){
+    const grp = G.draws[key]?.groups?.[Number(gi)];
+    const tids = Array.isArray(grp?.teams) ? grp.teams : [];
+    if(!tids.length) return '';
+    const stats = calcGS(key, Number(gi), tids, teams);
+    if(!stats.length) return '';
+    return `<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
+      <div style="font-size:.74rem;font-weight:800;color:#334155;margin-bottom:5px">🏅 순위</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${stats.map((s,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:${i===0?'#eff6ff':i===1?'#fff7ed':'#f8fafc'};border:1px solid ${i===0?'#bfdbfe':i===1?'#fed7aa':'#e5e7eb'};border-radius:8px">
+          <span style="min-width:22px;font-weight:900;color:${i===0?'#1d4ed8':i===1?'#c2410c':'#475569'}">${i+1}</span>
+          <span style="flex:1;font-size:.78rem;font-weight:800;color:var(--text)">${s.nm}</span>
+          <span style="font-size:.72rem;color:var(--text2)">${s.w}승 ${s.l}패</span>
+          <span style="font-size:.72rem;color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
 
+  list.forEach(m=>{
+    if(!m.bye){
+      const st=getOnlineOrderState(key,m);
+      orderTotal+=2;
+      if(st.s1) orderSubmitted++;
+      if(st.s2) orderSubmitted++;
+    }
+    if(m.phase === 'group' && m.group != null){
+      const gi = Number(m.group);
+      if(!groups[gi]) groups[gi] = { total:0, done:0, playing:0, matches:[] };
+      groups[gi].total++;
+      groups[gi].matches.push(m);
+      if(isDone(m)) groups[gi].done++;
+      else if(isPlaying(m)) groups[gi].playing++;
+    }else if(m.phase === 'main'){
+      main.total++;
+      main.matches.push(m);
+      if(isDone(m)) main.done++;
+      else if(isPlaying(m)) main.playing++;
+    }
+  });
+
+  if(main.total===0 && estimatedMainTotal>0){
+    main.total = estimatedMainTotal;
+  }
+
+  const groupTotal = Object.values(groups).reduce((s,v)=>s+v.total,0);
+  const groupDone = Object.values(groups).reduce((s,v)=>s+v.done,0);
+  const groupPlaying = Object.values(groups).reduce((s,v)=>s+v.playing,0);
+  const mainRemain = Math.max(0, main.total-main.done);
+  const remainAll = Math.max(0, (groupTotal+main.total) - (groupDone+main.done));
+  const playingAll = groupPlaying + main.playing;
+
+  const groupHtml = Object.keys(groups).map(Number).sort((a,b)=>a-b).map(gi=>{
+    const s = groups[gi];
+    const remain = Math.max(0, s.total - s.done);
+    const liveCls = s.playing > 0 ? ' live-card' : '';
+    const pendingInGrp = useOrder ? s.matches.filter(m=>!m.bye&&!isDone(m)) : [];
+    const doneInGrp = s.matches.filter(m=>isDone(m) && !m.bye);
+    return `<div class="card${liveCls}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="font-weight:900;color:var(--primary-dark)">${grpLabel(gi)} 현황</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${s.total}</span>
+          <span class="badge" style="background:#ecfccb;color:#3f6212">완료 ${s.done}</span>
+          ${s.playing > 0 ? `<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행 ${s.playing}</span>` : ''}
+          <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remain}</span>
+        </div>
+      </div>
+      ${standingsHtml(gi, s.matches)}
+      ${useOrder&&pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:${pendingInGrp.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${buildOrderChips(pendingInGrp)}</div>`:''}
+      ${doneInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#1e3a8a;margin-bottom:4px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:4px">${doneInGrp.map(resultLine).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+
+  const mainPending = useOrder ? main.matches.filter(m=>!m.bye&&!isDone(m)) : [];
+  const doneInMain = main.matches.filter(m=>isDone(m) && !m.bye);
+  const mainHtml = main.total ? `<div class="card${main.playing>0?' live-card':''}" style="padding:10px 12px;background:linear-gradient(180deg,#fff,#f7faff);margin:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="font-weight:900;color:var(--primary-dark)">본선 현황</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <span class="badge" style="background:#ede9fe;color:#6d28d9">전체 ${main.total}</span>
+          <span class="badge" style="background:#ecfccb;color:#3f6212">완료 ${main.done}</span>
+          ${main.playing > 0 ? `<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행 ${main.playing}</span>` : ''}
+          <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${mainRemain}</span>
+          ${main.matches.length===0&&estimatedMainTotal>0?`<span class="badge" style="background:#eef2ff;color:#4338ca">예상 경기수 반영</span>`:''}
+        </div>
+      </div>
+      ${useOrder&&mainPending.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:${mainPending.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${buildOrderChips(mainPending)}</div>`:''}
+      ${doneInMain.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#1e3a8a;margin-bottom:4px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:4px">${doneInMain.map(resultLine).join('')}</div>`:''}
+      ${main.matches.length===0&&estimatedMainTotal>0?`<div style="margin-top:8px;font-size:.74rem;color:var(--text2);line-height:1.55">예선 조 추첨 기준으로 본선 예상 경기수를 미리 포함했습니다. 본선 추첨 전이라 결과는 아직 없습니다.</div>`:''}
+    </div>` : '';
+
+  const orderBadgeHtml = useOrder && orderTotal>0 ? `
+    <span class="badge" style="background:${orderSubmitted===orderTotal?'#dcfce7':'#fef3c7'};color:${orderSubmitted===orderTotal?'#166534':'#92400e'};border:1px solid ${orderSubmitted===orderTotal?'#86efac':'#fde68a'}">📋 오더 ${orderSubmitted}/${orderTotal} 제출</span>` : '';
+
+  return `<div class="card" style="margin-top:12px;background:linear-gradient(135deg,#f9fbff,#eef4ff);border:1.5px solid #d7e3ff">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-weight:900;color:var(--primary-dark);font-size:.92rem">📊 경기 진행 현황</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${groupTotal+main.total}경기</span>
+        <span class="badge" style="background:#eff6ff;color:#1e40af">예선 ${groupTotal}경기</span>
+        <span class="badge" style="background:#f3e8ff;color:#6d28d9">본선 ${main.total}경기</span>
+        <span class="badge ${playingAll>0?'live-blink':''}" style="background:#fff7e8;color:#9a6400">진행중 ${playingAll}경기</span>
+        <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remainAll}경기</span>
+        ${orderBadgeHtml}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px">
+      ${groupHtml}
+      ${mainHtml}
+    </div>
+  </div>`;
+}
 
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
