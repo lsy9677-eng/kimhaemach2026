@@ -57,30 +57,38 @@ body{font-family:'Noto Sans KR',sans-serif;background:linear-gradient(180deg,#f4
 
 /* HEADER */
 .app-header{background:linear-gradient(135deg,#091225 0%,#0f1e3a 55%,#1b2f5a 100%);color:white;position:sticky;top:0;z-index:1000;box-shadow:0 4px 24px rgba(0,0,0,0.35);}
-.header-top{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.12);}
-.logo{display:flex;align-items:center;gap:10px;}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.12);flex-wrap:nowrap;}
+.logo{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
 .logo-icon{width:38px;height:38px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.logo-text{min-width:0;}
 .logo-text h1{font-family:'Oswald',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:.05em;line-height:1.2;}
 .logo-text p{font-size:.65rem;opacity:.75;letter-spacing:.1em;}
-.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;max-width:540px;}
+.header-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;max-width:none;flex:0 0 auto;}
 .admin-badge{background:var(--accent);color:var(--text);font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;display:none;white-space:nowrap;line-height:1.1;}
 .admin-badge.show{display:inline-flex;align-items:center;}
-.btn-sm{padding:5px 12px;border:1px solid rgba(255,255,255,0.4);background:transparent;color:white;border-radius:20px;cursor:pointer;font-size:.8rem;font-family:'Noto Sans KR',sans-serif;transition:all .2s;min-height:34px;white-space:nowrap;line-height:1.1;display:inline-flex;align-items:center;justify-content:center;}
+.btn-sm{padding:4px 10px;border:1px solid rgba(255,255,255,0.32);background:transparent;color:white;border-radius:12px;cursor:pointer;font-size:.73rem;font-family:'Noto Sans KR',sans-serif;transition:all .2s;min-height:30px;white-space:nowrap;line-height:1.1;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
 .btn-sm:hover{background:rgba(255,255,255,0.15);}
 .btn-sm.active{background:var(--accent);border-color:var(--accent);color:var(--text);}
 @media(max-width:680px){
-  .header-top{flex-direction:column;align-items:stretch;gap:6px;padding:8px 12px;}
-  .logo{justify-content:flex-start;}
-  .header-actions{width:100%;max-width:none;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-start;}
-  .header-actions .btn-sm{flex:1;min-width:90px;max-width:160px;padding:7px 8px;font-size:.78rem;min-height:36px;border-radius:12px;text-align:center;}
-  .header-actions .admin-badge{display:none !important;}
-  .header-actions .admin-badge.show{display:inline-flex !important;font-size:.68rem;padding:3px 8px;}
-  #adminSettingsBtn{flex:1 1 100%;max-width:none;order:1;}
-  .admin-mode #adminSettingsBtn{display:inline-flex !important;}
-  #opToggleBtn{order:2;}
-  #regToggleBtn{order:3;}
-  #adminToggleBtn{order:4;}
+  .header-top{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;flex-wrap:nowrap;}
+  .logo{justify-content:flex-start;gap:8px;min-width:0;flex:1 1 auto;}
+  .logo img{width:36px !important;height:36px !important;border-radius:10px !important;}
+  .logo-icon{width:34px;height:34px;font-size:16px;}
+  .logo-text h1{font-size:1rem;}
+  .logo-text p{font-size:.56rem;}
+  .header-actions{display:flex;flex-wrap:nowrap;gap:4px;align-items:center;justify-content:flex-end;flex:0 0 auto;min-width:0;}
+  .header-actions .btn-sm{padding:4px 7px;font-size:.64rem;min-height:28px;border-radius:10px;letter-spacing:-.01em;}
+  .header-actions .admin-badge,
+  .header-actions .admin-badge.show,
   #regLoginBadge,#opLoginBadge,#adminBadge{display:none !important;}
+  #adminSettingsBtn{display:none !important;}
+  .admin-mode #adminSettingsBtn{display:inline-flex !important;}
+}
+@media(max-width:420px){
+  .logo-text h1{font-size:.93rem;}
+  .logo-text p{font-size:.52rem;}
+  .header-actions{gap:3px;}
+  .header-actions .btn-sm{padding:4px 6px;font-size:.61rem;min-height:27px;}
 }
 .nav-tabs{display:flex;overflow-x:auto;gap:0;scrollbar-width:none;}
 .nav-tabs::-webkit-scrollbar{display:none;}
@@ -1018,7 +1026,7 @@ body.slider-ready .page:not(.active){
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">경기이사</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">경기진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️ 관리자 설정</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">📋 경기이사</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -1163,7 +1171,6 @@ body.slider-ready .page:not(.active){
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListImage44()">🖼️ 이미지 저장</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListExcel44()">📊 엑셀 저장</button>
-      <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px;background:#fee500;border-color:#f9c400;color:#3c1e1e;font-weight:700" onclick="saveRegListKakao44()">💛 카톡용 이미지</button>
       <button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="saveRegListPDF44()">📄 PDF 저장</button>
     </div>
   </div>
@@ -1173,7 +1180,7 @@ body.slider-ready .page:not(.active){
       <div style="font-size:2rem;margin-bottom:8px">📋</div>
       <div style="font-weight:700;font-size:.95rem;color:var(--primary-dark);margin-bottom:6px">팀 등록을 하려면 로그인이 필요합니다</div>
       <div style="font-size:.78rem;color:var(--text2);margin-bottom:14px;line-height:1.5">경기이사에게 받은 팀등록 비밀번호를 입력하세요</div>
-      <button class="btn btn-primary" style="padding:10px 28px;font-size:.9rem" onclick="toggleReg()">📋 경기이사 로그인</button>
+      <button class="btn btn-primary" style="padding:10px 28px;font-size:.9rem" onclick="toggleReg()">🏆 클럽 로그인</button>
     </div>
   </div>
   <div class="card">
@@ -1427,7 +1434,7 @@ body.slider-ready .page:not(.active){
 </main>
 <div class="modal-overlay" id="mAdmin"><div class="modal-box"><div class="modal-header"><h3>🔐 관리자 로그인</h3><button class="modal-close" onclick="cm('mAdmin')">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" type="password" id="adminPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdmin')">취소</button><button class="btn btn-primary" onclick="doLogin()">로그인</button></div></div></div>
 <!-- 팀등록 로그인 모달 -->
-<div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>📋 경기이사 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
+<div class="modal-overlay" id="mRegLogin"><div class="modal-box"><div class="modal-header"><h3>🏆 클럽 로그인</h3><button class="modal-close" onclick="cm('mRegLogin')">✕</button></div>
 <div class="modal-body">
   <div style="padding:10px 12px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#2e7d32;line-height:1.5">
     📌 경기이사 전용 로그인입니다. 클럽을 선택하고 비밀번호를 입력하세요.
@@ -2591,7 +2598,7 @@ function refreshRoleUI(){
   });
   const opBtn=ge('opToggleBtn');
   if(opBtn){
-    opBtn.textContent = OP ? '경기진행자 로그아웃' : '경기진행자 로그인';
+    opBtn.textContent = OP ? '🎾 진행자 로그아웃' : '🎾 진행자 로그인';
     opBtn.style.background = OP ? '#0f4ea8' : '#1565c0';
   }
   const opBadge=ge('opLoginBadge');
@@ -2608,7 +2615,7 @@ function applyOperatorUI(){
       localStorage.removeItem('reg_session_version');
     }catch(e){}
     const regBtn=ge('regToggleBtn');
-    if(regBtn){ regBtn.textContent='경기이사 로그인'; regBtn.style.background='var(--success)'; }
+    if(regBtn){ regBtn.textContent='🏆 클럽 로그인'; regBtn.style.background='var(--success)'; }
     const regBadge=ge('regLoginBadge'); if(regBadge) regBadge.style.display='none';
   }
   refreshRoleUI();
@@ -2717,7 +2724,7 @@ function toggleAdmin(){
     document.body.classList.remove('admin-mode');
     ge('adminBadge').classList.remove('show');
     ge('adminToggleBtn').classList.remove('active');
-    ge('adminToggleBtn').textContent='관리자 로그인';
+    ge('adminToggleBtn').textContent='🔐 관리자';
     document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='none');
     const rh2=ge('regActHdr'); if(rh2) rh2.textContent='';
     const ptabRec=ge('ptab-records'); if(ptabRec) ptabRec.style.display='none';
@@ -2747,7 +2754,7 @@ function applyAdminUI(){
   setTimeout(updateOperationSticky,0);
   ge('adminBadge').classList.add('show');
   ge('adminToggleBtn').classList.add('active');
-  ge('adminToggleBtn').textContent='로그아웃';
+  ge('adminToggleBtn').textContent='🔐 로그아웃';
   document.querySelectorAll('[id^="ao"]').forEach(e=>e.style.display='block');
   const rh=ge('regActHdr'); if(rh) rh.textContent='관리';
   const ptabR=ge('ptab-records'); if(ptabR) ptabR.style.display='';
@@ -2790,7 +2797,7 @@ function toggleReg(){
     localStorage.removeItem('reg');
     localStorage.removeItem('reg_club');
     localStorage.removeItem('reg_session_version');
-    ge('regToggleBtn').textContent='경기이사 로그인';
+    ge('regToggleBtn').textContent='🏆 클럽 로그인';
     ge('regToggleBtn').style.background='var(--success)';
     ge('regLoginBadge') && (ge('regLoginBadge').style.display='none');
     ge('aoReg') && (ge('aoReg').style.display='none');
@@ -2914,10 +2921,10 @@ function _completeRegLogin(club){
 
   // ── 헤더 버튼·뱃지 업데이트 ──
   const toggleBtn = ge('regToggleBtn');
-  if(toggleBtn){ toggleBtn.textContent='📋 로그아웃'; toggleBtn.style.background='#388e3c'; }
+  if(toggleBtn){ toggleBtn.textContent='🏆 클럽 로그아웃'; toggleBtn.style.background='#388e3c'; }
   const badge = ge('regLoginBadge');
   if(badge){
-    badge.textContent=`${club} 경기이사`;
+    badge.textContent=`${club} 클럽`;
     badge.style.cssText='display:inline-flex;align-items:center;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;margin-right:4px';
   }
 
