@@ -8451,12 +8451,10 @@ function openMainDraw(tid,div){
       <div>🎯 본선 규모: <b>${n}강</b></div>
       <div>👑 조 1위팀: <b>${rank1.length}팀</b></div>
       <div>🥈 조 2위이하: <b>${rank2.length}팀</b></div>
-      ${byeCount>0?`<div style="grid-column:1/-1;padding-top:4px;border-top:1px solid var(--border);color:var(--success);font-weight:600">🎫 부전승 ${byeCount}자리 → 1위 우선 배정, 실제 자리 자체는 외부값 + N번째 결과 기준으로 계산됩니다</div>`:''}
+      ${byeCount>0?`<div style="grid-column:1/-1;padding-top:4px;border-top:1px solid var(--border);color:var(--success);font-weight:600">🎫 부전승 ${byeCount}자리 → 1위 우선 배정</div>`:''}
     </div>
     <div style="margin-top:8px;padding:6px 10px;background:var(--panel2);border-radius:var(--radius);font-size:.75rem;color:var(--text2)">
       ✅ 1위팀끼리는 첫 경기에서 서로 만나지 않도록 우선 배치합니다<br>
-      ✅ 외부값(현재 시각 초/난수)과 N번째 결과를 사용합니다<br>
-      ✅ 1번째부터 N-1번째까지는 빠르게 확인하고, N번째만 실제 추첨처럼 천천히 진행합니다<br>
       ✅ 방식·채택순서·계산시각은 추첨 로그로 저장됩니다<br>
       <span style="color:#7a5600;font-weight:700">👑 1위팀</span> / <span style="color:#425466;font-weight:700">🥈 2위팀</span> 색을 분리해 한눈에 구분됩니다
     </div>`;
