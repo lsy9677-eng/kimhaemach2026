@@ -11553,10 +11553,29 @@ async function unlockOnlineOrder(key,mid){
   try{
     if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
     resetMatchOrderSelections(target);
+
+    if(target.phase==='group'){
+      const curDraw=G.draws[key]||{};
+      const nonMainMatches=(G.matches[key]||[]).filter(m=>m.phase!=='main');
+      G.matches[key]=nonMainMatches;
+      if(G.draws[key]){
+        delete curDraw.mainPlan;
+        delete curDraw.mainAudit;
+        delete curDraw.mainUpdatedAt;
+        G.draws[key]=curDraw;
+      }
+      if(window.BRACKET_PRELIM_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE,key)){
+        window.BRACKET_PRELIM_TOGGLE[key]=false;
+      }
+    }
+
     await stM(key);
+    if(G.draws[key]) await stD(key);
     sl(false);
     cm('mM3');
-    toast('초기화 완료 ✅ 오더와 경기 결과가 함께 초기화되어 원래 상태로 돌아갔습니다','success');
+    toast(target.phase==='group'
+      ? '초기화 완료 ✅ 예선 결과가 초기화되어 본선 대진과 현황도 함께 초기화되었습니다'
+      : '초기화 완료 ✅ 오더와 경기 결과가 함께 초기화되어 원래 상태로 돌아갔습니다','success');
     renderBracket();
     renderAllP();
     if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
