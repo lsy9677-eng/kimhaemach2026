@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-02-v10-pre-draw-guide-card";
+  const APP_VERSION = "2026-04-02-v11-reset-pre-results-keep-draw";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -6733,21 +6733,62 @@ function applyBracketRecommend(tid,div){
   }
   toast(`${dl(div)} 추천 적용`, 'success');
 }
+function buildFreshGroupMatchesFromDraw(key){
+  const draw=G.draws[key];
+  const groups=Array.isArray(draw?.groups)?draw.groups:[];
+  const fresh=[];
+  groups.forEach((grp,gi)=>{
+    const teamIdxs=Array.isArray(grp?.teams)?grp.teams:[];
+    for(let a=0;a<teamIdxs.length;a++){
+      for(let b=a+1;b<teamIdxs.length;b++){
+        fresh.push({
+          id:`g_${gi}_${a}_${b}`,
+          phase:'group',
+          group:gi,
+          t1:teamIdxs[a],
+          t2:teamIdxs[b],
+          winner:null,
+          rubbers:[],
+          court:''
+        });
+      }
+    }
+  });
+  return fresh;
+}
+
 async function resetDrawOnly(key){
   const {tid,div}=_k2td(key);
-  if(!confirm('추첨 결과와 경기 결과만 초기화합니다.\n팀 등록은 유지됩니다. 계속할까요?')) return;
+  if(!confirm(`조 추첨은 유지하고 경기 결과와 오더 내역만 초기화합니다.
+예선을 초기화하면 본선도 생성 전 상태로 돌아갑니다.
+팀 등록은 유지됩니다. 계속할까요?`)) return;
   sl(true);
   try{
+    const draw=G.draws[key];
+    const hadGroupDraw=!!(draw&&Array.isArray(draw.groups)&&draw.groups.length);
     await resetMatchRecords(key);
+
+    if(hadGroupDraw){
+      const preservedDraw={...draw};
+      delete preservedDraw.mainPlan;
+      delete preservedDraw.mainAudit;
+      delete preservedDraw.mainUpdatedAt;
+      G.draws[key]=preservedDraw;
+      G.matches[key]=buildFreshGroupMatchesFromDraw(key);
+    }else{
+      try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
+      delete G.draws[key];
+      G.matches[key]=[];
+    }
+
     await stM(key);
-    try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
-    delete G.draws[key];
+    if(G.draws[key]) await stD(key);
     if(G.mainMatches && G.mainMatches[key]) delete G.mainMatches[key];
-    await fbLog(`추첨 리셋: ${tid} ${dl(div)}`,'♻️');
+    await fbLog(`초기화: ${tid} ${dl(div)} (조 추첨 유지 / 결과·오더 리셋)`,'♻️');
     sl(false);
-    toast('추첨 리셋 완료','success');
+    toast(hadGroupDraw ? '초기화 완료 ✅ 조 추첨은 유지되고 예선 결과·오더, 본선이 모두 초기화되었습니다' : '초기화 완료','success');
     renderBracket();
-  }catch(e){ sl(false); toast('추첨 리셋 실패: '+e.message,'error'); }
+  }catch(e){ sl(false); toast('초기화 실패: '+e.message,'error'); }
 }
 
 function getGroupOrderPairKey(key, gi, m){
@@ -11473,35 +11514,51 @@ async function submitOnlineOrder(sideOnly=null){
 }
 
 function resetMatchOrderSelections(match){
-  const prev=Array.isArray(match?.rubbers)?match.rubbers:[];
-  match.rubbers=prev.map(rb=>{
-    if(!rb || typeof rb!=='object') return {};
-    const kept={};
-    if(rb.score1!=null) kept.score1=rb.score1;
-    if(rb.score2!=null) kept.score2=rb.score2;
-    if(rb.winner!=null) kept.winner=rb.winner;
-    if(rb.tiebreak!=null) kept.tiebreak=rb.tiebreak;
-    return Object.keys(kept).length?kept:{};
-  });
+  match.rubbers=[];
+  match.winner=null;
+  match.orderResultResetAt=new Date().toISOString();
+}
+
+async function rollbackSingleMatchPlayerStats(key,m){
+  if(!m || m.winner==null || m.bye) return;
+  const teams=G.teams[key]||[];
+  const wt=teams[m.winner], lt=teams[m.winner===m.t1?m.t2:m.t1];
+  const touched=new Set();
+  const takeBack=(team,field)=>{
+    (team?.players||[]).forEach(n=>{
+      const k=getPlayerKey(n,baseClub(team?.club||''));
+      if(G.players[k]){
+        G.players[k][field]=Math.max(0,(G.players[k][field]||0)-1);
+        touched.add(k);
+      }
+    });
+  };
+  takeBack(wt,'wins');
+  takeBack(lt,'losses');
+  if(touched.size) await Promise.all([...touched].map(k=>stP(k)));
 }
 
 async function unlockOnlineOrder(key,mid){
   if(!(AD||OP)){ toast('관리자 또는 진행자만 해제할 수 있습니다','error'); return; }
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
-  list[idx].orderSubmitted=false;
-  list[idx].orderSubmittedAt='';
-  list[idx].orderSubmittedBy='';
-  list[idx].orderSubmissions={};
-  list[idx].orderRevealed=false;
-  list[idx].orderRevealedAt='';
-  resetMatchOrderSelections(list[idx]);
+  const target=list[idx];
+  const hadWinner=target.winner!=null;
+  target.orderSubmitted=false;
+  target.orderSubmittedAt='';
+  target.orderSubmittedBy='';
+  target.orderSubmissions={};
+  target.orderRevealed=false;
+  target.orderRevealedAt='';
   sl(true);
   try{
+    if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
+    resetMatchOrderSelections(target);
     await stM(key);
     sl(false);
     cm('mM3');
-    toast('온라인 오더 상태 초기화 완료 ✅ 대진표 명단도 원래대로 복구되었습니다','success');
+    toast('초기화 완료 ✅ 오더와 경기 결과가 함께 초기화되어 원래 상태로 돌아갔습니다','success');
     renderBracket();
+    renderAllP();
     if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
   }catch(e){ sl(false); toast('해제 실패: '+e.message,'error'); }
 }
