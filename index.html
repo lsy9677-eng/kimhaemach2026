@@ -2034,9 +2034,21 @@ body.slider-ready .page:not(.active){
   <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:6px;color:var(--primary-dark)">🎾 경기진행자 비밀번호</div>
     <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.5">대진표 운영 전용 로그인 비밀번호입니다. 이 비밀번호로 로그인하면 대회관리/선수현황/팀등록 수정 권한은 없고, 대진표 운영·본선 추첨·본선 수동수정·오더 현황 확인·미제출팀 대리제출만 가능합니다.</div>
+    <div style="padding:8px 12px;background:var(--panel2);border-radius:8px;margin-bottom:10px;font-size:.82rem">
+      현재 경기진행자 비번: <b id="currentOperatorPwDisplay" style="color:#1565c0;letter-spacing:2px">●●●●</b>
+      <button class="btn btn-gray" style="font-size:.7rem;padding:2px 8px;margin-left:8px" onclick="toggleShowOperatorPw(this)">보기</button>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">현재 경기진행자 비밀번호</label>
+      <input class="form-input" type="password" id="currentOperatorPwInput" placeholder="현재 비밀번호 입력" autocomplete="off">
+    </div>
     <div class="form-group" style="margin-bottom:8px">
       <label class="form-label">새 경기진행자 비밀번호</label>
       <input class="form-input" type="text" id="newOperatorPwInput" placeholder="예: 2026court" autocomplete="off">
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label class="form-label">새 경기진행자 비밀번호 확인</label>
+      <input class="form-input" type="password" id="newOperatorPwInput2" placeholder="새 비밀번호 다시 입력" autocomplete="off">
     </div>
     <div style="display:flex;justify-content:flex-end">
       <button class="btn btn-primary" onclick="saveOperatorPw()">💾 저장</button>
@@ -2973,15 +2985,36 @@ function doOperatorLogin(){
   toast('경기진행자 로그인 ✅','success');
   showPage('bracket');
 }
+function toggleShowOperatorPw(btn){
+  const el = ge('currentOperatorPwDisplay');
+  if(!el) return;
+  if(el.textContent === '●●●●'){
+    el.textContent = G.meta.operatorPw||'(미설정)';
+    btn.textContent='숨기기';
+  } else {
+    el.textContent='●●●●';
+    btn.textContent='보기';
+  }
+}
+
 async function saveOperatorPw(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const cur=(ge('currentOperatorPwInput')?.value||'').trim();
   const nw=(ge('newOperatorPwInput')?.value||'').trim();
-  if(!nw || nw.length<4){ toast('4자 이상 입력하세요','error'); return; }
+  const nw2=(ge('newOperatorPwInput2')?.value||'').trim();
+  const currentSaved=G.meta.operatorPw||'2026court';
+  if(cur!==currentSaved){ toast('현재 경기진행자 비밀번호가 올바르지 않습니다','error'); return; }
+  if(!nw || nw.length<4){ toast('새 비밀번호는 4자 이상 입력하세요','error'); return; }
+  if(nw!==nw2){ toast('새 비밀번호 확인이 일치하지 않습니다','error'); return; }
+  if(nw===cur){ toast('현재 비밀번호와 다른 값으로 입력하세요','error'); return; }
   G.meta.operatorPw=nw;
   try{
     await saveMeta();
+    if(ge('currentOperatorPwInput')) ge('currentOperatorPwInput').value='';
     if(ge('newOperatorPwInput')) ge('newOperatorPwInput').value='';
-    toast('경기진행자 비밀번호 저장 완료 ✅','success');
+    if(ge('newOperatorPwInput2')) ge('newOperatorPwInput2').value='';
+    if(ge('currentOperatorPwDisplay')) ge('currentOperatorPwDisplay').textContent='●●●●';
+    toast('경기진행자 비밀번호 변경 완료 ✅','success');
   }catch(e){
     toast('저장 실패: '+e.message,'error');
   }
@@ -3558,7 +3591,10 @@ function openAdminSettings(){
   // 팀등록 비번 표시 초기화
   ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
   ge('newRegPwInput') && (ge('newRegPwInput').value='');
+  ge('currentOperatorPwDisplay') && (ge('currentOperatorPwDisplay').textContent='●●●●');
+  ge('currentOperatorPwInput') && (ge('currentOperatorPwInput').value='');
   ge('newOperatorPwInput') && (ge('newOperatorPwInput').value='');
+  ge('newOperatorPwInput2') && (ge('newOperatorPwInput2').value='');
   renderAdminDirectorEmailSection();
   renderAdminNoticeSection();
   om('mAdminSettings');
@@ -14411,7 +14447,7 @@ Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuick
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
