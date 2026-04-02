@@ -6911,6 +6911,7 @@ function togglePrelimSection(key){
   window.BRACKET_PRELIM_TOGGLE[key] = !current;
   renderBracket();
 }
+window.togglePrelimSection = togglePrelimSection;
 
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
@@ -10311,11 +10312,15 @@ async function saveM3(){
     const c1=ge('rp1_'+r),c2=ge('rp2_'+r);
     const pl1=getPickerSelected('rp1_'+r);
     const pl2=getPickerSelected('rp2_'+r);
-    const s1v=ge('rs1_'+r)?.value,s2v=ge('rs2_'+r)?.value;
-    const hasPair=(pl1.length>0||pl2.length>0);
+    let s1v=ge('rs1_'+r)?.value,s2v=ge('rs2_'+r)?.value;
+    const prev=prevRb[r]||{};
+    const rowBlank1=!!(prev.blankOrder1 || ((orderState.subs[orderState.c1]||{}).rubbers||[])[r]?.blankOrder);
+    const rowBlank2=!!(prev.blankOrder2 || ((orderState.subs[orderState.c2]||{}).rubbers||[])[r]?.blankOrder);
+    if(rowBlank1 && !rowBlank2){ s1v='0'; s2v='6'; }
+    else if(!rowBlank1 && rowBlank2){ s1v='6'; s2v='0'; }
+    const hasPair=(pl1.length>0||pl2.length>0||rowBlank1||rowBlank2);
     const noScore=(s1v===''&&s2v==='');
     const isZeroZero=(String(s1v)==='0'&&String(s2v)==='0');
-    const prev=prevRb[r]||{};
     const prev1=JSON.stringify(prev.players1||[]), cur1=JSON.stringify(pl1||[]);
     const prev2=JSON.stringify(prev.players2||[]), cur2=JSON.stringify(pl2||[]);
     if(prev1!==cur1||prev2!==cur2) pairChanged=true;
@@ -10326,8 +10331,13 @@ async function saveM3(){
     }
 
     if(noScore||isZeroZero){
-      if(hasPair) newRb.push({players1:pl1,players2:pl2,score1:null,score2:null,winner:null,tiebreak:false});
-      else newRb.push({});
+      if(hasPair){
+        const baseRb={players1:pl1,players2:pl2,score1:null,score2:null,winner:null,tiebreak:false};
+        if(rowBlank1) baseRb.blankOrder1=true;
+        if(rowBlank2) baseRb.blankOrder2=true;
+        applyBlankOrderAutoScore(baseRb);
+        newRb.push(baseRb);
+      }else newRb.push({});
       continue;
     }
 
@@ -10337,7 +10347,11 @@ async function saveM3(){
     const w=s1>s2?0:1;
     if(w===0) sc1++; else sc2++;
     validScoreCount++;
-    newRb.push({players1:pl1,players2:pl2,score1:s1,score2:s2,winner:w,tiebreak:false});
+    const scoreRb={players1:pl1,players2:pl2,score1:s1,score2:s2,winner:w,tiebreak:false};
+    if(rowBlank1) scoreRb.blankOrder1=true;
+    if(rowBlank2) scoreRb.blankOrder2=true;
+    applyBlankOrderAutoScore(scoreRb);
+    newRb.push(scoreRb);
   }
 
   const prevW=m.winner;
@@ -10741,7 +10755,23 @@ function getAssociationSummary(){
 // ══════════════════════════════════════════════════════
 
 let MY_CLUB_FILTER = false; // 내 클럽 필터 on/off 상태
-Object.defineProperty(window,'MY_CLUB_FILTER',{get:()=>MY_CLUB_FILTER,set:(v)=>{MY_CLUB_FILTER=v;}});
+Object.defineProperty(window,'MY_CLUB_FILTER',{get:()=>MY_CLUB_FILTER,set:(v)=>{MY_CLUB_FILTER=!!v;}});
+const MY_CLUB_FILTER_STORAGE_KEY = 'kimhae_my_club_filter';
+function loadMyClubFilterState(){
+  try{ MY_CLUB_FILTER = localStorage.getItem(MY_CLUB_FILTER_STORAGE_KEY)==='1'; }
+  catch(e){ MY_CLUB_FILTER=false; }
+  return MY_CLUB_FILTER;
+}
+function persistMyClubFilterState(v){
+  MY_CLUB_FILTER = !!v;
+  try{
+    if(MY_CLUB_FILTER) localStorage.setItem(MY_CLUB_FILTER_STORAGE_KEY,'1');
+    else localStorage.removeItem(MY_CLUB_FILTER_STORAGE_KEY);
+  }catch(e){}
+  return MY_CLUB_FILTER;
+}
+function clearMyClubFilterState(){ return persistMyClubFilterState(false); }
+loadMyClubFilterState();
 
 // 로그인/로그아웃 시 내 클럽 UI 갱신
 function updateMyClubUI(){
@@ -10775,7 +10805,7 @@ function updateMyClubUI(){
       }, 300);
     }
   } else {
-    MY_CLUB_FILTER = false;
+    clearMyClubFilterState();
     updateFilterBtnUI('register', false);
     updateFilterBtnUI('bracket', false);
   }
@@ -10916,9 +10946,6 @@ function goBracketMatch(tid,div,matchId){
 
   const applyAndFocus=()=>{
     setBracketSelectedDivs([div], tid);
-    // 내 클럽 필터 끄기 — 켜져 있으면 타 클럽 경기 카드가 숨겨져서 이동 불가
-    MY_CLUB_FILTER=false;
-    updateFilterBtnUI('bracket', false);
     renderBracket();
 
     let tries=0;
@@ -10946,9 +10973,10 @@ window.goBracketMatch = goBracketMatch;
 
 // 내 클럽 필터 토글
 function toggleMyClubFilter(tab, forceOn){
-  if(forceOn !== undefined) MY_CLUB_FILTER = forceOn;
-  else MY_CLUB_FILTER = !MY_CLUB_FILTER;
-  updateFilterBtnUI(tab, MY_CLUB_FILTER);
+  const nextState = (forceOn !== undefined) ? !!forceOn : !MY_CLUB_FILTER;
+  persistMyClubFilterState(nextState);
+  updateFilterBtnUI('register', MY_CLUB_FILTER);
+  updateFilterBtnUI('bracket', MY_CLUB_FILTER);
   if(tab==='bracket') renderBracket();
   if(tab==='register') renderRL();
 }
@@ -11025,10 +11053,33 @@ function syncRevealedOrderIntoMatchRubbers(key,m){
     else if(row2.blankOrder){ rubbers[i].players2=[]; }
     if(row1.blankOrder) rubbers[i].blankOrder1=true; else delete rubbers[i].blankOrder1;
     if(row2.blankOrder) rubbers[i].blankOrder2=true; else delete rubbers[i].blankOrder2;
+    applyBlankOrderAutoScore(rubbers[i]);
   }
   m.rubbers=rubbers;
   m.orderRevealed=true;
   if(!m.orderRevealedAt) m.orderRevealedAt=new Date().toISOString();
+}
+
+function applyBlankOrderAutoScore(rb){
+  if(!rb || typeof rb!=='object') return rb;
+  const b1=!!rb.blankOrder1, b2=!!rb.blankOrder2;
+  if(b1 && !b2){
+    rb.score1=0;
+    rb.score2=6;
+    rb.winner=1;
+    rb.tiebreak=false;
+  }else if(!b1 && b2){
+    rb.score1=6;
+    rb.score2=0;
+    rb.winner=0;
+    rb.tiebreak=false;
+  }else if(b1 && b2){
+    rb.score1=null;
+    rb.score2=null;
+    rb.winner=null;
+    rb.tiebreak=false;
+  }
+  return rb;
 }
 
 function isOnlineOrderLocked(match,key=''){
