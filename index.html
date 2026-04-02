@@ -1712,12 +1712,112 @@ body.slider-ready .page:not(.active){
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');mShowTab(1);om('mDirectorManual')">🏆 클럽 로그인 이용안내</button>
       <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');opShowTab(1);om('mOperatorManual')">🎾 진행자 로그인 이용안내</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');om('mFAQ')">❓ 자주 묻는 질문 (FAQ)</button>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="cm('mManualChooser')">닫기</button>
     </div>
   </div>
 </div>
+
+<!-- ========== FAQ 모달 ========== -->
+<div class="modal-overlay" id="mFAQ">
+<div class="modal-box" style="max-width:500px">
+<div class="modal-header" style="background:#0f1e3a">
+  <h3>❓ 자주 묻는 질문</h3>
+  <button class="modal-close" onclick="cm('mFAQ')">✕</button>
+</div>
+<div class="modal-body" style="padding:0">
+
+<!-- 탭 -->
+<div style="display:flex;border-bottom:2px solid #e0e0e0;background:#fff;position:sticky;top:0;z-index:10">
+  <div id="faqTab1" onclick="faqShowTab(1)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:800;color:#2e7d32;border-bottom:3px solid #2e7d32;cursor:pointer">🏆 경기이사</div>
+  <div id="faqTab2" onclick="faqShowTab(2)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">🎾 진행자</div>
+  <div id="faqTab3" onclick="faqShowTab(3)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">🔧 공통</div>
+</div>
+
+<!-- 경기이사 FAQ -->
+<div id="faqTabC1" style="padding:14px 16px;display:flex;flex-direction:column;gap:0">
+
+  <div style="border-left:3px solid #2e7d32;padding:10px 12px;margin-bottom:10px;background:#f0fdf4;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1b5e20;margin-bottom:5px">Q. 비밀번호를 잊어버렸어요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">클럽 비밀번호는 경기이사가 직접 관리합니다. 처음 로그인 시 설정한 전용 비밀번호를 사용하세요. 비밀번호를 분실한 경우 <b>관리자에게 연락</b>해서 임시 비밀번호로 초기화 후 다시 변경하세요.</div>
+  </div>
+
+  <div style="border-left:3px solid #2e7d32;padding:10px 12px;margin-bottom:10px;background:#f0fdf4;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1b5e20;margin-bottom:5px">Q. 오더를 제출했는데 수정하고 싶어요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6"><b>상대팀이 아직 미제출 상태</b>라면 오더 입력 화면에서 다시 선수를 선택한 후 <b>📤 오더 수정제출</b> 버튼으로 재제출할 수 있습니다.<br>⚠️ 양팀 모두 제출 완료된 후에는 수정이 불가합니다. 이 경우 관리자 또는 진행자에게 초기화를 요청하세요.</div>
+  </div>
+
+  <div style="border-left:3px solid #2e7d32;padding:10px 12px;margin-bottom:10px;background:#f0fdf4;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1b5e20;margin-bottom:5px">Q. 선수가 명단에 없어요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">오더에서 선택 가능한 선수는 <b>팀 등록 시 입력한 명단</b>에 있는 선수만 가능합니다. 등록 기한이 지나지 않았다면 팀등록 탭에서 선수를 추가할 수 있습니다. 등록 기한이 지났다면 관리자에게 문의하세요.</div>
+  </div>
+
+  <div style="border-left:3px solid #2e7d32;padding:10px 12px;margin-bottom:10px;background:#f0fdf4;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1b5e20;margin-bottom:5px">Q. 상대팀 오더가 안 보여요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">오더는 <b>양팀 모두 제출 완료해야</b> 서로에게 공개됩니다. 내 클럽만 제출한 상태에서는 상대 오더를 볼 수 없어요. 오더 현황 칩에서 상대팀 제출 여부를 확인하세요.</div>
+  </div>
+
+  <div style="border-left:3px solid #2e7d32;padding:10px 12px;margin-bottom:10px;background:#f0fdf4;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1b5e20;margin-bottom:5px">Q. 결과 저장이 안 돼요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">결과 저장은 <b>해당 경기에 참가한 클럽의 경기이사, 진행자, 관리자</b>만 가능합니다. 클럽 로그인 상태인지 확인하세요. 로그인 되어 있는데도 안 된다면 관리자에게 문의하세요.</div>
+  </div>
+
+</div>
+
+<!-- 진행자 FAQ -->
+<div id="faqTabC2" style="padding:14px 16px;display:none;flex-direction:column;gap:0">
+
+  <div style="border-left:3px solid #1565c0;padding:10px 12px;margin-bottom:10px;background:#eff6ff;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1e40af;margin-bottom:5px">Q. 본선 추첨 버튼이 활성화가 안 돼요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">예선 <b>전 경기의 결과가 모두 입력</b>되어야 본선 추첨 버튼이 활성화됩니다. 대진표에서 결과가 입력되지 않은 경기가 없는지 확인하세요. 미입력 경기가 하나라도 있으면 추첨이 시작되지 않습니다.</div>
+  </div>
+
+  <div style="border-left:3px solid #1565c0;padding:10px 12px;margin-bottom:10px;background:#eff6ff;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1e40af;margin-bottom:5px">Q. 오더 초기화 후 어떻게 해야 하나요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">초기화하면 양팀의 제출 상태가 모두 되돌아갑니다. 초기화 후 <b>양 클럽 경기이사가 다시 오더를 작성하고 제출</b>해야 합니다. 진행자가 대리제출을 해도 됩니다. 초기화 사실을 양 클럽 경기이사에게 반드시 알려주세요.</div>
+  </div>
+
+  <div style="border-left:3px solid #1565c0;padding:10px 12px;margin-bottom:10px;background:#eff6ff;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#1e40af;margin-bottom:5px">Q. 예선 내용을 다시 보고 싶어요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">본선 추첨 후 예선 섹션은 자동으로 접혀 있습니다. 대진표 화면에서 <b>📂 예선내용 펼치기</b> 버튼을 탭하면 예선 조별 결과를 다시 확인할 수 있습니다.</div>
+  </div>
+
+</div>
+
+<!-- 공통 FAQ -->
+<div id="faqTabC3" style="padding:14px 16px;display:none;flex-direction:column;gap:0">
+
+  <div style="border-left:3px solid #d4a017;padding:10px 12px;margin-bottom:10px;background:#fffbeb;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#92400e;margin-bottom:5px">Q. 앱이 느려요 / 화면이 안 바뀌어요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">브라우저 새로고침(↺)을 해보세요. 그래도 느리다면 브라우저 캐시를 지우거나 다른 브라우저로 접속해보세요. 대회 당일 동시 접속자가 많으면 잠시 느릴 수 있으며, 잠시 후 재시도하면 정상 작동합니다.</div>
+  </div>
+
+  <div style="border-left:3px solid #d4a017;padding:10px 12px;margin-bottom:10px;background:#fffbeb;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#92400e;margin-bottom:5px">Q. 로그아웃은 어떻게 하나요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">상단 버튼이 <b>🏆 클럽 로그아웃</b> 또는 <b>🎾 진행자 로그아웃</b>으로 바뀌어 있으면 해당 버튼을 클릭하면 됩니다. 로그아웃 후에는 일반 관람 모드로 돌아갑니다.</div>
+  </div>
+
+  <div style="border-left:3px solid #d4a017;padding:10px 12px;margin-bottom:10px;background:#fffbeb;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#92400e;margin-bottom:5px">Q. 로그인이 자꾸 풀려요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6">브라우저를 완전히 닫거나 시크릿 모드를 사용하면 로그인 정보가 초기화됩니다. <b>일반 모드</b>로 접속하면 로그인 상태가 유지됩니다. 관리자가 전체 세션 초기화를 한 경우에도 다시 로그인이 필요합니다.</div>
+  </div>
+
+  <div style="border-left:3px solid #d4a017;padding:10px 12px;margin-bottom:10px;background:#fffbeb;border-radius:0 8px 8px 0">
+    <div style="font-weight:700;font-size:.84rem;color:#92400e;margin-bottom:5px">Q. 앱 주소(URL)가 어떻게 되나요</div>
+    <div style="font-size:.78rem;color:#374151;line-height:1.6"><b>kimhaemach2026.pages.dev</b> 로 접속하세요. 즐겨찾기에 추가해두거나 홈 화면에 추가하면 편리하게 이용할 수 있습니다.</div>
+  </div>
+
+</div>
+
+</div><!-- modal-body -->
+<div class="modal-footer">
+  <button class="btn btn-gray" onclick="cm('mFAQ')">닫기</button>
+</div>
+</div>
+</div>
+<!-- ========== FAQ 모달 끝 ========== -->
 
 <!-- ========== 경기이사 이용안내 모달 ========== -->
 <div class="modal-overlay" id="mDirectorManual">
@@ -12498,6 +12598,21 @@ function shuffle(a){
 function np2(n){let p=1;while(p<n)p*=2;return p;}
 function ago(iso){const d=Date.now()-new Date(iso).getTime(),m=Math.floor(d/60000);if(m<1)return'방금';if(m<60)return m+'분 전';const h=Math.floor(m/60);if(h<24)return h+'시간 전';return Math.floor(h/24)+'일 전';}
 function ge(id){return document.getElementById(id);}
+window.faqShowTab=function(n){
+  [1,2,3].forEach(i=>{
+    const tab=document.getElementById('faqTab'+i);
+    const cont=document.getElementById('faqTabC'+i);
+    if(!tab||!cont) return;
+    const colors=['#2e7d32','#1565c0','#b45309'];
+    if(i===n){
+      tab.style.color=colors[i-1]; tab.style.borderBottomColor=colors[i-1]; tab.style.fontWeight='800';
+      cont.style.display='flex';
+    } else {
+      tab.style.color='#888'; tab.style.borderBottomColor='transparent'; tab.style.fontWeight='700';
+      cont.style.display='none';
+    }
+  });
+};
 window.opShowTab=function(n){
   [1,2,3].forEach(i=>{
     const tab=document.getElementById('opTab'+i);
