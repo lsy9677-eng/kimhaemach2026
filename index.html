@@ -1138,8 +1138,7 @@ body.slider-ready .page:not(.active){
   .logo-text p{display:none !important;}
   .header-actions{gap:4px !important;}
   .header-actions .btn-sm{padding:4px 6px !important;font-size:.62rem !important;min-height:30px !important;border-radius:10px !important;}
-  .header-actions .btn-manual{display:none !important;}
-  .swipe-indicator{display:none !important;}
+    .swipe-indicator{display:none !important;}
   .main-content{padding-top:12px !important;}
   .br-floating-notice{top:86px !important;min-width:calc(100vw - 12px) !important;max-width:calc(100vw - 12px) !important;padding:7px 9px !important;gap:6px !important;border-radius:12px !important;}
   .br-floating-notice .tag{padding:3px 7px !important;font-size:.62rem !important;flex:0 0 auto;}
@@ -1274,7 +1273,7 @@ body.slider-ready .page:not(.active){
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="mobileQuickMenuBtn" onclick="om('mMobileQuickMenu')" style="background:#fff;color:#0f1e3a;border:1.5px solid rgba(255,255,255,.42);font-weight:900">☰ 메뉴</button><button class="btn-sm btn-manual" onclick="om('mDirectorManual')" style="background:#fff;color:#2e7d32;border:1.5px solid #2e7d32;font-weight:700" title="경기이사 이용 안내">📖 이용안내</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="manualToggleBtn" onclick="om('mManualChooser')" style="background:#fff;color:#0f1e3a;border:1.5px solid rgba(255,255,255,.42);font-weight:900">📖 메뉴얼</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -1704,20 +1703,18 @@ body.slider-ready .page:not(.active){
 <!-- 경기진행자 로그인 모달 -->
 
 <!-- 모바일 빠른 메뉴 -->
-<div class="modal-overlay" id="mMobileQuickMenu">
+<div class="modal-overlay" id="mManualChooser">
   <div class="modal-box" style="max-width:340px">
     <div class="modal-header" style="background:#0f1e3a">
-      <h3>☰ 빠른 메뉴</h3>
-      <button class="modal-close" onclick="cm('mMobileQuickMenu')">✕</button>
+      <h3>📖 메뉴얼</h3>
+      <button class="modal-close" onclick="cm('mManualChooser')">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mDirectorManual')">📖 경기이사 이용안내</button>
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mOperatorManual')">🎾 경기진행자 이용안내</button>
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');showPage('bracket')">🎲 대진표 바로가기</button>
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');showPage('ranking')">📋 시합결과 바로가기</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');mShowTab(1);om('mDirectorManual')">🏆 클럽 로그인 이용안내</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');opShowTab(1);om('mOperatorManual')">🎾 진행자 로그인 이용안내</button>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-gray" onclick="cm('mMobileQuickMenu')">닫기</button>
+      <button class="btn btn-gray" onclick="cm('mManualChooser')">닫기</button>
     </div>
   </div>
 </div>
