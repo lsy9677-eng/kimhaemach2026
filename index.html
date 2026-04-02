@@ -11040,7 +11040,10 @@ function collectMyOnlineOrderFromModal(key, mid){
 function confirmSubmitOrderForSide(side){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const m=(G.matches[key]||[]).find(x=>x.id===mid); if(!m) return;
-  if(!AD){ toast('관리자만 사용할 수 있습니다','error'); return; }
+  if(!(AD||OP)){
+    toast('관리자 또는 진행자만 사용할 수 있습니다','error');
+    return;
+  }
   const teams=G.teams[key]||[];
   const teamObj=side===1?teams[m.t1]:teams[m.t2];
   const teamName=teamObj?tdn(teamObj,key,side===1?m.t1:m.t2):(side===1?'홈팀':'원정팀');
@@ -11055,10 +11058,11 @@ function confirmSubmitOrderForSide(side){
   }
   const st=getOnlineOrderState(key,m);
   const already=(side===1?st.s1:st.s2);
+  const actor=AD?'관리자':'진행자';
   const msg=already
-    ? `관리자 권한으로 ${teamName} 오더만 다시 제출하시겠습니까?
+    ? `${actor} 권한으로 ${teamName} 오더만 다시 제출하시겠습니까?
 현재 모달에 선택된 ${teamName} 오더만 제출 상태로 다시 저장됩니다.`
-    : `관리자 권한으로 ${teamName} 오더만 제출하시겠습니까?
+    : `${actor} 권한으로 ${teamName} 오더만 제출하시겠습니까?
 상대팀은 그대로 두고 ${teamName}만 제출 상태로 저장됩니다.`;
   if(!confirm(msg)) return;
   submitOnlineOrder(side);
@@ -11156,9 +11160,21 @@ async function submitOnlineOrder(sideOnly=null){
       payloads.push(p1,p2);
     }
   }else if(OP){
-    if(!st.s1){ const p1=collectSideOrderFromModal(key,mid,1); if(!p1){ toast('홈팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p1, club:getMatchTeamObjects(key,m).t1?.club||p1.base, proxy:true}); }
-    if(!st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(!p2){ toast('원정팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p2, club:getMatchTeamObjects(key,m).t2?.club||p2.base, proxy:true}); }
-    if(!payloads.length){ toast('이미 양팀 모두 제출 완료 상태입니다','info'); return; }
+    if(sideOnly===1 || sideOnly===2){
+      const alreadySubmitted = sideOnly===1 ? st.s1 : st.s2;
+      if(alreadySubmitted){
+        toast('해당 팀은 이미 제출 완료 상태입니다','info');
+        return;
+      }
+      const p=collectSideOrderFromModal(key,mid,sideOnly);
+      if(!p){ toast(sideOnly===1?'홈팀 오더 정보를 읽을 수 없습니다':'원정팀 오더 정보를 읽을 수 없습니다','error'); return; }
+      const sideTeam = sideOnly===1 ? getMatchTeamObjects(key,m).t1 : getMatchTeamObjects(key,m).t2;
+      payloads.push({...p, club:sideTeam?.club||p.base, proxy:true});
+    }else{
+      if(!st.s1){ const p1=collectSideOrderFromModal(key,mid,1); if(!p1){ toast('홈팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p1, club:getMatchTeamObjects(key,m).t1?.club||p1.base, proxy:true}); }
+      if(!st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(!p2){ toast('원정팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p2, club:getMatchTeamObjects(key,m).t2?.club||p2.base, proxy:true}); }
+      if(!payloads.length){ toast('이미 양팀 모두 제출 완료 상태입니다','info'); return; }
+    }
   }else{
     const payload=collectMyOnlineOrderFromModal(key,mid); if(!payload) return;
     payloads.push({side:payload.mySide,base:payload.myBase,rubbers:payload.rubbers,club:REG_CLUB||payload.myBase});
