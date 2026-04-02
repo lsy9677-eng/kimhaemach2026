@@ -1245,7 +1245,7 @@ body.slider-ready .page:not(.active){
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" onclick="om('mDirectorManual')" style="background:#fff;color:#2e7d32;border:1.5px solid #2e7d32;font-weight:700" title="경기이사 이용 안내">📖 이용안내</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -1673,6 +1673,303 @@ body.slider-ready .page:not(.active){
 <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mRegLogin')">취소</button><button class="btn btn-primary" style="background:var(--success)" onclick="doRegLogin()">로그인</button></div>
 </div></div>
 <!-- 경기진행자 로그인 모달 -->
+
+<!-- ========== 경기이사 이용안내 모달 ========== -->
+<div class="modal-overlay" id="mDirectorManual">
+<div class="modal-box" style="max-width:560px">
+<div class="modal-header" style="background:#2e7d32">
+  <h3>📖 경기이사 이용 안내</h3>
+  <button class="modal-close" onclick="cm('mDirectorManual')">✕</button>
+</div>
+<div class="modal-body" style="padding:0">
+
+<!-- 탭 -->
+<div style="display:flex;border-bottom:2px solid #e0e0e0;background:#fff;position:sticky;top:0;z-index:10">
+  <div id="mTab1" onclick="mShowTab(1)" style="flex:1;padding:11px 6px;text-align:center;font-size:.8rem;font-weight:800;color:#2e7d32;border-bottom:3px solid #2e7d32;cursor:pointer">① 클럽 로그인</div>
+  <div id="mTab2" onclick="mShowTab(2)" style="flex:1;padding:11px 6px;text-align:center;font-size:.8rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">② 오더 입력·제출</div>
+  <div id="mTab3" onclick="mShowTab(3)" style="flex:1;padding:11px 6px;text-align:center;font-size:.8rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">③ 결과 입력</div>
+</div>
+
+<!-- 탭1: 클럽 로그인 -->
+<div id="mTabC1" style="padding:16px">
+  <div style="background:#e8f5e9;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:.82rem;color:#1b5e20;line-height:1.6;font-weight:700">
+    🏆 클럽 로그인은 경기이사 전용입니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">화면 오른쪽 위 <span style="background:#2e7d32;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">🏆 클럽 로그인</span> 클릭</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">일반 사용자와 구분된 경기이사 전용 버튼입니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">클럽 선택 → 비밀번호 입력</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">관리자에게 받은 클럽 전용 비밀번호를 입력하세요.<br>처음 로그인 시 임시 비밀번호 → <b>전용 비밀번호로 변경 필수</b></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">로그인 완료 → 상단에 <span style="background:#2e7d32;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">클럽</span> 뱃지 표시</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">내 클럽 경기만 필터되고 오더 입력 권한이 생깁니다.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:14px;background:#fff3e0;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#e65100;line-height:1.55">
+    ⚠️ 비밀번호는 경기이사만 알고 관리해야 합니다. 필요한 회원에게만 공유하세요.
+  </div>
+  <div style="margin-top:10px;text-align:right">
+    <button onclick="mShowTab(2)" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:.82rem;font-weight:700;cursor:pointer">다음 ▶ 오더 입력</button>
+  </div>
+</div>
+
+<!-- 탭2: 오더 입력·제출 -->
+<div id="mTabC2" style="padding:16px;display:none">
+  <div style="background:#e3f2fd;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:.82rem;color:#0d47a1;line-height:1.6;font-weight:700">
+    📝 오더는 상대 클럽 제출 전까지 비공개입니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#1976d2;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">대진표에서 내 클럽 경기 찾기 → <span style="background:#f57c00;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">📝 오더 입력·제출</span> 클릭</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">로그인 후 내 클럽 경기만 필터되어 표시됩니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#1976d2;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">매치별 출전 선수 페어 선택</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">팀 등록 시 입력된 명단에서 페어를 구성합니다.<br>제출 전까지 자유롭게 수정 가능합니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#1976d2;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px"><span style="background:#757575;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">💾 임시저장</span> 으로 중간 저장 가능</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">나갔다 다시 열어도 임시저장 내용이 유지됩니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#1976d2;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">4</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">확정 시 <span style="background:#f57c00;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">📤 오더 제출</span> 클릭</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">상대가 제출 전이면 <b>오더 수정제출</b>로 재변경 가능합니다.</div>
+      </div>
+    </div>
+  </div>
+  <!-- 공개 흐름 -->
+  <div style="margin-top:14px;background:#f8f9fa;border-radius:10px;padding:12px">
+    <div style="font-size:.78rem;font-weight:700;color:#555;margin-bottom:8px">📋 오더 공개 흐름</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <div style="padding:6px 10px;background:#e3f2fd;color:#0d47a1;border-radius:8px;font-size:.76rem;font-weight:700">내 클럽 제출</div>
+      <div style="color:#aaa">→</div>
+      <div style="padding:6px 10px;background:#fff3e0;color:#e65100;border-radius:8px;font-size:.76rem;font-weight:700">상대 제출 대기</div>
+      <div style="color:#aaa">→</div>
+      <div style="padding:6px 10px;background:#e8f5e9;color:#1b5e20;border-radius:8px;font-size:.76rem;font-weight:700">양팀 완료 🔓 공개</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;display:flex;justify-content:space-between">
+    <button onclick="mShowTab(1)" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:8px;padding:8px 14px;font-size:.82rem;cursor:pointer">◀ 이전</button>
+    <button onclick="mShowTab(3)" style="background:#1976d2;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:.82rem;font-weight:700;cursor:pointer">다음 ▶ 결과 입력</button>
+  </div>
+</div>
+
+<!-- 탭3: 결과 입력 -->
+<div id="mTabC3" style="padding:16px;display:none">
+  <div style="background:#fff3e0;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:.82rem;color:#e65100;line-height:1.6;font-weight:700">
+    🏅 양팀 오더 공개 후 경기 진행 → 결과 입력 순서입니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#f57c00;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">양팀 오더 공개 확인 후 경기 진행</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">대진표 카드에서 📋 오더 2/2 제출 표시가 되면 오더가 공개된 상태입니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#f57c00;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">경기 후 <span style="background:#1976d2;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">📝 오더/기록확인입력</span> 클릭</div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">양팀 제출 완료 후 버튼 이름이 자동으로 바뀝니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#f57c00;color:#fff;font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:3px">매치별 점수 입력 → <span style="background:#1976d2;color:#fff;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700">💾 결과저장</span></div>
+        <div style="font-size:.80rem;color:#555;line-height:1.5">저장하면 대진표에 즉시 반영됩니다.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:14px;background:#ffebee;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#c62828;line-height:1.55">
+    🔒 양팀 제출 완료 후에는 오더 수정 불가합니다. 초기화가 필요하면 관리자 또는 경기진행자에게 요청하세요.
+  </div>
+  <div style="margin-top:10px;text-align:left">
+    <button onclick="mShowTab(2)" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:8px;padding:8px 14px;font-size:.82rem;cursor:pointer">◀ 이전</button>
+  </div>
+</div>
+
+</div><!-- modal-body -->
+<div class="modal-footer">
+  <button class="btn btn-gray" onclick="cm('mDirectorManual')">닫기</button>
+</div>
+</div><!-- modal-box -->
+</div><!-- modal-overlay -->
+<!-- ========== 경기이사 이용안내 모달 끝 ========== -->
+
+<!-- ========== 경기진행자 이용안내 모달 ========== -->
+<div class="modal-overlay" id="mOperatorManual">
+<div class="modal-box" style="max-width:540px">
+<div class="modal-header" style="background:#1565c0">
+  <h3>🎾 경기진행자 운영 안내</h3>
+  <button class="modal-close" onclick="cm('mOperatorManual')">✕</button>
+</div>
+<div class="modal-body" style="padding:0">
+
+<!-- 탭 -->
+<div style="display:flex;border-bottom:2px solid #e0e0e0;background:#fff;position:sticky;top:0;z-index:10">
+  <div id="opTab1" onclick="opShowTab(1)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:800;color:#1565c0;border-bottom:3px solid #1565c0;cursor:pointer">① 오더 관리</div>
+  <div id="opTab2" onclick="opShowTab(2)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">② 본선 추첨</div>
+  <div id="opTab3" onclick="opShowTab(3)" style="flex:1;padding:11px 4px;text-align:center;font-size:.76rem;font-weight:700;color:#888;border-bottom:3px solid transparent;cursor:pointer">③ 대진표 운용</div>
+</div>
+
+<!-- 탭1: 오더 관리 -->
+<div id="opTabC1" style="padding:16px">
+  <div style="background:#e3f2fd;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:.80rem;color:#0d47a1;line-height:1.6;font-weight:700">
+    🎾 진행자는 오더 현황 확인 · 미제출팀 대리제출 · 초기화가 가능합니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#1565c0;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">오더 제출 현황 확인</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">대진표 경기 카드의 <span style="background:#f57c00;color:#fff;padding:1px 7px;border-radius:5px;font-size:.73rem;font-weight:700">📋 오더 0/2 제출</span> 칩으로 확인합니다. 카드 클릭 시 양쪽 명단과 제출 상태를 볼 수 있습니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#1565c0;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">미제출팀 대리제출</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">경기 시작 전 미제출 팀이 있으면 오더 화면 하단의 <span style="background:#1565c0;color:#fff;padding:1px 7px;border-radius:5px;font-size:.73rem;font-weight:700">📤 ○○팀만 대리제출</span> 버튼으로 대신 제출합니다. 양팀 모두 미제출이면 <span style="background:#1565c0;color:#fff;padding:1px 7px;border-radius:5px;font-size:.73rem;font-weight:700">📤 양팀 모두 대리제출</span>도 가능합니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#1565c0;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">오더 초기화</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">다시 작성이 필요할 때 <span style="background:#c62828;color:#fff;padding:1px 7px;border-radius:5px;font-size:.73rem;font-weight:700">🔓 초기화</span> 버튼으로 제출 상태를 되돌립니다. 초기화 후 양 클럽 경기이사가 다시 제출해야 합니다.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:14px;background:#f8f9fa;border-radius:10px;padding:11px">
+    <div style="font-size:.76rem;font-weight:700;color:#555;margin-bottom:7px">📋 오더 공개 흐름</div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <div style="padding:5px 9px;background:#e3f2fd;color:#0d47a1;border-radius:7px;font-size:.74rem;font-weight:700">양팀 각자 제출</div>
+      <div style="color:#bbb">→</div>
+      <div style="padding:5px 9px;background:#e8f5e9;color:#1b5e20;border-radius:7px;font-size:.74rem;font-weight:700">오더 공개 🔓</div>
+      <div style="color:#bbb">→</div>
+      <div style="padding:5px 9px;background:#fff3e0;color:#e65100;border-radius:7px;font-size:.74rem;font-weight:700">경기·결과 입력</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;text-align:right">
+    <button onclick="opShowTab(2)" style="background:#1565c0;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.80rem;font-weight:700;cursor:pointer">다음 ▶ 본선 추첨</button>
+  </div>
+</div>
+
+<!-- 탭2: 본선 추첨 -->
+<div id="opTabC2" style="padding:16px;display:none">
+  <div style="background:#fce4ec;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:.80rem;color:#880e4f;line-height:1.6;font-weight:700">
+    🏆 예선 전 경기 결과가 모두 입력되어야 본선 추첨이 가능합니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#880e4f;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">예선 완료 확인</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">대진표에서 예선 조별 경기의 결과가 모두 입력됐는지 확인합니다. 결과 미입력 경기가 남아 있으면 본선 추첨 버튼이 활성화되지 않습니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#880e4f;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">본선 추첨 실행</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">예선 결과를 바탕으로 본선 진출팀이 자동 결정됩니다. 대진표 상단 또는 해당 부 섹션의 <span style="background:#880e4f;color:#fff;padding:1px 7px;border-radius:5px;font-size:.73rem;font-weight:700">🎲 본선 추첨</span> 버튼을 클릭하면 본선 대진이 생성됩니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#880e4f;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">본선 추첨 후 확인</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">추첨 결과를 확인하고 이상이 없으면 본선 경기를 진행합니다. 추첨 결과는 추첨 로그에 자동 저장됩니다.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:14px;background:#fce4ec;border-radius:10px;padding:11px">
+    <div style="font-size:.76rem;font-weight:700;color:#880e4f;margin-bottom:7px">🏆 예선 → 본선 흐름</div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <div style="padding:5px 9px;background:#fce4ec;color:#880e4f;border-radius:7px;font-size:.74rem;font-weight:700">예선 결과 전부 입력</div>
+      <div style="color:#bbb">→</div>
+      <div style="padding:5px 9px;background:#f3e5f5;color:#6a1b9a;border-radius:7px;font-size:.74rem;font-weight:700">본선 추첨 실행</div>
+      <div style="color:#bbb">→</div>
+      <div style="padding:5px 9px;background:#e8f5e9;color:#1b5e20;border-radius:7px;font-size:.74rem;font-weight:700">본선 경기 시작</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;display:flex;justify-content:space-between">
+    <button onclick="opShowTab(1)" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:8px;padding:8px 13px;font-size:.80rem;cursor:pointer">◀ 이전</button>
+    <button onclick="opShowTab(3)" style="background:#1565c0;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.80rem;font-weight:700;cursor:pointer">다음 ▶ 대진표 운용</button>
+  </div>
+</div>
+
+<!-- 탭3: 대진표 운용 -->
+<div id="opTabC3" style="padding:16px;display:none">
+  <div style="background:#e8f5e9;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:.80rem;color:#1b5e20;line-height:1.6;font-weight:700">
+    📋 예선이 끝나면 예선 섹션이 자동으로 접혀 본선 운용에 집중할 수 있습니다
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">예선 섹션 자동 접힘</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">예선 경기가 모두 완료되면 대진표에서 예선 조별 섹션이 자동으로 접혀 화면이 깔끔해집니다. 필요 시 섹션 제목을 탭하면 다시 펼쳐서 확인할 수 있습니다.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">본선 섹션 중심으로 운용</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">본선 추첨 후에는 본선 대진 섹션만 펼쳐져 바로 경기를 진행할 수 있습니다. 각 경기 카드를 클릭해 오더 확인 및 결과를 입력하세요.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:11px;align-items:flex-start">
+      <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#2e7d32;color:#fff;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+      <div>
+        <div style="font-weight:700;font-size:.86rem;margin-bottom:3px">본선 수동 수정</div>
+        <div style="font-size:.79rem;color:#555;line-height:1.55">부득이하게 대진을 수정해야 할 경우 진행자 권한으로 본선 대진을 직접 수정할 수 있습니다. 단, 신중하게 사용하고 변경 내용을 경기이사들에게 공유하세요.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:14px;background:#fff3e0;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#e65100;line-height:1.55">
+    ⚠️ 진행자는 팀등록 수정·선수현황·관리자 설정 권한이 없습니다. 해당 사항은 관리자에게 문의하세요.
+  </div>
+  <div style="margin-top:10px;text-align:left">
+    <button onclick="opShowTab(2)" style="background:#fff;color:#666;border:1px solid #ddd;border-radius:8px;padding:8px 13px;font-size:.80rem;cursor:pointer">◀ 이전</button>
+  </div>
+</div>
+
+</div><!-- modal-body -->
+<div class="modal-footer">
+  <button class="btn btn-gray" onclick="cm('mOperatorManual')">확인</button>
+</div>
+</div><!-- modal-box -->
+</div><!-- modal-overlay -->
+<!-- ========== 경기진행자 이용안내 모달 끝 ========== -->
+
+
 <div class="modal-overlay" id="mOpLogin"><div class="modal-box"><div class="modal-header"><h3>🎾 경기진행자 로그인</h3><button class="modal-close" onclick="cm('mOpLogin')">✕</button></div><div class="modal-body"><div style="padding:10px 12px;background:linear-gradient(135deg,#e8f0fe,#dbeafe);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#1d4ed8;line-height:1.5">대진표 운영 전용 로그인입니다. 예선 추첨/관리자 설정/선수등록 권한은 없고, 본선 추첨·본선 수정·오더 현황 확인·미제출팀 대리제출만 가능합니다.</div><div class="form-group"><label class="form-label">비밀번호 <span class="req">*</span></label><input class="form-input" type="password" id="opPwInput" placeholder="관리자가 정한 경기진행자 비밀번호" onkeydown="if(event.key==='Enter')doOperatorLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mOpLogin')">취소</button><button class="btn btn-primary" style="background:#1565c0" onclick="doOperatorLogin()">로그인</button></div></div></div>
 <!-- 최초 로그인 전화번호 등록 모달 -->
 <div class="modal-overlay" id="mFirstLogin">
@@ -2985,6 +3282,12 @@ function doOperatorLogin(){
   applyOperatorUI();
   toast('경기진행자 로그인 ✅','success');
   showPage('bracket');
+  // ▼▼▼ [이용안내] 진행자 로그인 시 안내 팝업 자동 표시 (세션당 1회) ▼▼▼
+  if(!sessionStorage.getItem('opManualShown')){
+    sessionStorage.setItem('opManualShown','1');
+    setTimeout(()=>{ om('mOperatorManual'); }, 400);
+  }
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 }
 function toggleShowOperatorPw(btn){
   const el = ge('currentOperatorPwDisplay');
@@ -3307,7 +3610,16 @@ function _completeRegLogin(club){
     upDash();
     updateMyClubUI();
     // 비번 미변경 클럽이면 변경 권장 팝업
-    openChangePwIfNeeded(club);
+    const pwNeeded = openChangePwIfNeeded(club);
+    // ▼▼▼ [이용안내] 비번 변경 팝업이 안 뜰 때만 이용안내 자동 표시 ▼▼▼
+    if(!pwNeeded){
+      const shownKey = 'manualShown_' + club;
+      if(!sessionStorage.getItem(shownKey)){
+        sessionStorage.setItem(shownKey, '1');
+        setTimeout(()=>{ window.mShowTab(1); om('mDirectorManual'); }, 400);
+      }
+    }
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
   }, 150);
 }
 
@@ -3329,12 +3641,13 @@ function shouldPromptPwChange(club){
 }
 
 function openChangePwIfNeeded(club){
-  if(!shouldPromptPwChange(club)) return;
+  if(!shouldPromptPwChange(club)) return false;
   CHANGE_PW_CLUB = club;
   ge('changePw1').value='';
   ge('changePw2').value='';
   ge('changePwMsg').textContent='';
   setTimeout(()=>{ om('mChangePw'); ge('changePw1')?.focus(); }, 400);
+  return true;
 }
 
 // 직접 비번 변경 (로그인 상태에서 버튼 클릭)
@@ -12020,6 +12333,34 @@ function shuffle(a){
 function np2(n){let p=1;while(p<n)p*=2;return p;}
 function ago(iso){const d=Date.now()-new Date(iso).getTime(),m=Math.floor(d/60000);if(m<1)return'방금';if(m<60)return m+'분 전';const h=Math.floor(m/60);if(h<24)return h+'시간 전';return Math.floor(h/24)+'일 전';}
 function ge(id){return document.getElementById(id);}
+window.opShowTab=function(n){
+  [1,2,3].forEach(i=>{
+    const tab=document.getElementById('opTab'+i);
+    const cont=document.getElementById('opTabC'+i);
+    if(!tab||!cont) return;
+    if(i===n){
+      tab.style.color='#1565c0'; tab.style.borderBottomColor='#1565c0'; tab.style.fontWeight='800';
+      cont.style.display='';
+    } else {
+      tab.style.color='#888'; tab.style.borderBottomColor='transparent'; tab.style.fontWeight='700';
+      cont.style.display='none';
+    }
+  });
+};
+window.mShowTab=function(n){
+  [1,2,3].forEach(i=>{
+    const tab=document.getElementById('mTab'+i);
+    const cont=document.getElementById('mTabC'+i);
+    if(!tab||!cont) return;
+    if(i===n){
+      tab.style.color='#2e7d32'; tab.style.borderBottomColor='#2e7d32'; tab.style.fontWeight='800';
+      cont.style.display='';
+    } else {
+      tab.style.color='#888'; tab.style.borderBottomColor='transparent'; tab.style.fontWeight='700';
+      cont.style.display='none';
+    }
+  });
+};
 function om(id){document.getElementById(id)?.classList.add('open');}
 function cm(id){const el=document.getElementById(id);if(!el)return;el.classList.remove('open');const box=el.querySelector('.modal-box');if(box)box.classList.remove('fullscreen');el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');}
 function toggleModalFullscreen(id,btn){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;const isFull=box.classList.toggle('fullscreen');if(btn)btn.textContent=isFull?'🗗':'⛶';}
