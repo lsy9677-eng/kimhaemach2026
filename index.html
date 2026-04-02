@@ -1138,6 +1138,7 @@ body.slider-ready .page:not(.active){
   .logo-text p{display:none !important;}
   .header-actions{gap:4px !important;}
   .header-actions .btn-sm{padding:4px 6px !important;font-size:.62rem !important;min-height:30px !important;border-radius:10px !important;}
+  .header-actions .btn-manual{display:none !important;}
   .swipe-indicator{display:none !important;}
   .main-content{padding-top:12px !important;}
   .br-floating-notice{top:86px !important;min-width:calc(100vw - 12px) !important;max-width:calc(100vw - 12px) !important;padding:7px 9px !important;gap:6px !important;border-radius:12px !important;}
@@ -1273,7 +1274,7 @@ body.slider-ready .page:not(.active){
       <div class="logo-icon" style="display:none">🎾</div>
       <div class="logo-text"><h1>김해시테니스협회</h1><p>TOURNAMENT SYSTEM</p></div>
     </div>
-    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="manualMenuBtn" onclick="om('mMobileQuickMenu')" style="background:#fff;color:#2e7d32;border:1.5px solid #2e7d32;font-weight:800">📖 메뉴얼</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
+    <div class="header-actions"><span class="admin-badge" id="regLoginBadge" style="display:none;background:var(--success);color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">클럽</span><span class="admin-badge" id="opLoginBadge" style="display:none;background:#1565c0;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px">진행자</span><span class="admin-badge" id="adminBadge">관리자</span><button class="btn-sm admin-only" id="adminSettingsBtn" onclick="openAdminSettings()">⚙️</button><button class="btn-sm" id="regToggleBtn" onclick="toggleReg()" style="background:var(--success);color:#fff;border:none">🏆 클럽 로그인</button><button class="btn-sm" id="mobileQuickMenuBtn" onclick="om('mMobileQuickMenu')" style="background:#fff;color:#0f1e3a;border:1.5px solid rgba(255,255,255,.42);font-weight:900">☰ 메뉴</button><button class="btn-sm btn-manual" onclick="om('mDirectorManual')" style="background:#fff;color:#2e7d32;border:1.5px solid #2e7d32;font-weight:700" title="경기이사 이용 안내">📖 이용안내</button><button class="btn-sm" id="opToggleBtn" onclick="toggleOperator()" style="background:#1565c0;color:#fff;border:none">🎾 진행자 로그인</button><button class="btn-sm" id="adminToggleBtn" onclick="toggleAdmin()">🔐 관리자</button></div>
   </div>
   <nav class="nav-tabs">
     <div class="nav-tab active" onclick="showPage('home')" data-page="home">🏠 홈</div>
@@ -1307,7 +1308,7 @@ body.slider-ready .page:not(.active){
     <div class="card-title">📊 김해시테니스협회 현황</div>
     <div class="g4 home-stats">
       <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_clubs')"><div class="stat-label">등록 클럽</div><div class="stat-val" id="sClubs">0</div></div>
-      <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_teams')"><div class="stat-label">등록 팀</div><div class="stat-val" id="sTeams">0</div></div>
+      <div class="stat-card home-click-card" onclick="goHomeMetric('courts')"><div class="stat-label">소속 코트</div><div class="stat-val" id="sTeams">0</div></div>
       <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_players')"><div class="stat-label">등록 선수</div><div class="stat-val" id="sMatches">0</div></div>
       <div class="stat-card home-click-card" onclick="goHomeMetric('reg2026')"><div class="stat-label">2026 인원</div><div class="stat-val" id="sPlayers">0</div></div>
     </div>
@@ -1702,16 +1703,18 @@ body.slider-ready .page:not(.active){
 </div></div>
 <!-- 경기진행자 로그인 모달 -->
 
-<!-- 메뉴얼 선택 -->
+<!-- 모바일 빠른 메뉴 -->
 <div class="modal-overlay" id="mMobileQuickMenu">
   <div class="modal-box" style="max-width:340px">
     <div class="modal-header" style="background:#0f1e3a">
-      <h3>📖 메뉴얼</h3>
+      <h3>☰ 빠른 메뉴</h3>
       <button class="modal-close" onclick="cm('mMobileQuickMenu')">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mDirectorManual')">🏆 클럽 로그인 이용안내</button>
-      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mOperatorManual')">🎾 진행자 로그인 이용안내</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mDirectorManual')">📖 경기이사 이용안내</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');om('mOperatorManual')">🎾 경기진행자 이용안내</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');showPage('bracket')">🎲 대진표 바로가기</button>
+      <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mMobileQuickMenu');showPage('ranking')">📋 시합결과 바로가기</button>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="cm('mMobileQuickMenu')">닫기</button>
@@ -2651,6 +2654,20 @@ body.slider-ready .page:not(.active){
   </div>
 </div>
 
+
+<div class="modal-overlay" id="mCourtInfo">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-header">
+      <h3>🎾 김해시 소속 코트 현황</h3>
+      <button class="modal-close" onclick="cm('mCourtInfo')">✕</button>
+    </div>
+    <div class="modal-body" id="mCourtInfoBody" style="max-height:72vh;overflow:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="cm('mCourtInfo')">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="TC"></div>
 <button class="scroll-top" id="stBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
@@ -2837,6 +2854,40 @@ const COURT_GROUPS = [
 ];
 // 기존 로직 호환을 위해 펼친 목록도 유지
 const COURT_LIST = COURT_GROUPS.flatMap(g => g.courts);
+
+function getTotalCourtCount(){
+  return COURT_GROUPS.reduce((sum,g)=>sum + ((g.courts||[]).length), 0);
+}
+function renderCourtInfoBody(){
+  const body=ge('mCourtInfoBody');
+  if(!body) return;
+  const total=getTotalCourtCount();
+  body.innerHTML = `
+    <div style="padding:10px 12px;background:linear-gradient(135deg,#eef4ff,#fff7dd);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;font-size:.84rem;line-height:1.65">
+      <b style="color:var(--primary-dark)">김해시 소속 코트 현황</b><br>
+      총 <b style="color:var(--primary)">${total}면</b> 운영 기준
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${COURT_GROUPS.map(g=>`
+        <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff">
+          <div style="padding:10px 12px;background:var(--primary);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>${g.title}</span>
+            <span style="font-size:.78rem;background:rgba(255,255,255,.16);padding:3px 8px;border-radius:999px">${(g.courts||[]).length}면</span>
+          </div>
+          <div style="padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px">
+            ${(g.courts||[]).map(c=>`<span class="badge bg-blue" style="font-size:.76rem">${c}</span>`).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function openCourtInfoModal(){
+  renderCourtInfoBody();
+  om('mCourtInfo');
+}
+window.openCourtInfoModal = openCourtInfoModal;
+
 
 
 // ── 조 코트 배정 UI 열림 상태(렌더 후에도 유지) ─────────────────────
@@ -4997,6 +5048,10 @@ function goHomeMetric(kind){
       if(y){ y.value='2026'; }
       renderRegistryTab();
       window.scrollTo({top:0,behavior:'smooth'});
+      break;
+    }
+    case 'courts': {
+      openCourtInfoModal();
       break;
     }
     default:
@@ -11341,9 +11396,10 @@ function upDash(){
   // 등록 팀수: G.teams 전체 (현재까지 등록된 모든 팀)
   let assocTeams = 0;
   Object.values(G.teams||{}).forEach(arr=>{ assocTeams += (arr||[]).length; });
+  const totalCourts = getTotalCourtCount();
 
   ge('sClubs').textContent = assocClubs.size || 31; // 2026 명단 기준 클럽수
-  ge('sTeams').textContent = assocTeams;
+  ge('sTeams').textContent = totalCourts;
   ge('sMatches').textContent = reg2026.length; // 4번째 카드 = 등록선수
   ge('sPlayers').textContent = assocPlayers;
   ge('regBadge').textContent = assocTeams;
