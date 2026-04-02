@@ -6665,7 +6665,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
                 <div style="font-weight:800;color:var(--primary-dark)">📌 예선 종료 후 실제 팀이 본선 추첨으로 배정됩니다</div>
               </div>
               <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">
-                이 화면은 구조 예시만 보여줍니다. 1위/2위 배정 기준만 표시하고 실제 팀명은 예선 종료 후 추첨으로 확정됩니다.
+                이 화면은 구조만 보여줍니다. 본선은 전체 재추첨이므로 실제 팀 배정은 아직 표시하지 않습니다.
               </div>
               ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
             </div>`;
@@ -6673,7 +6673,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
             html+=`<div style="margin-top:8px">
               <button class="btn btn-outline" style="font-size:.72rem;padding:4px 12px" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.nextElementSibling.style.display==='none'?'🌳 조별 본선 연결구조 보기':'🌳 조별 본선 연결구조 접기'">🌳 조별 본선 연결구조 보기</button>
               <div style="display:none;margin-top:8px">
-                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">실제 조 번호는 추첨 전까지 숨김 처리됩니다. 본선 추첨 후에만 자리 배정이 확정됩니다.</div>
+                <div style="font-size:.75rem;color:var(--text2);margin-bottom:6px">본선은 전체 재추첨이므로 추첨 전에는 실제 배정 정보를 숨깁니다.</div>
                 <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:12px">
                   ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
                 </div>
@@ -6969,7 +6969,7 @@ function renderCombinedBracketSection(tid, div){
             <div class="card-title" style="color:var(--primary-dark);margin:0">🌳 미리보기</div>
             <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${pv.n}강</span>
           </div>
-          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px">📌 <b>몇 조 몇 위</b>가 어느 본선 슬롯으로 가는지 확인하세요. 예선 결과가 나오면 자동으로 실제 팀명으로 바뀝니다.</div>
+          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px">📌 본선은 전체 재추첨입니다. 지금은 구조만 보이고 실제 배정은 본선 추첨 후에 확정됩니다.</div>
           ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
         </div>`;
       }
@@ -8105,9 +8105,9 @@ function refreshRunPreview(key){
   if(pv.n>=2){
     const adv=freshDraw.advance||2, gc=freshDraw.groups?.length||0;
     dst.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-      <div style="font-size:.78rem;font-weight:700;color:var(--primary-dark)">✅ 본선 배정 확정</div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--primary-dark)">⏳ 본선 전체 재추첨 대기</div>
       <span class="badge" style="background:var(--accent);color:#fff;font-size:.7rem">${adv}팀×${gc}조→${pv.n}강</span>
-    </div>${renderMainPreviewHTML(pv.matchSlots,pv.n,false)}`;
+    </div><div style="font-size:.74rem;color:var(--text2);margin-bottom:8px">지금은 구조만 표시됩니다. 실제 배정은 본선 추첨 후 확정됩니다.</div>${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}`;
   }
 }
 
@@ -8342,7 +8342,7 @@ function renderSavedDrawView(entry){
     : (Array.isArray(norm.plan?.matchSlots) && norm.plan.matchSlots.length ? norm.plan.matchSlots : []);
   const savedMainSize = Number(norm.mainSize || norm.plan?.n || 0);
   const mainHtml = (savedMainSlots.length && savedMainSize>=2)
-    ? renderMainPreviewHTML(savedMainSlots, savedMainSize, false)
+    ? renderMainPreviewHTML(savedMainSlots, savedMainSize, !isMainMode)
     : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>';
   const groupsHtml = (norm.groups||[]).length ? (norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
             <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
@@ -8383,7 +8383,7 @@ function renderSavedDrawView(entry){
         ${leftHtml}
       </div>
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 미리보기</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${isMainMode ? '본선 추첨 결과' : '본선 구조 미리보기'}</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
@@ -9378,11 +9378,8 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
   const cols=[];
   const firstCol=[];
   const previewLabel=(team, side)=>{
+    if(isPreview) return '추첨 대기';
     if(!team) return '추첨 대기';
-    if(isPreview){
-      const rk=Math.max(1, parseInt(team.rk||1,10));
-      return `( )조 ${rk}위`;
-    }
     return `${team.rk===1?'👑':'🥈'} ${team.nm}`;
   };
   for(let i=0;i<currentCount;i++){
