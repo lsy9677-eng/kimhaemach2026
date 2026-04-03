@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-03-v14-order-photo-view-role-fixed";
+  const APP_VERSION = "2026-04-03-v15-order-photo-storage-rules-ready";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -10394,7 +10394,7 @@ function openM3(key,mid){
   <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.${G.meta.onlineOrderEnabled && !st.bothSubmitted?`
   <span style="display:block;margin-top:4px;color:#b45309">제출 전에는 자유 수정 가능 · 제출 후에는 내 오더가 저장되며 · 양팀 제출 완료 후에는 완전 잠금됩니다.${isOperator?'<br><span style="color:#1d4ed8">경기진행자는 제출 전에도 양팀 명단은 볼 수 있지만, 제출 완료된 팀의 오더 선택은 양팀 모두 제출될 때까지 숨겨집니다.</span>':''}</span>`:''}</div>
   ${(G.meta.onlineOrderEnabled?`<div style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#93c5fd')};background:${st.bothSubmitted?'linear-gradient(135deg,#ecfdf5,#dcfce7)':(st.mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)')}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-size:.82rem;line-height:1.6;color:var(--text2)"><div style="font-size:.9rem;font-weight:900;color:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')}">${st.bothSubmitted?'🔒 제출 완료 상태':(st.mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div><div style="margin-top:4px">${statusText}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'✅ 제출완료':'⏳ 미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}</div></div><div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')};color:#fff">${st.bothSubmitted?'수정 불가':(st.mySubmitted?'상대 제출 대기':'작성 가능')}</div></div></div>`:'')}
-  ${((side1PhotoEditable||side2PhotoEditable||side1PhotoViewable||side2PhotoViewable||_orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2))?`<div style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)"><div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn1}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side1PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'upload')">🖼️ 사진불러오기</button>`:''}${side1PhotoViewable?`<button type="button" class="btn btn-accent" style="font-size:.74rem;padding:6px 10px" onclick="openOrderPhotoViewer(1)">👁 사진보기</button>`:''}</div><div id="orderPhotoStatus1" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,1)?(side1PhotoViewable?'저장된 사진 있음 · 다시보기 가능':'저장된 사진 있음 · 권한자만 보기 가능'):'대기중'}</div></div>`}${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn2}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side2PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'upload')">🖼️ 사진불러오기</button>`:''}${side2PhotoViewable?`<button type="button" class="btn btn-accent" style="font-size:.74rem;padding:6px 10px" onclick="openOrderPhotoViewer(2)">👁 사진보기</button>`:''}</div><div id="orderPhotoStatus2" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,2)?(side2PhotoViewable?'저장된 사진 있음 · 다시보기 가능':'저장된 사진 있음 · 권한자만 보기 가능'):'대기중'}</div></div>`}</div><div style="font-size:.72rem;color:var(--text3);margin-top:8px;line-height:1.5">사진은 경기 문서에 저장됩니다. 해당 사진을 넣은 클럽, 경기진행자, 관리자만 다시 확인할 수 있습니다. 자동 선택은 후보 명단 안에서만 보조합니다.</div></div>`:'')}`;
+  ${((side1PhotoEditable||side2PhotoEditable||side1PhotoViewable||side2PhotoViewable||_orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2))?`<div style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)"><div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn1}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side1PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'upload')">🖼️ 사진불러오기</button>`:''}${side1PhotoViewable?`<button type="button" class="btn btn-accent" style="font-size:.74rem;padding:6px 10px" onclick="openOrderPhotoViewer(1)">👁 사진보기</button>`:''}</div><div id="orderPhotoStatus1" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,1)?(side1PhotoViewable?'저장된 사진 있음 · 다시보기 가능':'저장된 사진 있음 · 권한자만 보기 가능'):'대기중'}</div></div>`}${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn2}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side2PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'upload')">🖼️ 사진불러오기</button>`:''}${side2PhotoViewable?`<button type="button" class="btn btn-accent" style="font-size:.74rem;padding:6px 10px" onclick="openOrderPhotoViewer(2)">👁 사진보기</button>`:''}</div><div id="orderPhotoStatus2" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,2)?(side2PhotoViewable?'저장된 사진 있음 · 다시보기 가능':'저장된 사진 있음 · 권한자만 보기 가능'):'대기중'}</div></div>`}</div><div style="font-size:.72rem;color:var(--text3);margin-top:8px;line-height:1.5">사진은 Firebase Storage에 저장되고 경기 문서에는 경로/URL만 저장됩니다. 해당 사진을 넣은 클럽, 경기진행자, 관리자만 다시 확인할 수 있습니다. 자동 선택은 후보 명단 안에서만 보조합니다.</div></div>`:'')}`;
   for(let r=0;r<dbl;r++){
     const rb=exRb[r]||{};
     const submitted1=getSubmittedPlayersForSide(key,m,1,r);
@@ -15303,7 +15303,11 @@ function _orderPhotoStoreKey(match, side){
 function _orderPhotoGetSaved(match, side){
   if(!match || !match.orderPhotoStore) return null;
   const key=_orderPhotoStoreKey(match, side);
-  return match.orderPhotoStore[key] || null;
+  const entry = match.orderPhotoStore[key] || null;
+  if(!entry) return null;
+  // Storage 방식(downloadURL) 또는 구형 방식(dataUrl) 모두 유효
+  if(entry.hasPhoto || entry.downloadURL || entry.dataUrl) return entry;
+  return null;
 }
 function _orderPhotoCanView(match, side){
   if(!match) return false;
@@ -15333,100 +15337,112 @@ function _sanitizeOrderPhotoStore(raw){
   });
   return out;
 }
+function _safeStorageSeg(v){
+  return encodeURIComponent(String(v||'').replace(/[\/]+/g,'_').trim() || 'unknown');
+}
 async function persistOrderPhoto(side, imageDataUrl, source){
   const key=CM_key, mid=CM_id; if(!key||!mid||!imageDataUrl) return null;
   const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid || x._id===mid); if(!m) return null;
   const teams=G.teams[key]||[];
   const team=side===1?teams[m.t1]:teams[m.t2];
-  const base=_orderPhotoStoreKey(m, side);
+  const base=_orderPhotoStoreKey(m, side); // 'side1' or 'side2'
+  const [tid, div] = key.split('_');
+  const matchDocId = m._id || m.id;
 
-  // ── 저장 전 압축: 원본 스마트폰 사진(3~5MB) → jpeg 축소(~200KB) ──
-  // Firestore 문서 1MB 한도 대응 + 전송 속도 개선
-  let compressedDataUrl = imageDataUrl;
+  // ── 1. dataUrl → Blob 변환 (압축: 최대 1200px, jpeg 78%) ──
+  let blob;
   try {
-    compressedDataUrl = await compressImageDataUrl(imageDataUrl, 1200, 0.78);
+    const compressed = await compressImageDataUrl(imageDataUrl, 1200, 0.78);
+    const res = await fetch(compressed);
+    blob = await res.blob();
   } catch(e) {
-    compressedDataUrl = imageDataUrl; // 압축 실패 시 원본 유지
+    try {
+      const res = await fetch(imageDataUrl);
+      blob = await res.blob();
+    } catch(e2) {
+      throw new Error('이미지 변환 실패: ' + (e2?.message||e2));
+    }
   }
+  if(!blob || !blob.size) throw new Error('이미지 데이터가 비어 있습니다');
+  if(blob.size > 5 * 1024 * 1024) throw new Error('이미지가 너무 큽니다. 5MB 이하로 다시 시도해 주세요');
 
-  // ── 사진(base64)은 별도 orderPhotos 컬렉션에 저장 ──
-  // match 문서에 직접 넣으면 Firestore 1MB 한도 초과 에러 발생
-  const photoDocId = `${(m._id||m.id)}_${base}`;
-  const photoPayload = {
-    matchId: m._id||m.id,
-    tournamentId: key.split('_')[0],
-    division: key.split('_')[1],
-    side: side,
-    sideKey: base,
-    dataUrl: String(compressedDataUrl||''),
+  // ── 2. Firebase Storage에 업로드 ──
+  const storagePath = `orderPhotos/${_safeStorageSeg(tid)}/${_safeStorageSeg(div)}/${_safeStorageSeg(matchDocId)}/${base}.jpg`;
+  const fileRef = ref(storage, storagePath);
+  await uploadBytes(fileRef, blob, {
+    contentType: 'image/jpeg',
+    cacheControl: 'private,max-age=3600',
+    customMetadata: {
+      tournamentId: String(tid||''),
+      division: String(div||''),
+      matchId: String(matchDocId||''),
+      side: String(base||''),
+      club: String(team?.club||''),
+      source: String(source||'upload')
+    }
+  });
+  const downloadURL = await getDownloadURL(fileRef);
+
+  // ── 3. match 문서에는 URL + 메타만 저장 (base64 절대 포함 안 함) ──
+  const meta = {
+    downloadURL,
+    storagePath,
     updatedAt: new Date().toISOString(),
     source: String(source||'upload'),
     club: String(team?.club||base||''),
-    savedBy: String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사')))
-  };
-
-  try {
-    await setDoc(doc(db,'orderPhotos', photoDocId), photoPayload, {merge:true});
-  } catch(e) {
-    throw new Error('사진 저장 실패: ' + (e?.message||e));
-  }
-
-  // match 문서에는 dataUrl 제외한 메타데이터만 저장 (stM 경유 안 함)
-  const metaOnly = {
-    updatedAt: photoPayload.updatedAt,
-    source: photoPayload.source,
-    club: photoPayload.club,
-    savedBy: photoPayload.savedBy,
-    photoDocId,
+    savedBy: String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사'))),
     hasPhoto: true
   };
-  if(!m.orderPhotoStore) m.orderPhotoStore={};
-  m.orderPhotoStore[base] = metaOnly;
+  if(!m.orderPhotoStore) m.orderPhotoStore = {};
+  m.orderPhotoStore[base] = meta;
 
-  // match 문서에 메타만 업데이트 (batch 말고 단건 updateDoc으로)
-  const matchDocId = m._id||m.id;
   try {
     await updateDoc(doc(db,'matches', matchDocId), {
-      [`orderPhotoStore.${base}`]: metaOnly,
+      [`orderPhotoStore.${base}`]: meta,
       updatedAt: new Date().toISOString()
     });
   } catch(e) {
-    // match 문서 업데이트 실패해도 사진은 저장된 상태 — 무시
     console.warn('match orderPhotoStore meta update failed', e);
+    throw new Error('사진은 Storage에 저장됐지만 경기 문서 메타 저장에 실패했습니다. 다시 시도해 주세요');
   }
 
-  // 메모리 캐시에는 압축본 dataUrl도 유지 (뷰어에서 즉시 볼 수 있도록)
-  m.orderPhotoStore[base] = { ...metaOnly, dataUrl: compressedDataUrl };
-
+  // 메모리 캐시에는 dataUrl도 임시 보관 (뷰어 즉시 열기용)
+  m.orderPhotoStore[base] = { ...meta, dataUrl: imageDataUrl };
   return m.orderPhotoStore[base];
 }
 async function openOrderPhotoViewer(side){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const m=(G.matches[key]||[]).find(x=>x.id===mid); if(!m) return;
   const saved=_orderPhotoGetSaved(m,side);
-  if(!saved||(!saved.dataUrl&&!saved.hasPhoto)){ toast('저장된 사진이 없습니다','info'); return; }
+  if(!saved||(!saved.downloadURL && !saved.dataUrl && !saved.hasPhoto)){
+    toast('저장된 사진이 없습니다','info'); return;
+  }
   if(!_orderPhotoCanView(m,side)){
-    toast('해당 클럽, 진행자, 관리자만 사진을 볼 수 있습니다','error');
-    return;
+    toast('해당 클럽, 진행자, 관리자만 사진을 볼 수 있습니다','error'); return;
   }
   const title=ge('mOrderPhotoViewTitle');
   const img=ge('mOrderPhotoViewImg');
   const meta=ge('mOrderPhotoViewMeta');
-
-  // dataUrl이 메모리에 없으면 orderPhotos 컬렉션에서 불러옴
-  let dataUrl = saved.dataUrl || '';
-  if(!dataUrl && saved.photoDocId){
-    try{
-      const snap = await getDoc(doc(db,'orderPhotos', saved.photoDocId));
-      if(snap.exists()) dataUrl = snap.data().dataUrl || '';
-    }catch(e){ toast('사진 불러오기 실패: '+(e?.message||e),'error'); return; }
-  }
-  if(!dataUrl){ toast('사진 데이터를 찾을 수 없습니다','error'); return; }
-
   if(title) title.textContent=`📷 ${saved.club||('팀 '+side)} 오더 사진`;
-  if(img) img.src=dataUrl;
   if(meta) meta.textContent=`저장: ${saved.updatedAt?fmtDt(saved.updatedAt):'-'} · ${saved.savedBy||'-'} · ${saved.source==='camera'?'사진찍기':'사진불러오기'}`;
-  om('mOrderPhotoView');
+  // 메모리에 dataUrl 있으면 즉시, 없으면 Storage downloadURL 사용
+  if(saved.dataUrl){
+    if(img) img.src=saved.dataUrl;
+    om('mOrderPhotoView');
+  } else if(saved.downloadURL){
+    if(img) img.src=saved.downloadURL;
+    om('mOrderPhotoView');
+  } else if(saved.storagePath){
+    // storagePath는 있는데 URL 없으면 다시 받아옴
+    try{
+      const url = await getDownloadURL(ref(storage, saved.storagePath));
+      m.orderPhotoStore[_orderPhotoStoreKey(m,side)].downloadURL = url;
+      if(img) img.src=url;
+      om('mOrderPhotoView');
+    }catch(e){ toast('사진 불러오기 실패: '+(e?.message||e),'error'); }
+  } else {
+    toast('사진 데이터를 찾을 수 없습니다','error');
+  }
 }
 function _tapOrderUsedPlayers(slots){
   return slots.flatMap(arr=>Array.isArray(arr)?arr:[]).filter(Boolean);
