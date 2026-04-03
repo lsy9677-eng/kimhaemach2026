@@ -15182,9 +15182,35 @@ function exportRegistryExcelMgr(){ exportRegistryExcel(); }
 
 
 
+
 let __orderPhotoTesseractPromise = null;
 function _orderPhotoNorm(v){
   return String(v||'').normalize('NFC').replace(/\s+/g,'').replace(/[^가-힣a-zA-Z0-9]/g,'').toLowerCase();
+}
+function _orderPhotoHangulParts(ch){
+  const code=String(ch||'').charCodeAt(0);
+  const base=0xAC00;
+  const idx=code-base;
+  if(idx<0 || idx>11171) return null;
+  const cho=Math.floor(idx/588);
+  const jung=Math.floor((idx%588)/28);
+  const jong=idx%28;
+  return {cho,jung,jong};
+}
+function _orderPhotoCharsNear(a,b){
+  if(a===b) return 1;
+  const pa=_orderPhotoHangulParts(a), pb=_orderPhotoHangulParts(b);
+  if(pa && pb){
+    let same=0;
+    if(pa.cho===pb.cho) same++;
+    if(pa.jung===pb.jung) same++;
+    if(pa.jong===pb.jong) same++;
+    if(same>=2) return 0.82;
+    if(same===1) return 0.45;
+    return 0;
+  }
+  if(/[a-z0-9]/i.test(a) && /[a-z0-9]/i.test(b)) return a===b?1:0;
+  return 0;
 }
 function _orderPhotoLevenshtein(a,b){
   const s=_orderPhotoNorm(a), t=_orderPhotoNorm(b);
@@ -15195,60 +15221,32 @@ function _orderPhotoLevenshtein(a,b){
   for(let j=0;j<=n;j++) dp[0][j]=j;
   for(let i=1;i<=m;i++){
     for(let j=1;j<=n;j++){
-      const cost=s[i-1]===t[j-1]?0:1;
-      dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+cost);
+      const near=_orderPhotoCharsNear(s[i-1], t[j-1]);
+      const cost = near>=0.8 ? 0.2 : (near>0 ? 0.55 : (s[i-1]===t[j-1]?0:1));
+      dp[i][j]=Math.min(
+        dp[i-1][j]+1,
+        dp[i][j-1]+1,
+        dp[i-1][j-1]+cost
+      );
     }
   }
   return dp[m][n];
-}
-function _orderPhotoKoreanCharParts(ch){
-  const code=String(ch||'').charCodeAt(0);
-  if(!(code>=0xAC00 && code<=0xD7A3)) return null;
-  const base=code-0xAC00;
-  const cho=Math.floor(base/588);
-  const jung=Math.floor((base%588)/28);
-  const jong=base%28;
-  return {cho,jung,jong};
-}
-function _orderPhotoKoreanNameBonus(a,b){
-  if(!/^[가-힣]+$/.test(a) || !/^[가-힣]+$/.test(b)) return 0;
-  if(a.length!==b.length) return 0;
-  let same=0, near=0, diff=0;
-  for(let i=0;i<a.length;i++){
-    if(a[i]===b[i]){ same++; continue; }
-    const pa=_orderPhotoKoreanCharParts(a[i]);
-    const pb=_orderPhotoKoreanCharParts(b[i]);
-    if(!pa || !pb){ diff++; continue; }
-    const sameCho = pa.cho===pb.cho;
-    const sameJung = pa.jung===pb.jung;
-    const sameJong = pa.jong===pb.jong;
-    if((sameCho&&sameJung) || (sameCho&&sameJong) || (sameJung&&sameJong)) near++;
-    else diff++;
-  }
-  if(diff===0 && near===1 && same===a.length-1) return 0.26;
-  if(diff===0 && near===2 && same===a.length-2) return 0.18;
-  if(diff===1 && same>=Math.max(1,a.length-2)) return 0.10;
-  return 0;
 }
 function _orderPhotoScore(token,candidate,lineText=''){
   const a=_orderPhotoNorm(token), b=_orderPhotoNorm(candidate), line=_orderPhotoNorm(lineText);
   if(!a||!b) return 0;
   if(a===b) return 1;
-  const dist=_orderPhotoLevenshtein(a,b);
-  let score=1-(dist/Math.max(a.length,b.length,1));
-  if(b.includes(a) || a.includes(b)) score=Math.max(score, Math.min(0.96, Math.max(a.length,b.length)>=3 ? 0.9 : 0.75));
-  if(line && line.includes(b)) score=Math.max(score,0.97);
-  if(a[0]===b[0]) score+=0.03;
-  if(a.length>=3 && b.length>=3){
-    const minLen=Math.min(a.length,b.length);
-    let prefix=0;
-    while(prefix<minLen && a[prefix]===b[prefix]) prefix++;
-    if(prefix>=2) score+=0.15;
-    else if(prefix>=1) score+=0.05;
-    if(a[a.length-1]===b[b.length-1]) score+=0.04;
-    if(dist===1 && a.length===b.length) score+=0.12;
+  let score=1-(_orderPhotoLevenshtein(a,b)/Math.max(a.length,b.length,1));
+  if(b.includes(a) || a.includes(b)) score=Math.max(score, Math.min(0.97, Math.max(a.length,b.length)>=3 ? 0.92 : 0.78));
+  if(line && line.includes(b)) score=Math.max(score,0.98);
+  if(a[0] && b[0] && a[0]===b[0]) score+=0.05;
+  if(a.length>=2 && b.length>=2 && a.slice(0,2)===b.slice(0,2)) score+=0.12;
+  if(a.length===b.length && _orderPhotoLevenshtein(a,b)<=1) score+=0.12;
+  if(a.length===b.length && a.length>=2 && a.length<=4){
+    let nearCount=0;
+    for(let i=0;i<a.length;i++) if(_orderPhotoCharsNear(a[i],b[i])>=0.8) nearCount++;
+    if(nearCount>=Math.max(2,a.length-1)) score+=0.12;
   }
-  score+=_orderPhotoKoreanNameBonus(a,b);
   return Math.max(0, Math.min(1, score));
 }
 function _orderPhotoExtractLines(text){
@@ -15256,13 +15254,74 @@ function _orderPhotoExtractLines(text){
     .split(/\r?\n+/)
     .map(line=>line.replace(/[|]/g,' ').replace(/[\t]+/g,' ').replace(/\s+/g,' ').trim())
     .filter(Boolean)
-    .slice(0,60);
+    .slice(0,60)
+    .map((text,idx)=>({text,y:idx*40,source:'plain'}));
+}
+function _orderPhotoExtractStructuredLines(result){
+  const data=result&&result.data||{};
+  const out=[];
+  const lines=Array.isArray(data.lines)?data.lines:[];
+  if(lines.length){
+    lines.forEach((ln,idx)=>{
+      const raw=String(ln.text||'').replace(/\s+/g,' ').trim();
+      if(!raw) return;
+      const bb=ln.bbox||{};
+      const y=((bb.y0??bb.top??(idx*40)) + (bb.y1??bb.bottom??(idx*40+20)))/2;
+      out.push({text:raw,y,source:'line',bbox:bb});
+    });
+  }else if(Array.isArray(data.words) && data.words.length){
+    const buckets=[];
+    data.words.forEach((w,idx)=>{
+      const raw=String(w.text||'').trim();
+      if(!raw) return;
+      const bb=w.bbox||{};
+      const y=((bb.y0??bb.top??(idx*20)) + (bb.y1??bb.bottom??(idx*20+10)))/2;
+      let bucket=buckets.find(b=>Math.abs(b.y-y)<18);
+      if(!bucket){ bucket={y,parts:[]}; buckets.push(bucket); }
+      bucket.parts.push({text:raw,x:(bb.x0??bb.left??0)});
+    });
+    buckets.sort((a,b)=>a.y-b.y).forEach((b,idx)=>{
+      b.parts.sort((p,q)=>p.x-q.x);
+      const raw=b.parts.map(p=>p.text).join(' ').replace(/\s+/g,' ').trim();
+      if(raw) out.push({text:raw,y:b.y,source:'word',bbox:{top:b.y}});
+    });
+  }
+  if(!out.length) return _orderPhotoExtractLines(data.text||'');
+  return out
+    .sort((a,b)=>a.y-b.y)
+    .map((line,idx)=>({
+      ...line,
+      text:String(line.text||'').replace(/[|]/g,' ').replace(/[\t]+/g,' ').replace(/\s+/g,' ').trim(),
+      idx
+    }))
+    .filter(x=>x.text);
 }
 function _orderPhotoExtractTokens(line){
-  const base=String(line||'').replace(/[\/,_\-:]+/g,' ');
+  const base=String(line||'').replace(/[\/,_\-:]+/g,' ').replace(/[(){}\[\]]/g,' ');
   const parts=base.split(/\s+/).map(x=>x.trim()).filter(Boolean);
   const chunks=base.match(/[가-힣]{2,5}|[A-Za-z]{2,12}|[0-9]{2,}/g)||[];
   return [...new Set([...parts,...chunks].filter(Boolean))];
+}
+function _orderPhotoCleanLineText(line){
+  return String(line||'')
+    .replace(/^\s*\d+\s*[\.\),-]?\s*/,'')
+    .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function _orderPhotoSplitPairSegments(line){
+  const cleaned=_orderPhotoCleanLineText(line);
+  if(!cleaned) return [];
+  const strongSplit=cleaned.split(/\s*[,，·ㆍ\/\\]\s*|\s{2,}/).map(x=>x.trim()).filter(Boolean);
+  if(strongSplit.length>=2) return strongSplit.slice(0,2);
+  const hangul=cleaned.match(/[가-힣]{2,5}/g)||[];
+  if(hangul.length>=2) return [hangul[0], hangul[1]];
+  const tokens=_orderPhotoExtractTokens(cleaned);
+  if(tokens.length>=2){
+    const half=Math.ceil(tokens.length/2);
+    return [tokens.slice(0,half).join(' '), tokens.slice(half).join(' ')].map(x=>x.trim()).filter(Boolean);
+  }
+  return cleaned ? [cleaned] : [];
 }
 function _orderPhotoGetContext(side){
   const key=CM_key, mid=CM_id;
@@ -15291,51 +15350,79 @@ function _orderPhotoApplySelection(side, assignments){
   });
   refreshAllOrderChipAvailability();
 }
+function _orderPhotoBestCandidate(sourceText, unused, lineText=''){
+  let best=null, bestScore=0;
+  [...unused].forEach(cand=>{
+    const score=Math.max(
+      _orderPhotoScore(sourceText,cand,lineText),
+      _orderPhotoScore(lineText,cand,lineText)
+    );
+    if(score>bestScore){ bestScore=score; best=cand; }
+  });
+  return {best,bestScore};
+}
 function _orderPhotoAssign(lines,candidates,dbl){
-  const unused=new Set((candidates||[]).filter(Boolean));
+  const usable=(candidates||[]).filter(Boolean);
+  const maxPlayers=Math.min(usable.length, dbl*2);
+  const orderedLines=(lines||[]).slice().sort((a,b)=>(a.y??0)-(b.y??0)).slice(0, Math.max(dbl+2,dbl));
   const assignments=Array.from({length:dbl},()=>[]);
-  let filled=0;
-  const allTokens=[];
-  lines.forEach(line=>_orderPhotoExtractTokens(line).forEach(tok=>allTokens.push({token:tok,line})));
-  for(const line of lines){
-    if(filled>=dbl) break;
-    const tokens=_orderPhotoExtractTokens(line);
-    if(!tokens.length) continue;
-    const picks=[];
-    for(const tok of tokens){
-      let best=null, bestScore=0;
-      unused.forEach(cand=>{
-        const score=_orderPhotoScore(tok,cand,line);
-        if(score>bestScore){ bestScore=score; best=cand; }
+  const lineMeta=Array.from({length:dbl},(_,i)=>orderedLines[i]||null);
+  const unused=new Set(usable);
+  const seen=new Set();
+  for(let row=0; row<dbl; row++){
+    const lineObj=lineMeta[row];
+    if(!lineObj) continue;
+    const lineText=String(lineObj.text||'');
+    const segments=_orderPhotoSplitPairSegments(lineText);
+    const chosen=[];
+    segments.forEach(seg=>{
+      if(chosen.length>=2) return;
+      const {best,bestScore}=_orderPhotoBestCandidate(seg, unused, lineText);
+      if(best && bestScore>=0.28 && !seen.has(best)){
+        chosen.push(best); seen.add(best); unused.delete(best);
+      }
+    });
+    if(chosen.length<2){
+      const tokens=_orderPhotoExtractTokens(lineText);
+      tokens.forEach(tok=>{
+        if(chosen.length>=2) return;
+        const {best,bestScore}=_orderPhotoBestCandidate(tok, unused, lineText);
+        if(best && bestScore>=0.34 && !seen.has(best)){
+          chosen.push(best); seen.add(best); unused.delete(best);
+        }
       });
-      if(best && bestScore>=0.52 && !picks.includes(best)){
-        picks.push(best);
-      }
-      if(picks.length>=2) break;
     }
-    if(picks.length<2){
-      const ranked=[...unused].map(cand=>({cand,score:_orderPhotoScore(line,cand,line)})).sort((a,b)=>b.score-a.score);
-      ranked.forEach(x=>{ if(x.score>=0.52 && picks.length<2 && !picks.includes(x.cand)) picks.push(x.cand); });
+    if(chosen.length<2){
+      const ranked=[...unused].map(cand=>({cand,score:_orderPhotoScore(lineText,cand,lineText)})).sort((a,b)=>b.score-a.score);
+      ranked.forEach(item=>{
+        if(chosen.length>=2) return;
+        if(item.score<0.24) return;
+        if(!seen.has(item.cand)){
+          chosen.push(item.cand); seen.add(item.cand); unused.delete(item.cand);
+        }
+      });
     }
-    if(picks.length){
-      assignments[filled]=picks.slice(0,2);
-      picks.slice(0,2).forEach(p=>unused.delete(p));
-      filled++;
-    }
+    assignments[row]=chosen.slice(0,2);
   }
-  if(filled<dbl && unused.size){
-    const rankedGlobal=[...unused].map(cand=>{
-      let best=0;
-      allTokens.forEach(({token,line})=>{ best=Math.max(best,_orderPhotoScore(token,cand,line),_orderPhotoScore(line,cand,line)); });
-      return {cand,score:best};
-    }).sort((a,b)=>b.score-a.score);
-    for(const row of assignments){
-      while(row.length<2 && rankedGlobal.length){
-        const next=rankedGlobal.shift();
-        if(!next || !unused.has(next.cand) || next.score<0.5) continue;
-        row.push(next.cand);
-        unused.delete(next.cand);
+  const allLineTexts=orderedLines.map(x=>String(x.text||''));
+  for(let row=0; row<dbl; row++){
+    const lineText=String((lineMeta[row]&&lineMeta[row].text)||'');
+    while(assignments[row].length<2 && seen.size<maxPlayers){
+      let ranked=[...unused].map(cand=>{
+        let score=_orderPhotoScore(lineText,cand,lineText);
+        if(!lineText){
+          allLineTexts.forEach(txt=>{ score=Math.max(score,_orderPhotoScore(txt,cand,txt)); });
+        }
+        return {cand,score};
+      }).sort((a,b)=>b.score-a.score);
+      let next=ranked.find(x=>!seen.has(x.cand));
+      if(!next){
+        next=usable.find(c=>!seen.has(c)) ? {cand:usable.find(c=>!seen.has(c)),score:0} : null;
       }
+      if(!next) break;
+      assignments[row].push(next.cand);
+      seen.add(next.cand);
+      unused.delete(next.cand);
     }
   }
   const assignedCount=assignments.reduce((n,row)=>n+row.length,0);
@@ -15348,6 +15435,41 @@ function _orderPhotoReadFile(file){
     reader.onerror=()=>reject(reader.error||new Error('파일 읽기 실패'));
     reader.readAsDataURL(file);
   });
+}
+function _orderPhotoLoadImage(src){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=()=>reject(new Error('이미지 로드 실패'));
+    img.src=src;
+  });
+}
+function _orderPhotoBuildVariant(img, mode='gray'){
+  const maxW=1600;
+  const scale=Math.min(1.8, maxW/Math.max(img.width,1));
+  const w=Math.max(1, Math.round(img.width*scale));
+  const h=Math.max(1, Math.round(img.height*scale));
+  const canvas=document.createElement('canvas');
+  canvas.width=w; canvas.height=h;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(img,0,0,w,h);
+  const imageData=ctx.getImageData(0,0,w,h);
+  const d=imageData.data;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    let v=0.299*r+0.587*g+0.114*b;
+    if(mode==='contrast'){
+      v=(v-128)*1.6+128;
+    }else if(mode==='binary'){
+      v=v<168?0:255;
+    }else if(mode==='binaryStrong'){
+      v=v<186?0:255;
+    }
+    v=Math.max(0,Math.min(255,v));
+    d[i]=d[i+1]=d[i+2]=v;
+  }
+  ctx.putImageData(imageData,0,0);
+  return canvas;
 }
 async function _ensureOrderPhotoTesseract(){
   if(window.Tesseract) return window.Tesseract;
@@ -15362,6 +15484,32 @@ async function _ensureOrderPhotoTesseract(){
   });
   return __orderPhotoTesseractPromise;
 }
+async function _orderPhotoRecognizeBest(Tesseract, imageSrc){
+  const img=await _orderPhotoLoadImage(imageSrc);
+  const variants=[
+    {name:'orig', src:imageSrc},
+    {name:'gray', src:_orderPhotoBuildVariant(img,'gray').toDataURL('image/png')},
+    {name:'contrast', src:_orderPhotoBuildVariant(img,'contrast').toDataURL('image/png')},
+    {name:'binary', src:_orderPhotoBuildVariant(img,'binary').toDataURL('image/png')}
+  ];
+  let best=null;
+  for(const variant of variants){
+    try{
+      const result=await Tesseract.recognize(variant.src,'kor+eng',{
+        tessedit_pageseg_mode: 6,
+        preserve_interword_spaces: 1
+      });
+      const lines=_orderPhotoExtractStructuredLines(result);
+      const hangulChars=String(result?.data?.text||'').replace(/[^가-힣]/g,'').length;
+      const score=(lines.length*8)+hangulChars;
+      if(!best || score>best.score){
+        best={result,lines,score,name:variant.name};
+      }
+    }catch(err){}
+  }
+  if(!best) throw new Error('글자 인식 실패');
+  return best;
+}
 async function _processOrderPhoto(side,file){
   const ctx=_orderPhotoGetContext(side);
   if(!ctx){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
@@ -15371,16 +15519,16 @@ async function _processOrderPhoto(side,file){
   try{
     const Tesseract=await _ensureOrderPhotoTesseract();
     const image=await _orderPhotoReadFile(file);
-    _orderPhotoSetStatus(side,'글자 인식 중…');
-    const result=await Tesseract.recognize(image,'kor+eng');
-    const text=(result&&result.data&&result.data.text)||'';
-    const lines=_orderPhotoExtractLines(text);
+    _orderPhotoSetStatus(side,'명단 기반으로 사진 분석 중…');
+    const best=await _orderPhotoRecognizeBest(Tesseract, image);
+    const lines=(best&&best.lines)||[];
     if(!lines.length){ _orderPhotoSetStatus(side,'글자를 찾지 못했습니다',true); toast('글자를 찾지 못했습니다','error'); return; }
     const assigned=_orderPhotoAssign(lines,ctx.candidates,ctx.dbl);
     _orderPhotoApplySelection(side, assigned.assignments);
     const rowsMatched=assigned.assignments.filter(row=>row.length>0).length;
-    const warn = assigned.assignedCount < Math.min(ctx.candidates.length, ctx.dbl*2);
-    _orderPhotoSetStatus(side, `자동선택 ${assigned.assignedCount}명 · ${rowsMatched}개 복식 반영${assigned.unused.length?` · 남음 ${assigned.unused.length}명`:''}`, warn);
+    const totalNeed=Math.min(ctx.candidates.length, ctx.dbl*2);
+    const warn = assigned.assignedCount < totalNeed;
+    _orderPhotoSetStatus(side, `자동선택 ${assigned.assignedCount}명 · ${rowsMatched}개 복식 반영${assigned.unused.length?` · 남음 ${assigned.unused.length}명`:''}${best?.name?` · ${best.name}판독`:''}`, warn);
     toast(`사진 인식 완료 · ${assigned.assignedCount}명 자동선택`, assigned.assignedCount?'success':'info');
   }catch(err){
     console.error(err);
@@ -15402,6 +15550,7 @@ function triggerOrderPhoto(side, source){
   document.body.appendChild(input);
   input.click();
 }
+
 
 // showPage 수정 - players는 누구나 접근
 
