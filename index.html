@@ -11381,38 +11381,37 @@ function goBracketMatch(tid,div,matchId){
   showPage('bracket');
   const brTS = ge('brTS');
   if(brTS) brTS.value = tid;
-  // div 먼저 설정 후 onBrTC 한 번만 호출 (이중렌더링 방지)
-  try{ BR_MULTI_DIVS = [div]; }catch(_e){}
   if(typeof onBrTC === 'function') onBrTC();
 
-  let tries = 0;
-  const finder = ()=>{
-    const scope = pageBracket || document;
-    // 방법1: data-match-id (m.id 기준)
-    const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
-    if(byData){ focusMatchCardElement(byData); return; }
+  const applyAndFocus = ()=>{
+    try{ setBracketSelectedDivs([div], tid); }catch(_e){}
+    try{ renderBracket(); }catch(_e){}
 
-    // 방법2: 현재 렌더된 모든 m3card의 id와 비교 (부분 일치 포함)
-    const allCards = Array.from(scope.querySelectorAll('.m3card'));
-    const byPartial = allCards.find(el => {
-      const dmid = el.getAttribute('data-match-id')||'';
-      const eid = el.id||'';
-      return dmid === matchId || eid.endsWith('_'+matchId) || dmid.endsWith(matchId);
-    });
-    if(byPartial){ focusMatchCardElement(byPartial); return; }
+    let tries = 0;
+    const finder = ()=>{
+      const scope = pageBracket || document;
+      const exactId = getMatchCardDomId(matchKey, matchId);
+      const exact = scope.querySelector(`#${CSS.escape(exactId)}`);
+      const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
+      const el = exact || byData;
 
-    tries++;
-    if(tries < 30){
-      setTimeout(finder, 200);
-    }else{
-      // 찾기 실패 시 콘솔에 디버그 정보 출력
-      const allIds = allCards.map(el=>el.getAttribute('data-match-id')).filter(Boolean);
-      console.warn('[goBracketMatch] 경기 카드 못 찾음', {matchId, matchKey, allIds});
-      toast('해당 경기를 찾지 못했습니다. 선택된 부서를 확인해 주세요.','info');
-    }
+      if(el){
+        focusMatchCardElement(el);
+        return;
+      }
+
+      tries++;
+      if(tries < 30){
+        setTimeout(finder, 180);
+      }else{
+        toast('해당 경기를 찾지 못했습니다. 선택된 부서를 확인해 주세요.','info');
+      }
+    };
+
+    setTimeout(finder, 220);
   };
 
-  requestAnimationFrame(()=>setTimeout(finder, 300));
+  requestAnimationFrame(()=>setTimeout(applyAndFocus, 260));
 }
 
 window.goBracketMatch = goBracketMatch;
@@ -13081,6 +13080,7 @@ function buildOrderAlertMessageForViewer(key,m,submittedSide){
 }
 function shouldNotifyForOrderAlert(prevState,nextState,submittedSide){
   if(!nextState || !submittedSide) return false;
+  // 로그인한 사용자라면 어느 탭에서든 알람 수신
   if(!(AD||OP||REG)) return false;
   if(REG && REG_CLUB){
     const myBase=baseClub(REG_CLUB)||REG_CLUB;
