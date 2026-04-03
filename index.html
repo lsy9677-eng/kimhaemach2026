@@ -3196,6 +3196,7 @@ async function initFB(){
     },e=>console.error(e));
 
     onSnapshot(collection(db,'matches'),s=>{
+      const prevMatchMap=buildMatchAlertStateMap(G.matches||{});
       G.matches={};G._matchIdsByKey={};
       s.docs.forEach(d=>{
         const x=d.data()||{};const tid=x.tournamentId,div=x.division;
@@ -3207,6 +3208,11 @@ async function initFB(){
         G._matchIdsByKey[key].push(d.id);
       });
       Object.keys(G.matches).forEach(k=>G.matches[k].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')));
+      try{
+        processOnlineOrderAlerts(prevMatchMap, G.matches||{});
+      }catch(alertErr){
+        console.warn('order alert process failed', alertErr);
+      }
       onDU();
     },e=>console.error(e));
 
@@ -12988,6 +12994,89 @@ function om(id){document.getElementById(id)?.classList.add('open');}
 function cm(id){const el=document.getElementById(id);if(!el)return;el.classList.remove('open');const box=el.querySelector('.modal-box');if(box)box.classList.remove('fullscreen');el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');}
 function toggleModalFullscreen(id,btn){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;const isFull=box.classList.toggle('fullscreen');if(btn)btn.textContent=isFull?'🗗':'⛶';}
 function setModalFullscreenState(id,on=true){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;box.classList.toggle('fullscreen',!!on);overlay.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent=on?'🗗':'⛶');}
+
+function buildMatchAlertStateMap(matchesObj){
+  const map={};
+  try{
+    Object.entries(matchesObj||{}).forEach(([key,list])=>{
+      (list||[]).forEach(m=>{
+        if(!m) return;
+        const mid=m._id||m.id;
+        if(!mid) return;
+        const subs=(m&&typeof m.orderSubmissions==='object'&&m.orderSubmissions)?m.orderSubmissions:{};
+        const bases=getMatchBaseClubs(key,m);
+        const c1=bases.c1||'';
+        const c2=bases.c2||'';
+        map[mid]={
+          key,
+          tid:(m.tournamentId||key.split('_').slice(0,-1).join('_')||''),
+          div:(m.division||key.split('_').slice(-1)[0]||''),
+          id:(m.id||mid),
+          c1,c2,
+          s1:!!(c1&&subs[c1]),
+          s2:!!(c2&&subs[c2]),
+          both:!!(c1&&c2&&subs[c1]&&subs[c2]),
+          t1:m.t1,
+          t2:m.t2
+        };
+      });
+    });
+  }catch(e){ console.warn('buildMatchAlertStateMap failed', e); }
+  return map;
+}
+function isDivisionSelectedForAlert(tid, div){
+  const selectedTid=ge('brTS')?.value||'';
+  if(!selectedTid || selectedTid!==tid) return false;
+  const selectedDivs=getBracketSelectedDivs(tid)||[];
+  return selectedDivs.includes(div);
+}
+function buildOrderAlertMessageForViewer(key,m,submittedSide){
+  const teams=G.teams[key]||[];
+  const home=teams[m.t1]??teams.find(t=>t&&((t.id!=null&&t.id===m.t1)||(t.name&&t.name===m.t1)));
+  const away=teams[m.t2]??teams.find(t=>t&&((t.id!=null&&t.id===m.t2)||(t.name&&t.name===m.t2)));
+  const homeName=tdn(home,key,m.t1)||home?.club||'홈팀';
+  const awayName=tdn(away,key,m.t2)||away?.club||'원정팀';
+  const submitTeamName=submittedSide===1?homeName:awayName;
+  const matchLabel=`${dl(m.division||key.split('_').slice(-1)[0]||'')} · ${homeName} vs ${awayName}`;
+  if(REG && REG_CLUB){
+    return `상대팀 ${submitTeamName} 오더 제출 · ${matchLabel}`;
+  }
+  return `${submitTeamName} 오더 제출 · ${matchLabel}`;
+}
+function shouldNotifyForOrderAlert(prevState,nextState,submittedSide){
+  if(!nextState || !submittedSide) return false;
+  const tid=nextState.tid||'';
+  const div=nextState.div||'';
+  if(!(AD||OP||REG)) return false;
+  if(!isDivisionSelectedForAlert(tid,div)) return false;
+  if(REG && REG_CLUB){
+    const myBase=baseClub(REG_CLUB)||REG_CLUB;
+    const isMine=(submittedSide===1?(nextState.c1===myBase):(nextState.c2===myBase));
+    if(isMine) return false;
+    const involved = nextState.c1===myBase || nextState.c2===myBase;
+    if(!involved) return false;
+  }
+  return true;
+}
+function processOnlineOrderAlerts(prevMap,newMatchesObj){
+  const nextMap=buildMatchAlertStateMap(newMatchesObj||{});
+  Object.entries(nextMap).forEach(([mid,nextState])=>{
+    const prevState=prevMap[mid];
+    if(!prevState) return;
+    const side1Changed=!prevState.s1 && !!nextState.s1;
+    const side2Changed=!prevState.s2 && !!nextState.s2;
+    if(side1Changed && shouldNotifyForOrderAlert(prevState,nextState,1)){
+      toast(buildOrderAlertMessageForViewer(nextState.key,{
+        t1:nextState.t1,t2:nextState.t2,division:nextState.div
+      },1),'info');
+    }
+    if(side2Changed && shouldNotifyForOrderAlert(prevState,nextState,2)){
+      toast(buildOrderAlertMessageForViewer(nextState.key,{
+        t1:nextState.t1,t2:nextState.t2,division:nextState.div
+      },2),'info');
+    }
+  });
+}
 const STICKY_ALERT_QUEUE=[];
 let STICKY_ALERT_OPEN=false;
 function isPersistentOrderAlertMessage(msg='',type='info'){
@@ -13022,6 +13111,7 @@ function renderNextStickyAlert(){
       <button type="button" class="sticky-alert-btn secondary" onclick="closeStickyAlert()">확인</button>
     </div>
   </div>`;
+  wrap.setAttribute('data-msg', String(item.msg||'').trim());
   wrap.classList.add('show');
 }
 function enqueueStickyAlert(msg,type='info'){
@@ -13032,7 +13122,6 @@ function enqueueStickyAlert(msg,type='info'){
   if(current===key) return;
   if(STICKY_ALERT_QUEUE.some(x=>x&&x.msg===key)) return;
   STICKY_ALERT_QUEUE.push({msg:key,type});
-  if(wrap) wrap.setAttribute('data-msg',key);
   renderNextStickyAlert();
 }
 function toast(msg,type='info'){
