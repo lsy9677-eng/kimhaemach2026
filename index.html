@@ -1906,6 +1906,39 @@ body.slider-ready .page:not(.active){
       </div>
     </div>
   </div>
+
+  <!-- 신규 기능 안내 -->
+  <div style="margin-top:16px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #d97706;border-radius:12px;padding:13px 14px">
+    <div style="font-size:.82rem;font-weight:900;color:#92400e;margin-bottom:10px">✨ 편의 기능 안내</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="flex-shrink:0;font-size:1.1rem">📋</div>
+        <div>
+          <div style="font-weight:800;font-size:.82rem;color:#78350f;margin-bottom:2px">이전 오더 자동 불러오기</div>
+          <div style="font-size:.76rem;color:#92400e;line-height:1.55">직전 경기에서 저장·제출한 오더가 다음 경기에 자동으로 채워집니다.<br>페어가 크게 바뀌지 않을 때 수정만 해서 바로 제출할 수 있습니다.<br><span style="background:#fff;border:1px solid #d97706;border-radius:6px;padding:1px 7px;font-size:.72rem;font-weight:700">초기화</span> 버튼으로 지우고 처음부터 입력할 수도 있습니다.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #fde68a;padding-top:10px;display:flex;gap:10px;align-items:flex-start">
+        <div style="flex-shrink:0;font-size:1.1rem">🔀</div>
+        <div>
+          <div style="font-weight:800;font-size:.82rem;color:#78350f;margin-bottom:2px">복식 순서 변경</div>
+          <div style="font-size:.76rem;color:#92400e;line-height:1.55">오더 화면 상단의 <span style="background:linear-gradient(135deg,#f57c00,#ef6c00);color:#fff;border-radius:6px;padding:1px 7px;font-size:.72rem;font-weight:800">🔀 복식 순서 변경</span> 버튼을 누르면 팝업이 열립니다.<br>1~5복식 카드를 <b>새 순서대로 탭</b>하면 순서가 자동 재배치됩니다.<br>탭한 순서 = 1복식 → 2복식 → … 순으로 배치됩니다.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #fde68a;padding-top:10px;display:flex;gap:10px;align-items:flex-start">
+        <div style="flex-shrink:0;font-size:1.1rem">📷</div>
+        <div>
+          <div style="font-weight:800;font-size:.82rem;color:#78350f;margin-bottom:2px">사진으로 오더 보조입력</div>
+          <div style="font-size:.76rem;color:#92400e;line-height:1.55">오더지 사진을 찍거나 불러오면 AI가 선수 이름을 자동으로 인식해 채워줍니다.<br>인식 결과는 반드시 직접 확인 후 제출하세요.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- 공개 흐름 -->
   <div style="margin-top:14px;background:#f8f9fa;border-radius:10px;padding:12px">
     <div style="font-size:.78rem;font-weight:700;color:#555;margin-bottom:8px">📋 오더 공개 흐름</div>
@@ -10326,6 +10359,13 @@ function openM3(key,mid){
   }
   ge('mM3B').innerHTML=html;om('mM3');
   refreshAllOrderChipAvailability();
+  // 순서 변경 버튼 (잠금 상태 아닐 때만)
+  if(!myLocked){
+    const reorderBtn = document.createElement('div');
+    reorderBtn.style.cssText = 'margin-bottom:10px;display:flex;justify-content:flex-end';
+    reorderBtn.innerHTML = `<button type="button" onclick="openReorderPopup(${dbl})" style="padding:8px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.82rem;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 복식 순서 변경</button>`;
+    ge('mM3B')?.insertAdjacentElement('afterbegin', reorderBtn);
+  }
   requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
 }
 
@@ -10509,7 +10549,7 @@ async function saveM3(){
     sl(true);
     try{
       await stM(key);
-      updateLastOrderCacheFromCurrentMatch();
+      saveLastOrderFromPicker(key, m);
       sl(false);cm('mM3');toast('페어 저장 완료 ✅','success');renderBracket();
     }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
     return;
@@ -10539,7 +10579,7 @@ async function saveM3(){
   sl(true);
   try{
     await stM(key);
-    updateLastOrderCacheFromCurrentMatch();
+    saveLastOrderFromPicker(key, m);
     const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
     await fbLog(`결과: ${dn1} ${sc1}:${sc2} ${dn2}`,'⚡');
     if(m.phase==='main')await autoAdv(key,m.id);
@@ -11503,7 +11543,7 @@ async function submitOnlineOrder(sideOnly=null){
   sl(true);
   try{
     await stM(key);
-    updateLastOrderCacheFromCurrentMatch();
+    saveLastOrderFromPicker(key, m);
     sl(false);
     const st2=getOnlineOrderState(key,m);
     const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
@@ -15161,14 +15201,54 @@ function _orderPhotoLevenshtein(a,b){
   }
   return dp[m][n];
 }
+function _orderPhotoKoreanCharParts(ch){
+  const code=String(ch||'').charCodeAt(0);
+  if(!(code>=0xAC00 && code<=0xD7A3)) return null;
+  const base=code-0xAC00;
+  const cho=Math.floor(base/588);
+  const jung=Math.floor((base%588)/28);
+  const jong=base%28;
+  return {cho,jung,jong};
+}
+function _orderPhotoKoreanNameBonus(a,b){
+  if(!/^[가-힣]+$/.test(a) || !/^[가-힣]+$/.test(b)) return 0;
+  if(a.length!==b.length) return 0;
+  let same=0, near=0, diff=0;
+  for(let i=0;i<a.length;i++){
+    if(a[i]===b[i]){ same++; continue; }
+    const pa=_orderPhotoKoreanCharParts(a[i]);
+    const pb=_orderPhotoKoreanCharParts(b[i]);
+    if(!pa || !pb){ diff++; continue; }
+    const sameCho = pa.cho===pb.cho;
+    const sameJung = pa.jung===pb.jung;
+    const sameJong = pa.jong===pb.jong;
+    if((sameCho&&sameJung) || (sameCho&&sameJong) || (sameJung&&sameJong)) near++;
+    else diff++;
+  }
+  if(diff===0 && near===1 && same===a.length-1) return 0.26;
+  if(diff===0 && near===2 && same===a.length-2) return 0.18;
+  if(diff===1 && same>=Math.max(1,a.length-2)) return 0.10;
+  return 0;
+}
 function _orderPhotoScore(token,candidate,lineText=''){
   const a=_orderPhotoNorm(token), b=_orderPhotoNorm(candidate), line=_orderPhotoNorm(lineText);
   if(!a||!b) return 0;
   if(a===b) return 1;
-  let score=1-(_orderPhotoLevenshtein(a,b)/Math.max(a.length,b.length,1));
+  const dist=_orderPhotoLevenshtein(a,b);
+  let score=1-(dist/Math.max(a.length,b.length,1));
   if(b.includes(a) || a.includes(b)) score=Math.max(score, Math.min(0.96, Math.max(a.length,b.length)>=3 ? 0.9 : 0.75));
   if(line && line.includes(b)) score=Math.max(score,0.97);
   if(a[0]===b[0]) score+=0.03;
+  if(a.length>=3 && b.length>=3){
+    const minLen=Math.min(a.length,b.length);
+    let prefix=0;
+    while(prefix<minLen && a[prefix]===b[prefix]) prefix++;
+    if(prefix>=2) score+=0.15;
+    else if(prefix>=1) score+=0.05;
+    if(a[a.length-1]===b[b.length-1]) score+=0.04;
+    if(dist===1 && a.length===b.length) score+=0.12;
+  }
+  score+=_orderPhotoKoreanNameBonus(a,b);
   return Math.max(0, Math.min(1, score));
 }
 function _orderPhotoExtractLines(text){
@@ -15228,14 +15308,14 @@ function _orderPhotoAssign(lines,candidates,dbl){
         const score=_orderPhotoScore(tok,cand,line);
         if(score>bestScore){ bestScore=score; best=cand; }
       });
-      if(best && bestScore>=0.6 && !picks.includes(best)){
+      if(best && bestScore>=0.52 && !picks.includes(best)){
         picks.push(best);
       }
       if(picks.length>=2) break;
     }
     if(picks.length<2){
       const ranked=[...unused].map(cand=>({cand,score:_orderPhotoScore(line,cand,line)})).sort((a,b)=>b.score-a.score);
-      ranked.forEach(x=>{ if(x.score>=0.6 && picks.length<2 && !picks.includes(x.cand)) picks.push(x.cand); });
+      ranked.forEach(x=>{ if(x.score>=0.52 && picks.length<2 && !picks.includes(x.cand)) picks.push(x.cand); });
     }
     if(picks.length){
       assignments[filled]=picks.slice(0,2);
@@ -15252,7 +15332,7 @@ function _orderPhotoAssign(lines,candidates,dbl){
     for(const row of assignments){
       while(row.length<2 && rankedGlobal.length){
         const next=rankedGlobal.shift();
-        if(!next || !unused.has(next.cand) || next.score<0.55) continue;
+        if(!next || !unused.has(next.cand) || next.score<0.5) continue;
         row.push(next.cand);
         unused.delete(next.cand);
       }
@@ -15326,108 +15406,212 @@ function triggerOrderPhoto(side, source){
 // showPage 수정 - players는 누구나 접근
 
 // ═══════════════════════════════════════════════════
-//  이전 오더 템플릿 자동 불러오기
-//  (type="module" 스코프 안에 위치 — CM_key, G, tdn 등 접근 가능)
+//  이전 오더 자동 불러오기 + 복식 순서 변경 팝업
 // ═══════════════════════════════════════════════════
 
 if(!window._lastOrderCache) window._lastOrderCache = {};
 
-function cacheLastOrder(key, mid, teamIdx, rubbers, mySide) {
-  if (!key || teamIdx == null || !Array.isArray(rubbers)) return;
+// ── 캐시 저장: 저장/제출 버튼 시점에 picker DOM에서 직접 읽음 ──
+function saveLastOrderFromPicker(key, m) {
+  if (!key || !m) return;
+  const teams = G.teams[key] || [];
+  const t1 = teams[m.t1], t2 = teams[m.t2];
+  if (!t1 || !t2) return;
+  const [tid, div] = key.split('_');
+  const cfg = gDS(G.tournaments.find(t => t.id === tid), div);
+  const dbl = cfg.doublesCount || (t1.doublesCount) || 5;
   if (!window._lastOrderCache[key]) window._lastOrderCache[key] = {};
-  const normalized = rubbers.map(rb => {
-    if (!rb) return { myPlayers: [] };
-    const myPlayers = mySide === 2 ? (rb.players2 || []) : (rb.players1 || []);
-    return { myPlayers: myPlayers.filter(Boolean) };
-  });
-  if (!normalized.some(n => n.myPlayers.length > 0)) return;
-  window._lastOrderCache[key][teamIdx] = {
-    rubbers: normalized,
-    fromMatchId: mid,
-    savedAt: new Date().toISOString()
-  };
+  const r1 = [], r2 = [];
+  for (let r = 0; r < dbl; r++) {
+    r1.push({ myPlayers: getPickerSelected(`rp1_${r}`).filter(Boolean) });
+    r2.push({ myPlayers: getPickerSelected(`rp2_${r}`).filter(Boolean) });
+  }
+  if (r1.some(rb => rb.myPlayers.length > 0) && m.t1 != null)
+    window._lastOrderCache[key][m.t1] = { rubbers: r1, savedAt: new Date().toISOString() };
+  if (r2.some(rb => rb.myPlayers.length > 0) && m.t2 != null)
+    window._lastOrderCache[key][m.t2] = { rubbers: r2, savedAt: new Date().toISOString() };
 }
 
 function getLastOrder(key, teamIdx) {
   return window._lastOrderCache?.[key]?.[teamIdx] || null;
 }
 
-function updateLastOrderCacheFromCurrentMatch() {
-  const key = CM_key, mid = CM_id;
-  if (!key || !mid) return;
-  const m = (G.matches[key] || []).find(x => x.id === mid);
-  if (!m) return;
-  const rubbers = Array.isArray(m.rubbers) ? m.rubbers : [];
-  if (m.t1 != null) cacheLastOrder(key, mid, m.t1, rubbers, 1);
-  if (m.t2 != null) {
-    cacheLastOrder(key, mid, m.t2,
-      rubbers.map(rb => ({ players1: (rb&&rb.players2)||[], players2: (rb&&rb.players1)||[] })),
-      1);
-  }
-}
-
+// ── openM3 렌더 직후: 빈 오더에만 이전 오더 자동 채우기 ──
 function applyLastOrderIfEmpty(key, m, dbl, st) {
   const teams = G.teams[key] || [];
   const t1 = teams[m.t1], t2 = teams[m.t2];
   if (!t1 || !t2) return;
-  const exRb = Array.isArray(m.rubbers) ? m.rubbers : [];
-
-  const hasRealPlayers = (side) =>
-    exRb.some(rb => rb && ((side===1 ? (rb.players1||[]) : (rb.players2||[])).some(Boolean)));
-
   [{ teamIdx: m.t1, side: 1, teamObj: t1 },
    { teamIdx: m.t2, side: 2, teamObj: t2 }
   ].forEach(({ teamIdx, side, teamObj }) => {
-    const lastOrder = getLastOrder(key, teamIdx);
-    if (!lastOrder) return;
-    if (hasRealPlayers(side)) return;          // 이미 오더 있으면 스킵
-    if (side === 1 ? st.s1 : st.s2) return;   // 이미 제출됐으면 스킵
-
-    let appliedCount = 0;
-    lastOrder.rubbers.forEach((cache, r) => {
+    if (side === 1 ? st.s1 : st.s2) return;
+    let has = false;
+    for (let r = 0; r < dbl; r++) { if (getPickerSelected(`rp${side}_${r}`).some(Boolean)) { has = true; break; } }
+    if (has) return;
+    const last = getLastOrder(key, teamIdx);
+    if (!last) return;
+    let applied = 0;
+    last.rubbers.forEach((cache, r) => {
       if (r >= dbl) return;
       const cid = `rp${side}_${r}`;
-      const pool = getPickerPlayers(cid);       // 현재 팀 로스터
-      const valid = (cache.myPlayers || []).filter(p => pool.includes(p));
+      const valid = (cache.myPlayers || []).filter(p => getPickerPlayers(cid).includes(p));
       if (!valid.length) return;
       setPickerSelected(cid, valid);
-      renderPlayerDropdown(cid);               // ← 실제 chip UI 갱신 (m3-picked-item 구조)
-      appliedCount++;
+      renderPlayerDropdown(cid);
+      applied++;
     });
-
-    if (appliedCount > 0) {
-      const teamName = tdn(teamObj, key, side === 1 ? m.t1 : m.t2);
-      const bannerEl = document.createElement('div');
-      bannerEl.id = `lastOrderBanner_side${side}`;
-      bannerEl.style.cssText =
-        'margin-bottom:8px;padding:8px 12px;' +
-        'background:linear-gradient(135deg,#fffbeb,#fef3c7);' +
-        'border:1.5px solid #d97706;border-radius:10px;' +
-        'font-size:.76rem;color:#92400e;' +
-        'display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
-      bannerEl.innerHTML =
-        `<span>📋 <b>${teamName}</b> — 이전 오더 불러왔습니다. 확인 후 수정하세요</span>` +
-        `<button type="button" onclick="clearLastOrderFill(${side},${dbl})" ` +
-        `style="padding:3px 9px;border-radius:8px;border:1px solid #d97706;` +
-        `background:white;color:#92400e;font-size:.72rem;cursor:pointer;white-space:nowrap">초기화</button>`;
-      // 해당 side 첫 번째 rb-blk 앞에 배너 삽입
-      const firstPicker = ge(`rp${side}_0`);
-      let blk = firstPicker;
-      while (blk && !blk.classList?.contains('rb-blk')) blk = blk.parentElement;
-      if (blk) blk.insertAdjacentElement('beforebegin', bannerEl);
-      else ge('mM3B')?.insertAdjacentElement('afterbegin', bannerEl);
+    if (applied > 0) {
+      ge(`lastOrderBanner_side${side}`)?.remove();
+      const b = document.createElement('div');
+      b.id = `lastOrderBanner_side${side}`;
+      b.style.cssText = 'margin-bottom:8px;padding:8px 12px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #d97706;border-radius:10px;font-size:.76rem;color:#92400e;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
+      b.innerHTML = `<span>📋 <b>${tdn(teamObj,key,side===1?m.t1:m.t2)}</b> — 이전 오더 불러왔습니다</span><button type="button" onclick="clearLastOrderFill(${side},${dbl})" style="padding:3px 9px;border-radius:8px;border:1px solid #d97706;background:white;color:#92400e;font-size:.72rem;cursor:pointer;white-space:nowrap">초기화</button>`;
+      const fp = ge(`rp${side}_0`);
+      let blk = fp; while (blk && !blk.classList?.contains('rb-blk')) blk = blk.parentElement;
+      if (blk) blk.insertAdjacentElement('beforebegin', b);
+      else ge('mM3B')?.insertAdjacentElement('afterbegin', b);
     }
   });
 }
 
 function clearLastOrderFill(side, dbl) {
+  for (let r = 0; r < dbl; r++) { setPickerSelected(`rp${side}_${r}`, []); renderPlayerDropdown(`rp${side}_${r}`); }
+  ge(`lastOrderBanner_side${side}`)?.remove();
+}
+
+// ── 복식 순서 변경 팝업 ────────────────────────────────────────
+// 상태: 현재 팝업에서 선택 중인 순서 배열 (ex. [2,0,1,3,4] = 기존 3번→1복식, 1번→2복식...)
+let _reorderState = { dbl: 0, order: [], picked: [] };
+
+function openReorderPopup(dbl) {
+  // 현재 picker에서 각 복식의 선수 스냅샷
+  const slots = [];
   for (let r = 0; r < dbl; r++) {
-    const cid = `rp${side}_${r}`;
-    setPickerSelected(cid, []);
-    renderPlayerDropdown(cid);               // ← 동일하게 renderPlayerDropdown 사용
+    const p1 = getPickerSelected(`rp1_${r}`);
+    const p2 = getPickerSelected(`rp2_${r}`);
+    slots.push({ r, p1, p2, label: `${r+1}복식` });
   }
-  const banner = ge(`lastOrderBanner_side${side}`);
-  if (banner) banner.remove();
+  _reorderState = { dbl, slots, picked: [] };
+
+  // 팝업 오버레이 생성
+  let overlay = ge('reorderOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'reorderOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.3);overflow:hidden">
+      <div style="background:var(--primary);color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-weight:800;font-size:.95rem">🔀 복식 순서 변경</span>
+        <button onclick="closeReorderPopup()" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div style="padding:14px 16px">
+        <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px;line-height:1.6;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid var(--border)">
+          👆 아래 카드를 <b>새 순서대로 탭</b>하세요.<br>탭한 순서대로 1복식 → 2복식 → … 에 배치됩니다.
+        </div>
+        <div id="reorderCards" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="reorderPreview" style="margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:10px;font-size:.78rem;display:none">
+          <div style="font-weight:800;color:#166534;margin-bottom:6px">✅ 확정 순서</div>
+          <div id="reorderPreviewList"></div>
+        </div>
+      </div>
+      <div style="padding:10px 16px 16px;display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="reorderReset()" style="padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;font-size:.84rem;cursor:pointer;font-weight:700">↺ 초기화</button>
+        <button onclick="closeReorderPopup()" style="padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;font-size:.84rem;cursor:pointer;font-weight:700">취소</button>
+        <button id="reorderApplyBtn" onclick="applyReorder()" style="padding:8px 18px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:.84rem;cursor:pointer;font-weight:800" disabled>적용</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  renderReorderCards();
+}
+
+function renderReorderCards() {
+  const { slots, picked } = _reorderState;
+  const container = ge('reorderCards');
+  if (!container) return;
+  container.innerHTML = slots.map((slot, idx) => {
+    const seq = picked.indexOf(idx); // 이미 탭한 순서 (0-based), -1이면 미선택
+    const isPicked = seq >= 0;
+    const p1str = slot.p1.length ? slot.p1.join(' / ') : '(미선택)';
+    const p2str = slot.p2.length ? slot.p2.join(' / ') : '(미선택)';
+    return `<div onclick="reorderTap(${idx})"
+      style="cursor:pointer;padding:10px 14px;border-radius:12px;border:2px solid ${isPicked?'var(--primary)':'var(--border)'};background:${isPicked?'linear-gradient(135deg,#eef2ff,#dce8fb)':'#fff'};display:flex;align-items:center;gap:12px;transition:.15s;user-select:none;-webkit-tap-highlight-color:transparent">
+      <div style="width:32px;height:32px;border-radius:50%;background:${isPicked?'var(--primary)':'var(--border)'};color:${isPicked?'white':'var(--text2)'};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.9rem;flex-shrink:0">
+        ${isPicked ? seq+1 : ''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;font-size:.82rem;color:var(--primary-dark);margin-bottom:2px">기존 ${slot.label}</div>
+        <div style="font-size:.74rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p1str} · ${p2str}</div>
+      </div>
+      ${isPicked?`<div style="font-size:.7rem;font-weight:800;color:var(--primary);white-space:nowrap">→ ${seq+1}복식</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function reorderTap(idx) {
+  const { picked, slots } = _reorderState;
+  const existing = picked.indexOf(idx);
+  if (existing >= 0) {
+    // 이미 탭한 것 → 제거 (취소)
+    picked.splice(existing, 1);
+  } else if (picked.length < slots.length) {
+    picked.push(idx);
+  }
+  renderReorderCards();
+  // 프리뷰 업데이트
+  const preview = ge('reorderPreview');
+  const previewList = ge('reorderPreviewList');
+  const applyBtn = ge('reorderApplyBtn');
+  if (picked.length === slots.length) {
+    preview.style.display = 'block';
+    previewList.innerHTML = picked.map((origIdx, newR) =>
+      `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.78rem">
+        <span style="font-weight:800;color:var(--primary);min-width:40px">${newR+1}복식</span>
+        <span style="color:var(--text3)">←</span>
+        <span>기존 ${slots[origIdx].label}</span>
+        <span style="color:var(--text2);font-size:.72rem">(${slots[origIdx].p1.join('/')||'미선택'} · ${slots[origIdx].p2.join('/')||'미선택'})</span>
+      </div>`
+    ).join('');
+    applyBtn.disabled = false;
+    applyBtn.style.background = 'var(--primary)';
+  } else {
+    preview.style.display = 'none';
+    applyBtn.disabled = true;
+  }
+}
+
+function reorderReset() {
+  _reorderState.picked = [];
+  ge('reorderPreview').style.display = 'none';
+  ge('reorderApplyBtn').disabled = true;
+  renderReorderCards();
+}
+
+function applyReorder() {
+  const { slots, picked, dbl } = _reorderState;
+  if (picked.length !== slots.length) return;
+  // 현재 picker 값 스냅샷
+  const snap1 = [], snap2 = [];
+  for (let r = 0; r < dbl; r++) {
+    snap1.push(getPickerSelected(`rp1_${r}`));
+    snap2.push(getPickerSelected(`rp2_${r}`));
+  }
+  // 새 순서로 picker에 적용
+  picked.forEach((origIdx, newR) => {
+    setPickerSelected(`rp1_${newR}`, snap1[origIdx]);
+    setPickerSelected(`rp2_${newR}`, snap2[origIdx]);
+  });
+  // UI 갱신
+  for (let r = 0; r < dbl; r++) {
+    renderPlayerDropdown(`rp1_${r}`);
+    renderPlayerDropdown(`rp2_${r}`);
+  }
+  closeReorderPopup();
+  toast('복식 순서가 변경되었습니다 ✅', 'success');
+}
+
+function closeReorderPopup() {
+  ge('reorderOverlay')?.remove();
 }
 
 Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
@@ -15461,7 +15645,8 @@ Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuick
   toggleDivRubber,selRub,getDivRubbers,
   addPresetDiv,addCustomDiv,etAddPreset,etAddCustomDiv,
   etToggleRub,etSelRub,etGetRubbers,
-  updateLastOrderCacheFromCurrentMatch,applyLastOrderIfEmpty,clearLastOrderFill});
+  saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
+  openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
