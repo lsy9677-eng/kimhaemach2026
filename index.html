@@ -15314,10 +15314,28 @@ function _orderPhotoCanView(match, side){
   const club = String(team?.club || '').trim();
   return !!(REG && REG_CLUB && club && String(REG_CLUB).trim()===club);
 }
+function _sanitizeOrderPhotoStore(raw){
+  const out={};
+  if(!raw || typeof raw!=='object' || Array.isArray(raw)) return out;
+  ['side1','side2'].forEach(k=>{
+    const v=raw[k];
+    if(!v || typeof v!=='object' || Array.isArray(v)) return;
+    const dataUrl=typeof v.dataUrl==='string' ? v.dataUrl : '';
+    if(!dataUrl) return;
+    out[k]={
+      dataUrl,
+      updatedAt: typeof v.updatedAt==='string' ? v.updatedAt : '',
+      source: typeof v.source==='string' ? v.source : 'upload',
+      side: String(k==='side1'?1:2),
+      club: typeof v.club==='string' ? v.club : '',
+      savedBy: typeof v.savedBy==='string' ? v.savedBy : ''
+    };
+  });
+  return out;
+}
 async function persistOrderPhoto(side, imageDataUrl, source){
   const key=CM_key, mid=CM_id; if(!key||!mid||!imageDataUrl) return null;
-  const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid); if(!m) return null;
-  if(!m.orderPhotoStore||typeof m.orderPhotoStore!=='object' || Array.isArray(m.orderPhotoStore)) m.orderPhotoStore={};
+  const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid || x._id===mid); if(!m) return null;
   const teams=G.teams[key]||[];
   const team=side===1?teams[m.t1]:teams[m.t2];
   const base=_orderPhotoStoreKey(m, side);
@@ -15329,7 +15347,9 @@ async function persistOrderPhoto(side, imageDataUrl, source){
     club:String(team?.club||base||''),
     savedBy:String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사')))
   };
-  m.orderPhotoStore[base]=JSON.parse(JSON.stringify(payload));
+  const safeStore=_sanitizeOrderPhotoStore(m.orderPhotoStore);
+  safeStore[base]=JSON.parse(JSON.stringify(payload));
+  m.orderPhotoStore=safeStore;
   await stM(key);
   return m.orderPhotoStore[base];
 }
