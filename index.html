@@ -10551,15 +10551,19 @@ function openM3(key,mid){
       quickActionWrap.innerHTML=`
         <div style="font-size:.84rem;font-weight:900;color:#c2410c;margin-bottom:8px">✍️ 선수 입력 · 순서 변경</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(1,${dbl})">${dn1} 선수 입력</button>
-          <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(2,${dbl})">${dn2} 선수 입력</button>
+          ${(AD||OP) ? `
+            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(1,${dbl})">${dn1} 선수 입력</button>
+            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(2,${dbl})">${dn2} 선수 입력</button>
+          ` : `
+            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(${mySide||1},${dbl})">${(mySide===2?dn2:dn1)} 선수 입력</button>
+          `}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:${(AD||OP)?'stretch':'flex-end'}">
           ${(AD||OP) ? `
             <button type="button" onclick="openReorderPopup(${dbl},1)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 ${dn1} 순서 변경</button>
             <button type="button" onclick="openReorderPopup(${dbl},2)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 ${dn2} 순서 변경</button>
           ` : `
-            <button type="button" onclick="openReorderPopup(${dbl})" style="padding:9px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.82rem;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 복식 순서 변경</button>
+            <button type="button" onclick="openReorderPopup(${dbl},${mySide||1})" style="padding:9px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.82rem;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 복식 순서 변경</button>
           `}
         </div>`;
       const submitStatusCard=ge('mM3SubmitStatusCard');
@@ -13066,14 +13070,16 @@ function processOnlineOrderAlerts(prevMap,newMatchesObj){
     const side1Changed=!prevState.s1 && !!nextState.s1;
     const side2Changed=!prevState.s2 && !!nextState.s2;
     if(side1Changed && shouldNotifyForOrderAlert(prevState,nextState,1)){
-      toast(buildOrderAlertMessageForViewer(nextState.key,{
-        t1:nextState.t1,t2:nextState.t2,division:nextState.div
-      },1),'info');
+      enqueueStickyAlert({
+        msg:buildOrderAlertMessageForViewer(nextState.key,{t1:nextState.t1,t2:nextState.t2,division:nextState.div},1),
+        type:'info', tid:nextState.tid, div:nextState.div, matchId:mid
+      });
     }
     if(side2Changed && shouldNotifyForOrderAlert(prevState,nextState,2)){
-      toast(buildOrderAlertMessageForViewer(nextState.key,{
-        t1:nextState.t1,t2:nextState.t2,division:nextState.div
-      },2),'info');
+      enqueueStickyAlert({
+        msg:buildOrderAlertMessageForViewer(nextState.key,{t1:nextState.t1,t2:nextState.t2,division:nextState.div},2),
+        type:'info', tid:nextState.tid, div:nextState.div, matchId:mid
+      });
     }
   });
 }
@@ -13093,9 +13099,23 @@ function closeStickyAlert(showNext=true){
   wrap.classList.remove('show');
   wrap.innerHTML='';
   wrap.removeAttribute('data-msg');
+  wrap.removeAttribute('data-mid');
+  wrap.removeAttribute('data-tid');
+  wrap.removeAttribute('data-div');
   STICKY_ALERT_OPEN=false;
   if(showNext && STICKY_ALERT_QUEUE.length){
     setTimeout(renderNextStickyAlert,120);
+  }
+}
+function goToStickyAlertMatch(){
+  const wrap=ge('stickyAlertWrap');
+  if(!wrap) return;
+  const tid=wrap.getAttribute('data-tid')||'';
+  const div=wrap.getAttribute('data-div')||'';
+  const mid=wrap.getAttribute('data-mid')||'';
+  closeStickyAlert(true);
+  if(tid && div && mid && typeof goBracketMatch==='function'){
+    setTimeout(()=>goBracketMatch(tid,div,mid),120);
   }
 }
 function renderNextStickyAlert(){
@@ -13108,25 +13128,32 @@ function renderNextStickyAlert(){
     <div class="sticky-alert-title">🔔 오더 제출 알림</div>
     <div class="sticky-alert-msg">${esc(item.msg||'')}</div>
     <div class="sticky-alert-actions">
-      <button type="button" class="sticky-alert-btn secondary" onclick="closeStickyAlert()">확인</button>
+      <button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">확인</button>
+      ${item.tid&&item.div&&item.matchId?`<button type="button" class="sticky-alert-btn primary" onclick="window.goToStickyAlertMatch()">경기 바로가기</button>`:''}
     </div>
   </div>`;
   wrap.setAttribute('data-msg', String(item.msg||'').trim());
+  if(item.matchId) wrap.setAttribute('data-mid', String(item.matchId));
+  if(item.tid) wrap.setAttribute('data-tid', String(item.tid));
+  if(item.div) wrap.setAttribute('data-div', String(item.div));
   wrap.classList.add('show');
 }
-function enqueueStickyAlert(msg,type='info'){
-  const key=String(msg||'').trim();
+function enqueueStickyAlert(payload,type='info'){
+  const item=(payload && typeof payload==='object' && !Array.isArray(payload))
+    ? {msg:String(payload.msg||'').trim(), type:payload.type||type, tid:payload.tid||'', div:payload.div||'', matchId:payload.matchId||payload.mid||''}
+    : {msg:String(payload||'').trim(), type, tid:'', div:'', matchId:''};
+  const key=item.msg;
   if(!key) return;
   const wrap=ge('stickyAlertWrap');
   const current=wrap ? wrap.getAttribute('data-msg')||'' : '';
   if(current===key) return;
   if(STICKY_ALERT_QUEUE.some(x=>x&&x.msg===key)) return;
-  STICKY_ALERT_QUEUE.push({msg:key,type});
+  STICKY_ALERT_QUEUE.push(item);
   renderNextStickyAlert();
 }
 function toast(msg,type='info'){
   if(isPersistentOrderAlertMessage(msg,type)){
-    enqueueStickyAlert(msg,type);
+    enqueueStickyAlert({msg,type});
     return;
   }
   const c=ge('TC');
@@ -16376,7 +16403,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
