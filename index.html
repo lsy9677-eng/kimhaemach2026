@@ -15340,6 +15340,15 @@ async function persistOrderPhoto(side, imageDataUrl, source){
   const team=side===1?teams[m.t1]:teams[m.t2];
   const base=_orderPhotoStoreKey(m, side);
 
+  // ── 저장 전 압축: 원본 스마트폰 사진(3~5MB) → jpeg 축소(~200KB) ──
+  // Firestore 문서 1MB 한도 대응 + 전송 속도 개선
+  let compressedDataUrl = imageDataUrl;
+  try {
+    compressedDataUrl = await compressImageDataUrl(imageDataUrl, 1200, 0.78);
+  } catch(e) {
+    compressedDataUrl = imageDataUrl; // 압축 실패 시 원본 유지
+  }
+
   // ── 사진(base64)은 별도 orderPhotos 컬렉션에 저장 ──
   // match 문서에 직접 넣으면 Firestore 1MB 한도 초과 에러 발생
   const photoDocId = `${(m._id||m.id)}_${base}`;
@@ -15349,7 +15358,7 @@ async function persistOrderPhoto(side, imageDataUrl, source){
     division: key.split('_')[1],
     side: side,
     sideKey: base,
-    dataUrl: String(imageDataUrl||''),
+    dataUrl: String(compressedDataUrl||''),
     updatedAt: new Date().toISOString(),
     source: String(source||'upload'),
     club: String(team?.club||base||''),
@@ -15386,8 +15395,8 @@ async function persistOrderPhoto(side, imageDataUrl, source){
     console.warn('match orderPhotoStore meta update failed', e);
   }
 
-  // 메모리 캐시에는 dataUrl도 유지 (뷰어에서 즉시 볼 수 있도록)
-  m.orderPhotoStore[base] = { ...metaOnly, dataUrl: imageDataUrl };
+  // 메모리 캐시에는 압축본 dataUrl도 유지 (뷰어에서 즉시 볼 수 있도록)
+  m.orderPhotoStore[base] = { ...metaOnly, dataUrl: compressedDataUrl };
 
   return m.orderPhotoStore[base];
 }
