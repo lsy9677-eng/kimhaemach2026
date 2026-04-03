@@ -10430,6 +10430,11 @@ function openM3(key,mid){
   if(btnOpSubmitHome) btnOpSubmitHome.style.display='none';
   if(btnOpSubmitAway) btnOpSubmitAway.style.display='none';
 
+  if(btnSubmitHome){ btnSubmitHome.disabled=false; }
+  if(btnSubmitAway){ btnSubmitAway.disabled=false; }
+  if(btnOpSubmitHome){ btnOpSubmitHome.disabled=false; }
+  if(btnOpSubmitAway){ btnOpSubmitAway.disabled=false; }
+
   if(G.meta.onlineOrderEnabled){
     if(AD){
       if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
@@ -10579,6 +10584,12 @@ function openM3(key,mid){
       }
     }
   }
+  setTimeout(()=>{
+    try{
+      ensureM3AdminSubmitButtons();
+      ensureM3OperatorSubmitButtons();
+    }catch(_e){}
+  },0);
   om('mM3');
   refreshAllOrderChipAvailability();
   requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
@@ -11353,35 +11364,54 @@ function focusMatchCardElement(el){
 }
 
 function goBracketMatch(tid,div,matchId){
-  const matchKey=tid+'_'+div;
+  const matchKey = tid + '_' + div;
+  const pageBracket = ge('page-bracket');
+  if(!tid || !div || !matchId){
+    showPage('bracket');
+    return;
+  }
+
+  // 특정 경기로 직접 이동할 때는 필터 때문에 대상 경기가 숨겨지지 않도록 잠시 해제
+  if(MY_CLUB_FILTER){
+    persistMyClubFilterState(false);
+    updateFilterBtnUI('register', MY_CLUB_FILTER);
+    updateFilterBtnUI('bracket', MY_CLUB_FILTER);
+  }
+
   showPage('bracket');
-  const brTS=ge('brTS');
-  if(brTS) brTS.value=tid;
-  if(typeof onBrTC==='function') onBrTC();
+  const brTS = ge('brTS');
+  if(brTS) brTS.value = tid;
+  if(typeof onBrTC === 'function') onBrTC();
 
-  const applyAndFocus=()=>{
-    setBracketSelectedDivs([div], tid);
-    renderBracket();
+  const applyAndFocus = ()=>{
+    try{ setBracketSelectedDivs([div], tid); }catch(_e){}
+    try{ renderBracket(); }catch(_e){}
 
-    let tries=0;
-    const finder=()=>{
-      // _id 또는 id 둘 다 시도
-      const el=ge(getMatchCardDomId(matchKey, matchId))
-        || document.querySelector(`[data-match-id="${matchId}"]`)
-        || document.querySelector(`[data-mid="${matchId}"]`);
+    let tries = 0;
+    const finder = ()=>{
+      const scope = pageBracket || document;
+      const exactId = getMatchCardDomId(matchKey, matchId);
+      const exact = scope.querySelector(`#${CSS.escape(exactId)}`);
+      const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
+      const el = exact || byData;
+
       if(el){
         focusMatchCardElement(el);
         return;
       }
+
       tries++;
-      if(tries<24) setTimeout(finder, 180);
+      if(tries < 30){
+        setTimeout(finder, 180);
+      }else{
+        toast('해당 경기를 찾지 못했습니다. 선택된 부서를 확인해 주세요.','info');
+      }
     };
-    setTimeout(finder, 150);
+
+    setTimeout(finder, 220);
   };
 
-  requestAnimationFrame(()=>{
-    setTimeout(applyAndFocus, 280);
-  });
+  requestAnimationFrame(()=>setTimeout(applyAndFocus, 260));
 }
 
 window.goBracketMatch = goBracketMatch;
