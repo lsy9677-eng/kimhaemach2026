@@ -10326,7 +10326,6 @@ function openM3(key,mid){
   }
   ge('mM3B').innerHTML=html;om('mM3');
   refreshAllOrderChipAvailability();
-  // 이전 오더 자동 불러오기 (오더가 비어있는 경우에만)
   requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
 }
 
@@ -11504,6 +11503,7 @@ async function submitOnlineOrder(sideOnly=null){
   sl(true);
   try{
     await stM(key);
+    updateLastOrderCacheFromCurrentMatch();
     sl(false);
     const st2=getOnlineOrderState(key,m);
     const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
@@ -15325,6 +15325,111 @@ function triggerOrderPhoto(side, source){
 
 // showPage 수정 - players는 누구나 접근
 
+// ═══════════════════════════════════════════════════
+//  이전 오더 템플릿 자동 불러오기
+//  (type="module" 스코프 안에 위치 — CM_key, G, tdn 등 접근 가능)
+// ═══════════════════════════════════════════════════
+
+if(!window._lastOrderCache) window._lastOrderCache = {};
+
+function cacheLastOrder(key, mid, teamIdx, rubbers, mySide) {
+  if (!key || teamIdx == null || !Array.isArray(rubbers)) return;
+  if (!window._lastOrderCache[key]) window._lastOrderCache[key] = {};
+  const normalized = rubbers.map(rb => {
+    if (!rb) return { myPlayers: [] };
+    const myPlayers = mySide === 2 ? (rb.players2 || []) : (rb.players1 || []);
+    return { myPlayers: myPlayers.filter(Boolean) };
+  });
+  if (!normalized.some(n => n.myPlayers.length > 0)) return;
+  window._lastOrderCache[key][teamIdx] = {
+    rubbers: normalized,
+    fromMatchId: mid,
+    savedAt: new Date().toISOString()
+  };
+}
+
+function getLastOrder(key, teamIdx) {
+  return window._lastOrderCache?.[key]?.[teamIdx] || null;
+}
+
+function updateLastOrderCacheFromCurrentMatch() {
+  const key = CM_key, mid = CM_id;
+  if (!key || !mid) return;
+  const m = (G.matches[key] || []).find(x => x.id === mid);
+  if (!m) return;
+  const rubbers = Array.isArray(m.rubbers) ? m.rubbers : [];
+  if (m.t1 != null) cacheLastOrder(key, mid, m.t1, rubbers, 1);
+  if (m.t2 != null) {
+    cacheLastOrder(key, mid, m.t2,
+      rubbers.map(rb => ({ players1: (rb&&rb.players2)||[], players2: (rb&&rb.players1)||[] })),
+      1);
+  }
+}
+
+function applyLastOrderIfEmpty(key, m, dbl, st) {
+  const teams = G.teams[key] || [];
+  const t1 = teams[m.t1], t2 = teams[m.t2];
+  if (!t1 || !t2) return;
+  const exRb = Array.isArray(m.rubbers) ? m.rubbers : [];
+
+  const hasRealPlayers = (side) =>
+    exRb.some(rb => rb && ((side===1 ? (rb.players1||[]) : (rb.players2||[])).some(Boolean)));
+
+  [{ teamIdx: m.t1, side: 1, teamObj: t1 },
+   { teamIdx: m.t2, side: 2, teamObj: t2 }
+  ].forEach(({ teamIdx, side, teamObj }) => {
+    const lastOrder = getLastOrder(key, teamIdx);
+    if (!lastOrder) return;
+    if (hasRealPlayers(side)) return;          // 이미 오더 있으면 스킵
+    if (side === 1 ? st.s1 : st.s2) return;   // 이미 제출됐으면 스킵
+
+    let appliedCount = 0;
+    lastOrder.rubbers.forEach((cache, r) => {
+      if (r >= dbl) return;
+      const cid = `rp${side}_${r}`;
+      const pool = getPickerPlayers(cid);       // 현재 팀 로스터
+      const valid = (cache.myPlayers || []).filter(p => pool.includes(p));
+      if (!valid.length) return;
+      setPickerSelected(cid, valid);
+      renderPlayerDropdown(cid);               // ← 실제 chip UI 갱신 (m3-picked-item 구조)
+      appliedCount++;
+    });
+
+    if (appliedCount > 0) {
+      const teamName = tdn(teamObj, key, side === 1 ? m.t1 : m.t2);
+      const bannerEl = document.createElement('div');
+      bannerEl.id = `lastOrderBanner_side${side}`;
+      bannerEl.style.cssText =
+        'margin-bottom:8px;padding:8px 12px;' +
+        'background:linear-gradient(135deg,#fffbeb,#fef3c7);' +
+        'border:1.5px solid #d97706;border-radius:10px;' +
+        'font-size:.76rem;color:#92400e;' +
+        'display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
+      bannerEl.innerHTML =
+        `<span>📋 <b>${teamName}</b> — 이전 오더 불러왔습니다. 확인 후 수정하세요</span>` +
+        `<button type="button" onclick="clearLastOrderFill(${side},${dbl})" ` +
+        `style="padding:3px 9px;border-radius:8px;border:1px solid #d97706;` +
+        `background:white;color:#92400e;font-size:.72rem;cursor:pointer;white-space:nowrap">초기화</button>`;
+      // 해당 side 첫 번째 rb-blk 앞에 배너 삽입
+      const firstPicker = ge(`rp${side}_0`);
+      let blk = firstPicker;
+      while (blk && !blk.classList?.contains('rb-blk')) blk = blk.parentElement;
+      if (blk) blk.insertAdjacentElement('beforebegin', bannerEl);
+      else ge('mM3B')?.insertAdjacentElement('afterbegin', bannerEl);
+    }
+  });
+}
+
+function clearLastOrderFill(side, dbl) {
+  for (let r = 0; r < dbl; r++) {
+    const cid = `rp${side}_${r}`;
+    setPickerSelected(cid, []);
+    renderPlayerDropdown(cid);               // ← 동일하게 renderPlayerDropdown 사용
+  }
+  const banner = ge(`lastOrderBanner_side${side}`);
+  if (banner) banner.remove();
+}
+
 Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
@@ -15355,7 +15460,8 @@ Object.assign(window,{ toggleModalFullscreen, setModalFullscreenState, openQuick
   activateSlot,celebrateGroupComplete,refreshRunPreview,buildRouletteStrip,updateDrawMainPreview,
   toggleDivRubber,selRub,getDivRubbers,
   addPresetDiv,addCustomDiv,etAddPreset,etAddCustomDiv,
-  etToggleRub,etSelRub,etGetRubbers});
+  etToggleRub,etSelRub,etGetRubbers,
+  updateLastOrderCacheFromCurrentMatch,applyLastOrderIfEmpty,clearLastOrderFill});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
@@ -16239,180 +16345,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 
-
-<script>
-// ═══════════════════════════════════════════════════
-//  이전 오더 템플릿 자동 불러오기 기능
-//  ─ 팀별 마지막 사용 오더를 메모리에 캐싱해두고
-//    새 경기 오더 작성 시 자동으로 기본값으로 채움
-// ═══════════════════════════════════════════════════
-
-if(!window._lastOrderCache) window._lastOrderCache = {};
-
-/**
- * 팀의 마지막 오더를 캐시에 저장
- * mySide=1: players1이 내 팀, mySide=2: players2가 내 팀
- */
-function cacheLastOrder(key, mid, teamIdx, rubbers, mySide) {
-  if (!key || teamIdx == null || !Array.isArray(rubbers)) return;
-  if (!window._lastOrderCache[key]) window._lastOrderCache[key] = {};
-  const normalized = rubbers.map(rb => {
-    if (!rb || (!rb.players1 && !rb.players2)) return { myPlayers: [], opPlayers: [] };
-    const myPlayers = mySide === 2 ? (rb.players2 || []) : (rb.players1 || []);
-    const opPlayers = mySide === 2 ? (rb.players1 || []) : (rb.players2 || []);
-    return { myPlayers: [...myPlayers], opPlayers: [...opPlayers] };
-  });
-  window._lastOrderCache[key][teamIdx] = {
-    rubbers: normalized,
-    fromMatchId: mid,
-    savedAt: new Date().toISOString()
-  };
-}
-
-function getLastOrder(key, teamIdx) {
-  return window._lastOrderCache?.[key]?.[teamIdx] || null;
-}
-
-/**
- * openM3 렌더링 직후 호출
- * 오더가 없는 팀에 한해 이전 오더를 자동으로 picker에 채움
- */
-function applyLastOrderIfEmpty(key, m, dbl, st) {
-  const teams = G.teams[key] || [];
-  const t1 = teams[m.t1], t2 = teams[m.t2];
-  if (!t1 || !t2) return;
-  const exRb = Array.isArray(m.rubbers) ? m.rubbers : [];
-
-  [
-    { teamIdx: m.t1, side: 1 },
-    { teamIdx: m.t2, side: 2 }
-  ].forEach(({ teamIdx, side }) => {
-    const lastOrder = getLastOrder(key, teamIdx);
-    if (!lastOrder) return;
-
-    // 이미 이 side에 오더가 있거나 제출된 경우 스킵
-    const hasExisting = exRb.some(rb =>
-      rb && (side === 1 ? (rb.players1||[]).length > 0 : (rb.players2||[]).length > 0)
-    );
-    const alreadySubmitted = side === 1 ? st.s1 : st.s2;
-    if (hasExisting || alreadySubmitted) return;
-
-    let appliedCount = 0;
-    lastOrder.rubbers.forEach((cache, r) => {
-      if (r >= dbl) return;
-      const cid = `rp${side}_${r}`;
-      const cont = ge(cid);
-      if (!cont) return;
-      const myPlayers = cache.myPlayers || [];
-      if (!myPlayers.length) return;
-      // 현재 팀 로스터에 실제로 있는 선수만 필터
-      const pool = getPickerPlayers(cid);
-      const valid = myPlayers.filter(p => pool.includes(p));
-      if (!valid.length) return;
-      setPickerSelected(cid, valid);
-      appliedCount++;
-    });
-
-    if (appliedCount > 0) {
-      // 안내 배너 삽입
-      const teamObj = side === 1 ? t1 : t2;
-      const teamName = tdn(teamObj, key, side === 1 ? m.t1 : m.t2);
-      const bannerEl = document.createElement('div');
-      bannerEl.id = `lastOrderBanner_side${side}`;
-      bannerEl.style.cssText =
-        'margin-bottom:8px;padding:8px 12px;' +
-        'background:linear-gradient(135deg,#fffbeb,#fef3c7);' +
-        'border:1.5px solid #d97706;border-radius:10px;' +
-        'font-size:.76rem;color:#92400e;' +
-        'display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
-      bannerEl.innerHTML =
-        `<span>📋 <b>${teamName}</b> 이전 오더 기준으로 자동 불러왔습니다 — 확인 후 수정하세요</span>` +
-        `<button type="button" onclick="clearLastOrderFill(${side},${dbl})" ` +
-        `style="padding:3px 9px;border-radius:8px;border:1px solid #d97706;` +
-        `background:white;color:#92400e;font-size:.72rem;cursor:pointer;white-space:nowrap">초기화</button>`;
-
-      // 해당 side의 첫 번째 복식 블록 앞에 배너 삽입
-      const firstPicker = ge(`rp${side}_0`);
-      let insertTarget = firstPicker;
-      while (insertTarget && !insertTarget.classList?.contains('rb-blk')) {
-        insertTarget = insertTarget.parentElement;
-      }
-      if (insertTarget) insertTarget.insertAdjacentElement('beforebegin', bannerEl);
-      else ge('mM3B')?.insertAdjacentElement('afterbegin', bannerEl);
-
-      // chip UI 갱신
-      for (let r = 0; r < dbl; r++) {
-        try { refreshPickerChips(`rp${side}_${r}`); } catch(e) {}
-      }
-    }
-  });
-}
-
-/**
- * 배너의 "초기화" 버튼 클릭 시: 해당 side picker를 비움
- */
-function clearLastOrderFill(side, dbl) {
-  for (let r = 0; r < dbl; r++) {
-    const cid = `rp${side}_${r}`;
-    setPickerSelected(cid, []);
-    try { refreshPickerChips(cid); } catch(e) {}
-  }
-  const banner = ge(`lastOrderBanner_side${side}`);
-  if (banner) banner.remove();
-}
-
-/**
- * picker의 chip UI를 data-selected 기준으로 갱신
- */
-function refreshPickerChips(cid) {
-  const cont = ge(cid);
-  if (!cont) return;
-  const selected = getPickerSelected(cid);
-  const pickedEl = cont.querySelector('.m3-picked');
-  if (!pickedEl) return;
-  if (!selected.length) {
-    pickedEl.innerHTML = '<span style="color:var(--text3);font-size:.8rem">선택 없음</span>';
-    return;
-  }
-  pickedEl.innerHTML = selected.map(p =>
-    `<span class="p-chip sel" data-p="${p}" ` +
-    `style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;` +
-    `font-size:.8rem;font-weight:700;background:var(--primary);color:white;` +
-    `border:1.5px solid var(--primary);cursor:pointer;margin:2px" ` +
-    `onclick="togglePlayerChip('${cid}','${p}')">${p} ✕</span>`
-  ).join('');
-}
-
-/**
- * saveM3 / submit 성공 직후 호출
- * 현재 CM_key/CM_id 경기의 rubbers를 양 팀 캐시에 반영
- */
-function updateLastOrderCacheFromCurrentMatch() {
-  const key = CM_key, mid = CM_id;
-  if (!key || !mid) return;
-  const list = G.matches[key] || [];
-  const m = list.find(x => x.id === mid);
-  if (!m) return;
-  const rubbers = Array.isArray(m.rubbers) ? m.rubbers : [];
-  if (!rubbers.length) return;
-  // t1 기준 (players1 = t1)
-  if (m.t1 != null) cacheLastOrder(key, mid, m.t1, rubbers, 1);
-  // t2 기준 (players2 = t2 → 뒤집어서 저장)
-  if (m.t2 != null) {
-    const flipped = rubbers.map(rb => ({
-      players1: rb.players2 || [],
-      players2: rb.players1 || []
-    }));
-    cacheLastOrder(key, mid, m.t2, flipped, 1);
-  }
-}
-
-Object.assign(window, {
-  cacheLastOrder, getLastOrder,
-  applyLastOrderIfEmpty, clearLastOrderFill,
-  refreshPickerChips, updateLastOrderCacheFromCurrentMatch,
-});
-</script>
 
 </body>
 </html>
