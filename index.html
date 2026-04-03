@@ -7648,7 +7648,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const _tm2x=_tms2[m.t2]??_tms2.find(t=>t.id===m.t2||t.name===m.t2);
   const _isMyCM=MY_CLUB_FILTER&&_bc2&&((_tm1x&&baseClub(_tm1x.club||'')===_bc2)||(_tm2x&&baseClub(_tm2x.club||'')===_bc2));
   const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
-  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)':''}${_isOtherM?'opacity:0.35;':''}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.sc1}:${st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
+  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-docid="${m._id||m.id}" style="${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)':''}${_isOtherM?'opacity:0.35;':''}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.sc1}:${st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
     <div class="m3body">${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
@@ -11393,7 +11393,8 @@ function goBracketMatch(tid,div,matchId){
       const exactId = getMatchCardDomId(matchKey, matchId);
       const exact = scope.querySelector(`#${CSS.escape(exactId)}`);
       const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
-      const el = exact || byData;
+      const byDocId = scope.querySelector(`.m3card[data-match-docid="${String(matchId).replace(/"/g,'\"')}"]`);
+      const el = exact || byData || byDocId;
 
       if(el){
         focusMatchCardElement(el);
@@ -13036,7 +13037,7 @@ function buildMatchAlertStateMap(matchesObj){
     Object.entries(matchesObj||{}).forEach(([key,list])=>{
       (list||[]).forEach(m=>{
         if(!m) return;
-        const mid=m._id||m.id;
+        const mid=m.id||m._id;  // m3card는 m.id 기준으로 렌더링되므로 일치시킴
         if(!mid) return;
         const subs=(m&&typeof m.orderSubmissions==='object'&&m.orderSubmissions)?m.orderSubmissions:{};
         const bases=getMatchBaseClubs(key,m);
@@ -13160,7 +13161,7 @@ function renderNextStickyAlert(){
     <div class="sticky-alert-msg">${esc(item.msg||'')}</div>
     <div class="sticky-alert-actions">
       <button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">확인</button>
-      ${item.tid&&item.div&&item.matchId?`<button type="button" class="sticky-alert-btn primary" onclick="closeStickyAlert(false);goBracketMatch('${item.tid}','${item.div}','${item.matchId}')">경기 바로가기</button>`:''}
+      ${item.tid&&item.div&&item.matchId?`<button type="button" class="sticky-alert-btn primary" onclick="window.goToStickyAlertMatch()">경기 바로가기</button>`:''}
     </div>
   </div>`;
   wrap.setAttribute('data-msg', String(item.msg||'').trim());
