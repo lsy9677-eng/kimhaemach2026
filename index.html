@@ -6840,10 +6840,7 @@ function renderBracket(){
   cont.innerHTML = parts.length ? parts.join('<div style="height:14px"></div>') : '<div class="empty-state card"><div class="empty-icon">🎲</div><p>표시할 부서가 없습니다</p></div>';
   const _eb=ge('bracketExportBar');
   if(_eb) _eb.style.display = parts.length ? 'flex' : 'none';
-  requestAnimationFrame(()=>{
-    updateOperationSticky();
-    tryConsumePendingBracketNav();
-  });
+  requestAnimationFrame(()=>updateOperationSticky());
 }
 
 function getBracketDisplayTeams(key, teams){
@@ -11355,77 +11352,36 @@ function focusMatchCardElement(el){
   return true;
 }
 
-let PENDING_BRACKET_NAV = null;
-function tryConsumePendingBracketNav(){
-  if(!PENDING_BRACKET_NAV) return false;
-  const {tid,div,matchId}=PENDING_BRACKET_NAV;
-  const currentTid=(ge('brTS')?.value)||'';
-  if(!tid || !div || !matchId || currentTid!==tid) return false;
-  const matchKey=tid+'_'+div;
-  const el=ge(getMatchCardDomId(matchKey, matchId))
-    || document.querySelector(`[data-match-id="${matchId}"]`)
-    || document.querySelector(`[data-mid="${matchId}"]`);
-  if(!el) return false;
-  focusMatchCardElement(el);
-  PENDING_BRACKET_NAV = null;
-  return true;
-}
 function goBracketMatch(tid,div,matchId){
-  if(!tid || !div || !matchId) return;
-  PENDING_BRACKET_NAV = {tid,div,matchId};
-  const matchKey = tid+'_'+div;
-  const findTarget = () => ge(getMatchCardDomId(matchKey, matchId))
-    || document.querySelector(`[data-match-id="${matchId}"]`)
-    || document.querySelector(`[data-mid="${matchId}"]`);
-
-  const forceRender = () => {
-    const brTSInner = ge('brTS');
-    if(brTSInner && brTSInner.value !== tid) brTSInner.value = tid;
-    if(typeof setBracketSelectedDivs==='function') setBracketSelectedDivs([div], tid);
-    if(typeof renderBracketDivisionChips==='function') renderBracketDivisionChips(tid);
-    if(typeof renderBracket==='function') renderBracket();
-  };
-
-  let tries = 0;
-  let observer = null;
-  let timer = null;
-  const cleanup = () => {
-    if(observer){ try{ observer.disconnect(); }catch(e){} }
-    observer = null;
-    if(timer){ clearTimeout(timer); timer = null; }
-  };
-  const attemptFocus = () => {
-    forceRender();
-    const el = findTarget();
-    if(el){
-      cleanup();
-      PENDING_BRACKET_NAV = null;
-      focusMatchCardElement(el);
-      return true;
-    }
-    tries += 1;
-    if(tries >= 45){
-      cleanup();
-      return false;
-    }
-    timer = setTimeout(attemptFocus, 180);
-    return false;
-  };
-
+  const matchKey=tid+'_'+div;
   showPage('bracket');
-  const brTS = ge('brTS');
-  if(brTS) brTS.value = tid;
+  const brTS=ge('brTS');
+  if(brTS) brTS.value=tid;
   if(typeof onBrTC==='function') onBrTC();
 
-  const cont = ge('bracketContent');
-  if(cont && typeof MutationObserver !== 'undefined'){
-    observer = new MutationObserver(() => {
-      attemptFocus();
-    });
-    try{ observer.observe(cont, {childList:true, subtree:true}); }catch(e){}
-  }
+  const applyAndFocus=()=>{
+    setBracketSelectedDivs([div], tid);
+    renderBracket();
 
-  setTimeout(attemptFocus, 120);
+    let tries=0;
+    const finder=()=>{
+      // _id 또는 id 둘 다 시도
+      const el=ge(getMatchCardDomId(matchKey, matchId))
+        || document.querySelector(`[data-match-id="${matchId}"]`)
+        || document.querySelector(`[data-mid="${matchId}"]`);
+      if(el){
+        focusMatchCardElement(el);
+        return;
+      }
+      tries++;
+      if(tries<24) setTimeout(finder, 180);
+    };
+    setTimeout(finder, 150);
+  };
+
+  requestAnimationFrame(()=>{
+    setTimeout(applyAndFocus, 280);
+  });
 }
 
 window.goBracketMatch = goBracketMatch;
@@ -13158,9 +13114,10 @@ function goToStickyAlertMatch(){
   const tid=wrap.getAttribute('data-tid')||'';
   const div=wrap.getAttribute('data-div')||'';
   const mid=wrap.getAttribute('data-mid')||'';
-  closeStickyAlert(false);
-  if(!(tid && div && mid)) return;
-  if(typeof window.goBracketMatch==='function') window.goBracketMatch(tid,div,mid);
+  closeStickyAlert(true);
+  if(tid && div && mid && typeof goBracketMatch==='function'){
+    setTimeout(()=>goBracketMatch(tid,div,mid),120);
+  }
 }
 function renderNextStickyAlert(){
   const wrap=ge('stickyAlertWrap');
