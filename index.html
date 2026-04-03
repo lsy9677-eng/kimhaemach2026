@@ -15339,25 +15339,63 @@ async function persistOrderPhoto(side, imageDataUrl, source){
   const teams=G.teams[key]||[];
   const team=side===1?teams[m.t1]:teams[m.t2];
   const base=_orderPhotoStoreKey(m, side);
-  const payload={
-    dataUrl:String(imageDataUrl||''),
-    updatedAt:new Date().toISOString(),
-    source:String(source||'upload'),
-    side:String(side===1?1:2),
-    club:String(team?.club||base||''),
-    savedBy:String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사')))
+
+  // ── 사진(base64)은 별도 orderPhotos 컬렉션에 저장 ──
+  // match 문서에 직접 넣으면 Firestore 1MB 한도 초과 에러 발생
+  const photoDocId = `${(m._id||m.id)}_${base}`;
+  const photoPayload = {
+    matchId: m._id||m.id,
+    tournamentId: key.split('_')[0],
+    division: key.split('_')[1],
+    side: side,
+    sideKey: base,
+    dataUrl: String(imageDataUrl||''),
+    updatedAt: new Date().toISOString(),
+    source: String(source||'upload'),
+    club: String(team?.club||base||''),
+    savedBy: String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사')))
   };
-  const safeStore=_sanitizeOrderPhotoStore(m.orderPhotoStore);
-  safeStore[base]=JSON.parse(JSON.stringify(payload));
-  m.orderPhotoStore=safeStore;
-  await stM(key);
+
+  try {
+    await setDoc(doc(db,'orderPhotos', photoDocId), photoPayload, {merge:true});
+  } catch(e) {
+    throw new Error('사진 저장 실패: ' + (e?.message||e));
+  }
+
+  // match 문서에는 dataUrl 제외한 메타데이터만 저장 (stM 경유 안 함)
+  const metaOnly = {
+    updatedAt: photoPayload.updatedAt,
+    source: photoPayload.source,
+    club: photoPayload.club,
+    savedBy: photoPayload.savedBy,
+    photoDocId,
+    hasPhoto: true
+  };
+  if(!m.orderPhotoStore) m.orderPhotoStore={};
+  m.orderPhotoStore[base] = metaOnly;
+
+  // match 문서에 메타만 업데이트 (batch 말고 단건 updateDoc으로)
+  const matchDocId = m._id||m.id;
+  try {
+    await updateDoc(doc(db,'matches', matchDocId), {
+      [`orderPhotoStore.${base}`]: metaOnly,
+      updatedAt: new Date().toISOString()
+    });
+  } catch(e) {
+    // match 문서 업데이트 실패해도 사진은 저장된 상태 — 무시
+    console.warn('match orderPhotoStore meta update failed', e);
+  }
+
+  // 메모리 캐시에는 dataUrl도 유지 (뷰어에서 즉시 볼 수 있도록)
+  m.orderPhotoStore[base] = { ...metaOnly, dataUrl: imageDataUrl };
+
   return m.orderPhotoStore[base];
 }
-function openOrderPhotoViewer(side){
+async function openOrderPhotoViewer(side){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const m=(G.matches[key]||[]).find(x=>x.id===mid); if(!m) return;
   const saved=_orderPhotoGetSaved(m,side);
-  if(!saved||!saved.dataUrl){ toast('저장된 사진이 없습니다','info'); return; }
+  if(!saved||(!saved.dataUrl&&!saved.hasPhoto)){ toast('저장된 사진이 없습니다','info'); return; }
   if(!_orderPhotoCanView(m,side)){
     toast('해당 클럽, 진행자, 관리자만 사진을 볼 수 있습니다','error');
     return;
@@ -15365,8 +15403,19 @@ function openOrderPhotoViewer(side){
   const title=ge('mOrderPhotoViewTitle');
   const img=ge('mOrderPhotoViewImg');
   const meta=ge('mOrderPhotoViewMeta');
+
+  // dataUrl이 메모리에 없으면 orderPhotos 컬렉션에서 불러옴
+  let dataUrl = saved.dataUrl || '';
+  if(!dataUrl && saved.photoDocId){
+    try{
+      const snap = await getDoc(doc(db,'orderPhotos', saved.photoDocId));
+      if(snap.exists()) dataUrl = snap.data().dataUrl || '';
+    }catch(e){ toast('사진 불러오기 실패: '+(e?.message||e),'error'); return; }
+  }
+  if(!dataUrl){ toast('사진 데이터를 찾을 수 없습니다','error'); return; }
+
   if(title) title.textContent=`📷 ${saved.club||('팀 '+side)} 오더 사진`;
-  if(img) img.src=saved.dataUrl;
+  if(img) img.src=dataUrl;
   if(meta) meta.textContent=`저장: ${saved.updatedAt?fmtDt(saved.updatedAt):'-'} · ${saved.savedBy||'-'} · ${saved.source==='camera'?'사진찍기':'사진불러오기'}`;
   om('mOrderPhotoView');
 }
