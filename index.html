@@ -11373,35 +11373,58 @@ function tryConsumePendingBracketNav(){
 function goBracketMatch(tid,div,matchId){
   if(!tid || !div || !matchId) return;
   PENDING_BRACKET_NAV = {tid,div,matchId};
-  const matchKey=tid+'_'+div;
-  showPage('bracket');
-  const brTS=ge('brTS');
-  if(brTS) brTS.value=tid;
-  if(typeof onBrTC==='function') onBrTC();
+  const matchKey = tid+'_'+div;
+  const findTarget = () => ge(getMatchCardDomId(matchKey, matchId))
+    || document.querySelector(`[data-match-id="${matchId}"]`)
+    || document.querySelector(`[data-mid="${matchId}"]`);
 
-  const applyAndFocus=()=>{
+  const forceRender = () => {
+    const brTS = ge('brTS');
+    if(brTS && brTS.value !== tid) brTS.value = tid;
     setBracketSelectedDivs([div], tid);
-    renderBracket();
-
-    let tries=0;
-    const finder=()=>{
-      if(tryConsumePendingBracketNav()) return;
-      const el=ge(getMatchCardDomId(matchKey, matchId))
-        || document.querySelector(`[data-match-id="${matchId}"]`)
-        || document.querySelector(`[data-mid="${matchId}"]`);
-      if(el){
-        focusMatchCardElement(el);
-        PENDING_BRACKET_NAV = null;
-        return;
-      }
-      tries++;
-      if(tries<30) setTimeout(finder, 220);
-    };
-    setTimeout(finder, 180);
+    if(typeof renderBracketDivisionChips==='function') renderBracketDivisionChips(tid);
+    if(typeof renderBracket==='function') renderBracket();
   };
 
-  requestAnimationFrame(()=>{
-    setTimeout(applyAndFocus, 320);
+  let tries = 0;
+  let observer = null;
+  const cleanup = () => {
+    if(observer){ try{ observer.disconnect(); }catch(e){} }
+    observer = null;
+  };
+  const attemptFocus = () => {
+    forceRender();
+    const el = findTarget();
+    if(el){
+      cleanup();
+      PENDING_BRACKET_NAV = null;
+      focusMatchCardElement(el);
+      return true;
+    }
+    tries += 1;
+    if(tries >= 45){
+      cleanup();
+      return false;
+    }
+    setTimeout(attemptFocus, 180);
+    return false;
+  };
+
+  showPage('bracket');
+  const brTS = ge('brTS');
+  if(brTS) brTS.value = tid;
+  if(typeof onBrTC==='function') onBrTC();
+
+  const cont = ge('bracketContent');
+  if(cont && typeof MutationObserver !== 'undefined'){
+    observer = new MutationObserver(() => {
+      if(findTarget()) attemptFocus();
+    });
+    try{ observer.observe(cont, {childList:true, subtree:true}); }catch(e){}
+  }
+
+  requestAnimationFrame(() => {
+    setTimeout(attemptFocus, 260);
   });
 }
 
