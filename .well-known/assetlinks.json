@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.or.gimhaetennis",
+      "sha256_cert_fingerprints": [
+        "61:96:CB:33:16:64:F0:19:90:28:BA:D4:C1:9E:A1:47:C4:E5:81:7E:C5:81:E6:47:D7:EC:53:CF:C2:CC:88:DF"
+      ]
+    }
+  }
+]
