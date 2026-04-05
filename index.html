@@ -7960,11 +7960,6 @@ function getMatchDoublesCount(key,m){
 function getMatchResultState(key,m){
   if(!m) return {done:false,started:false,sc1:0,sc2:0,winner:null,totalRubbers:0};
   if(m.bye) return {done:true,started:true,sc1:1,sc2:0,winner:m.winner,totalRubbers:1};
-  if(isPreByeOrder){
-    toast('부전승 사전오더 단계에서는 결과를 저장할 수 없습니다','info');
-    return;
-  }
-
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
@@ -10386,11 +10381,11 @@ function openM3(key,mid){
   const m=(G.matches[key]||[]).find(m=>m.id===mid);if(!m)return;
   if(!(AD||canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 열 수 있습니다','error'); return; }
   const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];
-  const isPreByeOrder = !!(m.bye && t1 && !t2);
-  if(!t1 || (!t2 && !isPreByeOrder)){toast('팀 정보를 찾을 수 없음','error');return;}
+  if(m.bye){toast('부전승 경기입니다','info');return;}
+  if(!t1||!t2){toast('팀 정보를 찾을 수 없음','error');return;}
   CM_key=key;CM_id=mid;
   const [tid2,div]=key.split('_');
-  const dn1=tdn(t1,key,m.t1),dn2=(t2?tdn(t2,key,m.t2):'상대팀 미정');
+  const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
   const tObj=G.tournaments.find(t=>t.id===tid2);
   const cfg=gDS(tObj,div);
   const dbl=cfg.doublesCount||(t1.doublesCount)||5;
@@ -10429,7 +10424,7 @@ function openM3(key,mid){
   if(btnSave){ btnSave.style.display=''; btnSave.textContent='💾 임시저장'; btnSave.disabled=false; btnSave.title='현재 선택한 명단과 페어를 임시저장합니다'; }
   if(btnUnlock){ btnUnlock.style.display=''; btnUnlock.textContent='🔓 초기화'; btnUnlock.disabled=true; btnUnlock.title='오더 제출 상태와 제출 내용을 초기화합니다'; }
   if(btnSubmit) btnSubmit.style.display='none';
-  if(btnSaveResult){ btnSaveResult.style.display=''; btnSaveResult.textContent='💾 결과저장'; btnSaveResult.disabled=!!isPreByeOrder; btnSaveResult.title=isPreByeOrder?'부전승 사전오더 단계에서는 결과를 저장할 수 없습니다':'현재 경기 결과를 저장합니다'; }
+  if(btnSaveResult){ btnSaveResult.style.display=''; btnSaveResult.textContent='💾 결과저장'; btnSaveResult.disabled=false; btnSaveResult.title='현재 경기 결과를 저장합니다'; }
   if(btnSubmitHome) btnSubmitHome.style.display='none';
   if(btnSubmitAway) btnSubmitAway.style.display='none';
   if(btnOpSubmitHome) btnOpSubmitHome.style.display='none';
@@ -10442,15 +10437,15 @@ function openM3(key,mid){
 
   if(G.meta.onlineOrderEnabled){
     if(AD){
-      if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=isPreByeOrder?(st.s1?'📤 관리자 재제출(한팀)':'📤 관리자 제출(한팀)'):(st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'); }
+      if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
       if(btnSubmitHome){ btnSubmitHome.style.display=''; btnSubmitHome.textContent=`📤 ${dn1}만 제출`; btnSubmitHome.title='홈팀 오더만 제출 또는 재제출'; }
-      if(btnSubmitAway){ if(!isPreByeOrder){ btnSubmitAway.style.display=''; btnSubmitAway.textContent=`📤 ${dn2}만 제출`; btnSubmitAway.title='원정팀 오더만 제출 또는 재제출'; } }
+      if(btnSubmitAway){ btnSubmitAway.style.display=''; btnSubmitAway.textContent=`📤 ${dn2}만 제출`; btnSubmitAway.title='원정팀 오더만 제출 또는 재제출'; }
       if(btnUnlock){ btnUnlock.disabled=false; btnUnlock.title='오더 제출 상태와 제출 내용을 초기화하고 대진표 명단을 원래대로 돌립니다'; }
     } else if(isOperator){
       if(btnUnlock){ btnUnlock.disabled=false; btnUnlock.title='진행자도 오더 제출 상태와 제출 내용을 초기화할 수 있습니다'; }
       if(!st.bothSubmitted){
         const missingHome = !st.s1;
-        const missingAway = !isPreByeOrder && !st.s2;
+        const missingAway = !st.s2;
         if(missingHome && btnOpSubmitHome){
           btnOpSubmitHome.style.display='';
           btnOpSubmitHome.textContent=`📤 ${dn1}만 대리제출`;
@@ -10485,7 +10480,7 @@ function openM3(key,mid){
     if(btnUnlock){ btnUnlock.disabled=!(AD||isOperator); }
   }
 
-  const p1=t1?.players||[],p2=t2?.players||[];
+  const p1=t1.players||[],p2=t2.players||[];
   const defSlotLabels=['1·2번','3·4번','5·6번','7·8번','9·10번'];
   const exRb=Array.isArray(m.rubbers)?m.rubbers:[];
   let statusText='';
@@ -10728,7 +10723,7 @@ async function saveM3(){
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
   const m=list[idx];
   if(!(AD||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 저장할 수 있습니다','error');return;}
-  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2]; const isPreByeOrder=!!(m.bye&&t1&&!t2); if(!t1||(!t2&&!isPreByeOrder))return;
+  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];if(!t1||!t2)return;
   const [tid,div]=key.split('_');
   const tObj=G.tournaments.find(t=>t.id===tid);
   const cfg=gDS(tObj,div);
@@ -10799,11 +10794,6 @@ async function saveM3(){
     return;
   }
 
-  if(isPreByeOrder){
-    toast('부전승 사전오더 단계에서는 결과를 저장할 수 없습니다','info');
-    return;
-  }
-
   const totalRubbers=getMatchDoublesCount(key,m);
   const needWins=Math.floor(totalRubbers/2)+1;
   const isTieState=(sc1===sc2);
@@ -10858,7 +10848,7 @@ async function saveM3(){
   try{
     await stM(key);
     saveLastOrderFromPicker(key, m);
-    const dn1=tdn(t1,key,m.t1),dn2=(t2?tdn(t2,key,m.t2):'상대팀 미정');
+    const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
     if(hasFinalWinner){
       await fbLog(`결과: ${dn1} ${sc1}:${sc2} ${dn2}`,'⚡');
       if(m.phase==='main')await autoAdv(key,m.id);
@@ -10930,7 +10920,7 @@ async function recalcAllPlayerStats(){
 }
 
 async function updPS(key,m,prevW){
-  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2]; const isPreByeOrder=!!(m.bye&&t1&&!t2); if(!t1||(!t2&&!isPreByeOrder))return;
+  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];if(!t1||!t2)return;
   const gk=(n,t)=>getPlayerKey(n,baseClub(t?.club||''));
   if(prevW!=null){
     const pw=teams[prevW],pl=teams[prevW===m.t1?m.t2:m.t1];
@@ -11722,7 +11712,7 @@ function confirmSubmitOrder(){
     if(p2) payloads.push(p2);
   }else if(OP){
     if(!st.s1){ const p1=collectSideOrderFromModal(key,mid,1); if(p1) payloads.push(p1); }
-    if(st.c2 && !st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(p2) payloads.push(p2); }
+    if(!st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(p2) payloads.push(p2); }
   }else{
     const payload=collectMyOnlineOrderFromModal(key,mid);
     if(payload) payloads.push({side:payload.mySide,base:payload.myBase,rubbers:payload.rubbers});
@@ -11752,7 +11742,7 @@ function confirmSubmitOrder(){
   }else if(OP){
     const pending=[];
     if(!st.s1) pending.push('홈팀');
-    if(st.c2 && !st.s2) pending.push('원정팀');
+    if(!st.s2) pending.push('원정팀');
     msg=`경기진행자 권한으로 ${pending.join(' + ')} 오더를 대신 제출하시겠습니까?
 이미 제출된 팀의 오더는 건드리지 않고, 아직 미제출인 팀만 제출 처리됩니다.`;
   }else{
@@ -11796,9 +11786,8 @@ async function submitOnlineOrder(sideOnly=null){
     }else{
       const p1=collectSideOrderFromModal(key,mid,1);
       const p2=collectSideOrderFromModal(key,mid,2);
-      if(!p1){ toast('오더 정보를 읽을 수 없습니다','error'); return; }
-      if(p2) payloads.push(p1,p2);
-      else payloads.push(p1);
+      if(!p1||!p2){ toast('양팀 오더 정보를 읽을 수 없습니다','error'); return; }
+      payloads.push(p1,p2);
     }
   }else if(OP){
     if(sideOnly===1 || sideOnly===2){
@@ -11813,8 +11802,8 @@ async function submitOnlineOrder(sideOnly=null){
       payloads.push({...p, club:sideTeam?.club||p.base, proxy:true});
     }else{
       if(!st.s1){ const p1=collectSideOrderFromModal(key,mid,1); if(!p1){ toast('홈팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p1, club:getMatchTeamObjects(key,m).t1?.club||p1.base, proxy:true}); }
-      if(st.c2 && !st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(!p2){ toast('원정팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p2, club:getMatchTeamObjects(key,m).t2?.club||p2.base, proxy:true}); }
-      if(!payloads.length){ toast('이미 제출 완료 상태입니다','info'); return; }
+      if(!st.s2){ const p2=collectSideOrderFromModal(key,mid,2); if(!p2){ toast('원정팀 오더 정보를 읽을 수 없습니다','error'); return; } payloads.push({...p2, club:getMatchTeamObjects(key,m).t2?.club||p2.base, proxy:true}); }
+      if(!payloads.length){ toast('이미 양팀 모두 제출 완료 상태입니다','info'); return; }
     }
   }else{
     const payload=collectMyOnlineOrderFromModal(key,mid); if(!payload) return;
