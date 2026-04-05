@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-04-v17-alert-only-no-shortcut";
+  const APP_VERSION = "2026-04-05-v18-live-score-tie-save-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -10794,13 +10794,42 @@ async function saveM3(){
     return;
   }
 
-  if(sc1===sc2){toast('동점 — 홀수 복식 경기 진행 필요 (동점 불가)','error');return;}
+  const totalRubbers=getMatchDoublesCount(key,m);
+  const needWins=Math.floor(totalRubbers/2)+1;
+  const isTieState=(sc1===sc2);
+  const hasFinalWinner=!isTieState && (sc1>=needWins || sc2>=needWins);
+
   m.rubbers=newRb;
   if(G.meta.onlineOrderEnabled && orderState.bothSubmitted) syncRevealedOrderIntoMatchRubbers(key,m);
-  m.winner=sc1>sc2?m.t1:m.t2;
-  await updPS(key,m,prevW);
+  m.winner=hasFinalWinner ? (sc1>sc2?m.t1:m.t2) : null;
 
-  const finishedCourts = Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : []);
+  const adjustPlayerStatsForUnfinalized = async () => {
+    if(prevW==null) return;
+    const teams=G.teams[key]||[];
+    const gk=(n,t)=>getPlayerKey(n,baseClub(t?.club||''));
+    const pw=teams[prevW], pl=teams[prevW===m.t1?m.t2:m.t1];
+    const affected=new Set();
+    if(pw) (pw.players||[]).forEach(n=>{
+      const k=gk(n,pw);
+      if(G.players[k]?.wins>0){
+        G.players[k].wins--;
+        affected.add(k);
+      }
+    });
+    if(pl) (pl.players||[]).forEach(n=>{
+      const k=gk(n,pl);
+      if(G.players[k]?.losses>0){
+        G.players[k].losses--;
+        affected.add(k);
+      }
+    });
+    if(affected.size) await Promise.all([...affected].map(k=>G.players[k]?stP(k):Promise.resolve()));
+  };
+
+  if(hasFinalWinner) await updPS(key,m,prevW);
+  else await adjustPlayerStatsForUnfinalized();
+
+  const finishedCourts = hasFinalWinner ? (Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : [])) : [];
   if(finishedCourts.length > 0){
     const allMList = G.matches[key] || [];
     const myAssignedAt = m.courtAssignedAt || '';
@@ -10820,9 +10849,15 @@ async function saveM3(){
     await stM(key);
     saveLastOrderFromPicker(key, m);
     const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
-    await fbLog(`결과: ${dn1} ${sc1}:${sc2} ${dn2}`,'⚡');
-    if(m.phase==='main')await autoAdv(key,m.id);
-    sl(false);cm('mM3');toast('결과 저장 ✅','success');renderBracket();
+    if(hasFinalWinner){
+      await fbLog(`결과: ${dn1} ${sc1}:${sc2} ${dn2}`,'⚡');
+      if(m.phase==='main')await autoAdv(key,m.id);
+    }else if(isTieState){
+      await fbLog(`실시간점수: ${dn1} ${sc1}:${sc2} ${dn2} (동점 진행중)`,'📝');
+    }else{
+      await fbLog(`실시간점수: ${dn1} ${sc1}:${sc2} ${dn2}`,'📝');
+    }
+    sl(false);cm('mM3');toast(hasFinalWinner ? '결과 저장 ✅' : (isTieState ? '동점 상태로 실시간 스코어 저장 ✅' : '실시간 스코어 저장 ✅'),'success');renderBracket();
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
 }
 
