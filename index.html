@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-06-v20-latest-tournament-order";
+  const APP_VERSION = "2026-04-06-v23b-quick-order-button-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1393,8 +1393,9 @@ body.slider-ready .page:not(.active){
     <div class="card fade-in" style="border:2px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-weight:700;font-size:.95rem;color:#166534" id="myClubCardTitle">🏆 내 클럽 현황</div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn" style="font-size:.75rem;padding:4px 10px;background:#166534;color:white;border-radius:999px" onclick="showPage('register')">📋 팀등록</button>
+          <button class="btn" style="font-size:.75rem;padding:4px 10px;background:#ea580c;color:white;border-radius:999px" onclick="openMyClubQuickOrder()">📝 바로 오더쓰기</button>
           <button class="btn" style="font-size:.75rem;padding:4px 10px;background:#1d4ed8;color:white;border-radius:999px" onclick="goMyClubBracket()">🎲 대진표</button>
         </div>
       </div>
@@ -6809,14 +6810,18 @@ function renderBracket(){
             const _done=_st.done;
             const _winNm=_done?(baseClub((_tms[_st.winner]??_tms.find(t=>t.id===_st.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):(_st.started?`⏳ 진행중 ${_st.sc1}:${_st.sc2}`:'⏳ 대기');
             const _orderSummary=getMyClubOrderStatusSummaryHTML(_key,_m,_mbc);
+            const _draftBadge=getMyClubOrderDraftBadgeHTML(_key,_m,_mbc);
             _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
               <div style="flex:1;min-width:220px">
                 <div class="my-match-card-title">${_n1} <span style="color:var(--text3);font-weight:700">vs</span> ${_n2}</div>
                 ${_orderSummary}
+                ${_draftBadge}
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
                 ${_courts?`<span style="font-size:.78rem;color:var(--primary)">${_courts}</span>`:''}
                 <span style="font-size:.78rem;font-weight:700;color:${_done?('#16a34a'):'#e67e22'}">${_winNm}</span>
+                <button class="my-match-toggle-btn" onclick="event.stopPropagation();openMyMatchOrderFromCard('${_atid}','${_div}','${_m.id}')" style="border:1px solid #ea580c;border-radius:999px;background:white;color:#c2410c;cursor:pointer">📝 오더쓰기</button>
+                <button class="my-match-toggle-btn" onclick="event.stopPropagation();submitSavedOrderFromCard('${_atid}','${_div}','${_m.id}')" style="border:1px solid #2563eb;border-radius:999px;background:#eff6ff;color:#1d4ed8;cursor:pointer">📤 오더 제출</button>
               </div>
             </div>`;
           });
@@ -6824,9 +6829,12 @@ function renderBracket(){
       });
     }
     _bBanner.innerHTML=`<div style="padding:10px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${_myMatchCards?'8px':'0'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:${_myMatchCards?'8px':'0'}">
         <span class="my-match-panel-title">🏆 ${REG_CLUB} 내 경기 모아보기</span>
-        <button class="my-match-toggle-btn" onclick="toggleMyClubFilter('bracket')" style="border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="my-match-toggle-btn" onclick="event.stopPropagation();openMyClubQuickOrder()" style="border:1px solid #ea580c;border-radius:999px;background:white;color:#c2410c;cursor:pointer">📝 바로 오더쓰기</button>
+          <button class="my-match-toggle-btn" onclick="event.stopPropagation();toggleMyClubFilter('bracket')" style="border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
+        </div>
       </div>
       ${_myMatchCards||'<div style="font-size:.9rem;color:#166534;font-weight:700">등록된 경기가 없습니다</div>'}
     </div>`;
@@ -11295,6 +11303,8 @@ function updateMyClubUI(){
   if(isReg){
     const titleEl = ge('myClubCardTitle');
     if(titleEl) titleEl.textContent = `🏆 ${club} 현황`;
+    updateFilterBtnUI('register', MY_CLUB_FILTER);
+    updateFilterBtnUI('bracket', MY_CLUB_FILTER);
     updateMyClubHomeCard();
     // 팀등록 탭: 내 클럽 자동 선택
     const regClubSel = ge('regClub');
@@ -11405,10 +11415,12 @@ function updateMyClubHomeCard(){
     </div>`;
   });
 
-  html += `<div style="display:flex;gap:6px;margin-top:4px">
-    <button class="btn" style="flex:1;font-size:.78rem;padding:5px;background:#166534;color:white;border-radius:8px"
+  html += `<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+    <button class="btn" style="flex:1;min-width:120px;font-size:.78rem;padding:5px;background:#166534;color:white;border-radius:8px"
       onclick="showPage('register');toggleMyClubFilter('register',true)">📋 내 팀 보기</button>
-    <button class="btn" style="flex:1;font-size:.78rem;padding:5px;background:#1d4ed8;color:white;border-radius:8px"
+    <button class="btn" style="flex:1;min-width:120px;font-size:.78rem;padding:5px;background:#ea580c;color:white;border-radius:8px"
+      onclick="openMyClubQuickOrder()">📝 바로 오더쓰기</button>
+    <button class="btn" style="flex:1;min-width:120px;font-size:.78rem;padding:5px;background:#1d4ed8;color:white;border-radius:8px"
       onclick="goMyClubBracket()">🎲 내 경기 보기</button>
   </div>`;
 
@@ -11424,6 +11436,55 @@ function goMyClubBracket(){
   const brTS = ge('brTS');
   if(brTS){ brTS.value = at.id; onBrTC(); }
   setTimeout(()=>toggleMyClubFilter('bracket', true), 300);
+}
+
+function openMyClubQuickOrder(){
+  const club = REG_CLUB;
+  if(!REG || !club){
+    toast('클럽 로그인 후 사용해 주세요','info');
+    return;
+  }
+  const at = G.tournaments.find(t=>t.status==='ongoing') ||
+             G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
+  if(!at){
+    toast('진행 중인 대회가 없습니다','info');
+    return;
+  }
+  const bc = baseClub(club);
+  let target = null;
+
+  for(const div of (at.divisions||[])){
+    const key = at.id + '_' + div;
+    const teams = G.teams[key] || [];
+    const myIdxs = [];
+    teams.forEach((team, idx)=>{
+      if(baseClub(team.club||'')===bc || team.club===club) myIdxs.push(idx);
+    });
+    if(!myIdxs.length) continue;
+
+    const matches = (G.matches[key]||[]).filter(m=>m && !m.bye);
+    for(const idx of myIdxs){
+      const next = matches.find(m => (m.t1===idx || m.t2===idx) && !getMatchResultState(key,m).done);
+      if(next){
+        target = { key, mid: next.id, tid: at.id, div };
+        break;
+      }
+    }
+    if(target) break;
+  }
+
+  if(!target){
+    toast('오더를 입력할 다음 경기가 없습니다','info');
+    return;
+  }
+
+  showPage('bracket');
+  const brTS = ge('brTS');
+  if(brTS){ brTS.value = at.id; onBrTC(); }
+  setTimeout(()=>{
+    try{ toggleMyClubFilter('bracket', true); }catch(e){}
+    try{ openM3(target.key, target.mid); }catch(e){ toast('오더창을 여는 중 오류가 발생했습니다','error'); }
+  }, 350);
 }
 
 function focusMatchCardElement(el){
@@ -11449,13 +11510,7 @@ function goBracketMatch(tid,div,matchId){
     return;
   }
 
-  // 특정 경기로 직접 이동할 때는 필터 때문에 대상 경기가 숨겨지지 않도록 잠시 해제
-  if(MY_CLUB_FILTER){
-    persistMyClubFilterState(false);
-    updateFilterBtnUI('register', MY_CLUB_FILTER);
-    updateFilterBtnUI('bracket', MY_CLUB_FILTER);
-  }
-
+  // 내 클럽만 보기 상태는 사용자가 직접 해제하기 전까지 유지
   showPage('bracket');
   const brTS = ge('brTS');
   if(brTS) brTS.value = tid;
@@ -11652,6 +11707,97 @@ function getMyClubOrderStatusSummaryHTML(key,m,myBaseClub=''){
   const chip=(label,submitted,accent)=>`<span class="my-match-summary-chip" style="border:1.5px solid ${submitted?(accent||'#16a34a'):'#cbd5e1'};background:${submitted?'#ecfdf5':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${label} · ${submitted?'제출완료':'미제출'}</span>`;
   const pub=st.bothSubmitted?`<span class="my-match-summary-pub" style="border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 양팀 공개</span>`:'';
   return `<div class="my-match-summary-wrap">${chip(myLabel,mySubmitted,'#2563eb')}${chip(oppLabel,oppSubmitted,'#16a34a')}${pub}</div>`;
+}
+
+function getMySavedOrderDraftInfo(key,m,myBaseClub=''){
+  const myBase=baseClub(myBaseClub||REG_CLUB||'')||(myBaseClub||REG_CLUB||'');
+  if(!myBase || !m) return {hasDraft:false, side:0, count:0, submitted:false};
+  const st=getOnlineOrderState(key,m);
+  const side=st.c1===myBase?1:(st.c2===myBase?2:0);
+  if(!side) return {hasDraft:false, side:0, count:0, submitted:false};
+  const submitted=side===1?st.s1:st.s2;
+  const rows=Array.isArray(m.rubbers)?m.rubbers:[];
+  let count=0;
+  rows.forEach(rb=>{
+    if(!rb || typeof rb!=='object') return;
+    const players=side===1?(Array.isArray(rb.players1)?rb.players1:[]):(Array.isArray(rb.players2)?rb.players2:[]);
+    const blank=side===1?!!rb.blankOrder1:!!rb.blankOrder2;
+    if(blank || players.length===2) count++;
+  });
+  return {hasDraft:count>0, side, count, submitted};
+}
+
+function getMyClubOrderDraftBadgeHTML(key,m,myBaseClub=''){
+  const info=getMySavedOrderDraftInfo(key,m,myBaseClub);
+  if(!info.hasDraft) return '';
+  return `<div class="my-match-summary-wrap" style="margin-top:6px;justify-content:flex-start"><span class="my-match-summary-chip" style="border:1.5px solid ${info.submitted?'#16a34a':'#ea580c'};background:${info.submitted?'#ecfdf5':'#fff7ed'};color:${info.submitted?'#166534':'#9a3412'}">${info.submitted?'✅ 제출된 오더 있음':'💾 임시저장 오더 있음'} · ${info.count}개 복식</span></div>`;
+}
+
+function openMyMatchOrderFromCard(tid,div,mid){
+  const key=tid+'_'+div;
+  showPage('bracket');
+  const brTS=ge('brTS');
+  if(brTS){ brTS.value=tid; onBrTC(); }
+  setTimeout(()=>{
+    try{ toggleMyClubFilter('bracket', true); }catch(e){}
+    try{ openM3(key, mid); }catch(e){ toast('오더창을 여는 중 오류가 발생했습니다','error'); }
+  }, 260);
+}
+
+function collectSavedOrderPayloadForSide(key,m,side){
+  const st=getOnlineOrderState(key,m);
+  const base=side===1?st.c1:st.c2;
+  if(!base) return null;
+  const rows=Array.isArray(m.rubbers)?m.rubbers:[];
+  const rubbers=[];
+  for(let r=0;r<rows.length;r++){
+    const rb=rows[r]||{};
+    const players=side===1?(Array.isArray(rb.players1)?[...rb.players1]:[]):(Array.isArray(rb.players2)?[...rb.players2]:[]);
+    const blank=side===1?!!rb.blankOrder1:!!rb.blankOrder2;
+    rubbers.push({players:blank?[]:players, blankOrder:blank || players.length===0});
+  }
+  const hasDraft=rubbers.some(rb=>rb.blankOrder || (rb.players||[]).length===2);
+  if(!hasDraft) return null;
+  return {side, base, rubbers, club: side===1 ? (getMatchTeamObjects(key,m).t1?.club||base) : (getMatchTeamObjects(key,m).t2?.club||base)};
+}
+
+async function submitSavedOrderFromCard(tid,div,mid){
+  const key=tid+'_'+div;
+  const list=G.matches[key]||[];
+  const m=list.find(x=>x.id===mid);
+  if(!m){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
+  if(!G.meta.onlineOrderEnabled){ toast('온라인 오더 제출 기능이 꺼져 있습니다','info'); return; }
+  if(!(REG && REG_CLUB) && !AD && !OP){ toast('클럽 로그인 후 사용해 주세요','info'); return; }
+  if(!(AD || OP || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽만 제출할 수 있습니다','error'); return; }
+  const info=getMySavedOrderDraftInfo(key,m,REG_CLUB||'');
+  if(!info.hasDraft){ toast('먼저 오더쓰기에서 임시저장해 주세요','info'); return; }
+  if(info.submitted){ toast('이미 제출완료 상태입니다','info'); return; }
+  const payload=collectSavedOrderPayloadForSide(key,m,info.side);
+  if(!payload){ toast('임시저장된 오더를 찾을 수 없습니다','error'); return; }
+  const blankOrders=[];
+  (payload.rubbers||[]).forEach((rb,idx)=>{ if(rb.blankOrder || !(rb.players||[]).length) blankOrders.push(idx+1); });
+  if(blankOrders.length){
+    const label=[...new Set(blankOrders)].sort((a,b)=>a-b).map(n=>`${n}복식`).join(', ');
+    if(!confirm(`${label}은 공오더로 제출됩니다.
+임시저장된 오더를 바로 제출하시겠습니까?`)) return;
+  }else{
+    if(!confirm('임시저장된 오더를 바로 제출하시겠습니까?')) return;
+  }
+  if(!m.orderSubmissions||typeof m.orderSubmissions!=='object') m.orderSubmissions={};
+  const nowIso=new Date().toISOString();
+  m.orderSubmissions[payload.base]={ club:payload.club||payload.base, side:payload.side, submittedAt:nowIso, rubbers:payload.rubbers };
+  m.orderSubmitted=true;
+  m.orderSubmittedAt=nowIso;
+  m.orderSubmittedBy=REG_CLUB||'경기이사';
+  syncRevealedOrderIntoMatchRubbers(key,m);
+  sl(true);
+  try{
+    await stM(key);
+    sl(false);
+    toast(getOnlineOrderState(key,m).bothSubmitted ? '양팀 제출 완료 — 오더 자동 공개 ✅' : '임시저장 오더 제출 완료 ✅','success');
+    renderBracket();
+    if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
+  }catch(e){ sl(false); toast('제출 실패: '+e.message,'error'); }
 }
 
 function collectSideOrderFromModal(key, mid, side){
@@ -16537,7 +16683,7 @@ Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullsc
   openManualEdit,saveManualEdit,toggleByeEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
-  openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,resetClubPassword,saveFirstLoginPhone,saveForcedClubPassword,cancelForcedClubPassword,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,toggleMyClubFilter,saveRegDeadline,clearRegDeadline,refreshRegDeadlineUI,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
+  openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,resetClubPassword,saveFirstLoginPhone,saveForcedClubPassword,cancelForcedClubPassword,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,openMyClubQuickOrder,openMyMatchOrderFromCard,submitSavedOrderFromCard,toggleMyClubFilter,saveRegDeadline,clearRegDeadline,refreshRegDeadlineUI,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
   resetMatchRecords,recalcAllPlayerStats,
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
