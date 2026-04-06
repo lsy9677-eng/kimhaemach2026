@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-05-v18-live-score-tie-save-fix";
+  const APP_VERSION = "2026-04-06-v20-latest-tournament-order";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -5301,14 +5301,33 @@ function updateOperationSticky(){
 window.addEventListener('scroll',()=>{ try{ updateOperationSticky(); }catch(e){} }, {passive:true});
 window.addEventListener('resize',()=>{ try{ updateOperationSticky(); }catch(e){} });
 
-// ✅ 기본 대회 선택: "접수중(open)" 우선 → 없으면 "진행중(ongoing)" → 최신 1개
+// ✅ 기본 대회 선택: 가장 최근 대회 우선
+function _toMs(v){
+  try{
+    if(v==null) return 0;
+    if(typeof v==='number') return isFinite(v)?v:0;
+    if(typeof v?.toMillis==='function') return v.toMillis();
+    if(typeof v?.seconds==='number') return v.seconds*1000 + Math.floor((v.nanoseconds||0)/1e6);
+    const t=new Date(v).getTime();
+    return isNaN(t)?0:t;
+  }catch(e){ return 0; }
+}
+function tournamentSortValue(t){
+  if(!t) return 0;
+  const dateMs=_toMs(t.date || t.datetime || t.startAt || t.startDate || t.matchDate);
+  const createdMs=_toMs(t.createdAt || t.updatedAt || t.ts);
+  return Math.max(dateMs, createdMs);
+}
+function sortTournamentsLatest(arr){
+  return [...(Array.isArray(arr)?arr:[])].sort((a,b)=>{
+    const diff=tournamentSortValue(b)-tournamentSortValue(a);
+    if(diff!==0) return diff;
+    return String(b?.name||'').localeCompare(String(a?.name||''));
+  });
+}
 function pickDefaultTournamentId(){
   if(!Array.isArray(G.tournaments) || G.tournaments.length===0) return '';
-  const openT = G.tournaments.find(t=>t.status==='open');
-  if(openT) return openT.id;
-  const onT = G.tournaments.find(t=>t.status==='ongoing');
-  if(onT) return onT.id;
-  return G.tournaments[0].id;
+  return sortTournamentsLatest(G.tournaments)[0]?.id || '';
 }
 
 
@@ -5669,39 +5688,30 @@ function openTD(tid){
 
 
 function popSel(){
-  // regTS / brTS : 기본은 "접수중(open)" 대회 우선 선택
+  // regTS / brTS / rankTS : 가장 최근 대회순으로 정렬, 가장 최근 대회 기본 선택
   ['regTS','brTS'].forEach(id=>{
     const el=ge(id); if(!el) return;
     let v = el.value;
 
-    if(!v) v = pickDefaultTournamentId();
-
-    const sortedTours = (id==='regTS'
-      ? [...G.tournaments].sort((a,b)=>{
-          const pr={'open':0,'ongoing':1,'closed':2,'finished':3};
-          const pa=pr[a.status]??9, pb=pr[b.status]??9;
-          if(pa!==pb) return pa-pb;
-          return (b.date||'').localeCompare(a.date||'');
-        })
-      : [...G.tournaments]
-    );
+    const sortedTours = sortTournamentsLatest(G.tournaments);
+    if(!v || !sortedTours.some(t=>t.id===v)) v = pickDefaultTournamentId();
 
     el.innerHTML='<option value="">-- 대회 선택 --</option>'+
       sortedTours.map(t=>{
         const dis = (!AD && id==='regTS' && t.status!=='open') ? 'disabled' : '';
-        const label = `${t.name} (${t.date})` + (t.status==='open'?' [접수중]':t.status==='ongoing'?' [진행중]':t.status==='closed'?' [마감]':t.status==='finished'?' [종료]':'');
+        const label = `${t.name} (${t.date||''})` + (t.status==='open'?' [접수중]':t.status==='ongoing'?' [진행중]':t.status==='closed'?' [마감]':t.status==='finished'?' [종료]':'');
         return `<option value="${t.id}" ${t.id===v?'selected':''} ${dis}>${label}</option>`;
       }).join('');
   });
 
-  // rankTS: Firebase 대회 + 과거 내장 대회 모두 표시 (기본도 접수중 우선)
+  // rankTS: Firebase 대회 + 과거 내장 대회 모두 최근순 표시
   const rankEl=ge('rankTS');
   if(rankEl){
     let v = rankEl.value;
-    if(!v) v = pickDefaultTournamentId();
-    const allT=[...G.tournaments,...HIST_DATA].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const allT=sortTournamentsLatest([...G.tournaments,...HIST_DATA]);
+    if(!v || !allT.some(t=>t.id===v)) v = (allT[0]?.id || '');
     rankEl.innerHTML='<option value="">-- 대회 선택 --</option>'+
-      allT.map(t=>`<option value="${t.id}" ${t.id===v?'selected':''}>${t.name} (${(t.date||'').substring(0,7)||''})</option>`).join('');
+      allT.map(t=>`<option value="${t.id}" ${t.id===v?'selected':''}>${t.name} (${t.date||''})</option>`).join('');
   }
 
   const cs=ge('regClub');
