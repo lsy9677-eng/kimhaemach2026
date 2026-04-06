@@ -10770,14 +10770,21 @@ async function saveM3(){
   const prevRb=Array.isArray(m.rubbers)?m.rubbers:[];
   for(let r=0;r<dbl;r++){
     const c1=ge('rp1_'+r),c2=ge('rp2_'+r);
-    const pl1=getPickerSelected('rp1_'+r);
-    const pl2=getPickerSelected('rp2_'+r);
+    const rawPl1=getPickerSelected('rp1_'+r);
+    const rawPl2=getPickerSelected('rp2_'+r);
+    const currentBlank1=rawPl1[0]==='__GHOST__';
+    const currentBlank2=rawPl2[0]==='__GHOST__';
+    const pl1=currentBlank1?[]:rawPl1;
+    const pl2=currentBlank2?[]:rawPl2;
     let s1v=ge('rs1_'+r)?.value,s2v=ge('rs2_'+r)?.value;
     const prev=prevRb[r]||{};
-    const rowBlank1=!!(prev.blankOrder1 || ((orderState.subs[orderState.c1]||{}).rubbers||[])[r]?.blankOrder);
-    const rowBlank2=!!(prev.blankOrder2 || ((orderState.subs[orderState.c2]||{}).rubbers||[])[r]?.blankOrder);
+    const rowBlank1=!!(currentBlank1 || prev.blankOrder1 || ((orderState.subs[orderState.c1]||{}).rubbers||[])[r]?.blankOrder);
+    const rowBlank2=!!(currentBlank2 || prev.blankOrder2 || ((orderState.subs[orderState.c2]||{}).rubbers||[])[r]?.blankOrder);
     if(rowBlank1 && !rowBlank2){ s1v='0'; s2v='6'; }
     else if(!rowBlank1 && rowBlank2){ s1v='6'; s2v='0'; }
+    else if(rowBlank1 && rowBlank2){ s1v=''; s2v=''; }
+    if(ge('rs1_'+r) && (rowBlank1||rowBlank2)) ge('rs1_'+r).value = (s1v ?? '');
+    if(ge('rs2_'+r) && (rowBlank1||rowBlank2)) ge('rs2_'+r).value = (s2v ?? '');
     const hasPair=(pl1.length>0||pl2.length>0||rowBlank1||rowBlank2);
     const noScore=(s1v===''&&s2v==='');
     const isZeroZero=(String(s1v)==='0'&&String(s2v)==='0');
