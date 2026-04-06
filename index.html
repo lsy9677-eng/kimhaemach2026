@@ -10390,12 +10390,11 @@ function ensureM3AdminSubmitButtons(){
 function openM3(key,mid){
   const m=(G.matches[key]||[]).find(m=>m.id===mid);if(!m)return;
   if(!(AD||canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 열 수 있습니다','error'); return; }
-  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];
-  if(m.bye){toast('부전승 경기입니다','info');return;}
-  if(!t1||!t2){toast('팀 정보를 찾을 수 없음','error');return;}
+  const {t1,t2}=getMatchTeamObjects(key,m);
+  if(!t1 && !t2){toast('팀 정보를 찾을 수 없음','error');return;}
   CM_key=key;CM_id=mid;
   const [tid2,div]=key.split('_');
-  const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
+  const dn1=t1?tdn(t1,key,m.t1):'TBD',dn2=t2?tdn(t2,key,m.t2):(m.bye?'부전승 대기팀':'TBD');
   const tObj=G.tournaments.find(t=>t.id===tid2);
   const cfg=gDS(tObj,div);
   const dbl=cfg.doublesCount||(t1.doublesCount)||5;
@@ -10650,14 +10649,39 @@ function getPickerOtherUsed(cid){
   return out;
 }
 
+function syncGhostScoreFromPickers(cid){
+  const m=(CM_key&&CM_id)?(G.matches[CM_key]||[]).find(x=>x.id===CM_id):null;
+  if(!m) return;
+  const r = parseInt(String(cid||'').split('_')[1]||'-1',10);
+  if(!(r>=0)) return;
+  const sel1=getPickerSelected('rp1_'+r);
+  const sel2=getPickerSelected('rp2_'+r);
+  const ghost1=sel1[0]==='__GHOST__';
+  const ghost2=sel2[0]==='__GHOST__';
+  const in1=ge('rs1_'+r), in2=ge('rs2_'+r);
+  if(!in1||!in2) return;
+  if(ghost1 && !ghost2){ setRbSc('rs1_'+r,0); setRbSc('rs2_'+r,6); }
+  else if(!ghost1 && ghost2){ setRbSc('rs1_'+r,6); setRbSc('rs2_'+r,0); }
+  else if(ghost1 && ghost2){ in1.value=''; in2.value=''; for(let n=0;n<=6;n++){ const b1=ge('rs1_'+r+'_btn'+n), b2=ge('rs2_'+r+'_btn'+n); if(b1){b1.style.background='white';b1.style.color='var(--text)';b1.style.borderColor='var(--border)';} if(b2){b2.style.background='white';b2.style.color='var(--text)';b2.style.borderColor='var(--border)';} } }
+  else {
+    const prev=(Array.isArray(m.rubbers)?m.rubbers:[r]||[])[r]||{};
+    const prevGhost1=!!prev.blankOrder1, prevGhost2=!!prev.blankOrder2;
+    if((prevGhost1||prevGhost2) || String(in1.value)==='0'&&String(in2.value)==='6' || String(in1.value)==='6'&&String(in2.value)==='0'){
+      in1.value=''; in2.value='';
+      for(let n=0;n<=6;n++){ const b1=ge('rs1_'+r+'_btn'+n), b2=ge('rs2_'+r+'_btn'+n); if(b1){b1.style.background='white';b1.style.color='var(--text)';b1.style.borderColor='var(--border)';} if(b2){b2.style.background='white';b2.style.color='var(--text)';b2.style.borderColor='var(--border)';} }
+    }
+  }
+}
 function setGhostOrder(cid){
   const cont=ge(cid); if(!cont) return;
   setPickerSelected(cid,['__GHOST__']);
   renderPlayerDropdown(cid);
+  syncGhostScoreFromPickers(cid);
 }
 function clearGhostOrder(cid){
   setPickerSelected(cid,[]);
   renderPlayerDropdown(cid);
+  syncGhostScoreFromPickers(cid);
 }
 function renderPlayerDropdown(cid){
   const cont=ge(cid); if(!cont) return;
@@ -10707,10 +10731,12 @@ function choosePlayerFromDropdown(cid, player){
     list.classList.remove('open');
     renderPlayerDropdown(cid);
   }
+  syncGhostScoreFromPickers(cid);
 }
 function removeSelectedPlayerFromDropdown(cid, player){
   setPickerSelected(cid, getPickerSelected(cid).filter(p=>p!==player));
   refreshAllOrderChipAvailability();
+  syncGhostScoreFromPickers(cid);
 }
 function refreshOrderChipAvailability(sidePrefix){
   document.querySelectorAll(`[id^="${sidePrefix}"]`).forEach(el=>{
@@ -10733,7 +10759,7 @@ async function saveM3(){
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
   const m=list[idx];
   if(!(AD||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 저장할 수 있습니다','error');return;}
-  const teams=G.teams[key]||[];const t1=teams[m.t1],t2=teams[m.t2];if(!t1||!t2)return;
+  const {t1,t2}=getMatchTeamObjects(key,m); if(!t1 && !t2) return;
   const [tid,div]=key.split('_');
   const tObj=G.tournaments.find(t=>t.id===tid);
   const cfg=gDS(tObj,div);
@@ -10791,7 +10817,7 @@ async function saveM3(){
   const prevW=m.winner;
 
   if(validScoreCount===0){
-    if(prevW!=null){toast('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
+    if(prevW!=null && !m.bye){toast('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
     if(!pairChanged){toast('변경된 페어가 없습니다','info');return;}
     m.rubbers=newRb;
     m.winner=null;
