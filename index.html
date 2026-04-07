@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-06-v30d-prelim-main-collapse";
+  const APP_VERSION = "2026-04-07-v33-individual-score-display-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1344,7 +1344,19 @@ body.slider-ready .page:not(.active){
   font-size:.78rem;
 }
 
-.individual-entry-title{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.individual-entry-title{display:block;white-space:normal;overflow:visible;text-overflow:clip;word-break:keep-all;line-height:1.35;}
+.rr-team-card.individual-entry-card .rr-team-header{padding:8px 10px !important;align-items:center !important;flex-wrap:nowrap !important;gap:8px !important;}
+.rr-team-card.individual-entry-card .rr-team-info{min-width:0;flex:1 1 auto;align-items:flex-start !important;}
+.rr-team-card.individual-entry-card .rr-team-name{font-size:.96rem !important;line-height:1.35 !important;white-space:normal !important;overflow:visible !important;text-overflow:clip !important;word-break:keep-all !important;flex:1 1 auto;}
+.rr-team-card.individual-entry-card .rr-team-count{display:none !important;}
+.rr-team-card.individual-entry-card .rr-admin-btns{gap:4px !important;flex:0 0 auto;}
+.rr-team-card.individual-entry-card .rr-admin-btns .btn,.rr-team-card.individual-entry-card .rr-btn-edit,.rr-team-card.individual-entry-card .rr-btn-del{min-height:26px !important;padding:3px 7px !important;font-size:.68rem !important;border-radius:8px !important;}
+@media(max-width:600px){
+  .rr-team-card.individual-entry-card .rr-team-header{padding:7px 8px !important;gap:6px !important;}
+  .rr-team-card.individual-entry-card .rr-team-num{width:22px !important;height:22px !important;font-size:.7rem !important;}
+  .rr-team-card.individual-entry-card .rr-team-name{font-size:.88rem !important;line-height:1.32 !important;}
+  .rr-team-card.individual-entry-card .rr-admin-btns .btn,.rr-team-card.individual-entry-card .rr-btn-edit,.rr-team-card.individual-entry-card .rr-btn-del{min-height:24px !important;padding:2px 6px !important;font-size:.64rem !important;}
+}
 @media(max-width:680px){
   #mTapOrder .modal-footer{
     grid-template-columns:repeat(2,minmax(0,1fr));
@@ -3050,6 +3062,10 @@ function getTournamentTypeById(tid){
 function isIndividualTournament(t){
   return (t?.type||'team')==='individual_pair';
 }
+function isIndividualByKey(key=''){
+  const tid=String(key||'').split('_')[0]||'';
+  return getTournamentTypeById(tid)==='individual_pair';
+}
 function currentRegTournament(){
   const tid=ge('regTS')?.value||'';
   return (G.tournaments||[]).find(x=>x.id===tid)||null;
@@ -3109,10 +3125,10 @@ function getIndividualDisplayLine(team){
   const parts=getIndividualPlayers(team).slice(0,2).map(p=>{
     const name=(p?.name||'').trim()||'-';
     const club=(p?.clubsRaw||'').trim();
-    return `${name}${club?` ${club}`:''}`.trim();
+    return `${name}${club?`(${club})`:''}`.trim();
   }).filter(Boolean);
   const note=String(team?.note||'').trim();
-  return `${parts.join('   ')}${note?`   ${note}`:''}`.trim();
+  return `${parts.join(' / ')}${note?` · ${note}`:''}`.trim();
 }
 function ensureIndividualSimpleFields(){
   const anchor=ge('regPlayerSlots');
@@ -3181,6 +3197,7 @@ function updateTournamentTypeUI(){
   if(gs) gs.disabled=isInd;
   if(adv) adv.disabled=isInd;
 }
+window.updateTournamentTypeUI = updateTournamentTypeUI;
 
 // ── 대회 편집용 부서 목록 관리 ─────────────────────────────────
 function _renderEtDivList(){
@@ -3227,7 +3244,7 @@ function etAddCustomDiv(){
 }
 
 // 조 알파벳 레이블: 0→A조, 1→B조 ...
-function grpLabel(gi){ return String.fromCharCode(65+gi)+'조'; }
+function grpLabel(gi){ return `${Number(gi)+1}조`; }
 
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -3529,7 +3546,17 @@ async function stT(key){
       club: t.club,
       players: t.players||[],
       registeredAt: t.registeredAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      // 개인전 전용 필드 - Firestore에 저장해야 수정/삭제 비밀번호 검증 가능
+      ...(t.tournamentType ? {tournamentType: t.tournamentType} : {}),
+      ...(t.editPin ? {editPin: t.editPin} : {}),
+      ...(Array.isArray(t.individualPlayers) ? {individualPlayers: t.individualPlayers} : {}),
+      ...(t.clubTokens ? {clubTokens: t.clubTokens} : {}),
+      ...(t.pairLabel !== undefined ? {pairLabel: t.pairLabel} : {}),
+      ...(t.entryLabel !== undefined ? {entryLabel: t.entryLabel} : {}),
+      ...(t.note !== undefined ? {note: t.note} : {}),
+      ...(t.doublesCount !== undefined ? {doublesCount: t.doublesCount} : {}),
+      ...(t.mainPlayerCount !== undefined ? {mainPlayerCount: t.mainPlayerCount} : {})
     };
     batch.set(doc(db,'registrations',docId), payload, {merge:true});
   });
@@ -5585,7 +5612,18 @@ async function sendSupportSMS(){
   toast('문자 앱을 열었습니다','success');
 }
 
-function tdn(team,key,idx){if(!team)return'?';const ts=G.teams[key]||[];const same=ts.filter(t=>t.club===team.club);if(same.length<=1)return team.club;let o=0;for(let i=0;i<idx;i++){if(ts[i]&&ts[i].club===team.club)o++;}return team.club+'-'+String.fromCharCode(65+o);}
+function tdn(team,key,idx){
+  if(!team) return '?';
+  const isIndividual = team?.tournamentType==='individual_pair' || Array.isArray(team?.individualPlayers);
+  if(isIndividual){
+    return team.entryLabel || team.pairLabel || getIndividualDisplayLine(team) || ((team.players||[]).slice(0,2).join(' / ')) || '?';
+  }
+  const ts=G.teams[key]||[];
+  const same=ts.filter(t=>t.club===team.club);
+  if(same.length<=1)return team.club;
+  let o=0;for(let i=0;i<idx;i++){if(ts[i]&&ts[i].club===team.club)o++;}
+  return team.club+'-'+String.fromCharCode(65+o);
+}
 
 async function createTournament(){
   const nm=ge('tName').value.trim(),dt=ge('tDate').value;
@@ -6358,15 +6396,17 @@ function buildRegisterRosterGrid(tid,div,teams,key){
           ${subPlayers.length?`<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:.86rem;font-weight:600;color:var(--text3)">후보: ${subPlayers.map(n=>rosterPlayerHTML(n,team.club||'',tid)).join(', ')}</div>`:''}
         </div>`;
 
-    const headerName = isIndividual ? `${i+1}. ${individualLine||mainPlayers[0]||dn||'참가자'}` : dn;
-    const headerCount = isIndividual ? '2인' : `${p.length}명`;
+    const headerName = isIndividual ? `${individualLine||mainPlayers[0]||dn||'참가자'}` : dn;
+    const headerCount = isIndividual ? '' : `${p.length}명`;
+    const cardClass = isIndividual ? 'rr-team-card individual-entry-card' : 'rr-team-card';
+    const titleClass = isIndividual ? 'rr-team-name individual-entry-title' : 'rr-team-name';
 
-    return `<div class="rr-team-card">
+    return `<div class="${cardClass}">
       <div class="rr-team-header">
         <div class="rr-team-info">
           <span class="rr-team-num">${i+1}</span>
-          <span class="rr-team-name">${headerName}</span>
-          <span class="rr-team-count">${headerCount}</span>
+          <span class="${titleClass}">${headerName}</span>
+          ${headerCount?`<span class="rr-team-count">${headerCount}</span>`:''}
         </div>
         ${adminBtns}
       </div>
@@ -7194,7 +7234,7 @@ function renderBracket(){
             const _courts=_matchCourts.length?` 🎾${_matchCourts.join('/')}`:'';
             const _st=getMatchResultState(_key,_m);
             const _done=_st.done;
-            const _winNm=_done?(baseClub((_tms[_st.winner]??_tms.find(t=>t.id===_st.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):(_st.started?`⏳ 진행중 ${_st.sc1}:${_st.sc2}`:'⏳ 대기');
+            const _winNm=_done?(baseClub((_tms[_st.winner]??_tms.find(t=>t.id===_st.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):(_st.started?`⏳ 진행중 ${_st.disp1??_st.sc1}:${_st.disp2??_st.sc2}`:'⏳ 대기');
             const _orderSummary=getMyClubOrderStatusSummaryHTML(_key,_m,_mbc);
             const _draftBadge=getMyClubOrderDraftBadgeHTML(_key,_m,_mbc);
             _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
@@ -7454,8 +7494,10 @@ function renderMatchProgressSummary(key){
   const list=G.matches[key]||[];
   const [tid,div]=key.split('_');
   const teams=G.teams[key]||[];
-  const useOrder=!!G.meta.onlineOrderEnabled;
+  const isIndividualMode=isIndividualByKey(key);
+  const useOrder=!!G.meta.onlineOrderEnabled && !isIndividualMode;
   const estimatedMainTotal = estimateMainBracketMatchCount(key);
+  if(isIndividualMode) return '';
   if(!list.length && !estimatedMainTotal) return '';
 
   const isDone=m=>!!getMatchResultState(key,m).done;
@@ -7482,7 +7524,7 @@ function renderMatchProgressSummary(key){
   const st=getMatchResultState(key,m);
   if(!st.done || m.bye) return '';
   const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
-  const s1=Number(st.sc1||0), s2=Number(st.sc2||0);
+  const s1=Number((st.disp1??st.sc1)||0), s2=Number((st.disp2??st.sc2)||0);
   const leftWin = s1 > s2;
   const rightWin = s2 > s1;
   const roundChip = m.phase==='main' ? `<span class="ms-round-chip">🏆 ${mainMatchRoundLabel(m)}</span>` : '';
@@ -7491,7 +7533,7 @@ function renderMatchProgressSummary(key){
     ${roundChip}
     <span class="ms-chip" style="font-size:.78rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 9px">결과</span>
     <span class="ms-name" style="font-size:.9rem;font-weight:${leftWin?900:500};color:${leftWin?'var(--text)':'var(--text2)'}">${n1}</span>
-    <span class="ms-score" style="font-size:.92rem;font-weight:900;color:#1d4ed8">${st.sc1}:${st.sc2}</span>
+    <span class="ms-score" style="font-size:.92rem;font-weight:900;color:#1d4ed8">${st.disp1??st.sc1}:${st.disp2??st.sc2}</span>
     <span style="font-size:.86rem;color:var(--text2)">vs <span class="ms-name" style="font-weight:${rightWin?900:500};color:${rightWin?'var(--text)':'var(--text2)'}">${n2}</span></span>
     <span class="ms-move" style="margin-left:auto;font-size:.78rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
   </div>`;
@@ -7770,7 +7812,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   if(draw.groups?.length){
     html+=`<div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-      <span>📋 예선 조별 대진표</span>
+      <span>${isIndividualByKey(key)?'📋 예선 경기표':'📋 예선 조별 대진표'}</span>
     </div>`;
     html+=`<div id="${prelimToggleId}" style="display:${prelimCollapsed?'none':'block'}">`;
     draw.groups.forEach((grp,gi)=>{
@@ -7784,33 +7826,68 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         ? grpCourts.map(c=>`<span class="badge bg-blue" style="font-size:.82rem;padding:3px 9px">🎾 ${c}</span>`).join(' ')
         : (AD ? `<span class="badge bg-gray" style="font-size:.82rem;padding:3px 9px">코트: 미배정</span>` : ``);
       const doneCnt=gms.filter(m=>getMatchResultState(key,m).done).length;
+      const indivMode=isIndividualByKey(key);
+      const indivFlow=getIndividualGroupFlowText(key,gi);
+      const indivCollapsed = indivMode ? true : false;
       html+=`<div class="grp-card">
         <div class="grp-hdr">
-          <div style="display:flex;align-items:center;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-size:1.15rem;font-weight:900;letter-spacing:.5px">${grpLabel(gi)}</span>
-            <span style="font-size:.75rem;opacity:.85;font-weight:600">${grp.teams.length}팀</span>
+            <span style="font-size:.75rem;opacity:.85;font-weight:600">${grp.teams.length}${indivMode?'조':'팀'}</span>
             ${grpDone?'<span style="background:rgba(255,255,255,.25);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700">✅ 완료</span>'
               :`<span style="background:rgba(255,255,255,.18);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:600">${doneCnt}/${gms.length} 경기</span>`}
+            ${indivMode&&indivFlow?`<span style="font-size:.72rem;font-weight:700;background:rgba(255,255,255,.14);padding:4px 9px;border-radius:999px">${indivFlow}</span>`:''}
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${courtBadges}
             ${canManageBracket()?`<button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:600" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>`:''}
+            ${indivMode?`<button id="indivGroupToggle_${key}_${gi}" class="btn btn-outline" style="padding:5px 13px;font-size:.86rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:700" onclick="toggleIndividualGroupMatches('${key}',${gi})">📂 경기 보기</button>`:''}
           </div>
-        </div>
-        <div style="border-bottom:2px solid var(--border)">`;
-      stats.forEach((s,r)=>{
-        const isAdv=r<adv&&grpDone;
-        const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
-        const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
-        html+=`<div class="gs-row ${rowCls}">
-          <div class="gs-rk">${r+1}</div>
-          <div class="gs-nm">${s.nm}${isAdv?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
-          <div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></div>
         </div>`;
-      });
-      html+=`</div>
-        <div class="grp-matches-section">
-          <div class="grp-matches-label">📋 경기 목록</div>`;
+      if(!indivMode){
+        html+=`<div style="border-bottom:2px solid var(--border)">`;
+        stats.forEach((s,r)=>{
+          const isAdv=r<adv&&grpDone;
+          const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
+          const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
+          html+=`<div class="gs-row ${rowCls}">
+            <div class="gs-rk">${r+1}</div>
+            <div class="gs-nm">${s.nm}${isAdv?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
+            <div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></div>
+          </div>`;
+        });
+        html+=`</div><div class="grp-matches-section"><div class="grp-matches-label">📋 경기 목록</div>`;
+      }else{
+        const indivRows=stats.map((s,r)=>{
+          const team=teams[s.teamIdx]||{};
+          const info=getIndividualTeamCompactInfo(team);
+          const rankColor=r===0?'#1d4ed8':r===1?'#c2410c':'#475569';
+          const diffColor=s.diff>0?'#1565c0':s.diff<0?'#c62828':'#64748b';
+          const grpTeamLabel=getIndividualSideLabel(key,{group:gi},s.teamIdx)||`${r+1}번`;
+          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:${r===0?'linear-gradient(135deg,#eff6ff,#f8fbff)':r===1?'linear-gradient(135deg,#fff7ed,#fffaf5)':'#fff'}">
+            <div style="flex:0 0 46px;text-align:center">
+              <div style="font-size:.72rem;font-weight:900;color:${rankColor}">${r+1}위</div>
+              <div style="margin-top:6px;padding:4px 0;border-radius:10px;background:#f8fafc;border:1px solid var(--border);font-size:.72rem;font-weight:900;color:var(--primary)">${grpTeamLabel}</div>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);line-height:1.38;word-break:keep-all;overflow-wrap:anywhere">${info.names}</div>
+              ${info.clubs?`<div style="font-size:.66rem;color:#64748b;margin-top:4px;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere">${info.clubs}</div>`:''}
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                <span class="badge bg-blue" style="font-size:.72rem;padding:3px 8px">승 ${s.w}</span>
+                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">패 ${s.l}</span>
+                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">득 ${s.pf}</span>
+                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">실 ${s.pa}</span>
+                <span class="badge" style="font-size:.72rem;padding:3px 8px;background:#f8fafc;color:${diffColor};border:1px solid ${diffColor==='\#64748b'?'#cbd5e1':diffColor}">득실 ${s.diff>0?'+':''}${s.diff}</span>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+        html+=`<div style="border-top:1px solid rgba(255,255,255,.14);background:#fff">
+          <div style="padding:9px 12px;font-size:.8rem;font-weight:900;color:var(--primary-dark);background:linear-gradient(135deg,#f8fafc,#eef4ff);border-bottom:1px solid var(--border)">📋 조별 명단 · 순위 현황</div>
+          ${indivRows}
+        </div>
+        <div id="indivGroupMatches_${key}_${gi}" class="grp-matches-section" style="padding-top:12px;display:none"><div class="grp-matches-label">📋 경기 목록</div>`;
+      }
       sortGroupMatchesForDisplay(key, gi, gms).forEach(m=>{
         const mt1=teams[m.t1],mt2=teams[m.t2];
         if(!mt1||!mt2)return;
@@ -7818,7 +7895,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         const st=getMatchResultState(key,m);
         const done=st.done;
         const sc1=st.sc1,sc2=st.sc2;
-        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,`예선 ${grpLabel(gi)}`);
+        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,indivMode?getIndividualMatchLabel(key,m):`예선 ${grpLabel(gi)}`);
       });
       html+=`</div></div>`;
     });
@@ -7998,20 +8075,159 @@ function renderRankingCard(key,ranks,teams){
   }
 }
 
+
+function getIndividualMatchLabel(key,m){
+  try{
+    if(!isIndividualByKey(key) || !m || m.phase!=='group' || m.group==null) return '';
+    const gi=Number(m.group);
+    const pr=getGroupDisplayPriority(key, gi, m);
+    return `${pr+1}경기`;
+  }catch(e){ return ''; }
+}
+function getIndividualGroupFlowText(key,gi){
+  try{
+    if(!isIndividualByKey(key)) return '';
+    const grp=G.draws[key]?.groups?.[Number(gi)];
+    const size=Array.isArray(grp?.teams)?grp.teams.length:0;
+    if(size===2) return '진행순서: 1번조 vs 2번조';
+    if(size===3) return '진행순서: 1번조 vs 2번조 → 승리팀 vs 3번조 → 패배팀 vs 3번조';
+    return '';
+  }catch(e){ return ''; }
+}
+function getIndividualSideLabel(key,m,teamId){
+  try{
+    if(!isIndividualByKey(key) || !m || m.group==null) return '';
+    const grp=G.draws[key]?.groups?.[Number(m.group)];
+    const arr=Array.isArray(grp?.teams)?grp.teams:[];
+    const idx=arr.findIndex(v=>String(v)===String(teamId));
+    return idx>=0 ? `${idx+1}번` : '';
+  }catch(e){ return ''; }
+}
+function getIndividualTeamCompactInfo(team){
+  try{
+    const players=getIndividualPlayers(team).slice(0,2);
+    const names=players.map(p=>String(p?.name||'').trim()).filter(Boolean);
+    const clubs=players.map(p=>String(p?.clubsRaw||'').trim()).filter(Boolean);
+    return {
+      names: names.length ? names.join(' / ') : '-',
+      clubs: clubs.length ? clubs.join(' · ') : ''
+    };
+  }catch(e){ return {names:'-', clubs:''}; }
+}
+function getIndividualGroupStatsMap(key,gi){
+  try{
+    const grp=G.draws[key]?.groups?.[Number(gi)];
+    const tids=Array.isArray(grp?.teams)?grp.teams:[];
+    if(!tids.length) return {};
+    const teams=G.teams[key]||[];
+    const stats=calcGS(key,Number(gi),tids,teams)||[];
+    const out={};
+    stats.forEach((s,idx)=>{
+      const teamKey = s.teamIdx ?? s.ti ?? s.teamId ?? s.idx;
+      out[String(teamKey)]={
+        rank:idx+1,
+        w:Number(s.w||0),
+        l:Number(s.l||0),
+        pf:Number(s.pf ?? s.gw ?? 0),
+        pa:Number(s.pa ?? s.gl ?? 0),
+        diff:Number(s.diff ?? ((s.pf ?? s.gw ?? 0) - (s.pa ?? s.gl ?? 0)) ?? 0)
+      };
+    });
+    return out;
+  }catch(e){ return {}; }
+}
+function individualMiniStatHtml(st){
+  try{
+    if(!st) return '<span style="font-size:.67rem;color:#94a3b8">순위 대기</span>';
+    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
+      <span style="font-size:.67rem;font-weight:900;color:${st.rank===1?'#1d4ed8':st.rank===2?'#c2410c':'#475569'}">${st.rank}위</span>
+      <span style="font-size:.64rem;color:#64748b">${st.w}승 ${st.l}패</span>
+      <span style="font-size:.64rem;color:#64748b">득 ${st.pf} 실 ${st.pa}</span>
+      <span style="font-size:.64rem;color:${st.diff>0?'#1565c0':st.diff<0?'#c62828':'#64748b'}">득실 ${st.diff>0?'+':''}${st.diff}</span>
+    </div>`;
+  }catch(e){ return ''; }
+}
+function toggleIndividualGroupMatches(key,gi){
+  try{
+    const box=ge(`indivGroupMatches_${key}_${gi}`);
+    const btn=ge(`indivGroupToggle_${key}_${gi}`);
+    if(!box||!btn) return;
+    const hidden=box.style.display==='none';
+    box.style.display=hidden?'block':'none';
+    btn.textContent=hidden?'📂 경기 접기':'📂 경기 보기';
+  }catch(e){}
+}
+
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
   const rbs=m.rubbers||[];
+  const indivMode=isIndividualByKey(key);
   // 복식 수 결정
   const[,div]=key.split('_');const isT=div==='terinee';
   const teams=G.teams[key]||[];const t1=teams[m.t1];
   const p1=t1?.players||[];
-  const dbl=t1?.doublesCount||(isT?(p1.length<=6?3:p1.length<=8?4:5):5);
-  const rbLabels=['1복식','2복식','3복식','4복식','5복식'];
+  const dbl=indivMode?1:(t1?.doublesCount||(isT?(p1.length<=6?3:p1.length<=8?4:5):5));
+  const rbLabels=indivMode?['1경기']:['1복식','2복식','3복식','4복식','5복식'];
   const rbH=rbs.length?rbs.map((rb,r)=>{
     if(!rb||rb.score1==null)return`<div class="rb-row pend"><span class="rb-p1">${rb.players1?.join('/')||dn1+' '+(r+1)+'복식'}</span><span class="rb-sc">- : -</span><span class="rb-p2">${rb.players2?.join('/')||dn2+' '+(r+1)+'복식'}</span></div>`;
     const rw1=rb.winner===0,rw2=rb.winner===1;
     return`<div class="rb-row ${rw1?'win1':rw2?'win2':'pend'}"><span class="rb-p1" style="color:${rw1?'var(--success)':rw2?'var(--text3)':'inherit'}">${rb.players1?.join('/')||'-'}</span><span class="rb-sc" style="color:${rw1?'var(--success)':rw2?'var(--danger)':'var(--text2)'}">${rb.tiebreak?`<b>${rb.score1}:${rb.score2}</b><small style="font-size:.6em">TB</small>`:`${rb.score1}:${rb.score2}`}</span><span class="rb-p2" style="color:${rw2?'var(--success)':rw1?'var(--text3)':'inherit'}">${rb.players2?.join('/')||'-'}</span></div>`;
   }).join(''): rbLabels.slice(0,dbl).map(l=>`<div class="rb-row pend"><span>${l}</span><span class="rb-sc">-:-</span><span>-</span></div>`).join('');
+
+
+  if(indivMode){
+    const st2=getMatchResultState(key,m);
+    done=st2.done; sc1=st2.sc1; sc2=st2.sc2;
+    const canDirEdit=canEditMatchByDirector(key,m);
+    const btn=(AD||canDirEdit)?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${done?'✏️ 결과수정':'⚡ 결과입력'}</button>`:'';
+    const sideLabel1=getIndividualSideLabel(key,m,m.t1)||'1번';
+    const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
+    const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
+    const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
+    const groupCourtUI=canManageBracket() && m.phase==='group' && m.group!=null
+      ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openGroupCourtModal('${key}',${Number(m.group)})">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`
+      : (grpCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 조코트 ${grpCourts.join('/')}</span>`:'');
+    const matchCourtUI=canManageBracket()
+      ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openMatchCourtModal('${key}','${m.id}')">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button>`
+      : (matchCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 경기코트 ${matchCourts.join('/')}</span>`:'');
+    const info1=getIndividualTeamCompactInfo(teams[m.t1]||{});
+    const info2=getIndividualTeamCompactInfo(teams[m.t2]||{});
+    const statMap=getIndividualGroupStatsMap(key,Number(m.group));
+    const stat1=statMap[String(m.t1)]||null;
+    const stat2=statMap[String(m.t2)]||null;
+    const dispSc1=st2.disp1??sc1, dispSc2=st2.disp2??sc2;
+    const sideWrap1Style=done&&wn1?'padding:10px;border:1.5px solid #86efac;border-radius:12px;background:linear-gradient(135deg,#ecfdf5,#dcfce7);min-width:0;overflow:hidden':done&&wn2?'padding:10px;border:1.5px solid #fecaca;border-radius:12px;background:linear-gradient(135deg,#fff7f7,#fef2f2);min-width:0;overflow:hidden':'padding:10px;border:1.5px solid var(--border);border-radius:12px;background:#fff;min-width:0;overflow:hidden';
+    const sideWrap2Style=done&&wn2?'padding:10px;border:1.5px solid #86efac;border-radius:12px;background:linear-gradient(135deg,#ecfdf5,#dcfce7);min-width:0;overflow:hidden':done&&wn1?'padding:10px;border:1.5px solid #fecaca;border-radius:12px;background:linear-gradient(135deg,#fff7f7,#fef2f2);min-width:0;overflow:hidden':'padding:10px;border:1.5px solid var(--border);border-radius:12px;background:#fff;min-width:0;overflow:hidden';
+    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${done?(wn1?'border:2px solid #86efac;box-shadow:0 0 0 3px rgba(22,163,74,.08)':wn2?'border:2px solid #86efac;box-shadow:0 0 0 3px rgba(22,163,74,.08)':''):(MY_CLUB_FILTER?'':'border:1.5px solid var(--border);box-shadow:none')}">
+      <div class="m3body" style="padding:12px 14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label||'1경기'}</span></div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:`<span class="badge bg-gray" style="font-size:.78rem;padding:3px 9px">대기</span>`}${btn}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}</div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;margin-bottom:8px">
+          <div style="${sideWrap1Style}">
+            <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
+            <div style="padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--border);text-align:center;line-height:1.35;min-width:0;overflow:hidden">
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info1.names}</div>
+              ${info1.clubs?`<div style="font-size:.62rem;color:#64748b;margin-top:4px;white-space:normal;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere">${info1.clubs}</div>`:''}
+              ${individualMiniStatHtml(stat1)}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;font-size:1.05rem;font-weight:900;color:var(--text3)">VS</div>
+          <div style="${sideWrap2Style}">
+            <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel2}</div>
+            <div style="padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--border);text-align:center;line-height:1.35;min-width:0;overflow:hidden">
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info2.names}</div>
+              ${info2.clubs?`<div style="font-size:.62rem;color:#64748b;margin-top:4px;white-space:normal;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere">${info2.clubs}</div>`:''}
+              ${individualMiniStatHtml(stat2)}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;font-size:1.1rem;font-weight:900;color:${done?(wn1?'var(--success)':wn2?'var(--danger)':'var(--primary)'):'var(--text2)'}">${done?`${dispSc1}:${dispSc2}`:'- : -'}</div>
+      </div>
+    </div>`;
+  }
 
   // ── 조 코트(복수) 자동 표시: 예선 경기 카드에 "n조 코트: ..." 배지
   let grpCourtBadge = '';
@@ -8064,27 +8280,27 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const st2=getMatchResultState(key,m);
   done=st2.done; sc1=st2.sc1; sc2=st2.sc2;
   const canDirEdit=canEditMatchByDirector(key,m);
-  const isOrderLocked=isOnlineOrderLocked(m,key);
-  const orderStatusLabel=getOnlineOrderStatusLabel(key,m);
-  // 버튼 레이블: 오더기능 ON 여부 + 제출 상태에 따라 동적 결정
-  const _ost2 = G.meta.onlineOrderEnabled ? getOnlineOrderState(key,m) : null;
+  const useOrderHere=!!G.meta.onlineOrderEnabled && !isIndividualByKey(key);
+  const _ost2 = useOrderHere ? getOnlineOrderState(key,m) : null;
   const _btnLabel = done
     ? '✏️ 결과수정'
-    : G.meta.onlineOrderEnabled
+    : useOrderHere
       ? (_ost2.bothSubmitted ? '📝 오더/기록확인입력' : (_ost2.mySubmitted ? '📝 오더/기록확인입력' : '📝 오더 입력·제출'))
       : '⚡ 결과입력';
-  const _btnStyle = done ? 'btn-gray' : (G.meta.onlineOrderEnabled ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
+  const _btnStyle = done ? 'btn-gray' : (useOrderHere ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
   const btn=(AD||canDirEdit)?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
-  const orderBadge=getOnlineOrderStatusBadgeHTML(key,m);
-  const orderTeamStatus=getOnlineOrderTeamStatusHTML(key,m);
-  const unlockBtn=(AD&&G.meta.onlineOrderEnabled)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="CM_key='${key}';CM_id='${m.id}';confirmUnlockOrder()">🔓 오더초기화</button>`:'';
+  const orderBadge=useOrderHere?getOnlineOrderStatusBadgeHTML(key,m):'';
+  const orderTeamStatus=useOrderHere?getOnlineOrderTeamStatusHTML(key,m):'';
+  const unlockBtn=(AD&&useOrderHere)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="CM_key='${key}';CM_id='${m.id}';confirmUnlockOrder()">🔓 오더초기화</button>`:'';
   const _bc2=REG_CLUB?baseClub(REG_CLUB):'';
   const _tms2=G.teams[key]||[];
   const _tm1x=_tms2[m.t1]??_tms2.find(t=>t.id===m.t1||t.name===m.t1);
   const _tm2x=_tms2[m.t2]??_tms2.find(t=>t.id===m.t2||t.name===m.t2);
   const _isMyCM=MY_CLUB_FILTER&&_bc2&&((_tm1x&&baseClub(_tm1x.club||'')===_bc2)||(_tm2x&&baseClub(_tm2x.club||'')===_bc2));
   const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
-  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15)':''}${_isOtherM?'opacity:0.35;':''}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.sc1}:${st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
+  const teamCardStyleBase=`${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15);':''}${_isOtherM?'opacity:0.35;':''}`;
+  const teamWinTint=done&&wn1?'background:linear-gradient(135deg,#f7fff9,#eefbf3);border-color:#86efac;':done&&wn2?'background:linear-gradient(135deg,#fff7f7,#fef2f2);border-color:#fecaca;':'';
+  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
     <div class="m3body">${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
@@ -8379,7 +8595,7 @@ function calcGS(key,gi,tidxs,teams){
       if(m.winner===null)return;const isT1=m.t1===ti,sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
       if(m.winner===ti)w++;else l++;gw+=sc;gl+=scO;
     });
-    return{ti,nm:tdn(tm,key,ti),w,l,gw,gl,diff:gw-gl};
+    return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl};
   }).sort((a,b)=>b.w-a.w||b.diff-a.diff);
 }
 function rbSc(m,idx){if(!m.rubbers)return 0;return m.rubbers.filter(rb=>rb&&rb.winner===idx).length;}
@@ -8399,24 +8615,34 @@ function getMatchDoublesCount(key,m){
   return 5;
 }
 function getMatchResultState(key,m){
-  if(!m) return {done:false,started:false,sc1:0,sc2:0,winner:null,totalRubbers:0};
-  if(m.bye) return {done:true,started:true,sc1:1,sc2:0,winner:m.winner,totalRubbers:1};
+  if(!m) return {done:false,started:false,sc1:0,sc2:0,disp1:0,disp2:0,winner:null,totalRubbers:0};
+  if(m.bye) return {done:true,started:true,sc1:1,sc2:0,disp1:1,disp2:0,winner:m.winner,totalRubbers:1};
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
+  const indivMode=isIndividualByKey(key);
   let sc1=0, sc2=0, started=false;
-  rubbers.forEach(rb=>{
+  let disp1=0, disp2=0;
+  rubbers.forEach((rb, idx)=>{
     if(!rb) return;
     const hasScore=(rb.score1!=null||rb.score2!=null);
     const hasPlayers=(Array.isArray(rb.players1)&&rb.players1.length)||(Array.isArray(rb.players2)&&rb.players2.length);
     if(hasScore||hasPlayers) started=true;
     if(rb.winner===0) sc1++;
     else if(rb.winner===1) sc2++;
+    if(indivMode && idx===0 && hasScore){
+      disp1=Number(rb.score1||0);
+      disp2=Number(rb.score2||0);
+    }
   });
   let winner=null, done=false;
   if(sc1>=need){ winner=m.t1; done=true; }
   else if(sc2>=need){ winner=m.t2; done=true; }
-  return {done,started,sc1,sc2,winner,totalRubbers};
+  if(!indivMode){
+    disp1=sc1;
+    disp2=sc2;
+  }
+  return {done,started,sc1,sc2,disp1,disp2,winner,totalRubbers};
 }
 
 function estimateMainBracketSize(key){
@@ -8466,6 +8692,18 @@ function getMatchCardDomId(key, mid){
   return 'matchCard_'+String(key).replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+String(mid).replace(/[^a-zA-Z0-9_-]/g,'_');
 }
 function getAdvT(key,draw,teams,cfg){
+  // 개인전: draw.indivMode 플래그 기반으로 전용 진출팀 계산
+  if(draw.indivMode){
+    const res=[];
+    (draw.groups||[]).forEach((grp,gi)=>{
+      const gs=calcGS(key,gi,grp.teams,teams);
+      const grpSize=grp.teams.length;
+      // 2팀 1조: 전원 진출(1위, 2위), 3팀 1조: 1·2위만 진출
+      const adv=grpSize<=2?grpSize:2;
+      gs.slice(0,adv).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
+    });
+    return res;
+  }
   // draw.advance: 추첨 시 설정한 진출 수 우선, 없으면 cfg.advance
   const adv=draw.advance||cfg.advance||2,res=[];
   (draw.groups||[]).forEach((grp,gi)=>{calcGS(key,gi,grp.teams,teams).slice(0,adv).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1}));});
@@ -8734,6 +8972,8 @@ function openDraw(tid,div){
   const key=tid+'_'+div;
   const teams=G.teams[key]||[];
   const t=G.tournaments.find(t=>t.id===tid);
+  // 개인전은 전용 추첨 UI로 분기
+  if(isIndividualTournament(t)){ openIndividualDraw(tid,div); return; }
   DW={key,tid,div,teams,cfg:{},isRunning:false};
   const hasSameClub=checkSameClub(teams);
   ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
@@ -8860,9 +9100,21 @@ function buildSnakeOrder(grps,opt){
 
 function buildGreedyBalancedGroups(indices, teams, grpSizes){
   const groups=(grpSizes||[]).map((size,gi)=>({gi,size,teams:[]}));
-  if(!groups.length){
-    return [];
+  if(!groups.length) return [];
+
+  const isIndividual = (teams||[]).some(t=>t?.tournamentType==='individual_pair' || Array.isArray(t?.individualPlayers));
+  if(isIndividual){
+    const shuffled=[...(indices||[])];
+    shuffle(shuffled);
+    let ptr=0;
+    groups.forEach(g=>{
+      while(g.teams.length<g.size && ptr<shuffled.length){
+        g.teams.push(shuffled[ptr++]);
+      }
+    });
+    return groups;
   }
+
   const byClub={};
   indices.forEach(ti=>{
     const clubs=getTeamClubTokens(teams[ti]);
@@ -9849,6 +10101,343 @@ window.openLatestSavedDraw = openLatestSavedDraw;
 window.deleteSavedDrawHistory = deleteSavedDrawHistory;
 window.forceDeleteSavedDrawHistory = forceDeleteSavedDrawHistory;
 
+
+// ═══════════════════════════════════════════════════════════════
+// 개인전 전용 예선 추첨 시스템
+// ═══════════════════════════════════════════════════════════════
+
+// 개인전 조 구성 계산: 2팀/3팀 1조, 나머지 4팀이면 2+2
+function calcIndivGroups(n, grpSize){
+  // grpSize: 2 또는 3
+  if(grpSize===2){
+    // 전원 2팀씩 → 홀수면 마지막 1팀은 직전 조에 합류해 3팀 조 1개
+    const groups=[];
+    let rem=n;
+    while(rem>=2){
+      if(rem===3){ groups.push(3); rem=0; }
+      else { groups.push(2); rem-=2; }
+    }
+    return groups;
+  }
+  // grpSize===3
+  const groups=[];
+  let rem=n;
+  while(rem>0){
+    if(rem===1){
+      // 마지막 1팀 → 직전 2팀 조를 2팀×2개로 분리
+      if(groups.length>=1 && groups[groups.length-1]===2){
+        // 직전 조(2팀) + 이 1팀 → 2+1인데 이미 조가 2팀이므로 2팀 조 하나 더 추가 후 이 팀 넣기
+        // 실제로는 마지막 조(2팀) 분리: 2팀→1팀씩 2조로 → 불가. 대신:
+        // 뒤에서 2팀 조를 찾아서 그걸 2팀 조 유지하고 이 1팀을 별도 2팀 조에 배정
+        // => 사실상 마지막 2팀 조(2팀) + 현재 1팀 = 3팀 → 3팀 1조로 처리
+        const last=groups.pop(); // 2팀 조 제거
+        groups.push(last+1);    // 3팀 조로 합침
+        rem=0;
+      } else {
+        // 2팀 조 없으면 직전 3팀 조에서 1팀 빼서 2+2로
+        if(groups.length>=1 && groups[groups.length-1]===3){
+          groups[groups.length-1]=2;
+          groups.push(2);
+          rem=0;
+        } else {
+          groups.push(1); rem=0;
+        }
+      }
+    } else if(rem===2){ groups.push(2); rem=0; }
+    else if(rem===4){ groups.push(2); groups.push(2); rem=0; } // 4팀→2+2
+    else { groups.push(3); rem-=3; }
+  }
+  return groups;
+}
+
+// 개인전 추첨 모달 열기
+function openIndividualDraw(tid,div){
+  const key=tid+'_'+div;
+  const teams=G.teams[key]||[];
+  const t=G.tournaments.find(t=>t.id===tid);
+  if(teams.length<2){ toast('최소 2팀 필요','error'); return; }
+
+  IDW={key,tid,div,teams,grpSize:2,isRunning:false};
+
+  // 팀 목록 표시
+  const listHTML=teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('');
+
+  // 조 구성 미리보기 업데이트 함수
+  function updatePreview(gs){
+    const groups=calcIndivGroups(teams.length,gs);
+    const g3=groups.filter(x=>x===3).length;
+    const g2=groups.filter(x=>x===2).length;
+    let desc='';
+    if(g3&&g2) desc=`3팀 조 ${g3}개 + 2팀 조 ${g2}개`;
+    else if(g3) desc=`3팀 조 ${g3}개`;
+    else desc=`2팀 조 ${g2}개`;
+    const adv=gs===2?'전원 본선':'각 조 1·2위 본선 (3위 탈락)';
+    const el=document.getElementById('idwPreview');
+    if(el) el.innerHTML=`<b>${desc}</b> · ${adv}`;
+  }
+
+  const modalHTML=`
+    <div style="margin-bottom:14px;padding:10px 14px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)">
+      <div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${tl(div)} — 등록 (${teams.length}조)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${listHTML}</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:200px">
+        <label class="form-label">추첨 제목</label>
+        <input class="form-input" id="idwTitle" placeholder="예: 전국신인부 예선 추첨">
+      </div>
+      <div style="min-width:180px;padding-bottom:6px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:800;cursor:pointer">
+          <input type="checkbox" id="idwIsTest" style="accent-color:var(--accent)"> 테스트용 추첨
+        </label>
+        <div style="font-size:.72rem;color:var(--text3);margin-top:4px">테스트용만 삭제 가능</div>
+      </div>
+    </div>
+    <div style="padding:12px 14px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1.5px solid #7dd3fc;border-radius:12px;margin-bottom:14px">
+      <div style="font-weight:800;font-size:.88rem;margin-bottom:10px;color:#0369a1">⚙️ 조 편성 설정</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <span style="font-size:.82rem;font-weight:700;color:var(--text2)">조당 팀수</span>
+        <button id="idwBtn2" class="btn btn-accent" style="padding:6px 18px;font-size:.85rem" onclick="selectIndivGrpSize(2)">2팀 1조</button>
+        <button id="idwBtn3" class="btn btn-outline" style="padding:6px 18px;font-size:.85rem" onclick="selectIndivGrpSize(3)">3팀 1조</button>
+      </div>
+      <div style="font-size:.82rem;padding:8px 12px;background:white;border-radius:8px;border:1px solid var(--border)" id="idwPreview">-</div>
+      <div style="margin-top:10px;font-size:.78rem;color:#0369a1;line-height:1.7">
+        <div>🏅 <b>2팀 1조</b> : 1경기 → 승=1위·패=2위 → <b>전원 본선 진출</b></div>
+        <div>🏅 <b>3팀 1조</b> : 조별 리그 → <b>1·2위만 본선</b>, 3위 탈락</div>
+        <div>⚖️ 개인전은 클럽이 아니라 접수된 페어(2인 1팀) 기준으로 무작위 배정됩니다</div>
+        <div>🔢 4팀이 남을 경우 2팀 조 2개로 자동 처리됩니다</div>
+      </div>
+    </div>
+    <div style="padding:10px 12px;background:linear-gradient(135deg,#fefce8,#fef9c3);border:1.5px solid #fde047;border-radius:12px;margin-bottom:6px">
+      <div style="font-weight:800;font-size:.82rem;margin-bottom:6px;color:#854d0e">🌳 본선 대진 방식</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:700;cursor:pointer">
+          <input type="radio" name="idwMainMode" value="redraw" id="idwRedraw" checked style="accent-color:var(--accent)">
+          예선 후 본선 재추첨
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:700;cursor:pointer">
+          <input type="radio" name="idwMainMode" value="fixed" id="idwFixed" style="accent-color:var(--accent)">
+          예선 추첨 시 본선 확정
+        </label>
+      </div>
+      <div style="font-size:.74rem;color:#92400e;margin-top:6px;line-height:1.6">
+        · <b>재추첨</b>: 예선 종료 후 본선 대진을 다시 추첨 (유연한 운영)<br>
+        · <b>확정</b>: 예선 추첨과 동시에 본선 대진 확정 (조1위 부전승 우선)
+      </div>
+    </div>`;
+
+  // mDraw 모달 재활용
+  const cfgScr=document.getElementById('drawCfgScreen');
+  const runScr=document.getElementById('drawRunScreen');
+  if(cfgScr){ cfgScr.innerHTML=modalHTML; cfgScr.style.display='block'; }
+  if(runScr) runScr.style.display='none';
+
+  document.getElementById('confirmDrawBtn').textContent='🎲 추첨 시작';
+  document.getElementById('confirmDrawBtn').onclick=startIndividualDraw;
+  document.getElementById('confirmDrawBtn').disabled=false;
+  document.querySelector('#mDraw .modal-header h3').textContent='🎲 개인전 예선 추첨';
+  om('mDraw');
+
+  // 기본값 선택 표시
+  updatePreview(2);
+  window._idwUpdatePreview=updatePreview;
+}
+
+window.selectIndivGrpSize=function(gs){
+  IDW.grpSize=gs;
+  document.getElementById('idwBtn2').className='btn '+(gs===2?'btn-accent':'btn-outline');
+  document.getElementById('idwBtn3').className='btn '+(gs===3?'btn-accent':'btn-outline');
+  if(window._idwUpdatePreview) window._idwUpdatePreview(gs);
+};
+
+function tl(div){ return dl ? dl(div) : div; }
+
+let IDW={key:'',tid:'',div:'',teams:[],grpSize:2,isRunning:false};
+
+async function startIndividualDraw(){
+  if(IDW.isRunning) return;
+  if(!IDW.key||IDW.teams.length<2){ toast('최소 2팀 필요','error'); return; }
+  IDW.isRunning=true;
+  const btn=document.getElementById('confirmDrawBtn');
+  btn.disabled=true; btn.textContent='추첨 중...';
+
+  const key=IDW.key, teams=IDW.teams, tid=IDW.tid, div=IDW.div;
+  const gs=IDW.grpSize;
+  const mainMode=document.querySelector('input[name="idwMainMode"]:checked')?.value||'redraw';
+  const drawTitle=(document.getElementById('idwTitle')?.value||`${tl(div)} 예선 추첨`).trim();
+  const drawIsTest=!!document.getElementById('idwIsTest')?.checked;
+  const drawTime=new Date();
+
+  await resetMatchRecords(key);
+
+  // 조 크기 배열 계산
+  const grpSizes=calcIndivGroups(teams.length,gs);
+  const ng=grpSizes.length;
+
+  // 개인전은 클럽 기준 분리가 아니라 페어(2인 1팀) 기준으로 조를 만든다.
+  // 주의: buildGreedyBalancedGroups는 이미 teams 배열이 채워진 그룹을 반환하므로,
+  // 애니메이션 단계에서 그대로 push하면 같은 팀이 2번씩 들어가는 버그가 생긴다.
+  // 따라서 targetGroups(최종 배정)와 runGroups(애니메이션용 빈 그룹)를 분리한다.
+  const indices=teams.map((_,i)=>i);
+  const targetGroups=improveBalancedGroups(buildGreedyBalancedGroups(indices,teams,grpSizes),teams);
+  const runGroups=grpSizes.map((size,gi)=>({gi,size,teams:[]}));
+
+  // 추첨 애니메이션 화면으로 전환
+  switchToRunScreen();
+
+  // 조 슬롯 UI 렌더링
+  document.getElementById('drawGroupRows').innerHTML=targetGroups.map((g,gi)=>`
+    <div class="draw-group-row" id="dg_${gi}" style="overflow:visible">
+      <div class="draw-group-label">${grpLabel(gi)} (${g.size}팀)</div>
+      <div id="dg_slots_${gi}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        ${Array(g.size).fill(0).map(()=>`<span class="draw-team-slot">?</span>`).join('')}
+      </div>
+    </div>`).join('');
+
+  // 배정 순서: 최종 배정 결과를 슬롯 순서로 펼친다.
+  const assignOrder=groupsToAssignmentOrder(targetGroups);
+
+  for(let i=0;i<assignOrder.length;i++){
+    const {gi,ti}=assignOrder[i];
+    const team=teams[ti];
+    const dn=tdn(team,key,ti);
+    document.getElementById('drawProgressBar').style.width=`${Math.round((i+1)/assignOrder.length*100)}%`;
+    activateSlot(gi);
+    initDrawStage(i+1,assignOrder.length,gi);
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const stageEl=document.getElementById('drawStageContent');
+    const rWrap=stageEl?document.getElementById(stageEl._rouletteId):null;
+    const pool=assignOrder.slice(i).map(a=>tdn(teams[a.ti],key,a.ti));
+    await runRoulette(rWrap,pool,dn,1400+randInt(800));
+    await sleep(180);
+    const g=runGroups[gi];
+    const leafEl=stageEl?document.getElementById(stageEl._leafId):null;
+    await leafLandReveal(leafEl,dn,false);
+    fillSlotWithLeaf(gi,dn,false);
+    g.teams.push(ti);
+    if(g.teams.length>=g.size){ await sleep(260); await celebrateGroupComplete(gi); }
+    else await sleep(140);
+  }
+
+  document.getElementById('drawProgressBar').style.width='100%';
+  document.getElementById('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 추첨</div>`;
+  await sleep(400);
+
+  const groupData=runGroups.map(g=>({teams:[...g.teams],courts:[]}));
+  G.draws[key]={groups:groupData,advance:2,indivMode:true,grpSize:gs,mainMode,groupDrawAudit:{mode:'random',modeLabel:'무작위',loggedAt:drawTime.toISOString()}};
+
+  // 예선 경기 생성 (2팀 조: 1경기, 3팀 조: 3경기)
+  const mlist=[];
+  groupData.forEach((grp,gi)=>{
+    for(let a=0;a<grp.teams.length;a++)
+      for(let b=a+1;b<grp.teams.length;b++)
+        mlist.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:grp.teams[a],t2:grp.teams[b],winner:null,rubbers:[],court:''});
+  });
+
+  // 본선 확정 모드: 예선 추첨 시 본선 대진 미리 생성
+  if(mainMode==='fixed'){
+    const advEntries=[];
+    groupData.forEach((grp,gi)=>{
+      const grpSz=grp.teams.length;
+      const adv=grpSz<=2?grpSz:2;
+      for(let rk=1;rk<=adv;rk++) advEntries.push({ti:null,nm:`${grpLabel(gi)} ${rk}위`,gn:gi+1,rk,grpSize:grpSz,placeholder:true});
+    });
+    const totalAdv=advEntries.length;
+    const bracketN=nextPow2(totalAdv);
+    const mainMatches=buildIndivMainMatchesFromSlots(advEntries,bracketN,key);
+    mlist.push(...mainMatches);
+  }
+
+  G.matches[key]=mlist;
+
+  const t=G.tournaments.find(t=>t.id===tid);
+  sl(true);
+  try{
+    await stD(key); await stM(key);
+    const preview=buildIndivMainPreview(groupData,gs);
+    await saveDrawHistoryEntry({
+      key, tournamentId:tid, tournamentName:t?.name||'',
+      division:div, div, title:drawTitle, isTest:drawIsTest,
+      createdAt:drawTime.toISOString(),
+      groupCount:ng, groupSizes:grpSizes, advance:2,
+      mainSize:preview.totalAdv||0, mainPreviewSlots:[],
+      groups:groupData.map((g,gi)=>({
+        label:grpLabel(gi),
+        teams:g.teams.map(ti=>({name:tdn(teams[ti],key,ti),club:String(teams[ti]?.club||'')}))
+      })),
+      indivMode:true, grpSize:gs, mainMode
+    });
+    await fbLog(`개인전추첨: ${t?.name||''} ${tl(div)} ${ng}조 / ${gs}팀1조 / ${drawIsTest?'테스트':'실운영'} / ${drawTitle} / ${drawTime.toLocaleString('ko-KR')}`,'🎲');
+    sl(false);
+    btn.textContent='✅ 닫기';
+    btn.onclick=()=>{cm('mDraw');renderBracket();};
+    btn.disabled=false;
+    IDW.isRunning=false;
+    SFX.finale();
+    toast('추첨 완료 🎲','success');
+    refreshRunPreview(key);
+  }catch(e){
+    sl(false); IDW.isRunning=false;
+    const msg=e?.code==='permission-denied'?'권한 없음':(e?.message||'저장 실패');
+    toast('저장 실패: '+msg,'error');
+    btn.textContent='⚠️ 다시 시도';
+    btn.onclick=()=>{IDW.isRunning=false;startIndividualDraw();};
+    btn.disabled=false;
+  }
+}
+
+// 개인전 본선 대진 슬롯 구성 (조1위 부전승 우선, 없으면 조1vs조2)
+function buildIndivMainMatchesFromSlots(advEntries,bracketN,key){
+  const matchCount=bracketN/2;
+  const byeCount=bracketN-advEntries.length;
+  const byeIdxs=pickByeMatchIndices(matchCount,byeCount);
+  const byeSet=new Set(byeIdxs);
+  const normalIdxs=hybridSpreadOrder(matchCount).filter(i=>!byeSet.has(i));
+
+  const slots=Array.from({length:matchCount},(_,i)=>({
+    id:`main_${i}`,phase:'main',round:0,slot:i,
+    t1:null,t2:null,winner:null,rubbers:[],court:'',courts:[],
+    bye:byeSet.has(i)
+  }));
+
+  // 부전승 슬롯: 조1위 우선 배정
+  let rank1=advEntries.filter(e=>e.rk===1);
+  let rank2=advEntries.filter(e=>e.rk===2);
+
+  for(const si of byeIdxs){
+    const picked=rank1.shift()||rank2.shift()||null;
+    if(picked){ slots[si].t1=picked.ti; slots[si].winner=picked.ti; }
+  }
+
+  // 일반 슬롯: 조1위 vs 조2위 (같은 조끼리 최대한 피함)
+  for(const si of normalIdxs){
+    const p1=rank1.shift()||null;
+    if(p1) slots[si].t1=p1.ti;
+  }
+  for(const si of normalIdxs){
+    if(slots[si].t1===null) continue;
+    const t1gn=advEntries.find(e=>e.ti===slots[si].t1)?.gn;
+    const opp=removeFirstMatch(rank2,e=>e&&e.gn!==t1gn)||rank2.shift()||null;
+    if(opp) slots[si].t2=opp.ti;
+  }
+  // 남은 것 채우기
+  const leftover=[...rank1,...rank2];
+  for(const si of normalIdxs){
+    if(slots[si].t1===null){ const p=leftover.shift(); if(p) slots[si].t1=p.ti; }
+    if(!slots[si].bye&&slots[si].t2===null){ const p=leftover.shift(); if(p) slots[si].t2=p.ti; }
+  }
+
+  // round 부여 (단순 1라운드)
+  slots.forEach((s,i)=>{ s.round=0; s.slot=i; });
+  return slots;
+}
+
+function buildIndivMainPreview(groupData,gs){
+  let totalAdv=0;
+  groupData.forEach(grp=>{ totalAdv+=grp.teams.length<=2?grp.teams.length:2; });
+  return {totalAdv};
+}
+
 async function startDraw(){
   if(DW.isRunning)return;
   if(!DW.key||DW.teams.length<2){toast('최소 2팀 필요','error');return;}
@@ -9981,8 +10570,107 @@ async function confirmDraw(){startDraw();}
 let MD = {key:null,tid:null,div:null,advT:[],bracketSize:0,byeCount:0,isRunning:false,seed:1,plan:null,seedHash:'',seedMethod:'time',seedSourceLabel:'',seedSnapshotLabel:'',seedPreparedAt:'',nthPick:1,candidates:[],drawAudit:null};
 
 async function buildMain(tid,div){
+  const t=G.tournaments.find(x=>x.id===tid);
+  if(isIndividualTournament(t)){ openIndividualMainDraw(tid,div); return; }
   openMainDraw(tid,div);
 }
+
+// 개인전 본선 재추첨
+function openIndividualMainDraw(tid,div){
+  const key=tid+'_'+div;
+  const teams=G.teams[key]||[];
+  const draw=G.draws[key];
+  const t=G.tournaments.find(x=>x.id===tid);
+  const cfg=gDS(t,div);
+  if(!draw){ toast('예선 추첨을 먼저 진행해주세요','error'); return; }
+
+  const advT=getAdvT(key,draw,teams,cfg);
+  if(!advT.length){ toast('예선 진출팀이 없습니다','error'); return; }
+
+  const bracketN=nextPow2(advT.length);
+  const byeCount=bracketN-advT.length;
+
+  if(!confirm(`본선 대진을 재추첨합니다.\n진출 ${advT.length}팀 → ${bracketN}강 (부전승 ${byeCount}팀)\n기존 본선 결과가 초기화됩니다. 계속하시겠습니까?`)) return;
+
+  // 기존 본선 경기 제거, 새로 생성
+  const allMs=G.matches[key]||[];
+  const groupMs=allMs.filter(m=>m.phase==='group');
+  const mainMatches=buildIndivMainMatchesFixed(advT,bracketN,key,teams);
+  G.matches[key]=[...groupMs,...mainMatches];
+
+  sl(true);
+  stM(key).then(()=>{
+    sl(false);
+    toast('본선 대진 재추첨 완료','success');
+    try{ renderBracket(); }catch(e){}
+  }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
+}
+
+// 개인전 본선 대진 생성 (실제 ti 기반)
+function buildIndivMainMatchesFixed(advT, bracketN, key, teams){
+  const matchCount=bracketN/2;
+  const byeCount=bracketN-advT.length;
+  const byeIdxs=pickByeMatchIndices(matchCount,byeCount);
+  const byeSet=new Set(byeIdxs);
+  const normalIdxs=hybridSpreadOrder(matchCount).filter(i=>!byeSet.has(i));
+
+  const slots=Array.from({length:matchCount},(_,i)=>({
+    id:`main_${i}_${Date.now()}`,phase:'main',round:0,slot:i,
+    t1:null,t2:null,winner:null,rubbers:[],court:'',courts:[],
+    bye:byeSet.has(i)
+  }));
+
+  let rank1=[...advT.filter(e=>e.rk===1)];
+  let rank2=[...advT.filter(e=>e.rk===2)];
+  // 셔플
+  for(let i=rank1.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rank1[i],rank1[j]]=[rank1[j],rank1[i]]; }
+  for(let i=rank2.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rank2[i],rank2[j]]=[rank2[j],rank2[i]]; }
+
+  // 부전승: 조1위 우선
+  for(const si of byeIdxs){
+    const picked=rank1.shift()||rank2.shift()||null;
+    if(picked){ slots[si].t1=picked.ti; slots[si].winner=picked.ti; }
+  }
+
+  // 일반: 조1위 배정 후 조2위와 대진 (같은 조 최대한 피함)
+  for(const si of normalIdxs){
+    const p1=rank1.shift()||null;
+    if(p1) slots[si].t1=p1.ti;
+  }
+  for(const si of normalIdxs){
+    if(slots[si].t1===null) continue;
+    const t1gn=advT.find(e=>e.ti===slots[si].t1)?.gn;
+    const opp=removeFirstMatch(rank2,e=>e&&e.gn!==t1gn)||rank2.shift()||null;
+    if(opp) slots[si].t2=opp.ti;
+  }
+  const leftover=[...rank1,...rank2];
+  for(const si of normalIdxs){
+    if(slots[si].t1===null){ const p=leftover.shift(); if(p) slots[si].t1=p.ti; }
+    if(!slots[si].bye&&slots[si].t2===null){ const p=leftover.shift(); if(p) slots[si].t2=p.ti; }
+  }
+
+  // 토너먼트 트리 구성 (round/slot으로 다음 라운드 연결)
+  return buildTournamentTree(slots, matchCount);
+}
+
+function buildTournamentTree(slots, matchCount){
+  // 이미 round=0, slot=i 부여됨. 상위 라운드 매치 생성
+  const result=[...slots];
+  let prevRound=slots;
+  let round=1;
+  while(prevRound.length>1){
+    const nextRound=[];
+    for(let i=0;i<prevRound.length;i+=2){
+      const m={id:`main_r${round}_${i/2}_${Date.now()}`,phase:'main',round,slot:Math.floor(i/2),t1:null,t2:null,winner:null,rubbers:[],court:'',courts:[],bye:false};
+      nextRound.push(m);
+      result.push(m);
+    }
+    prevRound=nextRound;
+    round++;
+  }
+  return result;
+}
+
 
 function clampMainSeed(v){
   const n=parseInt(v,10);
@@ -10836,18 +11524,22 @@ function openM3(key,mid){
   const dbl=cfg.doublesCount||(t1.doublesCount)||5;
   const st=getOnlineOrderState(key,m);
   const mySide=st.mySide;
-  window._m3Ctx = { key, mid, dbl, mySide, dn1, dn2, isStaff: !!(AD||OP), online: !!G.meta.onlineOrderEnabled };
-  const revealBoth=AD||st.bothSubmitted||!G.meta.onlineOrderEnabled;
-  const myLocked=G.meta.onlineOrderEnabled && !AD && !OP && st.bothSubmitted;
+  const isIndividualMode=isIndividualByKey(key);
+  const useOrderHere=!!G.meta.onlineOrderEnabled && !isIndividualMode;
+  window._m3Ctx = { key, mid, dbl, mySide, dn1, dn2, isStaff: !!(AD||OP), online: useOrderHere, individual: isIndividualMode };
+  const revealBoth=AD||st.bothSubmitted||!useOrderHere;
+  const myLocked=useOrderHere && !AD && !OP && st.bothSubmitted;
   const isOperator = !!OP;
-  const side1PhotoEditable = AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted);
-  const side2PhotoEditable = AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted);
-  const side1PhotoViewable = !!_orderPhotoGetSaved(m,1) && _orderPhotoCanView(m,1);
-  const side2PhotoViewable = !!_orderPhotoGetSaved(m,2) && _orderPhotoCanView(m,2);
+  const side1PhotoEditable = useOrderHere && (AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted));
+  const side2PhotoEditable = useOrderHere && (AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted));
+  const side1PhotoViewable = useOrderHere && !!_orderPhotoGetSaved(m,1) && _orderPhotoCanView(m,1);
+  const side2PhotoViewable = useOrderHere && !!_orderPhotoGetSaved(m,2) && _orderPhotoCanView(m,2);
 
   // ── 제목 동적 설정 ──
   const titleEl=ge('mM3T');
-  if(G.meta.onlineOrderEnabled){
+  if(isIndividualMode){
+    titleEl.textContent=`⚡ ${dl(div)} · ${dn1} vs ${dn2} — 결과입력`;
+  } else if(useOrderHere){
     if(st.bothSubmitted) titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더/기록확인입력`;
     else if(st.mySubmitted) titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더/기록확인입력`;
     else titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더 입력·제출`;
@@ -10880,7 +11572,16 @@ function openM3(key,mid){
   if(btnOpSubmitHome){ btnOpSubmitHome.disabled=false; }
   if(btnOpSubmitAway){ btnOpSubmitAway.disabled=false; }
 
-  if(G.meta.onlineOrderEnabled){
+  if(isIndividualMode){
+    if(btnSave){ btnSave.style.display='none'; }
+    if(btnUnlock){ btnUnlock.style.display='none'; }
+    if(btnSubmit){ btnSubmit.style.display='none'; }
+    if(btnSubmitHome){ btnSubmitHome.style.display='none'; }
+    if(btnSubmitAway){ btnSubmitAway.style.display='none'; }
+    if(btnOpSubmitHome){ btnOpSubmitHome.style.display='none'; }
+    if(btnOpSubmitAway){ btnOpSubmitAway.style.display='none'; }
+    if(btnSaveResult){ btnSaveResult.style.display=''; btnSaveResult.textContent='💾 결과저장'; btnSaveResult.disabled=false; }
+  } else if(useOrderHere){
     if(AD){
       if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
       if(btnSubmitHome){ btnSubmitHome.style.display=''; btnSubmitHome.textContent=`📤 ${dn1}만 제출`; btnSubmitHome.title='홈팀 오더만 제출 또는 재제출'; }
@@ -10926,21 +11627,81 @@ function openM3(key,mid){
   }
 
   const p1=t1.players||[],p2=t2.players||[];
-  const defSlotLabels=['1·2번','3·4번','5·6번','7·8번','9·10번'];
   const exRb=Array.isArray(m.rubbers)?m.rubbers:[];
+  const scBtns=(id,cur)=>[0,1,2,3,4,5,6].map(n=>`<button type="button" onclick="setRbSc('${id}',${n})" style="width:32px;height:32px;border-radius:6px;border:1.5px solid ${cur===n?'var(--primary)':'var(--border)'};background:${cur===n?'var(--primary)':'white'};color:${cur===n?'white':'var(--text)'};font-weight:700;font-size:.85rem;cursor:pointer;transition:.15s" id="${id}_btn${n}">${n}</button>`).join('');
+  let html='';
+
+  if(isIndividualMode){
+    const rb=(Array.isArray(exRb)&&exRb[0])?exRb[0]:{};
+    const p1v=(rb.players1&&rb.players1.length?rb.players1:p1)||[];
+    const p2v=(rb.players2&&rb.players2.length?rb.players2:p2)||[];
+    const s1v=(rb.score1!=null&&rb.score1!=='')?rb.score1:'';
+    const s2v=(rb.score2!=null&&rb.score2!=='')?rb.score2:'';
+    const roundLabel=getIndividualMatchLabel(key,m)||'1경기';
+    const sideLabel1=getIndividualSideLabel(key,m,m.t1)||'1번';
+    const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
+    const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
+    const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
+    html=`<div style="margin-bottom:10px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#eef4ff);border:1.5px solid #bfdbfe;font-size:.8rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 개인전은 오더 제출이 없습니다. 점수만 입력하면 됩니다.</div>
+    <div class="m3card" style="border:1.5px solid var(--border);box-shadow:none">
+      <div class="m3hdr ${divisionHeaderClass(div)}" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+        <span class="m3badge">${dl(div)}</span>
+        <span class="m3badge">${roundLabel}</span>
+      </div>
+      <div class="m3body" style="padding:12px 12px 14px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px">${m.phase==='group'&&m.group!=null?`<button type="button" onclick="openGroupCourtModal('${key}',${Number(m.group)})" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`:''}<button type="button" onclick="openMatchCourtModal('${key}','${m.id}')" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button></div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px">
+          <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
+            <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
+            <div id="rp1_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p1v))}"></div>
+            <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p1v.length?p1v.join(' / '):'선수 정보 없음'}</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:900;color:var(--text3)">VS</div>
+          <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
+            <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${sideLabel2}</div>
+            <div id="rp2_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p2v))}"></div>
+            <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p2v.length?p2v.join(' / '):'선수 정보 없음'}</div>
+          </div>
+        </div>
+        <div style="padding:12px;border-radius:12px;background:#fff;border:1.5px solid var(--border)">
+          <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${roundLabel}</div>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
+            <div>
+              <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${sideLabel1}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs1_0', s1v===''?null:Number(s1v))}</div>
+              <input type="hidden" id="rs1_0" value="${s1v}">
+            </div>
+            <div style="font-size:1.3rem;font-weight:900;color:var(--text3);text-align:center">:</div>
+            <div>
+              <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${sideLabel2}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs2_0', s2v===''?null:Number(s2v))}</div>
+              <input type="hidden" id="rs2_0" value="${s2v}">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    ge('mM3B').innerHTML=html;
+    om('mM3');
+    refreshAllOrderChipAvailability();
+    return;
+  }
+
+
+  const defSlotLabels=['1·2번','3·4번','5·6번','7·8번','9·10번'];
   let statusText='';
-  if(G.meta.onlineOrderEnabled){
+  if(useOrderHere){
     if(st.bothSubmitted) statusText='🔒 양팀 제출 완료 — 오더가 공개되었고 더 이상 수정할 수 없습니다.';
     else if(isOperator) statusText='👀 경기진행자는 양 팀 명단과 제출 현황만 먼저 볼 수 있습니다. 이미 제출한 팀의 오더 배치는 양팀 제출 완료 후에만 공개됩니다. 아직 제출하지 않은 팀만 대신 제출할 수 있습니다.';
     else if(st.mySubmitted) statusText='✅ 내 클럽 제출 완료 — 상대 클럽 제출 전까지는 내 오더를 다시 선택해서 수정제출할 수 있습니다.';
     else if(mySide) statusText='📝 아직 제출 전입니다. 지금은 자유롭게 수정할 수 있고, 제출하면 내 클럽 오더가 저장됩니다.';
     else statusText='📝 관리자만 전체 오더를 확인할 수 있습니다.';
   }
-  let html=`<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:14px;padding:14px 16px;background:var(--primary);color:white;border-radius:var(--radius-lg)" class="${divisionHeaderClass(div)}"><div style="font-weight:800;font-size:1.08rem;line-height:1.35">${dn1}</div><div style="font-size:1.25rem;font-weight:900;opacity:.9">VS</div><div style="font-weight:800;font-size:1.08rem;text-align:right;line-height:1.35">${dn2}</div></div>
-  <div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #dbeafe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 오더는 각 복식에서 선수 2명을 선택한 뒤 하단의 제출 버튼으로 제출합니다. 진행자/관리자는 한 팀만 대리제출도 가능합니다.</div>
-  <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.${G.meta.onlineOrderEnabled && !st.bothSubmitted?`
+  html=`<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:14px;padding:14px 16px;background:var(--primary);color:white;border-radius:var(--radius-lg)" class="${divisionHeaderClass(div)}"><div style="font-weight:800;font-size:1.08rem;line-height:1.35">${dn1}</div><div style="font-size:1.25rem;font-weight:900;opacity:.9">VS</div><div style="font-weight:800;font-size:1.08rem;text-align:right;line-height:1.35">${dn2}</div></div>
+  ${isIndividualMode?`<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 개인전은 오더 제출이 없습니다. 팀(페어)이 이미 확정되어 있으므로 점수만 입력하면 됩니다.</div>`:`<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #dbeafe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 오더는 각 복식에서 선수 2명을 선택한 뒤 하단의 제출 버튼으로 제출합니다. 진행자/관리자는 한 팀만 대리제출도 가능합니다.</div>`}
+  <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.${useOrderHere && !st.bothSubmitted?`
   <span style="display:block;margin-top:4px;color:#b45309">제출 전에는 자유 수정 가능 · 제출 후에는 내 오더가 저장되며 · 양팀 제출 완료 후에는 완전 잠금됩니다.${isOperator?'<br><span style="color:#1d4ed8">경기진행자는 제출 전에도 양팀 명단은 볼 수 있지만, 제출 완료된 팀의 오더 선택은 양팀 모두 제출될 때까지 숨겨집니다.</span>':''}</span>`:''}</div>
-  ${(G.meta.onlineOrderEnabled?`<div id="mM3SubmitStatusCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#93c5fd')};background:${st.bothSubmitted?'linear-gradient(135deg,#ecfdf5,#dcfce7)':(st.mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)')}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-size:.82rem;line-height:1.6;color:var(--text2)"><div style="font-size:.9rem;font-weight:900;color:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')}">${st.bothSubmitted?'🔒 제출 완료 상태':(st.mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div><div style="margin-top:4px">${statusText}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'✅ 제출완료':'⏳ 미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}</div></div><div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')};color:#fff">${st.bothSubmitted?'수정 불가':(st.mySubmitted?'상대 제출 대기':'작성 가능')}</div></div></div>`:'')}
+  ${(useOrderHere?`<div id="mM3SubmitStatusCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#93c5fd')};background:${st.bothSubmitted?'linear-gradient(135deg,#ecfdf5,#dcfce7)':(st.mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)')}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-size:.82rem;line-height:1.6;color:var(--text2)"><div style="font-size:.9rem;font-weight:900;color:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')}">${st.bothSubmitted?'🔒 제출 완료 상태':(st.mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div><div style="margin-top:4px">${statusText}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'✅ 제출완료':'⏳ 미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}</div></div><div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')};color:#fff">${st.bothSubmitted?'수정 불가':(st.mySubmitted?'상대 제출 대기':'작성 가능')}</div></div></div>`:'')}
   ${((side1PhotoEditable||side2PhotoEditable||side1PhotoViewable||side2PhotoViewable||_orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2))?`<div id="mM3PhotoAssistCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)"><div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn1}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side1PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus1" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,1)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn2}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side2PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus2" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,2)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}</div></div>`:'')}`;
   for(let r=0;r<dbl;r++){
     const rb=exRb[r]||{};
@@ -10958,7 +11719,6 @@ function openM3(key,mid){
     const selP2=submitted2.length?submitted2:((submittedRow2.blankOrder||rb.blankOrder2)?[]:savedP2);
     const sv1=rb.score1!=null?rb.score1:'';
     const sv2=rb.score2!=null?rb.score2:'';
-    const scBtns=(id,cur)=>[0,1,2,3,4,5,6].map(n=>`<button type="button" onclick="setRbSc('${id}',${n})" style="width:32px;height:32px;border-radius:6px;border:1.5px solid ${cur===n?'var(--primary)':'var(--border)'};background:${cur===n?'var(--primary)':'white'};color:${cur===n?'white':'var(--text)'};font-weight:700;font-size:.85rem;cursor:pointer;transition:.15s" id="${id}_btn${n}">${n}</button>`).join('');
     const canEditSide1=AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted);
     const canEditSide2=AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted);
     const showSide1=isOperator || revealBoth || mySide===1 || AD;
@@ -10967,11 +11727,12 @@ function openM3(key,mid){
     const displaySelP2=(isOperator && !st.bothSubmitted && st.s2)?[]:selP2;
     const pickerHtml=(arr,selArr,cid,editable)=>`<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"><div class="m3-picked"></div>${editable?`<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`:''}</div>`;
     const hiddenHtml=(selArr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"></div>`;
+    const fixedPairHtml=(arr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(arr||[]))}"></div><div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.82rem;color:var(--text);font-weight:800;line-height:1.6">${(arr||[]).length?arr.join(' / '):'선수 정보 없음'}</div>`;
     html+=`<div class="rb-blk"><div class="rb-bhdr"><span>${r+1}복식 <small style="opacity:.75">(기본: ${defSlotLabels[r]})</small></span>${rb.winner!=null?`<span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:.7rem">${rb.winner===0?dn1:dn2} ✓</span>`:''}</div>
     <div class="rb-bbdy">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn1} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide1?`${pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)}${(isOperator && !st.bothSubmitted && st.s1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow1.blankOrder||rb.blankOrder1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp1_${r}`)}`}</div>
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${dn2} (2명 선택 또는 공오더)</span><span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'✅ 제출완료':'⏳ 미제출'}</span></div>${showSide2?`${pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)}${(isOperator && !st.bothSubmitted && st.s2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow2.blankOrder||rb.blankOrder2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp2_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${isIndividualMode?`${dn1} 페어`:`${dn1} (2명 선택 또는 공오더)`}</span>${isIndividualMode?'':`<span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'✅ 제출완료':'⏳ 미제출'}</span>`}</div>${showSide1?`${isIndividualMode?fixedPairHtml(p1,`rp1_${r}`):pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)}${(isOperator && !st.bothSubmitted && st.s1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow1.blankOrder||rb.blankOrder1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp1_${r}`)}`}</div>
+        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${isIndividualMode?`${dn2} 페어`:`${dn2} (2명 선택 또는 공오더)`}</span>${isIndividualMode?'':`<span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>`}</div>${showSide2?`${isIndividualMode?fixedPairHtml(p2,`rp2_${r}`):pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)}${(isOperator && !st.bothSubmitted && st.s2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow2.blankOrder||rb.blankOrder2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp2_${r}`)}`}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
         <div>
@@ -10995,7 +11756,7 @@ function openM3(key,mid){
     topInfo.style.cssText = 'margin-bottom:12px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--border);background:linear-gradient(135deg,#f8fbff,#eef4ff)';
     topInfo.innerHTML = ``;
     body.prepend(topInfo);
-    if(!myLocked){
+    if(!myLocked && !isIndividualMode){
       const quickActionWrap=document.createElement('div');
       quickActionWrap.id='mM3QuickActionWrap';
       quickActionWrap.style.cssText='margin:0 0 12px;padding:12px 13px;border-radius:14px;border:1.5px solid #fed7aa;background:linear-gradient(135deg,#fffaf0,#fff7ed)';
@@ -11813,7 +12574,7 @@ function updateMyClubHomeCard(){
       const grpCourts = (G.draws[key]?.groups?.[Number(nextM.group)]?.courts)||[];
       const matchCourts = Array.isArray(nextM.courts)&&nextM.courts.length ? nextM.courts : (nextM.court?[nextM.court]:grpCourts);
       const courts = matchCourts.length ? ` 🎾${matchCourts.join('/')}` : '';
-      const progress = st.started ? ` · 진행중 ${st.sc1}:${st.sc2}` : '';
+      const progress = st.started ? ` · 진행중 ${st.disp1??st.sc1}:${st.disp2??st.sc2}` : '';
       nextInfo = `<div style="font-size:.78rem;color:#1d4ed8;margin-top:3px;cursor:pointer" onclick="goBracketMatch('${at.id}','${div}','${nextM.id}')">⏭ 다음: vs <b>${opNm}</b>${courts}${progress}</div>`;
     }
 
@@ -13505,13 +14266,28 @@ async function deletePlayer(){
 function openRoster(tid,div){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;
   const key=tid+'_'+div,teams=G.teams[key]||[];
+  const isIndividual=isIndividualTournament(t);
   ge('mRosterT').textContent=`${dl(div)} 선수명단 (참가기록 조회 → 명단 클릭)`;
   if(!teams.length){ge('mRosterB').innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>등록된 팀 없음</p></div>';om('mRoster');return;}
-  const total=teams.reduce((s,t)=>s+t.players.length,0);
-  let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">팀</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div><div style="margin:-2px 0 12px;padding:8px 12px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:var(--radius);font-size:.82rem;font-weight:700;color:#92400e">🟠 주황 배경 표시는 이 대회 첫 출전 선수입니다.</div>`;
-  teams.forEach((team,i)=>{const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
-    html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-    <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
+  const total=teams.reduce((s,t)=>s+(isIndividual?(t.individualPlayers||t.players||[]).length:t.players.length),0);
+  const unitLabel=isIndividual?'조':'팀';
+  let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">${unitLabel}</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div>`;
+  // 팀전만 첫 출전 안내 표시
+  if(!isIndividual){
+    html+=`<div style="margin:-2px 0 12px;padding:8px 12px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:var(--radius);font-size:.82rem;font-weight:700;color:#92400e">🟠 주황 배경 표시는 이 대회 첫 출전 선수입니다.</div>`;
+  }
+  teams.forEach((team,i)=>{
+    if(isIndividual){
+      // 개인전: 팀명 헤더 없이 참가자 2명만 표시
+      const ips=getIndividualPlayers(team);
+      const note=team.note?`<div style="font-size:.72rem;color:var(--text3);margin-top:6px">📝 ${esc(team.note)}</div>`:'';
+      html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+        <div style="padding:10px 14px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">${ips.map((ip,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span><span>${esc(ip.name||'')}${ip.clubsRaw?`<span style="font-size:.65rem;color:var(--text3);margin-left:2px">(${esc(ip.clubsRaw)})</span>`:''}</span></div>`).join('')}</div>${note}</div></div>`;
+    }else{
+      const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
+      html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
+      <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
+    }
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
@@ -13958,6 +14734,10 @@ function renderNextStickyAlert(){
 window.closeStickyAlert = closeStickyAlert;
 window.goToStickyAlertMatch = goToStickyAlertMatch;
 window.resetBronzeTeams = resetBronzeTeams;
+window.openIndividualDraw = openIndividualDraw;
+window.selectIndivGrpSize = selectIndivGrpSize;
+window.startIndividualDraw = startIndividualDraw;
+window.openIndividualMainDraw = openIndividualMainDraw;
 
 function enqueueStickyAlert(payload,type='info'){
   const item=(payload && typeof payload==='object' && !Array.isArray(payload))
@@ -17273,7 +18053,8 @@ Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullsc
   addPresetDiv,addCustomDiv,etAddPreset,etAddCustomDiv,
   etToggleRub,etSelRub,etGetRubbers,
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
-  openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup});
+  openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
+  toggleIndividualGroupMatches});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
