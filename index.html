@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-08-v90-seed-reset-preserve";
+  const APP_VERSION = "2026-04-08-v92-a4-div-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -68,16 +68,57 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 
 function exportPrelimSheet(){
   try{
-    const byId = (id) => document.getElementById(id);
-    const app = window.G || {};
-    const tid = byId('brTS')?.value || '';
-    const div = byId('brDS')?.value || '';
-    const key = tid + '_' + div;
-    const draw = app.draws?.[key];
-    const teams = app.teams?.[key] || [];
-    const t = (app.tournaments || []).find(x => x.id === tid) || null;
+    if(typeof window.G === 'undefined' || !window.G){
+      if(typeof toast === 'function') toast('데이터 로딩 후 다시 시도하세요','error');
+      else alert('데이터 로딩 후 다시 시도하세요');
+      return;
+    }
 
-    if(!tid || !div || !draw || !Array.isArray(draw.groups) || !draw.groups.length){
+    const byId = (id) => document.getElementById(id);
+    const app = window.G;
+    const tid = byId('brTS')?.value || '';
+    if(!tid){
+      if(typeof toast === 'function') toast('대회를 먼저 선택하세요','error');
+      else alert('대회를 먼저 선택하세요');
+      return;
+    }
+
+    const tournament = (app.tournaments || []).find(x => x && x.id === tid) || null;
+
+    // 현재 선택된 부서 — BR_MULTI_DIVS 전역변수 우선 사용 (칩 버튼 data-div 없이도 동작)
+    let selectedDivs = [];
+    const activeBR = Array.isArray(window.BR_MULTI_DIVS) ? window.BR_MULTI_DIVS : [];
+    if(activeBR.length && !activeBR.includes('__ALL__')){
+      selectedDivs = [...activeBR];
+    }
+    // 폴백: brDS select 값
+    if(!selectedDivs.length){
+      const hiddenDiv = byId('brDS')?.value || '';
+      if(hiddenDiv && hiddenDiv !== '__ALL__' && hiddenDiv !== '전체'){
+        selectedDivs = [hiddenDiv];
+      }
+    }
+
+    const divs = Array.isArray(tournament?.divisions)
+      ? tournament.divisions.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean)
+      : [];
+
+    const hasPrelimDraw = (divName) => {
+      const key = tid + '_' + divName;
+      const d = app.draws?.[key];
+      return !!(d && Array.isArray(d.groups) && d.groups.length);
+    };
+
+    // selectedDivs가 비어있으면 전체 부서 중 추첨된 것 모두 포함
+    if(!selectedDivs.length){
+      selectedDivs = divs.filter(hasPrelimDraw);
+    } else {
+      // 선택된 부서 중 추첨된 것만 필터 (없으면 전체로 폴백)
+      const filtered = selectedDivs.filter(hasPrelimDraw);
+      selectedDivs = filtered.length ? filtered : divs.filter(hasPrelimDraw);
+    }
+
+    if(!selectedDivs.length){
       if(typeof toast === 'function') toast('예선 추첨 먼저 진행하세요','error');
       else alert('예선 추첨 먼저 진행하세요');
       return;
@@ -89,53 +130,83 @@ function exportPrelimSheet(){
       .replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;');
 
-    const teamLabel = (team, idx) => {
+    const buildTeamLabel = (teams, team, idx) => {
       if(!team) return '-';
+
       if(team.tournamentType === 'individual_pair' || Array.isArray(team.individualPlayers)){
         const ps = Array.isArray(team.individualPlayers) && team.individualPlayers.length
           ? team.individualPlayers
-          : (team.players || []).slice(0,2).map(n => ({name:n, clubsRaw:team.club || ''}));
+          : (team.players || []).slice(0,2).map(n => ({ name:n, clubsRaw:team.club || '' }));
+
         const pair = ps.map(p => {
           const nm = (p?.name || '').trim();
           const club = (p?.clubsRaw || '').trim();
           return nm + (club ? `(${club})` : '');
         }).filter(Boolean).join(' / ');
+
         return pair || ((team.players || []).join(' / ')) || '-';
       }
+
+      const club = team.club || team.name || '-';
       const same = teams.filter(x => x && x.club === team.club);
-      if(same.length <= 1) return team.club || '-';
+      if(same.length <= 1) return club;
+
       let order = 0;
       for(let i=0;i<idx;i++){
         if(teams[i] && teams[i].club === team.club) order++;
       }
-      return `${team.club}-${String.fromCharCode(65 + order)}`;
+      return `${club}-${String.fromCharCode(65 + order)}`;
     };
 
-    const groupsHtml = draw.groups.map((g, gi) => {
-      const teamIds = Array.isArray(g?.teams) ? g.teams : (Array.isArray(g) ? g : []);
-      const rows = teamIds.map((ti, i) => {
-        const team = teams[ti];
-        return `<tr>
-          <td class="num">${i+1}</td>
-          <td class="team">${esc(teamLabel(team, ti))}</td>
-        </tr>`;
+    const sections = selectedDivs.map(divName => {
+      const key = tid + '_' + divName;
+      const draw = app.draws?.[key];
+      const teams = app.teams?.[key] || [];
+      const groups = Array.isArray(draw?.groups) ? draw.groups : [];
+
+      const groupsHtml = groups.map((g, gi) => {
+        // g는 {teams:[...], courts:[], memo:''} 형태의 객체
+        const teamIds = Array.isArray(g?.teams) ? g.teams : (Array.isArray(g) ? g : []);
+        const courts = Array.isArray(g?.courts) && g.courts.length ? g.courts.join(', ') : '';
+        const memo = String(g?.memo || '').trim();
+
+        const rows = teamIds.map((ti, i) => {
+          const team = teams[ti];
+          return `<tr>
+            <td class="num">${i+1}</td>
+            <td class="team">${esc(buildTeamLabel(teams, team, ti))}</td>
+          </tr>`;
+        }).join('');
+
+        const grpLetter = String.fromCharCode(65 + gi);
+        return `
+          <section class="group">
+            <div class="group-title">${grpLetter}조${courts ? `<span class="court-badge">🎾 ${esc(courts)}</span>` : ''}</div>
+            ${memo ? `<div class="group-memo">📝 ${esc(memo)}</div>` : ''}
+            <table>
+              <thead>
+                <tr><th style="width:42px">순</th><th>팀 / 선수</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>
+        `;
       }).join('');
+
       return `
-        <section class="group">
-          <div class="group-title">${String.fromCharCode(65+gi)}조</div>
-          <table>
-            <thead>
-              <tr><th style="width:64px">번호</th><th>팀</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+        <section class="sheet">
+          <div class="header">
+            <div class="title">${esc(tournament?.name || '예선 대진표')}</div>
+            <div class="meta">
+              ${esc(tournament?.date || '') ? `${esc(tournament?.date || '')}<br>` : ''}
+              ${esc(divName)} 예선 조편성표
+            </div>
+          </div>
+          <div class="grid">${groupsHtml}</div>
+          <div class="footer">배포용 예선 대진표</div>
         </section>
       `;
-    }).join('');
-
-    const title = esc(t?.name || '예선 대진표');
-    const dateText = esc(t?.date || '');
-    const divText = esc(div || '');
+    }).join('<div class="page-break"></div>');
 
     const htmlContent = `<!DOCTYPE html>
 <html lang="ko">
@@ -144,44 +215,50 @@ function exportPrelimSheet(){
 <title>예선 대진표</title>
 <style>
   @page { size: A4 portrait; margin: 12mm; }
-  *{ box-sizing:border-box; }
-  body{
+  * { box-sizing:border-box; }
+  body {
     font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
     margin:0; color:#111827; background:#fff;
   }
-  .sheet{ width:100%; margin:0 auto; }
-  .header{
+  .sheet { width:100%; margin:0 auto; }
+  .header {
     text-align:center; margin-bottom:14px; padding-bottom:10px;
     border-bottom:2px solid #0f1e3a;
   }
-  .title{ font-size:20px; font-weight:800; color:#0f1e3a; margin-bottom:4px; }
-  .meta{ font-size:12px; color:#475569; line-height:1.5; }
-  .grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
-  .group{
+  .title { font-size:20px; font-weight:800; color:#0f1e3a; margin-bottom:4px; }
+  .meta { font-size:12px; color:#475569; line-height:1.5; }
+  .grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+  .group {
     border:1.4px solid #cbd5e1; border-radius:10px; overflow:hidden;
     break-inside:avoid; page-break-inside:avoid; background:#fff;
   }
-  .group-title{
+  .group-title {
     background:#0f1e3a; color:#fff; font-size:15px; font-weight:800; padding:8px 10px;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
   }
-  table{ width:100%; border-collapse:collapse; }
-  th, td{ border-top:1px solid #e2e8f0; padding:8px 10px; font-size:12px; vertical-align:middle; }
-  th{ background:#f8fafc; color:#334155; font-weight:800; text-align:center; }
-  td.num{ text-align:center; font-weight:800; color:#0f1e3a; width:64px; }
-  td.team{ text-align:left; font-weight:700; line-height:1.45; word-break:keep-all; }
-  .footer{ margin-top:10px; font-size:11px; color:#64748b; text-align:right; }
-  @media print{ .sheet{ margin:0; } }
+  .court-badge {
+    font-size:11px; font-weight:700; background:rgba(255,255,255,.18);
+    padding:2px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .group-memo {
+    font-size:11px; color:#7a5600; background:#fff8df;
+    border-bottom:1px solid #f6d365; padding:5px 10px; font-weight:700; line-height:1.4;
+  }
+  table { width:100%; border-collapse:collapse; }
+  th, td { border-top:1px solid #e2e8f0; padding:8px 10px; font-size:12px; vertical-align:middle; }
+  th { background:#f8fafc; color:#334155; font-weight:800; text-align:center; }
+  td.num { text-align:center; font-weight:800; color:#0f1e3a; width:64px; }
+  td.team { text-align:left; font-weight:700; line-height:1.45; word-break:keep-all; }
+  .footer { margin-top:10px; font-size:11px; color:#64748b; text-align:right; }
+  .page-break { height:0; page-break-before:always; break-before:page; }
+  @media print {
+    .sheet { margin:0; }
+    .page-break { display:block; }
+  }
 </style>
 </head>
 <body>
-  <div class="sheet">
-    <div class="header">
-      <div class="title">${title}</div>
-      <div class="meta">${dateText ? `${dateText}<br>` : ''}${divText ? `${divText} 예선 조편성표` : '예선 조편성표'}</div>
-    </div>
-    <div class="grid">${groupsHtml}</div>
-    <div class="footer">배포용 예선 대진표</div>
-  </div>
+  ${sections}
 </body>
 </html>`;
 
@@ -191,10 +268,23 @@ function exportPrelimSheet(){
       else alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.');
       return;
     }
+
     w.document.open();
     w.document.write(htmlContent);
     w.document.close();
-    setTimeout(() => { try{ w.focus(); w.print(); }catch(e){} }, 350);
+
+    const triggerPrint = () => {
+      try{
+        w.focus();
+        w.print();
+      }catch(_e){}
+    };
+
+    if(w.document.readyState === 'complete'){
+      setTimeout(triggerPrint, 250);
+    }else{
+      w.onload = () => setTimeout(triggerPrint, 250);
+    }
   }catch(err){
     console.error(err);
     if(typeof toast === 'function') toast('예선표 생성 중 오류가 발생했습니다','error');
@@ -3501,6 +3591,8 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
 let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',regSessionVersion:1,drawHistoryPolicyVersion:0},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+window.G = G;
+
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
 let PF={club:'',div:'',search:''};
 
