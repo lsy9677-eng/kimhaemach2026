@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-08-v74-mcard-label-null-fix";
+  const APP_VERSION = "2026-04-08-v80-memo-indivlock";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1432,7 +1432,7 @@ body.slider-ready .page:not(.active){
     </div>
   </div>
 
-  <div class="card fade-in home-status-card">
+  <div class="card fade-in home-status-card" id="homeAssocCard">
     <div class="card-title">📊 김해시테니스협회 현황</div>
     <div class="g4 home-stats">
       <div class="stat-card home-click-card" onclick="goHomeMetric('assoc_clubs')"><div class="stat-label">등록 클럽</div><div class="stat-val" id="sClubs">0</div></div>
@@ -2561,6 +2561,32 @@ body.slider-ready .page:not(.active){
 
 <div class="modal-overlay" id="mAdminSettings"><div class="modal-box" style="max-width:560px"><div class="modal-header"><h3>⚙️ 관리자 설정</h3><button class="modal-close" onclick="cm('mAdminSettings')">✕</button></div>
 <div class="modal-body">
+
+  <!-- 개인시합 기간 잠금 -->
+  <div class="form-group" style="margin-bottom:16px;padding:14px;background:linear-gradient(135deg,#fff8f0,#fef3e2);border:1.5px solid #f59e0b;border-radius:12px">
+    <div style="font-weight:800;font-size:.9rem;color:#92400e;margin-bottom:10px">🔒 개인시합 기간 김해시 메뉴 잠금</div>
+    <div style="font-size:.76rem;color:#78350f;line-height:1.6;margin-bottom:10px">
+      잠금 기간 중에는 일반 사용자에게 <b>대회관리·선수현황 탭, 협회 현황 카드, 등록선수 보기</b>가 숨겨집니다.<br>
+      관리자 로그인 시에는 항상 모두 표시됩니다.
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.86rem;font-weight:700;cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="indivLockEnabled" style="accent-color:var(--accent);width:16px;height:16px">
+      잠금 기능 사용
+    </label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label class="form-label" style="font-size:.76rem">시작일시</label>
+        <input class="form-input" type="datetime-local" id="indivLockStart" style="font-size:.82rem">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:.76rem">종료일시</label>
+        <input class="form-input" type="datetime-local" id="indivLockEnd" style="font-size:.82rem">
+      </div>
+    </div>
+    <div id="indivLockStatus" style="font-size:.76rem;color:#92400e;padding:6px 10px;background:rgba(255,255,255,.7);border-radius:8px;margin-bottom:8px"></div>
+    <button class="btn btn-primary" style="width:100%;padding:10px;font-size:.84rem" onclick="saveIndivLockSettings()">💾 잠금 설정 저장</button>
+  </div>
+
   <div class="form-group" style="margin-bottom:16px">
     <div style="font-weight:700;font-size:.88rem;margin-bottom:10px;color:var(--primary-dark)">🗂 데이터 관리</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -3742,6 +3768,10 @@ async function loadMeta(){
       if(typeof G.meta.onlineOrderEnabled!=='boolean') G.meta.onlineOrderEnabled=!!G.meta.onlineOrderEnabled;
       if(!G.meta.operatorPw) G.meta.operatorPw='2026court';
       if(!Number.isFinite(Number(G.meta.regSessionVersion))) G.meta.regSessionVersion=1;
+      // 개인시합 기간 잠금 설정
+      if(!G.meta.indivLockEnabled) G.meta.indivLockEnabled=false;
+      if(!G.meta.indivLockStart) G.meta.indivLockStart='';
+      if(!G.meta.indivLockEnd) G.meta.indivLockEnd='';
     }else{
       await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',regSessionVersion:1,drawHistoryPolicyVersion:0});
     }
@@ -3781,13 +3811,53 @@ async function saveMeta(){
       onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
       operatorPw:(G.meta.operatorPw||'2026court'),
       regSessionVersion:Number(G.meta.regSessionVersion||1),
-      drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0)
+      drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),
+      indivLockEnabled:!!G.meta.indivLockEnabled,
+      indivLockStart:(G.meta.indivLockStart||''),
+      indivLockEnd:(G.meta.indivLockEnd||'')
     });
   }catch(e){
     console.error('saveMeta 오류:', e);
     throw e;
   }
 }
+
+// ─── 개인시합 기간 김해시 UI 잠금 ────────────────────────────────────────
+function isIndivLockActive(){
+  if(!G.meta.indivLockEnabled) return false;
+  const now=new Date();
+  const start=G.meta.indivLockStart ? new Date(G.meta.indivLockStart) : null;
+  const end=G.meta.indivLockEnd   ? new Date(G.meta.indivLockEnd)   : null;
+  if(start && now < start) return false;
+  if(end   && now > end)   return false;
+  return true;
+}
+
+function applyIndivLock(){
+  // 탭 숨김은 refreshRoleUI()에서 통합 처리
+  // 여기서는 카드류(협회 현황, 등록선수 버튼)만 담당
+  const isAdmin = document.body.classList.contains('admin-mode');
+  const shouldHide = isIndivLockActive() && !isAdmin;
+
+  // 홈: 협회 현황 카드
+  document.querySelectorAll('.home-status-card').forEach(el=>{
+    el.style.display = shouldHide ? 'none' : '';
+  });
+
+  // 홈: 등록선수 현황 버튼
+  const regCard = document.getElementById('homeRegViewerCard');
+  if(regCard) regCard.style.display = shouldHide ? 'none' : '';
+
+  // 잠금 중 대상 탭에 있으면 홈으로 이동
+  if(shouldHide){
+    const lockPages = ['tournament','players'];
+    const curPage = document.querySelector('.nav-tab.active')?.dataset?.page;
+    if(curPage && lockPages.includes(curPage)){
+      try{ showPage('home'); }catch(e){}
+    }
+  }
+}
+window.applyIndivLock = applyIndivLock;
 async function purgeLegacyDrawHistoryOnce(){
   // 운영 안정화: 추첨 기록 자동 삭제를 더 이상 실행하지 않습니다.
   return;
@@ -3920,6 +3990,7 @@ function onDU(){
   try{ popSel(); }catch(e){ console.warn('onDU popSel failed', e); }
   renderFloatingNotice();
   updateOperationSticky();
+  try{ applyIndivLock(); }catch(e){}
 }
 function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend',`<style>@keyframes ldA{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .match-focus-pulse{position:relative;transform:scale(1.02);border:3px solid #2563eb !important;box-shadow:0 0 0 5px rgba(37,99,235,.18),0 18px 36px rgba(37,99,235,.22) !important;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
@@ -4055,9 +4126,22 @@ function isOperatorMode(){ return !!(OP && !AD); }
 function canManageBracket(){ return !!(AD || OP); }
 function refreshRoleUI(){
   const opPages=['tournament','register','players'];
+  // 개인시합 잠금 탭 목록
+  const lockPages=['tournament','players'];
+  const isAdmin = document.body.classList.contains('admin-mode');
+  const lockActive = isIndivLockActive() && !isAdmin;
+
   document.querySelectorAll('.nav-tab').forEach(tab=>{
     const p=tab.dataset.page;
-    tab.style.display = (isOperatorMode() && opPages.includes(p)) ? 'none' : '';
+    // 경기진행자 모드면 해당 탭 숨김
+    if(isOperatorMode() && opPages.includes(p)){
+      tab.style.display='none';
+    // 잠금 기간 중(비관리자)이면 대상 탭 숨김
+    } else if(lockActive && lockPages.includes(p)){
+      tab.style.display='none';
+    } else {
+      tab.style.display='';
+    }
   });
   const opBtn=ge('opToggleBtn');
   if(opBtn){
@@ -4086,6 +4170,8 @@ function refreshRoleUI(){
     if(adminToggle) adminToggle.style.display = '';
     if(clubNameBadge) clubNameBadge.style.display = 'none';
   }
+  // 카드류 잠금은 applyIndivLock에서 별도 처리
+  try{ applyIndivLock(); }catch(e){}
 }
 function applyOperatorUI(){
   OP=true;
@@ -4225,6 +4311,8 @@ function showPage(n){
   setTimeout(updateOperationSticky,0);
   setTimeout(()=>window.updatePageSliderHeight && window.updatePageSliderHeight(), 0);
   refreshRoleUI();
+  // refreshRoleUI가 탭 display를 덮어쓰므로 잠금 재적용
+  try{ applyIndivLock(); }catch(e){}
 }
 
 function toggleAdmin(){
@@ -4253,6 +4341,7 @@ function toggleAdmin(){
     toast('로그아웃','info');
     const _ap=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(_ap==='register'){renderRegisterDivisionOverview();renderRL();}
+    try{ applyIndivLock(); }catch(e){}
   } else om('mAdmin');
 }
 function applyAdminUI(){
@@ -4278,6 +4367,7 @@ function applyAdminUI(){
   }
   updatePlayersAdminControls();
   refreshRoleUI();
+  try{ applyIndivLock(); }catch(e){}
 }
 function doLogin(){
   const pw=ge('adminPw').value;
@@ -4744,6 +4834,15 @@ function openAdminSettings(){
   const fn=ge('adminFloatingNoticeInput'); if(fn) fn.value=(G.meta.adminFloatingNotice||'');
   const fne=ge('adminFloatingNoticeEnabled'); if(fne) fne.checked=!!G.meta.adminFloatingNoticeEnabled;
   const ooe=ge('onlineOrderEnabled'); if(ooe) ooe.checked=!!G.meta.onlineOrderEnabled;
+  // 잠금 설정 불러오기
+  const ile=ge('indivLockEnabled'); if(ile) ile.checked=!!G.meta.indivLockEnabled;
+  const ils=ge('indivLockStart');
+  if(ils) ils.value = G.meta.indivLockStart
+    ? new Date(G.meta.indivLockStart).toISOString().slice(0,16) : '';
+  const ile2=ge('indivLockEnd');
+  if(ile2) ile2.value = G.meta.indivLockEnd
+    ? new Date(G.meta.indivLockEnd).toISOString().slice(0,16) : '';
+  _updateIndivLockStatusDisplay();
   renderFloatingNotice();
   fillAdminPlayerClub();
   ge('apName') && (ge('apName').value='');
@@ -4758,6 +4857,53 @@ function openAdminSettings(){
   renderAdminNoticeSection();
   om('mAdminSettings');
 }
+
+function _updateIndivLockStatusDisplay(){
+  const el=ge('indivLockStatus');
+  if(!el) return;
+  const enabled=ge('indivLockEnabled')?.checked;
+  if(!enabled){ el.textContent='잠금 기능 꺼짐'; el.style.color='#64748b'; return; }
+  const startVal=ge('indivLockStart')?.value;
+  const endVal=ge('indivLockEnd')?.value;
+  const now=new Date();
+  const start=startVal ? new Date(startVal) : null;
+  const end=endVal   ? new Date(endVal)   : null;
+  let status='';
+  if(start && now < start){
+    status=`⏳ 잠금 대기 중 — ${start.toLocaleString('ko-KR')} 시작 예정`;
+    el.style.color='#1565c0';
+  } else if(end && now > end){
+    status=`✅ 잠금 기간 종료됨 (${end.toLocaleString('ko-KR')} 완료)`;
+    el.style.color='#166534';
+  } else {
+    status=`🔒 현재 잠금 중 — ${end ? end.toLocaleString('ko-KR')+' 까지' : '종료일 미설정'}`;
+    el.style.color='#92400e';
+  }
+  el.textContent=status;
+}
+window._updateIndivLockStatusDisplay=_updateIndivLockStatusDisplay;
+
+async function saveIndivLockSettings(){
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  const enabled=!!ge('indivLockEnabled')?.checked;
+  const startVal=ge('indivLockStart')?.value||'';
+  const endVal=ge('indivLockEnd')?.value||'';
+  G.meta.indivLockEnabled=enabled;
+  G.meta.indivLockStart=startVal ? new Date(startVal).toISOString() : '';
+  G.meta.indivLockEnd=endVal   ? new Date(endVal).toISOString()   : '';
+  sl(true);
+  try{
+    await saveMeta();
+    sl(false);
+    _updateIndivLockStatusDisplay();
+    applyIndivLock();
+    toast(enabled ? '🔒 잠금 설정 저장됨' : '잠금 해제 저장됨','success');
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+  }
+}
+window.saveIndivLockSettings=saveIndivLockSettings;
 
 async function saveAdminPassword(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
@@ -8984,11 +9130,17 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
     const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
     const grpCourtShareBadges=(m.phase==='group' && m.group!=null)?getGroupCourtShareBadges(key, Number(m.group)):'';
+    const grpMemo=(m.phase==='group' && m.group!=null)?getGroupMemo(key, Number(m.group)):'';
     const matchMemo=getMatchMemoByObj(m);
     const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
     const groupCourtUI=canManageBracket() && m.phase==='group' && m.group!=null
       ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openGroupCourtModal('${key}',${Number(m.group)})">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`
       : (grpCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 조코트 ${grpCourts.join('/')}</span>`:'');
+    const grpMemoUI = m.phase==='group' && m.group!=null
+      ? (canManageBracket()
+          ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:${grpMemo?'#7a5600':'var(--primary-dark)'};border:1.5px solid ${grpMemo?'#f6d365':'var(--border)'};border-radius:999px;font-weight:800" onclick="openGroupMemoModal('${key}',${Number(m.group)})">📝 조메모${grpMemo?' 수정':' 입력'}</button>`
+          : (grpMemo?`<span class="badge bg-gold" style="font-size:.74rem;padding:4px 9px">📝 ${esc(grpMemo)}</span>`:''))
+      : '';
     const matchCourtUI=canManageBracket()
       ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openMatchCourtModal('${key}','${m.id}')">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button>`
       : (matchCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 경기코트 ${matchCourts.join('/')}</span>`:'');
@@ -9016,7 +9168,8 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label||'1경기'}</span></div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:`<span class="badge bg-gray" style="font-size:.78rem;padding:3px 9px">대기</span>`}${btn}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${matchMemoUI}${grpCourtShareBadges}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${matchMemoUI}${grpMemoUI}${grpCourtShareBadges}</div>
+        ${grpMemo?`<div style="margin-bottom:8px;font-size:.78rem;font-weight:800;line-height:1.55;padding:7px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 조메모: ${esc(grpMemo)}</div>`:''}
         ${matchMemo?`<div style="margin-bottom:10px;font-size:.78rem;font-weight:800;line-height:1.55;padding:8px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 ${esc(matchMemo)}</div>`:''}
         <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;margin-bottom:8px">
           <div style="${sideWrap1Style}">
