@@ -2315,7 +2315,7 @@ body.slider-ready .page:not(.active){
 <!-- ========== 경기진행자 이용안내 모달 끝 ========== -->
 
 
-<div class="modal-overlay" id="mOpLogin"><div class="modal-box"><div class="modal-header"><h3>🎾 경기진행자 로그인</h3><button class="modal-close" onclick="cm('mOpLogin')">✕</button></div><div class="modal-body"><div style="padding:10px 12px;background:linear-gradient(135deg,#e8f0fe,#dbeafe);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#1d4ed8;line-height:1.5">대진표 운영 전용 로그인입니다. 관리자 설정/선수등록 권한은 없고, 예선 추첨·본선 추첨·본선 수정·오더 현황 확인·미제출팀 대리제출이 가능합니다.</div><div class="form-group"><label class="form-label">비밀번호 <span class="req">*</span></label><input class="form-input" type="password" id="opPwInput" placeholder="관리자가 정한 경기진행자 비밀번호" onkeydown="if(event.key==='Enter')doOperatorLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mOpLogin')">취소</button><button class="btn btn-primary" style="background:#1565c0" onclick="doOperatorLogin()">로그인</button></div></div></div>
+<div class="modal-overlay" id="mOpLogin"><div class="modal-box"><div class="modal-header"><h3>🎾 경기진행자 로그인</h3><button class="modal-close" onclick="cm('mOpLogin')">✕</button></div><div class="modal-body"><div style="padding:10px 12px;background:linear-gradient(135deg,#e8f0fe,#dbeafe);border-radius:10px;margin-bottom:14px;font-size:.8rem;color:#1d4ed8;line-height:1.5">대진표 운영 전용 로그인입니다. 관리자 설정/선수등록 권한은 없고, 예선 추첨·예선 재추첨·본선 추첨·본선 재추첨·본선 수정·오더 현황 확인·미제출팀 대리제출이 가능합니다.</div><div class="form-group"><label class="form-label">비밀번호 <span class="req">*</span></label><input class="form-input" type="password" id="opPwInput" placeholder="관리자가 정한 경기진행자 비밀번호" onkeydown="if(event.key==='Enter')doOperatorLogin()"></div></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mOpLogin')">취소</button><button class="btn btn-primary" style="background:#1565c0" onclick="doOperatorLogin()">로그인</button></div></div></div>
 <!-- 최초 로그인 전화번호 등록 모달 -->
 <div class="modal-overlay" id="mFirstLogin">
   <div class="modal-box">
@@ -8448,22 +8448,22 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const canMainRedraw = isGroupKO && hasGroups;
   const prelimRedrawLabel = draw ? '예선 재추첨' : '예선 추첨';
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
-  const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 시드보호 재추첨' : '본선 추첨';
+  const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
   const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
   const topActions=`<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:100%">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <span style="font-size:.72rem;font-weight:800;color:var(--primary-dark);padding:4px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--border)">📊 예선</span>
         <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','prelim')">🗂 예선 추첨기록</button>
         <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestPrelimSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','prelim')" ${latestPrelimSavedDraw?'':'disabled'}>📋 예선 추첨 보기</button>
-        ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="${prelimRedrawAction}">🎲 ${prelimRedrawLabel}</button>`:''}
+        ${canManageBracket()?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="${prelimRedrawAction}">🎲 ${prelimRedrawLabel}</button>`:''}
       </div>
       ${isGroupKO ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <span style="font-size:.72rem;font-weight:800;color:#166534;padding:4px 8px;border-radius:999px;background:linear-gradient(135deg,#eefbf3,#dcfce7);border:1px solid #86efac">🌳 본선</span>
         <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','main')">🗂 본선 추첨기록</button>
         <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestMainSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','main')" ${latestMainSavedDraw?'':'disabled'}>🌳 본선 추첨 보기</button>
-        ${AD?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="buildMain('${tid}','${div}')" ${canMainRedraw?'':'disabled'}>🎲 ${mainRedrawLabel}</button>`:''}
+        ${canManageBracket()?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="buildMain('${tid}','${div}')" ${canMainRedraw?'':'disabled'}>🎲 ${mainRedrawLabel}</button>`:''}
       </div>` : ``}
-      ${AD?`<div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button></div>`:''}
+      ${canManageBracket()?`<div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="resetDrawOnly('${key}')">♻️ 추첨 리셋</button></div>`:''}
     </div>`;
 
   // 개인전은 참가자 목록 기본 접기
@@ -10064,6 +10064,7 @@ function openDraw(tid,div){
     cfgScreen.insertBefore(seedWrap, cfgScreen.firstChild);
   }
   updatePrelimSeedSummary();
+  document.querySelectorAll('#drawCfgScreen .admin-block').forEach(el=>{ el.style.display = AD ? 'block' : 'none'; });
   // 설정화면 표시, 진행화면 숨김
   const cfgScr=ge('drawCfgScreen'); if(cfgScr) cfgScr.style.display='block';
   const runScr=ge('drawRunScreen');  if(runScr) runScr.style.display='none';
@@ -10133,7 +10134,7 @@ function updateMainSizeDisplay(){
 function getPrelimManualSeedMap(){
   const key=DW?.key||'';
   const teams=DW?.teams||[];
-  const raw=(ge('drawMainManualSeedsInput')?.value||String((G.draws[key]||{}).mainSeedRaw||'')).trim();
+  const raw=(AD ? (ge('drawMainManualSeedsInput')?.value||String((G.draws[key]||{}).mainSeedRaw||'')) : String((G.draws[key]||{}).mainSeedRaw||'')).trim();
   return parseManualSeedMapFromText(raw, teams.map((tm,ti)=>({ti,nm:tdn(tm,key,ti)})));
 }
 function updatePrelimSeedSummary(){
@@ -11489,7 +11490,7 @@ function openIndividualDraw(tid,div){
     <div class="admin-block" style="margin-top:10px;padding:12px 14px;background:linear-gradient(135deg,#fff8df,#eef4ff);border:1.5px solid var(--accent);border-radius:12px">
       <div style="font-weight:900;font-size:.86rem;color:var(--primary-dark);margin-bottom:5px">🎯 본선 시드 배정 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">(관리자 전용 · 최대 8번)</span></div>
       <div style="font-size:.75rem;color:var(--text2);line-height:1.6;margin-bottom:8px">
-        형식: <b>팀번호=시드번호</b> (쉼표 구분) — 예: <code>12=1, 7=2, 3=3, 9=4</code><br>
+        관리자만 설정합니다. 형식: <b>팀번호=시드번호</b> (쉼표 구분) — 예: <code>12=1, 7=2, 3=3, 9=4</code><br>
         1·2 시드는 결승 전까지 만나지 않도록, 상위 시드끼리는 최대한 늦게 만나도록 본선 추첨에 반영됩니다.
       </div>
       <input class="form-input" id="idwSeedInput" placeholder="예: 12=1, 7=2, 3=3, 9=4  (미입력 시 시드 없이 추첨)" oninput="updateIdwSeedSummary()" style="margin-bottom:6px">
@@ -11508,10 +11509,8 @@ function openIndividualDraw(tid,div){
   document.querySelector('#mDraw .modal-header h3').textContent='🎲 개인전 예선 추첨';
   om('mDraw');
 
-  // 관리자 모드면 admin-block 요소 표시
-  if(AD){
-    document.querySelectorAll('#drawCfgScreen .admin-block').forEach(el=>{ el.style.display='block'; });
-  }
+  // 관리자만 시드 설정 블록 표시
+  document.querySelectorAll('#drawCfgScreen .admin-block').forEach(el=>{ el.style.display = AD ? 'block' : 'none'; });
   // 기존 저장된 시드 복원
   const savedSeed=String((G.draws[key]||{}).mainSeedRaw||'').trim();
   const seedInput=ge('idwSeedInput');
@@ -11535,7 +11534,7 @@ window.updateIdwSeedSummary=function(){
   if(!summary) return;
   const key=IDW?.key||'';
   const teams=IDW?.teams||[];
-  const raw=(ge('idwSeedInput')?.value||'').trim();
+  const raw=(AD ? (ge('idwSeedInput')?.value||'') : String((G.draws[key]||{}).mainSeedRaw||'')).trim();
   const entries=teams.map((tm,ti)=>({ti,nm:tdn(tm,key,ti)}));
   const seedMap=parseManualSeedMapFromText(raw, entries);
   const pairs=Object.entries(seedMap).map(([ti,seedNo])=>{
@@ -11548,7 +11547,7 @@ window.updateIdwSeedSummary=function(){
   });
   summary.innerHTML=pairs.length
     ? `<span style="color:#92400e;font-weight:700">설정됨: ${pairs.join(' / ')}</span>`
-    : '미입력 시 시드 없이 추첨됩니다. 입력한 시드팀은 예선에서 서로 다른 조로 우선 분산되고 본선에서도 유지됩니다.';
+    : '관리자만 설정할 수 있습니다. 미입력 시 시드 없이 추첨됩니다. 입력한 시드팀은 예선에서 서로 다른 조로 우선 분산되고 본선에서도 유지됩니다.';
 };
 
 function tl(div){ return dl ? dl(div) : div; }
@@ -11580,7 +11579,7 @@ async function startIndividualDraw(){
   // 개인전도 시드팀 자동 분산 + 같은 클럽(소속) 회피를 적용한다.
   // targetGroups(최종 배정)와 runGroups(애니메이션용 빈 그룹)를 분리한다.
   const indices=teams.map((_,i)=>i);
-  const prelimSeedRaw=(ge('idwSeedInput')?.value||'').trim();
+  const prelimSeedRaw=(AD ? (ge('idwSeedInput')?.value||'') : String((G.draws[key]||{}).mainSeedRaw||'')).trim();
   const prelimSeedMap=prelimSeedRaw
     ? parseManualSeedMapFromText(prelimSeedRaw, teams.map((tm,ti)=>({ti,nm:tdn(tm,key,ti)})))
     : {};
@@ -11877,7 +11876,7 @@ async function startDraw(){
   // 시드 자동 분산 + 같은 클럽 회피 예선 추첨
   const drawTime = new Date();
   const indices = teams.map((_,i)=>i);
-  const prelimSeedRaw=(ge('drawMainManualSeedsInput')?.value||'').trim();
+  const prelimSeedRaw=(AD ? (ge('drawMainManualSeedsInput')?.value||'') : String((G.draws[key]||{}).mainSeedRaw||'')).trim();
   const prelimSeedMap=getPrelimManualSeedMap();
   const seededPrelimGroups=getPrelimSeedDistributedGroups(indices, teams, grpSizes, prelimSeedMap);
   const shuffled=groupsToAssignmentOrder(seededPrelimGroups).map(x=>x.ti);
