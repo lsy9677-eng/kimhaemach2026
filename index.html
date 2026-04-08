@@ -10452,6 +10452,9 @@ function openDraw(tid,div){
         <div style="font-weight:900;font-size:.88rem;color:var(--primary-dark);margin-bottom:6px">🎯 예선 단계 본선 시드 설정</div>
         <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:8px">관리자만 설정합니다. 형식은 <b>팀번호=시드번호</b>, 최대 8번까지 입력합니다. 입력한 시드팀은 예선에서 서로 다른 조로 자동 분산됩니다. 예: <code>12=1, 7=2, 3=3, 9=4</code></div>
         <input class="form-input" id="drawMainManualSeedsInput" placeholder="예: 12=1, 7=2, 3=3, 9=4" value="${savedSeedRaw.replace(/"/g,'&quot;')}" oninput="updatePrelimSeedSummary()">
+        <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button type="button" class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;min-height:34px" onclick="savePrelimSeedConfigFromModal()">💾 시드 저장</button>
+        </div>
         <div id="drawMainManualSeedsSummary" style="font-size:.72rem;color:var(--text3);margin-top:6px;line-height:1.55"></div>
       </div>`;
     cfgScreen.insertBefore(seedWrap, cfgScreen.firstChild);
@@ -10524,6 +10527,50 @@ function updateMainSizeDisplay(){
   // 본선 나무가지 미리보기 갱신
   updateDrawMainPreview();
 }
+
+async function persistPrelimSeedConfig(key, teams, raw, extra={}){
+  const cleanRaw=String(raw||'').trim();
+  const seedMap=parseManualSeedMapFromText(cleanRaw, (teams||[]).map((tm,ti)=>({ti,nm:tdn(tm,key,ti)})));
+  const base=(G.draws[key] && typeof G.draws[key]==='object') ? G.draws[key] : {};
+  G.draws[key]={...base, ...extra, mainSeedRaw:cleanRaw, mainSeedMap:seedMap};
+  await stD(key);
+  return seedMap;
+}
+async function savePrelimSeedConfigFromModal(){
+  if(!AD){ toast('관리자만 저장할 수 있습니다','info'); return; }
+  const key=DW?.key||'';
+  if(!key){ toast('대회를 먼저 선택하세요','error'); return; }
+  const raw=(ge('drawMainManualSeedsInput')?.value||'').trim();
+  sl(true);
+  try{
+    await persistPrelimSeedConfig(key, DW?.teams||[], raw);
+    sl(false);
+    updatePrelimSeedSummary();
+    toast('예선 시드 저장 완료 ✅ 추첨 전에도 계속 유지됩니다.','success');
+  }catch(e){
+    sl(false);
+    toast('시드 저장 실패: '+e.message,'error');
+  }
+}
+async function saveIdwSeedConfigFromModal(){
+  if(!AD){ toast('관리자만 저장할 수 있습니다','info'); return; }
+  const key=IDW?.key||'';
+  if(!key){ toast('대회를 먼저 선택하세요','error'); return; }
+  const raw=(ge('idwSeedInput')?.value||'').trim();
+  sl(true);
+  try{
+    await persistPrelimSeedConfig(key, IDW?.teams||[], raw, {indivMode:true, grpSize:(IDW?.grpSize||2)});
+    sl(false);
+    window.updateIdwSeedSummary?.();
+    toast('예선 시드 저장 완료 ✅ 추첨 전에도 계속 유지됩니다.','success');
+  }catch(e){
+    sl(false);
+    toast('시드 저장 실패: '+e.message,'error');
+  }
+}
+window.savePrelimSeedConfigFromModal = savePrelimSeedConfigFromModal;
+window.saveIdwSeedConfigFromModal = saveIdwSeedConfigFromModal;
+
 function getPrelimManualSeedMap(){
   const key=DW?.key||'';
   const teams=DW?.teams||[];
@@ -10546,7 +10593,7 @@ function updatePrelimSeedSummary(){
   });
   summary.innerHTML = pairs.length
     ? `설정됨: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">설정한 시드팀은 예선 추첨에서도 서로 다른 조로 우선 분산되고, 본선에서도 1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 유지됩니다.</span>`
-    : '미입력 시 일반 본선 추첨으로 진행됩니다.';
+    : '저장된 시드가 없으면 일반 본선 추첨으로 진행됩니다. 관리자 저장 후에는 추첨을 안 해도 계속 유지됩니다.';
 }
 
 function updateDrawMainPreview(){
@@ -11887,6 +11934,9 @@ function openIndividualDraw(tid,div){
         1·2 시드는 결승 전까지 만나지 않도록, 상위 시드끼리는 최대한 늦게 만나도록 본선 추첨에 반영됩니다.
       </div>
       <input class="form-input" id="idwSeedInput" placeholder="예: 12=1, 7=2, 3=3, 9=4  (미입력 시 시드 없이 추첨)" oninput="updateIdwSeedSummary()" style="margin-bottom:6px">
+      <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;min-height:34px" onclick="saveIdwSeedConfigFromModal()">💾 시드 저장</button>
+      </div>
       <div id="idwSeedSummary" style="font-size:.72rem;color:var(--text3);line-height:1.55"></div>
     </div>`;
 
@@ -11940,7 +11990,7 @@ window.updateIdwSeedSummary=function(){
   });
   summary.innerHTML=pairs.length
     ? `<span style="color:#92400e;font-weight:700">설정됨: ${pairs.join(' / ')}</span>`
-    : '관리자만 설정할 수 있습니다. 미입력 시 시드 없이 추첨됩니다. 입력한 시드팀은 예선에서 서로 다른 조로 우선 분산되고 본선에서도 유지됩니다.';
+    : '관리자만 설정할 수 있습니다. 저장된 시드가 없으면 시드 없이 추첨됩니다. 저장 후에는 추첨을 안 해도 계속 유지되며 예선 분산과 본선 시드에 함께 반영됩니다.';
 };
 
 function tl(div){ return dl ? dl(div) : div; }
