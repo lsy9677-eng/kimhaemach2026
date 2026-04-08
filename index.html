@@ -8258,10 +8258,11 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const allMs=G.matches[key]||[];
   const gMs=allMs.filter(m=>m.phase==='group');
+  const playInMs=allMs.filter(m=>m.phase==='playin');
   const mMs=allMs.filter(m=>m.phase==='main');
   const gDone=gMs.filter(m=>getMatchResultState(key,m).done).length;
   const estimatedMainTotal = estimateMainBracketMatchCount(key);
-  const shownMainTotal = Math.max(mMs.length, estimatedMainTotal);
+  const shownMainTotal = Math.max(mMs.length + playInMs.length, estimatedMainTotal + playInMs.length);
   const shownMainDone = mMs.filter(m=>getMatchResultState(key,m).done||m.bye).length;
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=shownMainTotal>0&&shownMainDone===shownMainTotal;
@@ -8925,6 +8926,7 @@ function renderCombinedBracketSection(tid, div){
   const cfg = gDS(t, div);
   const allMs = G.matches[key] || [];
   const gMs = allMs.filter(m=>m.phase==='group');
+  const playInMs = allMs.filter(m=>m.phase==='playin').sort((a,b)=>a.slot-b.slot);
   const mMs = allMs.filter(m=>m.phase==='main').sort((a,b)=>a.round-b.round||a.slot-b.slot);
   const bronzeMode=getThirdPlaceModeByKey(key);
   const bronzeMatch=(bronzeMode==='match')?ensureBronzeMatchForKey(key,false):getBronzeMatch(key);
@@ -8949,7 +8951,10 @@ function renderCombinedBracketSection(tid, div){
       const adv=draw.advance||cfg.advance||2;
       const grpCount=draw.groups?.length||0;
       if(mMs.length){
-        mainHTML = renderBracketTree(key,mMs,teams);
+        if(playInMs.length){
+          mainHTML += `<div class="card" style="margin-bottom:10px"><div class="card-title">🪣 진출전</div>${playInMs.map((pm,idx)=>`<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:#fff8df;font-size:.82rem">${pm.t1!==null?tdn(teams[pm.t1],key,pm.t1):(pm.source1Label||'TBD')} vs ${pm.t2!==null?tdn(teams[pm.t2],key,pm.t2):(pm.source2Label||'TBD')}<div style="font-size:.72rem;color:var(--text3);margin-top:4px">승자 → ${pm.winnerLabel||'64강 합류'}</div></div>`).join('')}</div>`;
+        }
+        mainHTML += renderBracketTree(key,mMs,teams);
         if(bronzeMode==='match' && bronzeMatch){ const bst=getMatchResultState(key,bronzeMatch); const b1=bronzeMatch.t1!==null?teams[bronzeMatch.t1]:null; const b2=bronzeMatch.t2!==null?teams[bronzeMatch.t2]:null; mainHTML += `<div class="card" style="margin-top:10px"><div class="card-title">🥉 3·4위전</div>${mCard(bronzeMatch,key,b1?tdn(b1,key,bronzeMatch.t1):(bronzeMatch.t1===null?'TBD':'?'),b2?tdn(b2,key,bronzeMatch.t2):(bronzeMatch.t2===null?'TBD':'?'),bst.done,bst.sc1,bst.sc2,'3·4위전')}</div>`; }
         // 본선 확정 후에도 조별 연결구조 토글로 제공
         mainHTML += `<div style="margin-top:10px">
@@ -9236,8 +9241,8 @@ function renderBracketTree(key,mMs,teams){
 
       const mt1 = m.t1 !== null ? teams[m.t1] : null;
       const mt2 = m.t2 !== null ? teams[m.t2] : null;
-      const dn1 = mt1 ? tdn(mt1,key,m.t1) : (m.t1===null&&!m.bye ? 'TBD' : '?');
-      const dn2 = mt2 ? tdn(mt2,key,m.t2) : 'TBD';
+      const dn1 = mt1 ? tdn(mt1,key,m.t1) : ((m.source1Label||'') || (m.t1===null&&!m.bye ? 'TBD' : '?'));
+      const dn2 = mt2 ? tdn(mt2,key,m.t2) : ((m.source2Label||'') || 'TBD');
       const st  = getMatchResultState(key, m);
       const done=st.done, wn1=done&&st.winner===m.t1, wn2=done&&st.winner===m.t2;
       const sc1=st.sc1, sc2=st.sc2;
@@ -9450,21 +9455,25 @@ function getAdvT(key,draw,teams,cfg){
     (draw.groups||[]).forEach((grp,gi)=>{
       const gs=calcGS(key,gi,grp.teams,teams);
       const grpSize=grp.teams.length;
-      // 2팀 1조: 전원 진출(1위, 2위), 3팀 1조: 1·2위만 진출
-      const adv=grpSize<=2?grpSize:2;
-      gs.slice(0,adv).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
+      const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
+      gs.slice(0,advCount).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
     });
     return res;
   }
-  // draw.advance: 추첨 시 설정한 진출 수 우선, 없으면 cfg.advance
-  const adv=draw.advance||cfg.advance||2,res=[];
-  (draw.groups||[]).forEach((grp,gi)=>{calcGS(key,gi,grp.teams,teams).slice(0,adv).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1}));});
+  const res=[];
+  (draw.groups||[]).forEach((grp,gi)=>{
+    const grpSize=(grp?.teams||[]).length||0;
+    const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
+    calcGS(key,gi,grp.teams,teams).slice(0,advCount).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
+  });
   return res;
 }
 function getPreviewAdvSlots(draw,cfg){
-  const adv=draw?.advance||cfg?.advance||2, res=[];
+  const res=[];
   (draw?.groups||[]).forEach((grp,gi)=>{
-    for(let rk=1; rk<=adv; rk++) res.push({nm:`${grpLabel(gi)} ${rk}위`, gn:gi+1, rk, placeholder:true});
+    const grpSize=(grp?.teams||[]).length||0;
+    const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
+    for(let rk=1; rk<=advCount; rk++) res.push({nm:`${grpLabel(gi)} ${rk}위`, gn:gi+1, rk, placeholder:true, grpSize});
   });
   return res;
 }
@@ -9614,12 +9623,54 @@ function buildHybridMainSlots(entries, n){
   return {matchSlots, n, byeCount, byeIdxs, normalIdxs};
 }
 
+function computeMainBracketSpec(total){
+  const t=Math.max(0, Number(total||0));
+  if(t<2) return {mainSize:0, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true};
+  let lower=1;
+  while(lower*2 <= t) lower*=2;
+  if(lower===t) return {mainSize:t, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true};
+  const winnersNeeded=t-lower;
+  const playInTeams=Math.min(t, winnersNeeded*2);
+  return {
+    mainSize: lower,
+    playInTeams,
+    playInMatches: Math.floor(playInTeams/2),
+    winnersNeeded,
+    directCount: t-playInTeams,
+    exact:false
+  };
+}
 function buildPreviewMainSlots(draw,cfg){
   const advT=getPreviewAdvSlots(draw,cfg);
   const total=advT.length;
-  if(total<2) return {matchSlots:[], n:0, byeCount:0};
-  const n=nextPow2(total);
-  return buildHybridMainSlots(advT, n);
+  if(total<2) return {matchSlots:[], n:0, byeCount:0, playInMatches:[], spec:computeMainBracketSpec(total)};
+  const spec=computeMainBracketSpec(total);
+  if(!spec.playInTeams){
+    const n=spec.mainSize;
+    const base=buildHybridMainSlots(advT, n);
+    return {...base, spec, playInMatches:[]};
+  }
+
+  const rank1=advT.filter(a=>a.rk===1);
+  const others=advT.filter(a=>a.rk!==1);
+  const playInEntries=others.slice(0, spec.playInTeams).map((e,i)=>({...e, playInId:i+1}));
+  const directEntries=advT.filter(e=>!playInEntries.some(p=>p.nm===e.nm && p.gn===e.gn && p.rk===e.rk));
+  const placeholders=Array.from({length:spec.winnersNeeded},(_,i)=>({
+    nm:`진출전 승자${i+1}`, gn:null, rk:2, placeholder:true, playInPlaceholder:true, playInId:i+1
+  }));
+  const mainEntries=[...directEntries, ...placeholders];
+  const base=buildHybridMainSlots(mainEntries, spec.mainSize);
+  const playInMatches=[];
+  for(let i=0;i<spec.playInMatches;i++){
+    playInMatches.push({
+      id:`playin_${i}`,
+      t1:playInEntries[i*2]||null,
+      t2:playInEntries[i*2+1]||null,
+      winnerLabel:`진출전 승자${i+1}`,
+      playInId:i+1
+    });
+  }
+  return {...base, spec, playInMatches};
 }
 
 function makeSeededRng(seed){
@@ -9738,6 +9789,25 @@ function openDraw(tid,div){
   if(titleInput) titleInput.value=`${dl(div)} 추첨 ${histCnt+1}`;
   const drawIsTestInput=ge('drawIsTestInput');
   if(drawIsTestInput) drawIsTestInput.checked=false;
+
+  const oldSeedBox=ge('drawSeedConfigWrap');
+  if(oldSeedBox) oldSeedBox.remove();
+  const cfgScreen=ge('drawCfgScreen');
+  if(cfgScreen){
+    const seedWrap=document.createElement('div');
+    seedWrap.id='drawSeedConfigWrap';
+    seedWrap.className='admin-only admin-block';
+    const savedSeedRaw=String((G.draws[key]||{}).mainSeedRaw||'').trim();
+    seedWrap.innerHTML=`
+      <div style="margin-bottom:12px;padding:12px 14px;background:linear-gradient(135deg,#fff8df,#eef4ff);border:1.5px solid var(--accent);border-radius:12px">
+        <div style="font-weight:900;font-size:.88rem;color:var(--primary-dark);margin-bottom:6px">🎯 예선 단계 본선 시드 설정</div>
+        <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:8px">관리자만 설정합니다. 형식은 <b>팀번호=시드번호</b>, 최대 8번까지 입력합니다. 예: <code>12=1, 7=2, 3=3, 9=4</code></div>
+        <input class="form-input" id="drawMainManualSeedsInput" placeholder="예: 12=1, 7=2, 3=3, 9=4" value="${savedSeedRaw.replace(/"/g,'&quot;')}" oninput="updatePrelimSeedSummary()">
+        <div id="drawMainManualSeedsSummary" style="font-size:.72rem;color:var(--text3);margin-top:6px;line-height:1.55"></div>
+      </div>`;
+    cfgScreen.insertBefore(seedWrap, cfgScreen.firstChild);
+  }
+  updatePrelimSeedSummary();
   // 설정화면 표시, 진행화면 숨김
   const cfgScr=ge('drawCfgScreen'); if(cfgScr) cfgScr.style.display='block';
   const runScr=ge('drawRunScreen');  if(runScr) runScr.style.display='none';
@@ -9797,10 +9867,36 @@ function updateAdvPresets(n){
 
 function updateMainSizeDisplay(){
   const {groups,advance,grpSizes}=DW.cfg;if(!groups)return;
-  const total=(advance||1)*groups;const np=nextPow2(total);const byes=np-total;
-  ge('mainSizeDisplay').textContent=`본선 진출 ${total}팀 → ${np}강 토너먼트${byes?` (부전승 ${byes}팀)`:' (완전 대진)'}`;
+  const total=(advance||1)*groups;const spec=computeMainBracketSpec(total);
+  ge('mainSizeDisplay').textContent = spec.playInMatches>0
+    ? `본선 진출 ${total}팀 → ${spec.mainSize}강 + 진출전 ${spec.playInMatches}경기`
+    : `본선 진출 ${total}팀 → ${spec.mainSize}강 토너먼트${spec.exact?' (완전 대진)':` (부전승 ${spec.mainSize-total}팀)`}`;
   // 본선 나무가지 미리보기 갱신
   updateDrawMainPreview();
+}
+function getPrelimManualSeedMap(){
+  const key=DW?.key||'';
+  const teams=DW?.teams||[];
+  const raw=(ge('drawMainManualSeedsInput')?.value||String((G.draws[key]||{}).mainSeedRaw||'')).trim();
+  return parseManualSeedMapFromText(raw, teams.map((tm,ti)=>({ti,nm:tdn(tm,key,ti)})));
+}
+function updatePrelimSeedSummary(){
+  const summary=ge('drawMainManualSeedsSummary');
+  if(!summary) return;
+  const key=DW?.key||'';
+  const teams=DW?.teams||[];
+  const seedMap=getPrelimManualSeedMap();
+  const pairs=Object.entries(seedMap).map(([ti,seedNo])=>{
+    const idx=Number(ti);
+    return teams[idx] ? `#${idx+1} ${tdn(teams[idx], key, idx)} → ${seedNo}번 시드` : '';
+  }).filter(Boolean).sort((a,b)=>{
+    const sa=parseInt((a.match(/(\d+)번 시드/)||[])[1]||'999',10);
+    const sb=parseInt((b.match(/(\d+)번 시드/)||[])[1]||'999',10);
+    return sa-sb;
+  });
+  summary.innerHTML = pairs.length
+    ? `설정됨: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 본선 추첨에 반영됩니다.</span>`
+    : '미입력 시 일반 본선 추첨으로 진행됩니다.';
 }
 
 function updateDrawMainPreview(){
@@ -9814,7 +9910,8 @@ function updateDrawMainPreview(){
   const pv=buildPreviewMainSlots(fakeDraw,{});
   if(pv.n<2){pvBox.style.display='none';return;}
   pvBox.style.display='block';
-  const badgeHtml=`<span class="badge" style="background:var(--accent);color:#fff">${advance}팀 진출 × ${groups}조 → ${pv.n}강</span>`;
+  const spec=pv.spec||computeMainBracketSpec((advance||1)*groups);
+  const badgeHtml=`<span class="badge" style="background:var(--accent);color:#fff">${advance}팀 진출 × ${groups}조 → ${spec.playInMatches>0 ? `${spec.mainSize}강 + 진출전 ${spec.playInMatches}경기` : `${pv.n}강`}</span>`;
   const prepared = DW.seedPreparedAt ? new Date(DW.seedPreparedAt) : null;
   const preparedTxt = prepared ? `${String(prepared.getHours()).padStart(2,'0')}:${String(prepared.getMinutes()).padStart(2,'0')}:${String(prepared.getSeconds()).padStart(2,'0')}` : '-';
   pvCont.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -10367,11 +10464,21 @@ function compactGroupSummaryFromShuffled(shuffled){
 }
 function compactMainSummaryFromPlan(plan){
   const slots=(plan?.matchSlots)||[];
-  return slots.map((s,idx)=>{
-    const a=s?.t1?.nm||'자동진출';
-    const b=s?.t2?.nm||'대기';
-    return `${idx+1}경기 ${a} vs ${b}`;
-  }).join(' / ');
+  const playIns=(plan?.playInMatches)||[];
+  const parts=[];
+  if(playIns.length){
+    playIns.forEach((s,idx)=>{
+      const a=s?.t1?.nm||'TBD';
+      const b=s?.t2?.nm||'TBD';
+      parts.push(`진출전${idx+1} ${a} vs ${b}`);
+    });
+  }
+  slots.forEach((s,idx)=>{
+    const a=s?.t1?.nm || s?.source1Label || '자동진출';
+    const b=s?.t2?.nm || s?.source2Label || '대기';
+    parts.push(`${idx+1}경기 ${a} vs ${b}`);
+  });
+  return parts.join(' / ');
 }
 function renderDrawCandidatePreviewCards(){
   const el=ge('drawCandidatePreview');
@@ -11255,7 +11362,9 @@ async function startDraw(){
   const audit={mode:'random',modeLabel:'완전 무작위',loggedAt:drawTime.toISOString()};
   DW.drawAudit=audit;
   const groupData=grps.map(g=>({teams:g.teams,courts:[],memo:''}));
-  G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit};
+  const prelimSeedRaw=(ge('drawMainManualSeedsInput')?.value||'').trim();
+  const prelimSeedMap=getPrelimManualSeedMap();
+  G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit,mainSeedRaw:prelimSeedRaw,mainSeedMap:prelimSeedMap};
   const mlist=[];
   groupData.forEach((grp,gi)=>{
     for(let a=0;a<grp.teams.length;a++)
@@ -11487,8 +11596,8 @@ function updateMainManualSeeds(){
     const summary=ge('mainManualSeedsSummary');
     if(summary){
       summary.innerHTML=pairs.length
-        ? `적용 예정: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 배치합니다.</span>`
-        : '미입력 시 기존 추첨 로직으로 진행됩니다.';
+        ? `예선 추첨에서 설정된 시드: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 배치합니다.</span>`
+        : '예선 추첨 단계에서 저장된 시드가 없습니다. 일반 본선 추첨으로 진행됩니다.';
     }
     MD.plan=null;
     updateMainSeedPreview();
@@ -11582,16 +11691,13 @@ function buildStandardSeedLeafOrder(size){
   }
   return arr.slice(0,size);
 }
-function getMainManualSeedMap(entries){
-  try{
-    if(MD && MD.manualSeedMap && Object.keys(MD.manualSeedMap).length) return MD.manualSeedMap;
-  }catch(e){}
-  const input=(ge('mainManualSeedsInput')?.value||'').trim();
+function parseManualSeedMapFromText(input, entries){
   const out={};
-  if(!input) return out;
+  const txt=String(input||'').trim();
+  if(!txt) return out;
   const pool=[...(entries||[])];
   const usedTi=new Set();
-  input.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean).forEach(token=>{
+  txt.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean).forEach(token=>{
     let m = token.match(/^(\d+)\s*[:=\-]\s*(\d+)$/);
     let teamNo=null, seedNo=null;
     if(m){
@@ -11600,7 +11706,6 @@ function getMainManualSeedMap(entries){
     }else{
       m = token.match(/^#?(\d+)$/);
       if(m){
-        // 단독 숫자는 시드번호로 간주하지 않고 무시 (매핑이 모호함)
         return;
       }
     }
@@ -11613,6 +11718,13 @@ function getMainManualSeedMap(entries){
     out[ti]=seedNo;
   });
   return out;
+}
+function getMainManualSeedMap(entries){
+  try{
+    if(MD && MD.manualSeedMap && Object.keys(MD.manualSeedMap).length) return MD.manualSeedMap;
+  }catch(e){}
+  const input=(ge('mainManualSeedsInput')?.value||'').trim();
+  return parseManualSeedMapFromText(input, entries);
 }
 function scoreMainLeafCandidate(pos, entry, leaves, n){
   let score=0;
@@ -11650,41 +11762,77 @@ function chooseBestMainLeaf(positions, entry, leaves, n, rnd){
 }
 function buildSeededMainSlots(entries, n, seed, tid, div){
   const total=(entries||[]).length;
-  if(total<2 || !n) return {matchSlots:[], n:0, byeCount:0, byeIdxs:[], normalIdxs:[], revealOrder:[]};
+  const spec=computeMainBracketSpec(total);
+  if(total<2 || !spec.mainSize) return {matchSlots:[], n:0, byeCount:0, byeIdxs:[], normalIdxs:[], revealOrder:[], playInMatches:[], spec};
 
-  const byeCount=n-total;
-  const matchCount=n/2;
-  const matchSlots=Array.from({length:matchCount},(_,i)=>({id:i,t1:null,t2:null,bye:false}));
   const rnd=seededMainRng(seed, tid, div, total);
-
   const manualSeedMap=getMainManualSeedMap(entries);
-  const seedEntries=(entries||[])
-    .map(e=>({entry:e, seedNo:manualSeedMap[Number(e?.ti)]}))
-    .filter(x=>x.seedNo>=1 && x.seedNo<=Math.min(8,n))
+
+  const toSeeded = (list)=> (list||[]).map(e=>({...e, seedNo:manualSeedMap[Number(e?.ti)]||null}));
+  const allSeeded=toSeeded(entries);
+  let playInEntries=[];
+  let mainPool=[];
+
+  if(spec.playInTeams>0){
+    const manualProtected=new Set(Object.keys(manualSeedMap).map(v=>Number(v)));
+    const candidates=shuffleSeeded(
+      allSeeded.filter(e=>!manualProtected.has(Number(e?.ti))).sort((a,b)=>{
+        const ra=Number(a?.rk||99), rb=Number(b?.rk||99);
+        if(ra!==rb) return rb-ra; // 2위 우선 진출전
+        return Number(a?.gn||0)-Number(b?.gn||0);
+      }),
+      rnd
+    );
+    const playMap=new Set();
+    playInEntries=candidates.slice(0, spec.playInTeams).map((e,i)=>{
+      playMap.add(Number(e.ti));
+      return {...e, playInId:Math.floor(i/2)+1};
+    });
+    mainPool=allSeeded.filter(e=>!playMap.has(Number(e.ti)));
+    const placeholders=Array.from({length:spec.winnersNeeded},(_,i)=>({
+      nm:`진출전 승자${i+1}`,
+      gn:null,
+      rk:2,
+      placeholder:true,
+      playInPlaceholder:true,
+      playInId:i+1,
+      seedNo:null
+    }));
+    mainPool=[...mainPool, ...placeholders];
+  }else{
+    mainPool=[...allSeeded];
+  }
+
+  const mainSize=spec.mainSize;
+  const byeCount=mainSize-mainPool.length;
+  const matchCount=mainSize/2;
+  const matchSlots=Array.from({length:matchCount},(_,i)=>({id:i,t1:null,t2:null,bye:false}));
+  const seedEntries=(mainPool||[])
+    .filter(x=>!x.placeholder && x.seedNo>=1 && x.seedNo<=Math.min(8, mainSize))
     .sort((a,b)=>a.seedNo-b.seedNo);
 
-  const remaining=(entries||[]).filter(e=>manualSeedMap[Number(e?.ti)]==null);
-  const rank1=shuffleSeeded(remaining.filter(a=>a.rk===1), rnd);
-  const others=shuffleSeeded(remaining.filter(a=>a.rk!==1), rnd);
+  const remaining=(mainPool||[]).filter(e=>e.placeholder || e.seedNo==null);
+  const rank1=shuffleSeeded(remaining.filter(a=>!a.placeholder && a.rk===1), rnd);
+  const others=shuffleSeeded(remaining.filter(a=>a.placeholder || a.rk!==1), rnd);
 
-  const leaves=Array.from({length:n},()=>null);
-  const stdOrder=buildStandardSeedLeafOrder(n);
+  const leaves=Array.from({length:mainSize},()=>null);
+  const stdOrder=buildStandardSeedLeafOrder(mainSize);
   const seedPosByNo={};
-  stdOrder.forEach((seedNo, leafIdx)=>{
-    seedPosByNo[seedNo]=leafIdx;
-  });
+  stdOrder.forEach((seedNo, leafIdx)=>{ seedPosByNo[seedNo]=leafIdx; });
 
-  seedEntries.forEach(({entry, seedNo})=>{
-    const pos=seedPosByNo[seedNo];
-    if(pos==null || pos<0 || pos>=n) return;
-    leaves[pos]={...entry, seedNo};
+  seedEntries.forEach((entry)=>{
+    const pos=seedPosByNo[entry.seedNo];
+    if(pos==null || pos<0 || pos>=mainSize) return;
+    leaves[pos]={...entry};
   });
 
   const getOpenPositions=()=>leaves.map((v,i)=>v?null:i).filter(v=>v!=null);
   [...rank1, ...others].forEach(entry=>{
     const opens=getOpenPositions();
     if(!opens.length) return;
-    const pos=chooseBestMainLeaf(opens, entry, leaves, n, rnd);
+    const pos=entry.placeholder
+      ? opens[Math.floor(rnd()*opens.length)]
+      : chooseBestMainLeaf(opens, entry, leaves, mainSize, rnd);
     if(pos!=null) leaves[pos]={...entry};
   });
 
@@ -11703,10 +11851,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div){
   }
 
   const byeIdxs=[], normalIdxs=[];
-  matchSlots.forEach((slot,idx)=>{
-    if(slot.bye) byeIdxs.push(idx);
-    else normalIdxs.push(idx);
-  });
+  matchSlots.forEach((slot,idx)=>{ if(slot.bye) byeIdxs.push(idx); else normalIdxs.push(idx); });
 
   const revealOrder=[];
   byeIdxs.forEach(slotIdx=>{
@@ -11722,7 +11867,25 @@ function buildSeededMainSlots(entries, n, seed, tid, div){
     if(slot?.t2) revealOrder.push({slotIdx, side:'t2', team:slot.t2, bye:false});
   });
 
-  return {matchSlots, n, byeCount, byeIdxs, normalIdxs, revealOrder};
+  const playInMatches=[];
+  if(spec.playInMatches>0){
+    for(let i=0;i<spec.playInMatches;i++){
+      const a=playInEntries[i*2]||null;
+      const b=playInEntries[i*2+1]||null;
+      const target = matchSlots.findIndex(ms=>(ms?.t1?.playInId===i+1)||(ms?.t2?.playInId===i+1));
+      const targetSide = target>=0 && matchSlots[target]?.t1?.playInId===i+1 ? 't1' : 't2';
+      playInMatches.push({
+        id:`playin_${i}`,
+        t1:a, t2:b,
+        winnerLabel:`진출전 승자${i+1}`,
+        playInId:i+1,
+        targetSlot: target,
+        targetSide
+      });
+    }
+  }
+
+  return {matchSlots, n:mainSize, byeCount, byeIdxs, normalIdxs, revealOrder, playInMatches, spec};
 }
 function rouletteBallHTML(text, cls='', extraStyle=''){
   return `<div class="leaf-card-stage ${cls||''}" style="${extraStyle||''}">${text}</div>`;
@@ -11923,12 +12086,15 @@ function openMainDraw(tid,div){
   const advT=getAdvT(key,draw,teams,cfg);
   if(advT.length<2){toast('진출팀 2팀 이상 필요','error');return;}
 
-  const n=np2(advT.length);
-  const byeCount=n-advT.length;
+  const spec=computeMainBracketSpec(advT.length);
+  const n=spec.mainSize;
+  const byeCount=Math.max(0, n-advT.length);
   const rank1=advT.filter(a=>a.rk===1);
   const rank2=advT.filter(a=>a.rk!==1);
 
-  MD={key,tid,div,advT,bracketSize:n,byeCount,rank1,rank2,isRunning:false,seed:1,plan:null,seedHash:'',manualSeedMap:{}};
+  const savedMainSeedMap=(draw && typeof draw.mainSeedMap==='object' && draw.mainSeedMap) ? draw.mainSeedMap : {};
+  const savedMainSeedRaw=String(draw?.mainSeedRaw||'').trim();
+  MD={key,tid,div,advT,bracketSize:n,byeCount,rank1,rank2,spec,isRunning:false,seed:1,plan:null,seedHash:'',manualSeedMap:savedMainSeedMap,manualSeedRaw:savedMainSeedRaw};
 
   ge('mainAdvTeams').innerHTML=`
     <div style="padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#dce8fb);border-radius:var(--radius-lg);border:1.5px solid var(--success);margin-bottom:10px">
@@ -11941,9 +12107,9 @@ function openMainDraw(tid,div){
   ge('mainBracketInfo').innerHTML=`
     <div class="main-info-grid">
       <div class="main-info-item">진출팀 <b>${advT.length}팀</b></div>
-      <div class="main-info-item">본선 <b>${n}강</b></div>
-      ${byeCount>0?`<div class="main-info-item" style="grid-column:1/-1">부전승 <b>${byeCount}자리</b></div>`:''}
-      <div class="main-info-item" style="grid-column:1/-1">관리자 시드 <b>팀번호=시드번호</b> 형식 입력 (예: <code>12=1, 7=2, 3=3, 9=4</code>)</div><div class="main-info-item" style="grid-column:1/-1">조당 2팀 + 본선 2팀 진출이면 각 조 <b>1위/2위 모두 본선 진출</b>로 처리됩니다.</div>
+      <div class="main-info-item">본선 <b>${spec.mainSize}강</b></div>
+      ${spec.playInMatches>0?`<div class="main-info-item" style="grid-column:1/-1">진출전 <b>${spec.playInMatches}경기</b> · 하위 진출팀 ${spec.playInTeams}명이 먼저 경기 후 ${spec.winnersNeeded}명이 ${spec.mainSize}강 합류</div>`: (byeCount>0?`<div class="main-info-item" style="grid-column:1/-1">부전승 <b>${byeCount}자리</b></div>`:'')}
+      <div class="main-info-item" style="grid-column:1/-1">조당 2팀이면 각 조 <b>1위/2위 모두 본선 진출</b>로 처리됩니다.</div>
     </div>`;
 
   ge('mainStep1').style.display='block';
@@ -11973,9 +12139,10 @@ function openMainDraw(tid,div){
         </div>
       </div>
       <div class="admin-only admin-block" style="flex:1;min-width:280px">
-        <label class="form-label">시드 배정 <span style="font-size:.72rem;color:var(--text3);font-weight:600">(팀번호=시드번호, 최대 8번)</span></label>
-        <input class="form-input" id="mainManualSeedsInput" placeholder="예: 12=1, 7=2, 3=3, 9=4" oninput="updateMainManualSeeds()">
-        <div id="mainManualSeedsSummary" style="font-size:.72rem;color:var(--text3);margin-top:6px;line-height:1.55">미입력 시 기존 추첨 로직으로 진행됩니다.</div>
+        <label class="form-label">시드 배정 <span style="font-size:.72rem;color:var(--text3);font-weight:600">(예선 추첨 단계에서 설정)</span></label>
+        <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+          <div id="mainManualSeedsSummary" style="font-size:.72rem;color:var(--text3);line-height:1.6">예선 추첨에서 저장된 시드가 있으면 자동 적용됩니다.</div>
+        </div>
       </div>
     </div>`;
   const step1 = ge('mainStep1');
@@ -11988,8 +12155,6 @@ function openMainDraw(tid,div){
     step1.insertBefore(wrap, step1.firstChild);
     const titleInput = ge('mainDrawTitleInput');
     if(titleInput) titleInput.value = getMainDrawDefaultTitle();
-    const seedInput = ge('mainManualSeedsInput');
-    if(seedInput) seedInput.value='';
     updateMainManualSeeds();
   }
   const footer = ge('mMain')?.querySelector('.modal-footer');
@@ -12019,11 +12184,11 @@ async function runMainExternalDrawAnimation(plan,audit={}){
   }));
 
   const total=Math.max(1,revealOrder.length);
-  renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false);
+  renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false,(plan?.playInMatches)||[]);
   renderMainSeedSummary(plan, audit?.chosenSeed || audit?.baseSeed || MD?.seed || 1);
 
   if(!revealOrder.length){
-    renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true);
+    renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true,(plan?.playInMatches)||[]);
     if(progress) progress.style.width='100%';
     showMainStageMsg(tennisRevealHTML('본선 대진표 확정','success','추첨할 슬롯이 없어 바로 확정했습니다'));
     await sleep(280);
@@ -12057,13 +12222,13 @@ async function runMainExternalDrawAnimation(plan,audit={}){
     else liveSlots[slotIdx].t2 = team ? {...team} : null;
     if(step.bye) liveSlots[slotIdx].bye = true;
 
-    renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false);
+    renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false,(plan?.playInMatches)||[]);
     if(progress) progress.style.width=`${Math.round(((i+1)/total)*100)}%`;
     ge('mainStageMeta').innerHTML=`완전 무작위 본선 추첨 진행 중... (${i+1}/${total})`;
     await sleep(i===revealOrder.length-1 ? 260 : 120);
   }
 
-  renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true);
+  renderMainPreview(slots,n,G.teams[MD?.key||'']||[],MD?.key||'',true,(plan?.playInMatches)||[]);
   showMainStageMsg(tennisRevealHTML('본선 대진표 확정','success','모든 슬롯 배정이 완료되었습니다'));
   if(progress) progress.style.width='100%';
   try{ spawnConfetti(ge('mainStageContent')); }catch(e){}
@@ -12102,9 +12267,9 @@ async function startMainDraw(){
     const summaryHtml = compactMainSummaryFromPlan(plan);
 
     if(!meta.isTest){
-      const mainMatches = buildMainMatches((plan?.matchSlots)||[], plan?.n||0);
+      const mainMatches = buildMainMatches((plan?.matchSlots)||[], plan?.n||0, (plan?.playInMatches)||[]);
       const prevMatches = Array.isArray(G.matches[key]) ? G.matches[key] : [];
-      const nonMainMatches = prevMatches.filter(m=>m.phase!=='main');
+      const nonMainMatches = prevMatches.filter(m=>m.phase!=='main' && m.phase!=='playin');
       G.matches[key] = [...nonMainMatches, ...mainMatches];
       G.draws[key]={
         ...(G.draws[key]||{}),
@@ -12146,7 +12311,7 @@ async function startMainDraw(){
     MD.isRunning=false;
   }
 }
-function renderMainPreviewHTML(matchSlots,n,isPreview){
+function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
   // ── 상수 ──────────────────────────────────────────────
   const CARD_H   = 72;
   const CARD_W   = 158;
@@ -12228,8 +12393,8 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
     const top = cy - CARD_H / 2;
 
     const isBye = !!ms.bye;
-    const topLabel = isPreview ? '추첨 대기' : (ms.t1 ? `${ms.t1.rk===1?'👑':'🥈'} ${ms.t1.nm}` : '추첨 대기');
-    const botLabel = isBye ? '부전승' : (isPreview ? '추첨 대기' : (ms.t2 ? `${ms.t2.rk===1?'👑':'🥈'} ${ms.t2.nm}` : '추첨 대기'));
+    const topLabel = ms.t1 ? ((ms.t1.playInPlaceholder||ms.t1.placeholder)?ms.t1.nm:`${ms.t1.rk===1?'👑':'🥈'} ${ms.t1.nm}`) : (ms.source1Label||'추첨 대기');
+    const botLabel = isBye ? '부전승' : (ms.t2 ? ((ms.t2.playInPlaceholder||ms.t2.placeholder)?ms.t2.nm:`${ms.t2.rk===1?'👑':'🥈'} ${ms.t2.nm}`) : (ms.source2Label||'추첨 대기'));
 
     const topBg   = ms.t1 ? '#eef4ff' : '#f8fafc';
     const botBg   = isBye ? '#fff8e6' : (ms.t2 ? '#f0fdf4' : '#f8fafc');
@@ -12291,38 +12456,61 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
     </div>
   </div>`;
 }
-function renderMainPreview(matchSlots,n,teams,key,final){
-  ge('mainBracketPreview').innerHTML=renderMainPreviewHTML(matchSlots,n,false);
+function renderMainPreview(matchSlots,n,teams,key,final,playInMatches=[]){
+  ge('mainBracketPreview').innerHTML=renderMainPreviewHTML(matchSlots,n,false,playInMatches);
 }
 
 // ─── Firebase 저장용 match 구조 생성 ────────────────────
-function buildMainMatches(matchSlots,n){
-  const mainMs=[];
+function buildMainMatches(matchSlots,n,playInMatches=[]){
+  const out=[];
   const matchCount=n/2;
 
-  // r0: 1라운드 매치 생성
+  // 진출전 경기 생성
+  (playInMatches||[]).forEach((pm, i)=>{
+    out.push({
+      id:`playin_${i}`,
+      phase:'playin',
+      round:0,
+      slot:i,
+      t1:pm?.t1 && !pm.t1.placeholder ? pm.t1.ti : null,
+      t2:pm?.t2 && !pm.t2.placeholder ? pm.t2.ti : null,
+      winner:null,
+      rubbers:[],
+      bye:false,
+      court:'',
+      targetSlot:Number(pm?.targetSlot??-1),
+      targetSide:String(pm?.targetSide||'t1'),
+      winnerLabel:String(pm?.winnerLabel||`진출전 승자${i+1}`)
+    });
+  });
+
+  const mainMs=[];
   for(let i=0;i<matchCount;i++){
-    const ms=matchSlots[i];
-    const t1ti=ms.t1?ms.t1.ti:null;
-    const t2ti=ms.t2?ms.t2.ti:null;
+    const ms=matchSlots[i]||{};
+    const t1ti=(ms.t1 && !ms.t1.placeholder)?ms.t1.ti:null;
+    const t2ti=(ms.t2 && !ms.t2.placeholder)?ms.t2.ti:null;
     const m={id:`main_r0_${i}`,phase:'main',round:0,slot:i,
-              t1:t1ti,t2:t2ti,winner:null,rubbers:[],bye:!!ms.bye,court:'',
-              t1Seed:(ms.t1&&ms.t1.seedNo)?Number(ms.t1.seedNo):null,
-              t2Seed:(ms.t2&&ms.t2.seedNo)?Number(ms.t2.seedNo):null};
+      t1:t1ti,t2:t2ti,winner:null,rubbers:[],bye:!!ms.bye,court:'',
+      t1Seed:(ms.t1&&ms.t1.seedNo)?Number(ms.t1.seedNo):null,
+      t2Seed:(ms.t2&&ms.t2.seedNo)?Number(ms.t2.seedNo):null,
+      source1Label:(ms.t1&&ms.t1.placeholder)?String(ms.t1.nm||''): (ms.source1Label||''),
+      source2Label:(ms.t2&&ms.t2.placeholder)?String(ms.t2.nm||''): (ms.source2Label||''),
+      source1PlayInId:(ms.t1&&ms.t1.playInId)?Number(ms.t1.playInId):null,
+      source2PlayInId:(ms.t2&&ms.t2.playInId)?Number(ms.t2.playInId):null
+    };
     if(ms.bye && t1ti!==null){ m.winner=t1ti; }
     mainMs.push(m);
   }
 
-  // 상위 라운드 빈 매치 생성
   let slots=matchCount;
   for(let r=1;slots>1;r++){
     const hs=Math.ceil(slots/2);
-    for(let i=0;i<hs;i++)
+    for(let i=0;i<hs;i++){
       mainMs.push({id:`main_r${r}_${i}`,phase:'main',round:r,slot:i,t1:null,t2:null,winner:null,rubbers:[],bye:false,court:''});
+    }
     slots=hs;
   }
 
-  // 부전승 전파: r0 bye팀의 다음 라운드 자리(t1/t2)만 채움 - winner 자동 설정 안 함
   const maxR=Math.max(...mainMs.map(m=>m.round));
   for(let r=0;r<maxR;r++){
     mainMs.filter(m=>m.round===r&&m.winner!==null&&m.bye).forEach(bm=>{
@@ -12330,12 +12518,10 @@ function buildMainMatches(matchSlots,n){
       if(!nm) return;
       if(bm.slot%2===0){ if(nm.t1===null) nm.t1=bm.winner; }
       else             { if(nm.t2===null) nm.t2=bm.winner; }
-      // winner는 절대 자동 설정 안 함 - 실제 경기 후에만 설정
     });
   }
-  return mainMs;
+  return [...out, ...mainMs];
 }
-
 // ─── 수동 수정 ──────────────────────────────────────────
 let ME={key:null,tid:null,div:null};
 function openManualEdit(tid,div){
@@ -13151,7 +13337,23 @@ async function updPS(key,m,prevW){
 }
 
 async function autoAdv(key,mid){
-  const list=G.matches[key]||[];const m=list.find(m=>m.id===mid);if(!m||m.phase!=='main')return;
+  const list=G.matches[key]||[];
+  const m=list.find(m=>m.id===mid);
+  if(!m) return;
+
+  if(m.phase==='playin'){
+    const target=list.find(x=>x.phase==='main' && x.round===0 && x.slot===Number(m.targetSlot));
+    if(target && m.winner!=null){
+      if(String(m.targetSide||'t1')==='t2') target.t2=m.winner;
+      else target.t1=m.winner;
+      target.winner=null;
+      target.bye=false;
+    }
+    await stM(key);
+    return;
+  }
+
+  if(m.phase!=='main') return;
   const nm=list.find(m2=>m2.phase==='main'&&m2.round===m.round+1&&m2.slot===Math.floor(m.slot/2));
   if(nm){
     if(m.slot%2===0)nm.t1=m.winner;else nm.t2=m.winner;
@@ -13339,7 +13541,8 @@ function renderLiveRanking(tid,div,cont){
   divs.forEach(d=>{
     const key=tid+'_'+d,teams=G.teams[key]||[],draw=G.draws[key];
     const allMs=G.matches[key]||[];
-    const mMs=allMs.filter(m=>m.phase==='main');
+    const playInMs=allMs.filter(m=>m.phase==='playin');
+  const mMs=allMs.filter(m=>m.phase==='main');
     const summary=getMainMedalSummary(key,teams,mMs);
     if(divs.length>1) html+=`<div class="sec-title" style="margin-top:${html?'18px':'0'}">${dl(d)}</div>`;
     if(summary){
@@ -14374,7 +14577,8 @@ function upDash(){
       const tc=(G.teams[k]||[]).length;
       const allMs=G.matches[k]||[];
       const gMs=allMs.filter(m=>m.phase==='group');
-      const mMs=allMs.filter(m=>m.phase==='main');
+      const playInMs=allMs.filter(m=>m.phase==='playin');
+  const mMs=allMs.filter(m=>m.phase==='main');
       const md=allMs.filter(m=>getMatchResultState(k,m).done).length;
       const mt=allMs.length;
       const hd=!!G.draws[k];
