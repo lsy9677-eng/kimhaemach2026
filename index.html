@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-08-v86-draw-reset-split";
+  const APP_VERSION = "2026-04-08-v90-seed-reset-preserve";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -8416,6 +8416,18 @@ function buildFreshGroupMatchesFromDraw(key){
 }
 
 
+
+function getPreservedSeedDrawState(key){
+  const draw = G.draws?.[key] || {};
+  const preserved = {};
+  if(typeof draw.mainSeedRaw === 'string') preserved.mainSeedRaw = draw.mainSeedRaw;
+  if(draw.mainSeedMap && typeof draw.mainSeedMap === 'object'){
+    preserved.mainSeedMap = JSON.parse(JSON.stringify(draw.mainSeedMap));
+  }
+  return preserved;
+}
+
+
 async function resetPrelimDrawOnly(key){
   const {tid,div}=_k2td(key);
   if(!confirm(`예선 리셋을 진행합니다.
@@ -8423,13 +8435,13 @@ async function resetPrelimDrawOnly(key){
 - 예선 대진표/예선 경기/예선 결과/오더를 모두 초기화
 - 본선 대진표/본선 경기/본선 결과도 함께 제거
 - 팀 등록은 유지
+- 관리자 저장 시드는 유지
 
 추첨 전 상태로 완전히 되돌릴까요?`)) return;
   sl(true);
   try{
+    const preservedSeedDraw = getPreservedSeedDrawState(key);
     await resetMatchRecords(key);
-    try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
-    delete G.draws[key];
     G.matches[key]=[];
     await stM(key);
     if(G.mainMatches && G.mainMatches[key]) delete G.mainMatches[key];
@@ -8441,9 +8453,16 @@ async function resetPrelimDrawOnly(key){
         delete window.BRACKET_MAIN_TOGGLE[key];
       }
     }catch(_e){}
-    await fbLog(`예선 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화)`,'♻️');
+    if(Object.keys(preservedSeedDraw).length){
+      G.draws[key]=preservedSeedDraw;
+      await stD(key);
+    }else{
+      try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
+      delete G.draws[key];
+    }
+    await fbLog(`예선 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화, 시드 유지)`,'♻️');
     sl(false);
-    toast('예선 리셋 완료 ✅ 예선·본선 대진이 모두 추첨 전 상태로 초기화되었습니다','success');
+    toast('예선 리셋 완료 ✅ 예선·본선 대진은 초기화되고 관리자 시드는 유지됩니다','success');
     renderBracket();
   }catch(e){ sl(false); toast('예선 리셋 실패: '+e.message,'error'); }
 }
@@ -8460,12 +8479,14 @@ async function resetMainDrawOnly(key){
 - 예선 대진표/예선 결과는 유지
 - 본선 대진표/진출전/본선 경기/본선 결과만 제거
 - 본선은 추첨 전 상태로 돌아갑니다
+- 관리자 저장 시드는 유지
 
 계속할까요?`)) return;
   sl(true);
   try{
     await resetMatchRecords(key);
-    const preservedDraw={...draw};
+    const preservedSeedDraw=getPreservedSeedDrawState(key);
+    const preservedDraw={...draw, ...preservedSeedDraw};
     delete preservedDraw.mainPlan;
     delete preservedDraw.mainAudit;
     delete preservedDraw.mainUpdatedAt;
@@ -8478,9 +8499,9 @@ async function resetMainDrawOnly(key){
         delete window.BRACKET_MAIN_TOGGLE[key];
       }
     }catch(_e){}
-    await fbLog(`본선 리셋: ${tid} ${dl(div)} (예선 유지 / 본선 초기화)`,'♻️');
+    await fbLog(`본선 리셋: ${tid} ${dl(div)} (예선 유지 / 본선 초기화, 시드 유지)`,'♻️');
     sl(false);
-    toast('본선 리셋 완료 ✅ 예선은 유지되고 본선만 추첨 전 상태로 초기화되었습니다','success');
+    toast('본선 리셋 완료 ✅ 예선은 유지되고 관리자 시드는 그대로 유지됩니다','success');
     renderBracket();
   }catch(e){ sl(false); toast('본선 리셋 실패: '+e.message,'error'); }
 }
@@ -8492,13 +8513,13 @@ async function resetDrawOnly(key){
 - 예선 대진표/예선 경기/예선 결과/오더 삭제
 - 본선 대진표/본선 경기/본선 결과 삭제
 - 팀 등록은 유지
+- 관리자 저장 시드는 유지
 
 예선 추첨 전 상태로 완전히 되돌릴까요?`)) return;
   sl(true);
   try{
+    const preservedSeedDraw = getPreservedSeedDrawState(key);
     await resetMatchRecords(key);
-    try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
-    delete G.draws[key];
     G.matches[key]=[];
     await stM(key);
     if(G.mainMatches && G.mainMatches[key]) delete G.mainMatches[key];
@@ -8510,9 +8531,16 @@ async function resetDrawOnly(key){
         delete window.BRACKET_MAIN_TOGGLE[key];
       }
     }catch(_e){}
-    await fbLog(`전체 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화)`,'♻️');
+    if(Object.keys(preservedSeedDraw).length){
+      G.draws[key]=preservedSeedDraw;
+      await stD(key);
+    }else{
+      try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
+      delete G.draws[key];
+    }
+    await fbLog(`전체 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화, 시드 유지)`,'♻️');
     sl(false);
-    toast('전체 리셋 완료 ✅ 예선·본선 대진이 모두 추첨 전 상태로 초기화되었습니다','success');
+    toast('전체 리셋 완료 ✅ 예선·본선 대진은 초기화되고 관리자 시드는 유지됩니다','success');
     renderBracket();
   }catch(e){ sl(false); toast('전체 리셋 실패: '+e.message,'error'); }
 }
