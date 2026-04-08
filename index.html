@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-08-v43-svg-bracket-lines";
+  const APP_VERSION = "2026-04-08-v47-bracket-round-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3356,6 +3356,48 @@ const COURT_GROUPS = [
 ];
 // 기존 로직 호환을 위해 펼친 목록도 유지
 const COURT_LIST = COURT_GROUPS.flatMap(g => g.courts);
+function getGroupMemo(key, gi){
+  try{
+    return String(G.draws?.[key]?.groups?.[Number(gi)]?.memo || '').trim();
+  }catch(e){ return ''; }
+}
+function escAttr(v=''){
+  return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderCourtAccordionSelector(selectedCourts=[], usedCourtsMap=null, scope='group'){
+  const selected=new Set((selectedCourts||[]).filter(Boolean));
+  return COURT_GROUPS.map((g, idx)=>{
+    const boxId=`courtAcc_${scope}_${idx}_${Math.random().toString(36).slice(2,7)}`;
+    const hasSelected=(g.courts||[]).some(c=>selected.has(c));
+    const labels=(g.courts||[]).map(c=>{
+      const isMine=selected.has(c);
+      const usedBy=usedCourtsMap && usedCourtsMap[c] ? usedCourtsMap[c] : [];
+      const isUsed=!isMine && usedBy.length>0;
+      const bg=isMine?'#e8f4fd':isUsed?'#fff8e1':'white';
+      const border=isMine?'#1565c0':isUsed?'#f5a623':'var(--border)';
+      const extra=isUsed?`<span style="font-size:.62rem;color:#e67e22">⚠️ ${usedBy[0]} 대기중</span>`:'';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px solid ${border};border-radius:999px;background:${bg};font-size:.88rem;cursor:pointer;flex-wrap:wrap">
+        <input type="checkbox" value="${escAttr(c)}" ${isMine?'checked':''}>
+        <span style="font-weight:${isMine?700:400}">${c}${isMine?' ✅':''}</span>
+        ${extra}
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff">
+      <button type="button" onclick="toggleCourtAccordion('${boxId}', this)" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:none;background:${hasSelected?'linear-gradient(135deg,#eef4ff,#fff8df)':'#f8fafc'};cursor:pointer">
+        <span style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">📍 ${g.title}</span>
+        <span style="font-size:.76rem;font-weight:800;color:${hasSelected?'var(--primary)':'var(--text2)'}">${hasSelected?((g.courts||[]).filter(c=>selected.has(c)).join('/')):'구장 선택'}</span>
+      </button>
+      <div id="${boxId}" style="display:${hasSelected?'block':'none'};padding:12px 14px;border-top:1px solid var(--border)">
+        <div style="display:flex;flex-wrap:wrap;gap:8px">${labels}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleCourtAccordion(id, btn){
+  const box=ge(id);
+  if(!box) return;
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+}
 
 function getTotalCourtCount(){
   return COURT_GROUPS.reduce((sum,g)=>sum + ((g.courts||[]).length), 0);
@@ -8328,9 +8370,11 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       const grpDone=gms.length>0&&gms.every(m=>getMatchResultState(key,m).done);
 
       const grpCourts = (grp.courts||[]);
+      const grpMemo = getGroupMemo(key,gi);
       const courtBadges = grpCourts.length
         ? grpCourts.map(c=>`<span class="badge bg-blue" style="font-size:.82rem;padding:3px 9px">🎾 ${c}</span>`).join(' ')
         : (AD ? `<span class="badge bg-gray" style="font-size:.82rem;padding:3px 9px">코트: 미배정</span>` : ``);
+      const memoBadge = grpMemo ? `<div style="margin-top:8px;font-size:.8rem;font-weight:800;line-height:1.55;padding:8px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 ${esc(grpMemo)}</div>` : '';
       const doneCnt=gms.filter(m=>getMatchResultState(key,m).done).length;
       const indivMode=isIndividualByKey(key);
       const indivFlow=getIndividualGroupFlowText(key,gi);
@@ -8346,10 +8390,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${courtBadges}
-            ${canManageBracket()?`<button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:600" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>`:''}
+            ${canManageBracket()?`<button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:600" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button><button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:700" onclick="openGroupMemoModal('${key}',${gi})">📝 조메모${grpMemo?' 수정':' 입력'}</button>`:''}
             ${indivMode?`<button id="indivGroupToggle_${key}_${gi}" class="btn btn-outline" style="padding:5px 13px;font-size:.86rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:700" onclick="toggleIndividualGroupMatches('${key}',${gi})">📂 경기 보기</button>`:''}
           </div>
-        </div>`;
+        </div>${memoBadge}`;
       if(!indivMode){
         html+=`<div style="border-bottom:2px solid var(--border)">`;
         stats.forEach((s,r)=>{
@@ -8459,7 +8503,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   }
 
   if(mMs.length){
-    const rounds=[...new Set(mMs.map(m=>m.round))].sort((a,b)=>a-b);
+    const rounds=[...new Set(mMs.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
     const totalR=rounds.length;
 
     if(prelimCollapsed && !s4){
@@ -8482,8 +8526,9 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
     html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황</div>`;
     rounds.forEach(r=>{
-      const rms=mMs.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot);
-      const lbl=r===rounds[rounds.length-1]?'결승':r===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-r)}강`;
+      const rms=mMs.filter(m=>Number(m.round||0)===r).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+      const rIdx=rounds.indexOf(r);
+      const lbl=r===rounds[rounds.length-1]?'결승':rIdx===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-1-rIdx)*2}강`;
       html+=`<div style="font-size:.82rem;font-weight:700;color:var(--primary-dark);margin:8px 0 4px;padding-left:4px">— ${lbl}</div>`;
       rms.forEach(m=>{
         if(m.bye){
@@ -8706,6 +8751,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const sideLabel1=getIndividualSideLabel(key,m,m.t1)||'1번';
     const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
     const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
+    const grpMemo=(m.phase==='group' && m.group!=null)?getGroupMemo(key, Number(m.group)):'';
     const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
     const groupCourtUI=canManageBracket() && m.phase==='group' && m.group!=null
       ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openGroupCourtModal('${key}',${Number(m.group)})">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`
@@ -8727,7 +8773,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label||'1경기'}</span></div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:`<span class="badge bg-gray" style="font-size:.78rem;padding:3px 9px">대기</span>`}${btn}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${grpMemo?`<span class="badge bg-gold" style="font-size:.74rem;padding:4px 9px">📝 ${esc(grpMemo)}</span>`:''}</div>
         <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;margin-bottom:8px">
           <div style="${sideWrap1Style}">
             <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
@@ -8754,13 +8800,18 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
 
   // ── 조 코트(복수) 자동 표시: 예선 경기 카드에 "n조 코트: ..." 배지
   let grpCourtBadge = '';
+  let grpMemoBadge = '';
   if(m && m.phase==='group' && m.group!=null){
     const gi = m.group;
     const grpCourts = (G.draws[key]?.groups?.[gi]?.courts) || [];
+    const grpMemo = getGroupMemo(key, gi);
     if(grpCourts.length){
       grpCourtBadge = `<span style="font-size:.88rem;font-weight:700;background:rgba(255,255,255,.22);color:white;padding:3px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.4)">🎾 ${grpLabel(gi)}: ${grpCourts.join('/')}</span>`;
     } else if(AD){
       grpCourtBadge = `<span style="font-size:.88rem;font-weight:600;background:rgba(255,255,255,.12);color:rgba(255,255,255,.8);padding:3px 12px;border-radius:12px;border:1px dashed rgba(255,255,255,.45)">🎾 미배정</span>`;
+    }
+    if(grpMemo){
+      grpMemoBadge = `<span style="font-size:.84rem;font-weight:800;background:rgba(255,248,223,.92);color:#7a5600;padding:3px 12px;border-radius:12px;border:1px solid rgba(246,211,101,.9)">📝 ${esc(grpMemo)}</span>`;
     }
   }
   // 개별 경기 코트 상태 계산
@@ -8823,7 +8874,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
   const teamCardStyleBase=`${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15);':''}${_isOtherM?'opacity:0.35;':''}`;
   const teamWinTint=done&&wn1?'background:linear-gradient(135deg,#f7fff9,#eefbf3);border-color:#86efac;':done&&wn2?'background:linear-gradient(135deg,#fff7f7,#fef2f2);border-color:#fecaca;':'';
-  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
+  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${grpMemoBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${btn}</div></div>
     <div class="m3body">${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
@@ -9026,39 +9077,95 @@ async function saveBracketViewImage(){
 }
 
 function renderBracketTree(key,mMs,teams){
-  const rounds=[...new Set(mMs.map(m=>m.round))].sort((a,b)=>a-b);
-  const totalR=rounds.length;
+  // round 값이 문자열/숫자 혼용으로 저장될 수 있으므로 Number()로 정규화
+  let normalizedMs = mMs.map(m=>({...m, round: Number(m.round||0), slot: Number(m.slot||0)}));
+
+  // ── round 값이 모두 동일하거나 비정상인 경우 slot 기반으로 재구성 ──────
+  // buildTournamentTree가 올바르게 생성했어야 하지만, 저장/로드 과정에서
+  // round 필드가 누락되거나 모두 0으로 저장된 경우 자동 복원
+  {
+    const uniqueRounds = [...new Set(normalizedMs.map(m=>m.round))];
+    if(uniqueRounds.length === 1){
+      // round가 하나뿐 → slot 기반으로 토너먼트 트리 재구성
+      // 경기 수로 라운드 수 계산: matchCount = 2^(rounds-1) → rounds = log2(matchCount)+1
+      const mc = normalizedMs.length;
+      // 첫 라운드 경기 수 추정: 2의 거듭제곱 중 mc 이하 최대값
+      let firstRoundCount = 1;
+      while(firstRoundCount * 2 <= mc) firstRoundCount *= 2;
+      // slot 순으로 정렬 후 앞 firstRoundCount개가 round=0
+      normalizedMs = normalizedMs.sort((a,b)=>a.slot-b.slot);
+      // id에 round 정보가 있는 경우 활용 (main_r0_x, main_r1_x 패턴)
+      const hasRoundInId = normalizedMs.some(m=>/main_r(\d+)_/.test(String(m.id||'')));
+      if(hasRoundInId){
+        normalizedMs = normalizedMs.map(m=>{
+          const match = String(m.id||'').match(/main_r(\d+)_/);
+          return match ? {...m, round: parseInt(match[1],10)} : m;
+        });
+      } else {
+        // id에도 정보 없으면 slot 기반으로 재배분
+        let r = 0, count = firstRoundCount, idx = 0;
+        const rebuilt = [];
+        while(count >= 1 && idx < normalizedMs.length){
+          for(let s = 0; s < count && idx < normalizedMs.length; s++, idx++){
+            rebuilt.push({...normalizedMs[idx], round: r, slot: s});
+          }
+          count = Math.ceil(count / 2);
+          if(count === count * 2) break; // 무한루프 방지
+          r++;
+        }
+        normalizedMs = rebuilt;
+      }
+    }
+  }
+
+  const roundNums=[...new Set(normalizedMs.map(m=>m.round))].sort((a,b)=>a-b);
+  const totalR=roundNums.length;
   if(!totalR) return '';
 
-  // ── 상수 (renderMainPreviewHTML와 동일) ───────────────
+  // ── 상수 ───────────────────────────────────────────────
   const CARD_H  = 72;
   const CARD_W  = 168;
   const COL_GAP = 48;
-  const ROW_GAP = 10;
+  const ROW_GAP = 14;   // 같은 라운드 카드 간 세로 간격
   const TITLE_H = 28;
   const COL_W   = CARD_W + COL_GAP;
 
-  // 각 라운드 경기 목록
-  const roundsMs = rounds.map(r => mMs.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot));
+  // 각 라운드 경기 목록 (Number() 변환으로 비교)
+  const roundsMs = roundNums.map(r => normalizedMs.filter(m=>m.round===r).sort((a,b)=>a.slot-b.slot));
+  // rounds는 라운드 인덱스 배열 (titlesHtml 등에서 사용)
+  const rounds = roundNums;
   const firstCount = roundsMs[0].length;
 
   // 전체 높이 (첫 라운드 기준)
   const totalH = firstCount * CARD_H + Math.max(0, firstCount - 1) * ROW_GAP;
 
-  function getCenters(count){
-    if(count === 1) return [totalH / 2];
-    const slot = totalH / count;
-    return Array.from({length: count}, (_, i) => slot * i + slot / 2);
+  // ── 각 라운드별 카드 Y 중심 계산 ──────────────────────
+  // 첫 라운드: 균등 배치
+  const firstCenters = Array.from({length: firstCount}, (_, i) =>
+    i * (CARD_H + ROW_GAP) + CARD_H / 2
+  );
+
+  // 후속 라운드: 이전 라운드 pair(2개씩)의 중간값으로 결정
+  // → 토너먼트 구조상 정확히 연결선 중심에 카드가 옴
+  const centersByRound = [firstCenters];
+  for(let ri = 1; ri < totalR; ri++){
+    const prev = centersByRound[ri - 1];
+    const cur  = [];
+    for(let i = 0; i < prev.length; i += 2){
+      const y1 = prev[i];
+      const y2 = (i + 1 < prev.length) ? prev[i + 1] : y1;
+      cur.push((y1 + y2) / 2);
+    }
+    // 실제 이 라운드 경기 수에 맞게 clamp
+    const actual = roundsMs[ri]?.length || cur.length;
+    centersByRound.push(cur.slice(0, actual));
   }
-  const centersByRound = roundsMs.map(rms => getCenters(rms.length));
 
   const svgW = totalR * COL_W - COL_GAP + 4;
-  const svgH = totalH + TITLE_H + 12;
+  const svgH = totalH + TITLE_H + 16;
 
   // ── SVG 연결선 ────────────────────────────────────────
-  // 승자 정보도 선 색상에 반영
   function getWinnerOf(rIdx, mIdx){
-    // rIdx 라운드 mIdx 경기의 승자가 다음 라운드 어느 슬롯 t1/t2인지 판단
     const m = roundsMs[rIdx]?.[mIdx];
     if(!m) return null;
     const st = getMatchResultState(key, m);
@@ -9077,10 +9184,9 @@ function renderBracketTree(key,mMs,teams){
       const y1 = curCenters[i] + TITLE_H + 4;
       const y2 = (i + 1 < curCenters.length) ? curCenters[i + 1] + TITLE_H + 4 : y1;
       const nextIdx = Math.floor(i / 2);
-      const yNext  = nextCenters[nextIdx] + TITLE_H + 4;
+      const yNext  = (nextCenters[nextIdx] ?? (y1 + y2) / 2) + TITLE_H + 4;
       const yMidV  = (y1 + y2) / 2;
 
-      // 승자가 있으면 해당 선을 파란색 굵게
       const w1 = getWinnerOf(r, i);
       const w2 = getWinnerOf(r, i + 1);
       const hasWin1 = w1 !== null && w1 !== undefined;
@@ -9094,14 +9200,11 @@ function renderBracketTree(key,mMs,teams){
       const vertClr  = anyWin  ? '#1565c0' : '#c8d4e8';
       const vertSW   = anyWin  ? 3 : 2;
 
-      // 왼쪽 카드들 → 수평선
       svgLines += `<line x1="${xRight}" y1="${y1}" x2="${xMid}" y2="${y1}" stroke="${lineClr1}" stroke-width="${lineSW1}"/>`;
       if(i + 1 < curCenters.length){
         svgLines += `<line x1="${xRight}" y1="${y2}" x2="${xMid}" y2="${y2}" stroke="${lineClr2}" stroke-width="${lineSW2}"/>`;
       }
-      // 수직선
       svgLines += `<line x1="${xMid}" y1="${y1}" x2="${xMid}" y2="${y2}" stroke="${vertClr}" stroke-width="${vertSW}"/>`;
-      // 중간 → 다음 라운드
       svgLines += `<line x1="${xMid}" y1="${yMidV}" x2="${xLeft}" y2="${yNext}" stroke="${vertClr}" stroke-width="${vertSW}"/>`;
     }
   }
@@ -9116,7 +9219,7 @@ function renderBracketTree(key,mMs,teams){
     const xLeft   = ri * COL_W;
 
     rms.forEach((m, mi) => {
-      const cy  = centers[mi] + TITLE_H + 4;
+      const cy  = (centers[mi] ?? 0) + TITLE_H + 4;
       const top = cy - CARD_H / 2;
 
       const mt1 = m.t1 !== null ? teams[m.t1] : null;
@@ -10960,7 +11063,7 @@ async function startIndividualDraw(){
   document.getElementById('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 추첨</div>`;
   await sleep(400);
 
-  const groupData=runGroups.map(g=>({teams:[...g.teams],courts:[]}));
+  const groupData=runGroups.map(g=>({teams:[...g.teams],courts:[],memo:''}));
   G.draws[key]={groups:groupData,advance:2,indivMode:true,grpSize:gs,mainMode,groupDrawAudit:{mode:'random',modeLabel:'무작위',loggedAt:drawTime.toISOString()}};
 
   // 예선 경기 생성 (2팀 조: 1경기, 3팀 조: 3경기)
@@ -11139,7 +11242,7 @@ async function startDraw(){
 
   const audit={mode:'random',modeLabel:'완전 무작위',loggedAt:drawTime.toISOString()};
   DW.drawAudit=audit;
-  const groupData=grps.map(g=>({teams:g.teams,courts:[]}));
+  const groupData=grps.map(g=>({teams:g.teams,courts:[],memo:''}));
   G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit};
   const mlist=[];
   groupData.forEach((grp,gi)=>{
@@ -11908,12 +12011,12 @@ async function startMainDraw(){
 }
 function renderMainPreviewHTML(matchSlots,n,isPreview){
   // ── 상수 ──────────────────────────────────────────────
-  const CARD_H   = 72;   // 카드 높이 (px) - 슬롯 2개 × 34 + 테두리
-  const CARD_W   = 158;  // 카드 너비
-  const COL_GAP  = 48;   // 라운드 간 간격 (선이 지나가는 공간)
-  const ROW_GAP  = 10;   // 같은 라운드 카드 간 세로 간격
+  const CARD_H   = 72;
+  const CARD_W   = 158;
+  const COL_GAP  = 48;
+  const ROW_GAP  = 14;  // renderBracketTree와 동일
   const COL_W    = CARD_W + COL_GAP;
-  const TITLE_H  = 28;   // 라운드 타이틀 높이
+  const TITLE_H  = 28;
 
   const rounds = Math.max(1, Math.log2(n));
   const firstCount = Math.max(1, n / 2);
@@ -11927,21 +12030,26 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
   }
 
   // ── 각 라운드별 카드 Y 중심 좌표 계산 ────────────────
-  // 첫 라운드 기준으로 전체 높이 결정
-  const totalH = firstCount * CARD_H + (firstCount - 1) * ROW_GAP;
-
-  function getCenters(count){
-    // count개 카드를 totalH 안에 균등 배치했을 때 각 카드 중심 Y
-    if(count === 1) return [totalH / 2];
-    const slot = totalH / count;
-    return Array.from({length: count}, (_, i) => slot * i + slot / 2);
+  // renderBracketTree와 동일 로직: 첫 라운드 절대 배치 → 후속 라운드는 pair 중간값
+  const firstCenters = Array.from({length: firstCount}, (_, i) =>
+    i * (CARD_H + ROW_GAP) + CARD_H / 2
+  );
+  const centersByRound = [firstCenters];
+  for(let r = 1; r < rounds; r++){
+    const prev = centersByRound[r - 1];
+    const cur  = [];
+    for(let i = 0; i < prev.length; i += 2){
+      const y1 = prev[i];
+      const y2 = (i + 1 < prev.length) ? prev[i + 1] : y1;
+      cur.push((y1 + y2) / 2);
+    }
+    centersByRound.push(cur.slice(0, colCounts[r]));
   }
 
-  const centersByRound = colCounts.map(c => getCenters(c));
-
   // ── 전체 SVG 캔버스 크기 ──────────────────────────────
+  const totalH = firstCount * CARD_H + Math.max(0, firstCount - 1) * ROW_GAP;
   const svgW = rounds * COL_W - COL_GAP + 4;
-  const svgH = totalH + TITLE_H + 8;
+  const svgH = totalH + TITLE_H + 16;
 
   // ── SVG 선 생성 ───────────────────────────────────────
   // 각 라운드 카드에서 다음 라운드 카드로 연결
@@ -11977,10 +12085,9 @@ function renderMainPreviewHTML(matchSlots,n,isPreview){
   let cardsHtml = '';
 
   // 첫 번째 라운드: matchSlots 기반
-  const firstCenters = centersByRound[0];
   for(let i = 0; i < firstCount; i++){
     const ms = matchSlots[i] || {};
-    const cy = firstCenters[i] + TITLE_H + 4;
+    const cy = centersByRound[0][i] + TITLE_H + 4;
     const top = cy - CARD_H / 2;
 
     const isBye = !!ms.bye;
@@ -16136,27 +16243,22 @@ function openMatchCourtModal(key,mid){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 코트 배정 가능','info'); return; }
   ensureMatchCourtModal();
   MC_MODAL={key,mid};
-  // G.matches에서 못 찾으면 G.draws에서 직접 찾기 (로컬/오프라인 대비)
   const list=G.matches[key]||[];
   let m=list.find(x=>x.id===mid);
   if(!m){
-    // draws의 matches 배열에서도 탐색
     const drw=G.draws[key];
     if(drw){
-      const allM=[...(drw.matches||[]),...(drw.groups||[]).flatMap(g=>g.matches||[])];
+      const allM=[...(drw.matches||[]),...((drw.groups||[]).flatMap(g=>g.matches||[]))];
       m=allM.find(x=>x.id===mid);
     }
   }
-  if(!m) m={id:mid,courts:[],court:''}; // 그래도 없으면 빈 객체로 모달 열기
+  if(!m) m={id:mid,courts:[],court:''};
   const mCourts = Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : []);
-  // 경기 제목 생성
-  const d=G.draws[key];
   let label='경기';
   if(m.phase==='group') label=`${(m.group??0)+1}조 예선`;
   else if(m.phase==='main') label=`본선 R${m.round??''} #${(m.slot??0)+1}`;
   ge('mMCourtT').textContent=`🎾 코트 배정 – ${label}`;
 
-  // 다른 경기에서 사용 중인 코트 수집 (자기 자신 제외)
   const usedCourts={};
   (G.matches[key]||[]).forEach(x=>{
     if(x.id===mid) return;
@@ -16170,25 +16272,7 @@ function openMatchCourtModal(key,mid){
     });
   });
 
-  const sectionsHtml = COURT_GROUPS.map(g=>{
-    const labels = g.courts.map(c=>{
-      const isMine=mCourts.includes(c);
-      const usedBy=usedCourts[c]||[];
-      const isUsed=usedBy.length>0 && !isMine;
-      const bg=isMine?'#e8f4fd':isUsed?'#fff8e1':'white';
-      const border=isMine?'#1565c0':isUsed?'#f5a623':'var(--border)';
-      const extra=isUsed?`<span style="font-size:.62rem;color:#e67e22">⚠️ ${usedBy[0]} 대기중</span>`:'';
-      return `<label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid ${border};border-radius:999px;background:${bg};font-size:.95rem;cursor:pointer;flex-wrap:wrap">
-        <input type="checkbox" value="${c}" ${isMine?'checked':''}>
-        <span style="font-weight:${isMine?700:400}">${c}${isMine?' ✅':''}</span>
-        ${extra}
-      </label>`;
-    }).join('');
-    return `<div style="margin-bottom:12px">
-      <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin:2px 2px 8px">📍 ${g.title}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">${labels}</div>
-    </div>`;
-  }).join('');
+  const sectionsHtml = renderCourtAccordionSelector(mCourts, usedCourts, `match_${key}_${mid}`);
   const hint=`<div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
     ✅ 현재 배정된 코트 &nbsp;|&nbsp; ⚠️ 다른 경기 사용 중<br>
     사용 중인 코트 선택 시 해당 경기는 <b>대기중</b>으로 변경됩니다.
@@ -16207,7 +16291,6 @@ async function saveMatchCourtModal(){
   const box=ge('mMCourtB');
   const courts=[...box.querySelectorAll('input[type="checkbox"]:checked')].map(i=>i.value);
 
-  // 선택된 코트를 다른 경기가 사용 중이면 → 해당 경기 코트 제거 (대기중으로)
   let freed=0;
   list.forEach(x=>{
     if(x.id===mid) return;
@@ -16222,12 +16305,12 @@ async function saveMatchCourtModal(){
 
   m.courts=courts;
   m.court=courts[0]||'';
-  m.courtAssignedAt=new Date().toISOString(); // 배정 순서 판별용 타임스탬프
+  m.courtAssignedAt=new Date().toISOString();
   sl(true);
   try{
     await stM(key);
     sl(false);
-    toast('코트 배정 저장 ✅','success');
+    toast(freed>0?`코트 배정 저장 ✅ (${freed}경기 대기중 전환)`:'코트 배정 저장 ✅','success');
     cm('mMCourt');
     renderBracket();
   }catch(e){
@@ -16255,21 +16338,17 @@ async function setCourt(key, mid, value){
   }
 }
 
-
-// ─── 예선 '조' 단위 코트 배정 (복수 선택, 조 간 중복 사용 가능) ───────────
 function _gcuiId(key,gi){ return `gcui_${key}_${gi}`; }
 
 function toggleGroupCourtUI(key,gi){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 코트 배정 가능','info'); return; }
   const set=_gcSet(key);
   if(set.has(gi)) set.delete(gi); else set.add(gi);
-  // 렌더를 다시 해서(전체/단일 화면 모두) 열림 상태를 확실히 반영
   renderBracket();
 }
 
 async function onGroupCourtChange(key,gi){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 코트 배정 가능','info'); return; }
-  // 체크 중에도 UI가 닫히지 않도록 열린 상태 유지
   _gcSet(key).add(gi);
   const box = ge(_gcuiId(key,gi));
   if(!box) return;
@@ -16286,57 +16365,21 @@ async function onGroupCourtChange(key,gi){
     toast('코트 저장 실패: '+e.message,'error');
     return;
   }
-  // 다시 렌더(경기 카드/헤더 배지 갱신) + 열린 상태 유지
   renderBracket();
 }
 
-// ─── 조 코트 배정 (복수 선택) : 모달 방식 (체크 중 리렌더 방지) ───────────
 let GC_MODAL = { key:null, gi:null };
-
-function ensureGroupCourtModal(){
-  if(document.getElementById('mGCourt')) return;
-  const wrap=document.createElement('div');
-  wrap.className='modal-overlay';
-  wrap.id='mGCourt';
-  wrap.innerHTML=`
-    <div class="modal-box" style="max-width:640px">
-      <div class="modal-header">
-        <h3 id="mGCourtT">🎾 조 코트 배정</h3>
-        <button class="modal-close" onclick="cm('mGCourt')">✕</button>
-      </div>
-      <div class="modal-body" id="mGCourtB"></div>
-      <div class="modal-footer">
-        <button class="btn btn-gray" onclick="cm('mGCourt')">닫기</button>
-        <button class="btn btn-primary" onclick="saveGroupCourtModal()">💾 저장</button>
-      </div>
-    </div>`;
-  document.body.appendChild(wrap);
-  // 바깥 클릭 닫기
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
-}
 
 function openGroupCourtModal(key,gi){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 코트 배정 가능','info'); return; }
-  ensureGroupCourtModal();
   GC_MODAL={key,gi};
   const grpCourts=(G.draws[key]?.groups?.[gi]?.courts)||[];
   const title=`🎾 ${grpLabel(gi)} 코트 배정 (복수 선택)`;
-  const sectionsHtml = COURT_GROUPS.map(g=>{
-    const labels = g.courts.map(c=>{
-      const chk = grpCourts.includes(c) ? 'checked' : '';
-      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:white;font-size:.8rem;cursor:pointer">
-        <input type="checkbox" value="${c}" ${chk}>
-        <span>${c}</span>
-      </label>`;
-    }).join('');
-    return `<div style="margin-bottom:12px">
-      <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin:2px 2px 8px">📍 ${g.title}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">${labels}</div>
-    </div>`;
-  }).join('');
+  const sectionsHtml = renderCourtAccordionSelector(grpCourts, null, `group_${key}_${gi}`);
   const hint = `<div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
+    • 구장 이름을 누르면 아래에 세부 코트 번호가 펼쳐집니다.<br>
     • 체크박스로 여러 코트를 선택할 수 있습니다.<br>
-    • 아래 <b>저장</b>을 눌러야 반영됩니다.
+    • 아래 저장을 눌러야 반영됩니다.
   </div>`;
   ge('mGCourtT').textContent = title;
   ge('mGCourtB').innerHTML = hint + sectionsHtml;
@@ -16503,6 +16546,67 @@ async function saveGroupCourtModal(){
     toast('코트 저장 실패: '+e.message,'error');
   }
 }
+
+// ─── 조 메모 입력 모달 ───────────────────────────────────────────────
+let GM_MODAL = { key:null, gi:null };
+
+function ensureGroupMemoModal(){
+  if(document.getElementById('mGMemo')) return;
+  const wrap=document.createElement('div');
+  wrap.className='modal-overlay';
+  wrap.id='mGMemo';
+  wrap.innerHTML=`
+    <div class="modal-box" style="max-width:560px">
+      <div class="modal-header">
+        <h3 id="mGMemoT">📝 조 메모</h3>
+        <button class="modal-close" onclick="cm('mGMemo')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:.74rem;color:var(--text2);margin-bottom:10px;line-height:1.6;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+          예: 2번코트 대기 / 5분 뒤 출전 요망 / 경기순서 변경 등 운영 메모를 남길 수 있습니다.
+        </div>
+        <textarea class="form-textarea" id="mGMemoInput" placeholder="조별 운영 메모를 입력하세요"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="cm('mGMemo')">닫기</button>
+        <button class="btn btn-outline" onclick="clearGroupMemoModal()">지우기</button>
+        <button class="btn btn-primary" onclick="saveGroupMemoModal()">💾 저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+}
+function openGroupMemoModal(key,gi){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 조 메모 입력 가능','info'); return; }
+  ensureGroupMemoModal();
+  GM_MODAL={key,gi};
+  ge('mGMemoT').textContent=`📝 ${grpLabel(gi)} 메모`;
+  ge('mGMemoInput').value=getGroupMemo(key,gi);
+  om('mGMemo');
+}
+async function saveGroupMemoModal(){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 저장 가능','info'); return; }
+  const {key,gi}=GM_MODAL;
+  if(key==null || gi==null) return;
+  if(!G.draws[key] || !G.draws[key].groups || !G.draws[key].groups[gi]){ toast('추첨 데이터가 없습니다','error'); return; }
+  G.draws[key].groups[gi].memo = (ge('mGMemoInput')?.value||'').trim();
+  sl(true);
+  try{
+    await stD(key);
+    sl(false);
+    toast('조 메모 저장 ✅','success');
+    cm('mGMemo');
+    renderBracket();
+  }catch(e){
+    sl(false);
+    toast('메모 저장 실패: '+e.message,'error');
+  }
+}
+async function clearGroupMemoModal(){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 저장 가능','info'); return; }
+  if(ge('mGMemoInput')) ge('mGMemoInput').value='';
+}
+window.openGroupMemoModal = openGroupMemoModal;
 
 // ─── 과거 대회 요강 업로드 (관리자용) ───────────────────────────────
 window.HIST_GUIDE_PENDING = []; // File 객체 임시 보관
