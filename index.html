@@ -2955,6 +2955,50 @@ body.slider-ready .page:not(.active){
 
 <div class="modal-overlay" id="mTapOrder"><div class="modal-box" style="max-width:760px;width:96vw"><div class="modal-header"><h3 id="mTapOrderTitle">선수 입력</h3><button class="modal-close" onclick="closeTapOrderModal()">✕</button></div><div class="modal-body" style="max-height:78vh;overflow:auto"><div style="padding:10px 12px;background:linear-gradient(135deg,#fff7dd,#ffefb0);border:1px solid #d4a017;border-radius:12px;font-size:.8rem;color:#8a6412;line-height:1.6;margin-bottom:12px">1복식부터 차례대로 선수 2명씩 탭하세요. 2명을 채우면 자동으로 다음 복식으로 이동합니다. 이미 선택된 선수는 다시 선택되지 않습니다.</div><div id="tapOrderSummary" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px"></div><div id="tapOrderCurrent" style="padding:10px 12px;border-radius:12px;border:1.5px solid #93c5fd;background:#eff6ff;font-size:.88rem;font-weight:900;color:#1d4ed8;margin-bottom:12px"></div><div id="tapOrderPlayerList" style="display:flex;flex-wrap:wrap;gap:8px"></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="tapOrderClear()">🗑️ 지우기</button><button class="btn btn-danger" onclick="tapOrderReset()">🔄 초기화</button><button class="btn btn-gray" onclick="closeTapOrderModal()">닫기</button><button class="btn btn-primary" onclick="applyTapOrderSelections()">✅ 적용</button></div></div></div>
 
+
+<div class="modal-overlay" id="mPlayerQuickContact">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="mPlayerQuickContactTitle">📱 선수 연락</h3>
+      <button class="modal-close" onclick="cm('mPlayerQuickContact')">✕</button>
+    </div>
+    <div class="modal-body" id="mPlayerQuickContactBody"></div>
+    <div class="modal-footer" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+      <button class="btn btn-outline" id="mPlayerQuickContactCopy">📋 복사</button>
+      <button class="btn btn-outline" id="mPlayerQuickContactSms">💬 문자</button>
+      <button class="btn btn-primary" id="mPlayerQuickContactCall">📞 전화</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mIndividualExcelImport">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-header">
+      <h3>📥 개인전 엑셀 일괄 등록</h3>
+      <button class="modal-close" onclick="cm('mIndividualExcelImport')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:10px 12px;background:linear-gradient(135deg,#eef4ff,#fff8df);border:1px solid var(--border);border-radius:12px;font-size:.8rem;line-height:1.7;margin-bottom:12px">
+        <b>지원 컬럼</b>: 참가 No / 이름 / 구력 / 소속 / 전화번호(선택)<br>
+        · 이름, 구력, 소속은 <b>참가자1/참가자2</b>를 <b>/</b> 로 구분해도 됩니다.<br>
+        · 전화번호는 없으면 비워도 되며, 팝업에 <b>미등록</b>으로 표시됩니다.
+      </div>
+      <div class="form-group">
+        <label class="form-label">엑셀 파일 선택</label>
+        <input type="file" class="form-input" id="individualExcelFile" accept=".xlsx,.xls,.csv" onchange="previewIndividualExcelFile(this)">
+      </div>
+      <div id="individualExcelPreview" style="font-size:.78rem;color:var(--text2);line-height:1.6;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;min-height:70px">파일을 선택하면 미리보기가 표시됩니다.</div>
+      <div style="margin-top:10px;font-size:.74rem;color:var(--text3);line-height:1.6">
+        ※ 현재 선택한 <b>대회/부서</b>에 바로 등록됩니다. 같은 페어가 있으면 자동으로 건너뜁니다.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="cm('mIndividualExcelImport')">닫기</button>
+      <button class="btn btn-primary" onclick="importIndividualExcelTeams()">등록하기</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="TC"></div>
 <div class="sticky-alert-wrap" id="stickyAlertWrap" aria-live="polite" aria-atomic="true"></div>
 <button class="scroll-top" id="stBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
@@ -3148,7 +3192,10 @@ function ensureIndividualSimpleFields(){
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">이름<span class="req">*</span></label><input class="form-input" id="ip1name" placeholder="예: 이상영"></div>
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">클럽명<span class="req">*</span></label><input class="form-input" id="p1club" placeholder="예: 모던,나이스"></div>
         </div>
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="p1phone" inputmode="tel" placeholder="예: 010-1234-5678"></div>
+        <div class="frow">
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label">전화번호</label><input class="form-input" id="p1phone" inputmode="tel" placeholder="예: 010-1234-5678"></div>
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label">구력</label><input class="form-input" id="p1career" placeholder="예: 24.07"></div>
+        </div>
       </div>
       <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
         <div style="font-size:.82rem;font-weight:800;color:var(--primary-dark);margin-bottom:8px">2번 참가자</div>
@@ -3156,7 +3203,10 @@ function ensureIndividualSimpleFields(){
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">이름<span class="req">*</span></label><input class="form-input" id="ip2name" placeholder="예: 강대영"></div>
           <div class="form-group" style="margin-bottom:8px"><label class="form-label">클럽명<span class="req">*</span></label><input class="form-input" id="p2club" placeholder="예: 모던"></div>
         </div>
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="p2phone" inputmode="tel" placeholder="예: 010-9876-4321"></div>
+        <div class="frow">
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label">전화번호</label><input class="form-input" id="p2phone" inputmode="tel" placeholder="예: 010-9876-4321"></div>
+          <div class="form-group" style="margin-bottom:8px"><label class="form-label">구력</label><input class="form-input" id="p2career" placeholder="예: 23.06"></div>
+        </div>
       </div>
       <div class="frow">
         <div class="form-group" style="margin-bottom:0"><label class="form-label">비고</label><input class="form-input" id="pNote" placeholder="예: 혼복 / 전국신인 / 파트너변경 가능"></div>
@@ -4630,6 +4680,159 @@ async function saveAdminPhone(){
   }
 }
 
+
+let INDIVIDUAL_EXCEL_ROWS = [];
+function openIndividualExcelModal(){
+  const tid=ge('regTS')?.value||'';
+  const div=ge('regDS')?.value||'';
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  if(!tid || !div || !t){ toast('대회와 부서를 먼저 선택하세요','info'); return; }
+  if(!isIndividualTournament(t)){ toast('개인전 부서에서만 사용할 수 있습니다','info'); return; }
+  INDIVIDUAL_EXCEL_ROWS=[];
+  if(ge('individualExcelFile')) ge('individualExcelFile').value='';
+  if(ge('individualExcelPreview')) ge('individualExcelPreview').innerHTML='파일을 선택하면 미리보기가 표시됩니다.';
+  om('mIndividualExcelImport');
+}
+function parseIndividualExcelSheetRows(rows){
+  const out=[];
+  const cleaned=(rows||[]).map(r=>Array.isArray(r)?r.map(v=>String(v==null?'':v).trim()):[]);
+  const headerIdx=cleaned.findIndex(r=>r.some(c=>/참가\s*No|이름|성명|구력|소속|클럽/.test(c)));
+  const start=headerIdx>=0?headerIdx:0;
+  const header=cleaned[start]||[];
+  const idxBy=(patterns, fallback)=>{
+    for(let i=0;i<header.length;i++){
+      const cell=header[i]||'';
+      if(patterns.some(rx=>rx.test(cell))) return i;
+    }
+    return fallback;
+  };
+  const noIdx=idxBy([/참가\s*No/i,/번호/,/^No\.?$/i],1);
+  const nameIdx=idxBy([/이름/,/성명/,/참가자/],2);
+  const careerIdx=idxBy([/구력/,/경력/],3);
+  const clubIdx=idxBy([/소속/,/클럽/],4);
+  const phoneIdx=idxBy([/전화/,/휴대/,/연락처/],-1);
+  const noteIdx=idxBy([/기타/,/비고/,/메모/],-1);
+  for(const row of cleaned.slice(start+1)){
+    if(!row.some(Boolean)) continue;
+    const no=String(row[noIdx]||'').trim();
+    const nameRaw=String(row[nameIdx]||'').trim();
+    const careerRaw=String(row[careerIdx]||'').trim();
+    const clubRaw=String(row[clubIdx]||'').trim();
+    const phoneRaw=phoneIdx>=0?String(row[phoneIdx]||'').trim():'';
+    const note=noteIdx>=0?String(row[noteIdx]||'').trim():'';
+    if(!nameRaw || !clubRaw) continue;
+    const names=nameRaw.split('/').map(s=>s.trim()).filter(Boolean);
+    const careers=careerRaw.split('/').map(s=>normalizeCareerValue(s)).filter((v,idx,arr)=>idx<arr.length || v);
+    const clubs=clubRaw.split('/').map(s=>s.trim()).filter(Boolean);
+    const phones=phoneRaw.split('/').map(s=>formatPhoneLoose(s)).filter((v,idx,arr)=>idx<arr.length || v);
+    if(names.length<2 || clubs.length<2){
+      continue;
+    }
+    out.push({
+      entryNo:no,
+      note,
+      players:[
+        {name:names[0]||'', clubsRaw:clubs[0]||'', clubs:parseClubAliases(clubs[0]||''), phone:phones[0]||'', career:careers[0]||''},
+        {name:names[1]||'', clubsRaw:clubs[1]||'', clubs:parseClubAliases(clubs[1]||''), phone:phones[1]||'', career:careers[1]||''}
+      ]
+    });
+  }
+  return out;
+}
+async function previewIndividualExcelFile(input){
+  const file=input?.files?.[0];
+  if(!file) return;
+  try{
+    let rows=[];
+    if(/\.csv$/i.test(file.name||'')){
+      const text=await file.text();
+      rows=text.split(/\r?\n/).map(line=>line.split(','));
+    }else{
+      const buf=await file.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      let picked=null;
+      for(const s of wb.SheetNames){
+        const ws=wb.Sheets[s];
+        const arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        const hasHeader=arr.some(r=>Array.isArray(r)&&r.some(c=>/이름|구력|소속/.test(String(c||''))));
+        if(hasHeader && (!picked || /배포용/.test(s))) { picked={name:s, rows:arr}; if(/배포용/.test(s)) break; }
+      }
+      if(!picked) picked={name:wb.SheetNames[0], rows:XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''})};
+      rows=picked.rows;
+      window.__INDIVIDUAL_EXCEL_SHEET_NAME=picked.name;
+    }
+    INDIVIDUAL_EXCEL_ROWS=parseIndividualExcelSheetRows(rows);
+    const preview=ge('individualExcelPreview');
+    if(preview){
+      if(!INDIVIDUAL_EXCEL_ROWS.length){
+        preview.innerHTML='<span style="color:var(--danger)">가져올 수 있는 행이 없습니다. 이름/구력/소속 컬럼을 확인해 주세요.</span>';
+      }else{
+        preview.innerHTML=`<div style="font-weight:800;color:var(--primary-dark);margin-bottom:6px">감지된 참가팀 ${INDIVIDUAL_EXCEL_ROWS.length}건${window.__INDIVIDUAL_EXCEL_SHEET_NAME?` · 시트: ${window.__INDIVIDUAL_EXCEL_SHEET_NAME}`:''}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">${INDIVIDUAL_EXCEL_ROWS.slice(0,6).map((row,idx)=>`<div style="padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:10px"><div style="font-size:.8rem;font-weight:800">${row.entryNo||idx+1}. ${row.players[0].name} / ${row.players[1].name}</div><div style="font-size:.72rem;color:var(--text2);margin-top:3px">구력: ${(row.players[0].career||'-')} / ${(row.players[1].career||'-')} · 소속: ${row.players[0].clubsRaw} / ${row.players[1].clubsRaw}</div></div>`).join('')}</div>
+          ${INDIVIDUAL_EXCEL_ROWS.length>6?`<div style="margin-top:8px;font-size:.72rem;color:var(--text3)">외 ${INDIVIDUAL_EXCEL_ROWS.length-6}건 더 있습니다.</div>`:''}`;
+      }
+    }
+  }catch(e){
+    console.error(e);
+    INDIVIDUAL_EXCEL_ROWS=[];
+    if(ge('individualExcelPreview')) ge('individualExcelPreview').innerHTML=`<span style="color:var(--danger)">파일 분석 실패: ${e.message}</span>`;
+  }
+}
+async function importIndividualExcelTeams(){
+  const tid=ge('regTS')?.value||'';
+  const div=ge('regDS')?.value||'';
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  if(!AD){ toast('관리자 로그인 필요','info'); return; }
+  if(!tid || !div || !t){ toast('대회와 부서를 먼저 선택하세요','error'); return; }
+  if(!isIndividualTournament(t)){ toast('개인전 부서에서만 사용할 수 있습니다','error'); return; }
+  if(!INDIVIDUAL_EXCEL_ROWS.length){ toast('먼저 엑셀 파일을 선택해 주세요','error'); return; }
+  const key=tid+'_'+div;
+  if(!G.teams[key]) G.teams[key]=[];
+  const existing=G.teams[key];
+  const maxTeams=getDivisionMaxTeams(tid,div);
+  let added=0, skipped=0;
+  const createdPlayers=[];
+  for(const row of INDIVIDUAL_EXCEL_ROWS){
+    if(maxTeams>0 && existing.length>=maxTeams){ skipped++; continue; }
+    const players=row.players||[];
+    if(players.length<2) { skipped++; continue; }
+    const names=players.map(p=>String(p?.name||'').trim()).filter(Boolean);
+    if(names.length!==2) { skipped++; continue; }
+    const pairKey=[...names].sort().join('|');
+    const dup=existing.find(tm=>(((tm.players||[]).slice().sort().join('|'))===pairKey));
+    if(dup){ skipped++; continue; }
+    const newTeam={
+      club:players[0]?.clubsRaw||players[1]?.clubsRaw||'',
+      players:names,
+      individualPlayers:players,
+      clubTokens:[...new Set(players.flatMap(p=>p.clubs||[]))],
+      doublesCount:1,
+      mainPlayerCount:2,
+      pairLabel:getIndividualDisplayLine({individualPlayers:players}),
+      entryLabel:getIndividualDisplayLine({individualPlayers:players}),
+      tournamentType:'individual_pair',
+      note:String(row.note||'').trim(),
+      editPin:'',
+      registeredAt:new Date().toISOString()
+    };
+    existing.push(newTeam);
+    createdPlayers.push(...players);
+    added++;
+  }
+  if(!added){ toast(skipped?'중복 또는 형식 문제로 추가된 팀이 없습니다':'추가할 팀이 없습니다','info'); return; }
+  sl(true);
+  try{
+    await stT(key);
+    await persistIndividualPlayerMeta(createdPlayers);
+    sl(false);
+    cm('mIndividualExcelImport');
+    renderRL();
+    toast(`엑셀 일괄 등록 완료 ✅ ${added}팀 추가${skipped?` · ${skipped}팀 건너뜀`:''}`,'success');
+  }catch(e){
+    sl(false);
+    toast('엑셀 등록 실패: '+e.message,'error');
+  }
+}
 function _getActiveTournamentLabel(){
   try{
     const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
@@ -6204,11 +6407,155 @@ function isFirstAppearancePlayer(name, club, currentTid){
 
   return true;
 }
+function normalizeCareerValue(v){
+  return String(v==null?'':v).trim();
+}
+function findIndividualPlayerMeta(name, club=''){
+  try{
+    const nn=String(name||'').trim();
+    const cc=String(club||'').trim();
+    if(!nn) return null;
+    for(const list of Object.values(G.teams||{})){
+      for(const team of (list||[])){
+        for(const p of (team?.individualPlayers||[])){
+          const pName=String(p?.name||'').trim();
+          if(pName!==nn) continue;
+          const pClub=String(p?.clubsRaw||team?.club||'').trim();
+          const clubOk=!cc || pClub===cc || baseClub(pClub)===baseClub(cc) || parseClubAliases(pClub).includes(baseClub(cc));
+          if(!clubOk) continue;
+          return {
+            name: pName,
+            club: pClub,
+            phone: formatPhoneLoose(String(p?.phone||'')),
+            career: normalizeCareerValue(p?.career||''),
+            note: String(team?.note||'').trim()
+          };
+        }
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+function getPlayerContactInfo(name, club='', phone='', career=''){
+  try{
+    const nn=String(name||'').trim();
+    const cc=String(club||'').trim();
+    const info={phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:cc,note:''};
+    const fromTeam=findIndividualPlayerMeta(nn, cc);
+    if(fromTeam){
+      if(!info.phone && fromTeam.phone) info.phone=fromTeam.phone;
+      if(!info.career && fromTeam.career) info.career=fromTeam.career;
+      if(!info.club && fromTeam.club) info.club=fromTeam.club;
+      if(fromTeam.note) info.note=fromTeam.note;
+    }
+    const candidates=[];
+    if(cc){
+      candidates.push(pKey(nn, cc));
+      const bc=baseClub(cc);
+      if(bc && bc!==cc) candidates.push(pKey(nn, bc));
+    }
+    for(const key of candidates){
+      const p=G.players?.[key];
+      if(!p) continue;
+      if(!info.phone && p.phone) info.phone=formatPhoneLoose(String(p.phone));
+      if(!info.career && p.career) info.career=normalizeCareerValue(p.career);
+      if(!info.club && (p.club || pKeyParse(key).club)) info.club=String(p.club||pKeyParse(key).club||'').trim();
+    }
+    for(const [key,p] of Object.entries(G.players||{})){
+      const parsed=pKeyParse(key);
+      if(String(p?.name||parsed.name||'').trim()!==nn) continue;
+      if(cc){
+        const pClub=String(p?.club||parsed.club||'').trim();
+        const pBase=baseClub(pClub);
+        const clubBase=baseClub(cc);
+        const clubs=[pClub,pBase].filter(Boolean);
+        if(!clubs.includes(cc) && !(clubBase && clubs.includes(clubBase))) continue;
+      }
+      if(!info.phone && p?.phone) info.phone=formatPhoneLoose(String(p.phone));
+      if(!info.career && p?.career) info.career=normalizeCareerValue(p.career);
+      if(!info.club && (p?.club||parsed.club)) info.club=String(p?.club||parsed.club||'').trim();
+      break;
+    }
+    return info;
+  }catch(e){
+    return {phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:String(club||'').trim(),note:''};
+  }
+}
+function getPlayerPhone(name, club=''){
+  return getPlayerContactInfo(name, club).phone||'';
+}
+function getPlayerCareer(name, club=''){
+  return getPlayerContactInfo(name, club).career||'';
+}
+function renderClickablePlayerName(name, club='', phone='', style='', career=''){
+  const nm=String(name||'').trim();
+  if(!nm) return '-';
+  const info=getPlayerContactInfo(nm, club, phone, career);
+  const baseStyle=`cursor:pointer;${style||''}`;
+  return `<span onclick="openPlayerContact('${esc(nm)}','${esc(info.club||club||'')}','${esc(info.phone||'')}','${esc(info.career||'')}')" style="${baseStyle}">${nm}</span>`;
+}
+function renderClickablePlayerNames(names=[], club='', phones=[], careers=[]){
+  try{
+    return (names||[]).map((nm,idx)=>renderClickablePlayerName(nm, club, Array.isArray(phones)?phones[idx]:'', '', Array.isArray(careers)?careers[idx]:'')).join(' / ');
+  }catch(e){ return (names||[]).join(' / '); }
+}
+function openPlayerContact(name, club='', phone='', career=''){
+  try{
+    const nm=String(name||'').trim()||'선수';
+    const info=getPlayerContactInfo(nm, club, phone, career);
+    const raw=String(info.phone||'').trim();
+    const clean=raw.replace(/[^0-9+]/g,'');
+    const body=ge('mPlayerQuickContactBody');
+    const title=ge('mPlayerQuickContactTitle');
+    const callBtn=ge('mPlayerQuickContactCall');
+    const smsBtn=ge('mPlayerQuickContactSms');
+    const copyBtn=ge('mPlayerQuickContactCopy');
+    if(title) title.textContent=`📱 ${nm}`;
+    if(body){
+      body.innerHTML=`<div style="display:grid;gap:10px">
+        <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+          <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">전화번호</div>
+          <div style="font-size:1rem;font-weight:900;color:var(--text)">${raw||'미등록'}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">구력</div>
+            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.career||'미입력'}</div>
+          </div>
+          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">소속</div>
+            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.club||club||'-'}</div>
+          </div>
+        </div>
+        ${info.note?`<div style="padding:10px 12px;background:#fff8df;border:1px solid #f6d365;border-radius:12px;font-size:.82rem;line-height:1.6;color:#7a5600"><b>비고</b><br>${info.note}</div>`:''}
+      </div>`;
+    }
+    if(callBtn){
+      callBtn.disabled=!clean;
+      callBtn.onclick=()=>{ if(clean) location.href=`tel:${clean}`; };
+    }
+    if(smsBtn){
+      smsBtn.disabled=!clean;
+      smsBtn.onclick=()=>{ if(clean) location.href=`sms:${clean}`; };
+    }
+    if(copyBtn){
+      copyBtn.onclick=async ()=>{
+        if(!raw){ toast('전화번호가 등록되지 않았습니다','info'); return; }
+        const copied=await copyTextSafe(raw);
+        toast(copied?'번호 복사 완료 ✅':'번호를 수동으로 복사해 주세요','success');
+      };
+    }
+    om('mPlayerQuickContact');
+  }catch(e){
+    console.warn('openPlayerContact error', e);
+  }
+}
 function rosterPlayerHTML(name, club, tid){
   const mark=isFirstAppearancePlayer(name, club, tid);
-  return `<span onclick="openPD('${esc(name)}','${esc(club||'')}')" style="cursor:pointer;color:${mark?'#92400e':'var(--primary)'};font-weight:${mark?'800':'700'}">${name}</span>`;
+  const info=getPlayerContactInfo(name, club);
+  const style=`color:${mark?'#92400e':'var(--primary)'};font-weight:${mark?'800':'700'}`;
+  return renderClickablePlayerName(name, club, info.phone||'', style, info.career||'');
 }
-
 
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
@@ -6416,6 +6763,38 @@ function buildRegisterRosterGrid(tid,div,teams,key){
 }
 
 
+
+function upsertIndividualPlayerMetaRecords(individualPlayers=[]){
+  try{
+    (individualPlayers||[]).forEach(p=>{
+      const nm=String(p?.name||'').trim();
+      const rawClub=String(p?.clubsRaw||'').trim();
+      const career=normalizeCareerValue(p?.career||'');
+      const phone=formatPhoneLoose(String(p?.phone||''));
+      if(!nm || !rawClub) return;
+      const clubs=parseClubAliases(rawClub);
+      const base=clubs[0]||rawClub;
+      const key=pKey(nm, base);
+      if(!G.players[key]) G.players[key]={key,name:nm,club:base,clubs:[base],history:[],wins:0,losses:0};
+      const rec=G.players[key];
+      rec.key=key;
+      rec.name=nm;
+      rec.club=base;
+      rec.clubs=[...new Set([...(rec.clubs||[]), ...clubs, base].filter(Boolean))];
+      if(phone) rec.phone=phone;
+      if(career) rec.career=career;
+    });
+  }catch(e){}
+}
+async function persistIndividualPlayerMeta(individualPlayers=[]){
+  upsertIndividualPlayerMetaRecords(individualPlayers);
+  try{
+    const keys=(individualPlayers||[]).map(p=>pKey(String(p?.name||'').trim(), parseClubAliases(String(p?.clubsRaw||'').trim())[0]||String(p?.clubsRaw||'').trim())).filter(Boolean);
+    for(const k of keys){
+      if(G.players[k]) await stP(k);
+    }
+  }catch(e){ console.warn('persistIndividualPlayerMeta failed', e); }
+}
 function renderRegisterDivisionOverview(){
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
@@ -6518,6 +6897,19 @@ function renderRL(){
   ge('regSection').style.display='block';
   ge('aoReg').style.display=canRegister?'block':'none';
   if(canRegister) mountRegisterFormInline(div);
+  const bulkBarHost=ge('individualBulkImportBar');
+  if(bulkBarHost) bulkBarHost.remove();
+  if(canRegister && isIndividual && AD){
+    const formBox=ge('aoReg');
+    const titleEl=formBox?.querySelector('.card-title');
+    if(formBox && titleEl){
+      const bar=document.createElement('div');
+      bar.id='individualBulkImportBar';
+      bar.style.cssText='display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:-4px 0 10px';
+      bar.innerHTML=`<button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="openIndividualExcelModal()">📥 엑셀 일괄 등록</button>`;
+      titleEl.insertAdjacentElement('afterend', bar);
+    }
+  }
 
   if(REG && REG_CLUB && !AD && !isIndividual){
     setTimeout(()=>{
@@ -6615,6 +7007,8 @@ async function registerTeam(){
     const p2clubRaw=(ge('p2club')?.value||'').trim();
     const p1phone=formatPhoneLoose(ge('p1phone')?.value||'');
     const p2phone=formatPhoneLoose(ge('p2phone')?.value||'');
+    const p1career=normalizeCareerValue(ge('p1career')?.value||'');
+    const p2career=normalizeCareerValue(ge('p2career')?.value||'');
     const note=(ge('pNote')?.value||'').trim();
     const editPin=((ge('pEditPin')?.value||'').trim()).replace(/\D/g,'');
     names=[p1,p2].filter(Boolean);
@@ -6624,8 +7018,8 @@ async function registerTeam(){
     if(editPin.length!==4){toast('수정/삭제 비밀번호는 숫자 4자리로 입력해 주세요','error');return;}
     if((p1phone && p1phone.replace(/[^0-9]/g,'').length<9) || (p2phone && p2phone.replace(/[^0-9]/g,'').length<9)){toast('전화번호를 확인해 주세요','error');return;}
     individualPlayers=[
-      {name:p1, clubsRaw:p1clubRaw, clubs:parseClubAliases(p1clubRaw), phone:p1phone},
-      {name:p2, clubsRaw:p2clubRaw, clubs:parseClubAliases(p2clubRaw), phone:p2phone}
+      {name:p1, clubsRaw:p1clubRaw, clubs:parseClubAliases(p1clubRaw), phone:p1phone, career:p1career},
+      {name:p2, clubsRaw:p2clubRaw, clubs:parseClubAliases(p2clubRaw), phone:p2phone, career:p2career}
     ];
     const pairKey=[...names].sort().join('|');
     const dup=ex.find(tm=>(((tm.players||[]).slice().sort().join('|'))===pairKey));
@@ -6883,7 +7277,7 @@ function openETeam(key,idx){
             <div class="form-group" style="margin-bottom:8px"><label class="form-label">이름</label><input class="form-input" id="etIp1Name" value="${esc(ips[0]?.name||'')}"></div>
             <div class="form-group" style="margin-bottom:8px"><label class="form-label">클럽명</label><input class="form-input" id="etP1Club" value="${esc(ips[0]?.clubsRaw||'')}"></div>
           </div>
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="etP1Phone" value="${esc(ips[0]?.phone||'')}"></div>
+          <div class="frow"><div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="etP1Phone" value="${esc(ips[0]?.phone||'')}"></div><div class="form-group" style="margin-bottom:0"><label class="form-label">구력</label><input class="form-input" id="etP1Career" value="${esc(ips[0]?.career||'')}" placeholder="예: 24.07"></div></div>
         </div>
         <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
           <div style="font-size:.82rem;font-weight:800;color:var(--primary-dark);margin-bottom:8px">2번 참가자</div>
@@ -6891,7 +7285,7 @@ function openETeam(key,idx){
             <div class="form-group" style="margin-bottom:8px"><label class="form-label">이름</label><input class="form-input" id="etIp2Name" value="${esc(ips[1]?.name||'')}"></div>
             <div class="form-group" style="margin-bottom:8px"><label class="form-label">클럽명</label><input class="form-input" id="etP2Club" value="${esc(ips[1]?.clubsRaw||'')}"></div>
           </div>
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="etP2Phone" value="${esc(ips[1]?.phone||'')}"></div>
+          <div class="frow"><div class="form-group" style="margin-bottom:0"><label class="form-label">전화번호</label><input class="form-input" id="etP2Phone" value="${esc(ips[1]?.phone||'')}"></div><div class="form-group" style="margin-bottom:0"><label class="form-label">구력</label><input class="form-input" id="etP2Career" value="${esc(ips[1]?.career||'')}" placeholder="예: 23.06"></div></div>
         </div>
         <div class="frow">
           <div class="form-group" style="margin-bottom:0"><label class="form-label">비고</label><input class="form-input" id="etPNote" value="${esc(team.note||'')}"></div>
@@ -6952,9 +7346,11 @@ async function saveETeam(){
     const p1Name=(ge('etIp1Name')?.value||'').trim();
     const p1Club=(ge('etP1Club')?.value||'').trim();
     const p1Phone=formatPhoneLoose(ge('etP1Phone')?.value||'');
+    const p1Career=normalizeCareerValue(ge('etP1Career')?.value||'');
     const p2Name=(ge('etIp2Name')?.value||'').trim();
     const p2Club=(ge('etP2Club')?.value||'').trim();
     const p2Phone=formatPhoneLoose(ge('etP2Phone')?.value||'');
+    const p2Career=normalizeCareerValue(ge('etP2Career')?.value||'');
     const note=(ge('etPNote')?.value||'').trim();
     const editPin=String(ge('etEditPin')?.value||'').replace(/\D/g,'').slice(0,4);
 
@@ -6972,8 +7368,8 @@ async function saveETeam(){
     }
 
     const individualPlayers=[
-      {name:p1Name, clubsRaw:p1Club, clubs:parseClubAliases(p1Club), phone:p1Phone},
-      {name:p2Name, clubsRaw:p2Club, clubs:parseClubAliases(p2Club), phone:p2Phone}
+      {name:p1Name, clubsRaw:p1Club, clubs:parseClubAliases(p1Club), phone:p1Phone, career:p1Career},
+      {name:p2Name, clubsRaw:p2Club, clubs:parseClubAliases(p2Club), phone:p2Phone, career:p2Career}
     ];
     const backupTeam = JSON.parse(JSON.stringify(team));
     team.players = [p1Name,p2Name];
@@ -6998,6 +7394,7 @@ async function saveETeam(){
       return;
     }
 
+    try{ await persistIndividualPlayerMeta(individualPlayers); }catch(e){}
     sl(false);
     window.__IND_TEAM_EDIT_VERIFIED = false;
     cm('mETeam');
@@ -7850,35 +8247,38 @@ function renderBracketHTMLForDiv(tid,div,isAll){
           const isAdv=r<adv&&grpDone;
           const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
           const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
+          const rankLabel=s.rank==null?`${s.slot||r+1}번`:`${s.rank}위`;
           html+=`<div class="gs-row ${rowCls}">
-            <div class="gs-rk">${r+1}</div>
-            <div class="gs-nm">${s.nm}${isAdv?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
-            <div class="gs-stats"><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></div>
-          </div>`;
+            <div class="gs-rk">${rankLabel}</div>
+            <div class="gs-nm">${s.nm}${(isAdv&&s.rank!=null)?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
+            <div class="gs-stats">${s.rank==null?'<span style="color:var(--text3)">경기 전</span>':`<><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></>`}</div>
+          </div>`.replace('<>','').replace('</>','');
         });
         html+=`</div><div class="grp-matches-section"><div class="grp-matches-label">📋 경기 목록</div>`;
       }else{
         const indivRows=stats.map((s,r)=>{
           const team=teams[s.teamIdx]||{};
           const info=getIndividualTeamCompactInfo(team);
-          const rankColor=r===0?'#1d4ed8':r===1?'#c2410c':'#475569';
+          const hasRank=typeof s.rank==='number';
+          const rankColor=hasRank?(s.rank===1?'#1d4ed8':s.rank===2?'#c2410c':'#475569'):'#475569';
           const diffColor=s.diff>0?'#1565c0':s.diff<0?'#c62828':'#64748b';
-          const grpTeamLabel=getIndividualSideLabel(key,{group:gi},s.teamIdx)||`${r+1}번`;
-          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:${r===0?'linear-gradient(135deg,#eff6ff,#f8fbff)':r===1?'linear-gradient(135deg,#fff7ed,#fffaf5)':'#fff'}">
+          const grpTeamLabel=getIndividualSideLabel(key,{group:gi},s.teamIdx)||`${s.slot||r+1}번`;
+          const leftLabel=hasRank?`${s.rank}위`:`${s.slot||r+1}번`;
+          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:${hasRank?(s.rank===1?'linear-gradient(135deg,#eff6ff,#f8fbff)':s.rank===2?'linear-gradient(135deg,#fff7ed,#fffaf5)':'#fff'):'#fff'}">
             <div style="flex:0 0 46px;text-align:center">
-              <div style="font-size:.72rem;font-weight:900;color:${rankColor}">${r+1}위</div>
+              <div style="font-size:.72rem;font-weight:900;color:${rankColor}">${leftLabel}</div>
               <div style="margin-top:6px;padding:4px 0;border-radius:10px;background:#f8fafc;border:1px solid var(--border);font-size:.72rem;font-weight:900;color:var(--primary)">${grpTeamLabel}</div>
             </div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:.98rem;font-weight:900;color:var(--text);line-height:1.38;word-break:keep-all;overflow-wrap:anywhere">${info.names}</div>
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);line-height:1.38;word-break:keep-all;overflow-wrap:anywhere">${info.namesHtml||info.names}</div>
               ${info.clubs?`<div style="font-size:.66rem;color:#64748b;margin-top:4px;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere">${info.clubs}</div>`:''}
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+              ${hasRank?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
                 <span class="badge bg-blue" style="font-size:.72rem;padding:3px 8px">승 ${s.w}</span>
                 <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">패 ${s.l}</span>
                 <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">득 ${s.pf}</span>
                 <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">실 ${s.pa}</span>
                 <span class="badge" style="font-size:.72rem;padding:3px 8px;background:#f8fafc;color:${diffColor};border:1px solid ${diffColor==='\#64748b'?'#cbd5e1':diffColor}">득실 ${s.diff>0?'+':''}${s.diff}</span>
-              </div>
+              </div>`:''}
             </div>
           </div>`;
         }).join('');
@@ -8108,11 +8508,22 @@ function getIndividualTeamCompactInfo(team){
     const players=getIndividualPlayers(team).slice(0,2);
     const names=players.map(p=>String(p?.name||'').trim()).filter(Boolean);
     const clubs=players.map(p=>String(p?.clubsRaw||'').trim()).filter(Boolean);
+    const namesHtml=players.length
+      ? players.map(p=>{
+          const nm=String(p?.name||'').trim();
+          if(!nm) return '';
+          const ph=formatPhoneLoose(String(p?.phone||'').trim());
+          const club=String(p?.clubsRaw||'').trim();
+          const career=normalizeCareerValue(p?.career||'');
+          return renderClickablePlayerName(nm, club, ph, 'font-weight:900;color:var(--text)', career);
+        }).filter(Boolean).join(' / ')
+      : '-';
     return {
       names: names.length ? names.join(' / ') : '-',
+      namesHtml,
       clubs: clubs.length ? clubs.join(' · ') : ''
     };
-  }catch(e){ return {names:'-', clubs:''}; }
+  }catch(e){ return {names:'-', namesHtml:'-', clubs:''}; }
 }
 function getIndividualGroupStatsMap(key,gi){
   try{
@@ -8124,8 +8535,10 @@ function getIndividualGroupStatsMap(key,gi){
     const out={};
     stats.forEach((s,idx)=>{
       const teamKey = s.teamIdx ?? s.ti ?? s.teamId ?? s.idx;
+      const hasRank=typeof s.rank==='number';
       out[String(teamKey)]={
-        rank:idx+1,
+        rank:hasRank?s.rank:null,
+        slot:idx+1,
         w:Number(s.w||0),
         l:Number(s.l||0),
         pf:Number(s.pf ?? s.gw ?? 0),
@@ -8138,7 +8551,7 @@ function getIndividualGroupStatsMap(key,gi){
 }
 function individualMiniStatHtml(st){
   try{
-    if(!st) return '<span style="font-size:.67rem;color:#94a3b8">순위 대기</span>';
+    if(!st || st.rank==null) return '';
     return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
       <span style="font-size:.67rem;font-weight:900;color:${st.rank===1?'#1d4ed8':st.rank===2?'#c2410c':'#475569'}">${st.rank}위</span>
       <span style="font-size:.64rem;color:#64748b">${st.w}승 ${st.l}패</span>
@@ -8209,7 +8622,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <div style="${sideWrap1Style}">
             <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
             <div style="padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--border);text-align:center;line-height:1.35;min-width:0;overflow:hidden">
-              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info1.names}</div>
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info1.namesHtml||info1.names}</div>
               ${info1.clubs?`<div style="font-size:.62rem;color:#64748b;margin-top:4px;white-space:normal;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere">${info1.clubs}</div>`:''}
               ${individualMiniStatHtml(stat1)}
             </div>
@@ -8218,7 +8631,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <div style="${sideWrap2Style}">
             <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel2}</div>
             <div style="padding:10px;border-radius:10px;background:#f8fafc;border:1px solid var(--border);text-align:center;line-height:1.35;min-width:0;overflow:hidden">
-              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info2.names}</div>
+              <div style="font-size:.98rem;font-weight:900;color:var(--text);word-break:keep-all;overflow-wrap:anywhere">${info2.namesHtml||info2.names}</div>
               ${info2.clubs?`<div style="font-size:.62rem;color:#64748b;margin-top:4px;white-space:normal;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere">${info2.clubs}</div>`:''}
               ${individualMiniStatHtml(stat2)}
             </div>
@@ -8589,14 +9002,22 @@ function renderBracketTree(key,mMs,teams){
 }
 
 function calcGS(key,gi,tidxs,teams){
-  return tidxs.map(ti=>{
-    const tm=teams[ti];let w=0,l=0,gw=0,gl=0;
+  const rows=tidxs.map((ti,slotIdx)=>{
+    const tm=teams[ti];let w=0,l=0,gw=0,gl=0,played=0;
     (G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi&&(m.t1===ti||m.t2===ti)).forEach(m=>{
-      if(m.winner===null)return;const isT1=m.t1===ti,sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
-      if(m.winner===ti)w++;else l++;gw+=sc;gl+=scO;
+      const isT1=m.t1===ti;
+      const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
+      const hasRealScore=rubbers.some(rb=>rb&&((rb.score1!=null&&rb.score1!=='')||(rb.score2!=null&&rb.score2!=='')));
+      if(!hasRealScore) return;
+      played++;
+      const sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
+      if(m.winner===ti) w++; else if(m.winner!=null) l++;
+      gw+=sc;gl+=scO;
     });
-    return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl};
-  }).sort((a,b)=>b.w-a.w||b.diff-a.diff);
+    return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl,slot:slotIdx+1,played};
+  }).sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
+  const hasAnyScore=rows.some(r=>Number(r.played||0)>0);
+  return rows.map((row,idx)=>({...row, rank:hasAnyScore?(idx+1):null}));
 }
 function rbSc(m,idx){if(!m.rubbers)return 0;return m.rubbers.filter(rb=>rb&&rb.winner===idx).length;}
 function getMatchDoublesCount(key,m){
@@ -13809,7 +14230,7 @@ function buildPH(name,p){
         <b style="font-size:1.1rem">${name}</b>
         <div style="font-size:.75rem;color:var(--text2);margin-top:2px">주클럽: ${clubInfo.mainClub||'-'}</div>
         ${clubInfo.subClubs.length?`<div style="font-size:.75rem;margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span style="color:#7c3aed;font-weight:600">부클럽:</span><span class="sub-badge" style="font-size:.72rem">${clubInfo.subClubs.join(', ')}</span></div>`:''}
-        ${AD&&p.phone?`<div style="font-size:.75rem;color:var(--text2);margin-top:2px">📱 ${p.phone}</div>`:''}
+        ${(p.phone||p.career)?`<div style="font-size:.75rem;color:var(--text2);margin-top:2px;display:flex;gap:10px;flex-wrap:wrap">${p.phone?`<span>📱 ${p.phone}</span>`:''}${p.career?`<span>⏱ 구력 ${p.career}</span>`:''}</div>`:''}
         ${divTags?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px">${divTags}</div>`:''}
       </div>
     </div>
@@ -18034,7 +18455,7 @@ Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullsc
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
   onRankTC,renderRanking,
-  filterP,showP,renderAllP,openPD,openRoster,
+  filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
