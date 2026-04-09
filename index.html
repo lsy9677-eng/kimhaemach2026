@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v148-prelim-court-pool-grouped-selector";
+  const APP_VERSION = "2026-04-09-v156-display-only-main-filter-safe";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3801,7 +3801,7 @@ function getAutoAssignedGroupsForCourt(key, court){
   }catch(e){ return []; }
 }
 function getCourtStatusSnapshot(key){
-  const selectedCourts=getSelectedCourtFilters(key)||[];
+  const selectedCourts=getDisplayCourtFilters(key)||[];
   const usedCourts=getUsedCourtsForKey(key);
   const targetCourts=(selectedCourts.length && isIndividualByKey(key))
     ? [...new Set([...selectedCourts, ...usedCourts])]
@@ -4937,6 +4937,9 @@ function isOperatorMode(){ return !!(OP && !AD); }
 
 const INDIV_OPERATOR_FILTERS = {};
 const INDIV_FILTER_STORAGE_KEY = 'kimhae_indiv_operator_filters_v1';
+// 보기 필터는 화면 렌더링 전용이다. 실제 코트 배정 허용 범위, 자동 코트 배정,
+// 수동 코트 이동, 저장 데이터에는 절대 영향을 주지 않는다.
+
 function loadIndivOperatorFilters(){
   try{
     const raw=localStorage.getItem(INDIV_FILTER_STORAGE_KEY);
@@ -5031,7 +5034,7 @@ function getIndivFilterHeading(){
 }
 function getIndivFilterSubheading(){
   return (AD || OP)
-    ? '조, 코트, 본선 구간은 중복 선택 가능합니다. 이 설정은 보기용이며 실제 배정 구조는 바꾸지 않습니다.'
+    ? '조, 코트, 본선 구간은 중복 선택 가능합니다. 이 설정은 보기용이며 실제 코트 배정·자동배정·저장 데이터는 바꾸지 않습니다.'
     : '보고 싶은 조, 코트, 본선 구간만 골라서 화면을 간단하게 볼 수 있습니다.';
 }
 function closeIndivFilterPicker(){
@@ -5161,6 +5164,10 @@ window.toggleTempIndivFilter = toggleTempIndivFilter;
 window.clearTempIndivFilters = clearTempIndivFilters;
 window.applyIndivFilterPicker = applyIndivFilterPicker;
 
+function getDisplayGroupFilters(key){ return getIndivOperatorGroupFilter(key)||[]; }
+function getDisplayCourtFilters(key){ return getSelectedCourtFilters(key)||[]; }
+function getDisplayMainBlockFilters(key){ return getSelectedMainBlockFilters(key)||[]; }
+
 function getVisibleGroupIndexesForKey(key){
   const draw=G.draws[key]||{};
   const groups=Array.isArray(draw.groups)?draw.groups:[];
@@ -5254,6 +5261,8 @@ function getGroupAssignedCourts(key, gi){
 }
 function getAllowedCourtsForMatch(key,m){
   if(!m) return [];
+  // 중요: 여기서는 보기 필터(getSelectedCourtFilters / 본선구간 필터)를 절대 참조하지 않는다.
+  // 실제 배정 허용 코트는 부서 기본 코트 + 조 코트 배정만 기준으로 계산한다.
   const drawAllowed=getBracketAllowedCourts(key).map(String);
   let pool=drawAllowed.length ? COURT_LIST.filter(c=>drawAllowed.includes(String(c))) : COURT_LIST.slice();
   if(!isIndividualByKey(key)) return pool;
@@ -10137,8 +10146,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   html += renderMatchProgressSummary(key);
   if(isIndivKey && draw?.groups?.length){
-    const selectedGroups=getIndivOperatorGroupFilter(key)||[];
-    const selectedCourts=getSelectedCourtFilters(key)||[];
+    const selectedGroups=getDisplayGroupFilters(key)||[];
+    const selectedCourts=getDisplayCourtFilters(key)||[];
     const selectedMainMatches=getSelectedMainMatchFilters(key)||[];
     const summaryText = formatIndivFilterSummary(key);
     html += `<div style="margin:10px 0 12px;padding:12px 14px;border:1px solid #dbe7ff;border-radius:14px;background:linear-gradient(135deg,#fff,#f8fbff)">
@@ -10397,7 +10406,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
     const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
-    const hasMainOpFilter=(getSelectedMainBlockFilters(key).length>0);
+    const hasMainOpFilter=(getDisplayMainBlockFilters(key).length>0);
     html+= `<div id="mainStage_${tid}_${div}">`+(filteredMainMs.length?renderBracketTree(key,filteredMainMs,teams):`<div style="padding:14px 12px;border:1px dashed #bfdbfe;border-radius:12px;background:#fff;font-size:.82rem;color:var(--text2)">선택한 본선 구간에 표시할 대진이 없습니다.</div>`)+`</div>`;
 
     // 진출전(play-in) 경기 표시
