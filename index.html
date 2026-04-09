@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v157-reads-optimized";
+  const APP_VERSION = "2026-04-09-v158-read-burst-reduced";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3417,7 +3417,7 @@ function etAddCustomDiv(){
 function grpLabel(gi){ return `${Number(gi)+1}조`; }
 
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
@@ -3446,6 +3446,63 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
 let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0},clubs:["LTC", "T-ONE", "UDT", "UP테니스", "경운", "국제", "금병", "김해시니어", "남산", "능동", "단디", "더원", "동김해", "돛대", "로패", "모던", "목련", "불사조", "삼계", "수로", "써올", "아테", "영운", "웅진", "원도심", "장유여성", "중앙", "테사모", "포텐이스", "포티올", "하모니"],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
+const PLAYER_CACHE_TTL=1000*60*60*12;
+let PLAYERS_LOADED=false;
+let PLAYERS_LOADING_PROMISE=null;
+function _playerDocId(k){ return String(k||'').replace(/[\/\.#\$\[\]]/g,'_'); }
+function loadPlayersFromLocalCache(){
+  try{
+    const raw=localStorage.getItem(PLAYER_CACHE_KEY);
+    if(!raw) return false;
+    const parsed=JSON.parse(raw);
+    const ts=Number(parsed?.ts||0);
+    const data=parsed?.data||{};
+    if(!ts || !data || typeof data!=='object') return false;
+    if(Date.now()-ts>PLAYER_CACHE_TTL) return false;
+    G.players=data;
+    return Object.keys(G.players||{}).length>0;
+  }catch(e){ return false; }
+}
+function savePlayersToLocalCache(){
+  try{
+    localStorage.setItem(PLAYER_CACHE_KEY, JSON.stringify({ts:Date.now(), data:G.players||{}}));
+  }catch(e){}
+}
+async function ensurePlayersLoaded(force=false){
+  if(force){ PLAYERS_LOADED=false; PLAYERS_LOADING_PROMISE=null; }
+  if(PLAYERS_LOADED && !force) return G.players||{};
+  if(PLAYERS_LOADING_PROMISE && !force) return PLAYERS_LOADING_PROMISE;
+  PLAYERS_LOADING_PROMISE=(async()=>{
+    const playersSnap=await getDocs(collection(db,'players'));
+    const next={};
+    playersSnap.forEach(d=>{
+      const x=d.data();
+      if(!x?.name) return;
+      const k=x.key||(x.club?x.name+'__'+x.club:x.name);
+      next[k]=x;
+    });
+    G.players=next;
+    PLAYERS_LOADED=true;
+    savePlayersToLocalCache();
+    return G.players;
+  })().catch(err=>{
+    console.warn('ensurePlayersLoaded failed', err);
+    throw err;
+  }).finally(()=>{ PLAYERS_LOADING_PROMISE=null; });
+  return PLAYERS_LOADING_PROMISE;
+}
+function getRealtimeTargetTournamentId(){
+  try{
+    const selected = ge('brTS')?.value || ge('regTS')?.value || ge('rankTS')?.value || '';
+    if(selected && (G.tournaments||[]).some(t=>t.id===selected)) return selected;
+  }catch(e){}
+  return (G.tournaments||[]).find(t=>t.status==='ongoing')?.id
+    || (G.tournaments||[]).find(t=>t.status==='open')?.id
+    || sortTournamentsLatest(G.tournaments||[])[0]?.id
+    || '';
+}
+
 window.G = G;
 
 let CE_tid=null,CE_key=null,CE_idx=null,CM_key=null,CM_id=null,CD_key=null;
@@ -4399,9 +4456,15 @@ async function initFB(){
         _onRegsSnap, e=>console.error('regs snap err',e)
       );
 
-      // ③ 대진표 - 활성 대회 문서만 구독 (draws/{tid_div} 구조이므로 prefix 필터 불가 → 전체 유지하되 캐시 활용)
-      //    draws는 문서 수가 적고(부서 수만큼) 변경 빈도도 낮으므로 전체 구독 유지
-      _unsubDraws = onSnapshot(collection(db,'draws'), _onDrawsSnap, e=>console.error('draws snap err',e));
+      // ③ 대진표 - 활성 대회 draw 문서만 구독
+      _unsubDraws = onSnapshot(
+        query(
+          collection(db,'draws'),
+          where(documentId(), '>=', newTid + '_'),
+          where(documentId(), '<=', newTid + '_\uf8ff')
+        ),
+        _onDrawsSnap, e=>console.error('draws snap err',e)
+      );
 
       // ④ 경기결과 - 활성 대회만 구독
       _unsubMatches = onSnapshot(
@@ -4413,23 +4476,15 @@ async function initFB(){
     // ① 대회 목록 구독 → 대회 목록이 바뀌면 최신(가장 최근) 대회로 자동 재구독
     onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')),s=>{
       G.tournaments=s.docs.map(d=>({id:d.id,...d.data()}));
-      // 가장 최근 대회(첫 번째)를 활성 대회로 자동 선택하여 하위 컬렉션 재구독
-      const latestTid = G.tournaments.length ? G.tournaments[0].id : null;
-      window._resubscribeByTid(latestTid);
+      const activeTid = getRealtimeTargetTournamentId() || null;
+      window._resubscribeByTid(activeTid);
       onDU();
     },e=>console.error(e));
 
-    // ④ 선수 기록 - 1회 읽기만 (저장 후 로컬에서 업데이트)
-    // onSnapshot → getDocs: reads 수천 회 → 1회로 절감
-    const playersSnap=await getDocs(collection(db,'players'));
-    G.players={};
-    playersSnap.forEach(d=>{
-      const x=d.data();
-      if(!x?.name) return;
-      const k=x.key||(x.club?x.name+'__'+x.club:x.name);
-      G.players[k]=x;
-    });
-    renderAllP();popCF();
+    // ④ 선수 기록 - 초기 진입 시 Firestore 전체 읽기 금지
+    //    로컬 캐시만 우선 사용하고, 선수기록 탭/선수상세를 열 때만 필요 시 1회 로드
+    loadPlayersFromLocalCache();
+    popCF();
     // ⑤ 활동로그 - 최근 10개만 1회 읽기 (실시간 불필요)
     try{
       const logSnap=await getDocs(query(collection(db,'activityLog'),orderBy('time','desc'),limit(10)));
@@ -5540,6 +5595,13 @@ function showPage(n){
     const el=ge('rankTS');
     if(el && !el.value){ el.value = pickDefaultTournamentId(); onRankTC(); }
   }
+
+  try{
+    if(window._resubscribeByTid){
+      const activeTid = getRealtimeTargetTournamentId();
+      window._resubscribeByTid(activeTid||null);
+    }
+  }catch(e){}
 
   window.scrollTo({top:0,behavior:'auto'});
   renderFloatingNotice();
@@ -8244,6 +8306,7 @@ function rosterPlayerHTML(name, club, tid){
 
 function onRegTC(){
   const tid=ge('regTS').value,ds=ge('regDS');
+  try{ if(window._resubscribeByTid) window._resubscribeByTid(tid || getRealtimeTargetTournamentId() || null); }catch(e){}
   setRegClubInputMode(currentRegIsIndividual());
   applyRegLoginUI();
   ge('regSection').style.display='none';
@@ -9260,6 +9323,7 @@ function initBracketNotice(){
 
 function onBrTC(){
   const tid=ge('brTS').value, ds=ge('brDS');
+  try{ if(window._resubscribeByTid) window._resubscribeByTid(tid || getRealtimeTargetTournamentId() || null); }catch(e){}
   if(!tid){
     if(ds) ds.innerHTML='<option value="__ALL__">전체</option>';
     BR_MULTI_DIVS=['__ALL__'];
@@ -15992,6 +16056,7 @@ async function autoAdv(key,mid){
 
 function onRankTC(){
   const tid=ge('rankTS').value, ds=ge('rankDS');
+  try{ if(window._resubscribeByTid) window._resubscribeByTid(tid || getRealtimeTargetTournamentId() || null); }catch(e){}
   ds.innerHTML='<option value="">전체 부서</option><option value="__GUIDE__">📌 요강</option>';
   if(!tid)return;
   const t=[...G.tournaments,...HIST_DATA].find(t=>t.id===tid);
@@ -17491,7 +17556,8 @@ function phint(inp,num){
     </span>`;
   }).join(' ');
 }
-function openPHist(iid){
+async function openPHist(iid){
+  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
   let name=(ge(iid)?.value||'').trim();
   if(!name){toast('이름 먼저 입력','info');return;}
 
@@ -17630,7 +17696,8 @@ function buildPH(name,p){
 }
 function popCF(){const el=ge('pfClub');if(!el)return;const cur=el.value;el.innerHTML='<option value="">전체 클럽</option>'+G.clubs.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');}
 function filterP(){PF.club=ge('pfClub')?.value||'';PF.div=ge('pfDiv')?.value||'';PF.search=ge('psInput')?.value||'';renderAllP();}
-function showP(name,club){
+async function showP(name,club){
+  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
   const sec=ge('ppSection');
   if(sec) sec.style.display='none';
 
@@ -17661,6 +17728,7 @@ function showP(name,club){
   om('mPHist');
 }
 function renderAllP(){
+  if(!PLAYERS_LOADED && !Object.keys(G.players||{}).length){ loadPlayersFromLocalCache(); }
   // 2026 등록 명단 로드 (비동기면 캐시에서, 없으면 기본값)
   const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
   const fbKeys = Object.keys(G.players||{});
@@ -17794,7 +17862,8 @@ function renderAllP(){
     ...filteredOther.map(name=>makeRow(name,'','',false))
   ].join('');
 }
-function openPD(name,club){
+async function openPD(name,club){
+  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
   // name에 "이름__클럽"이 들어와도 정상 표시되도록 보정
   const sp = splitKeyNameClub(name);
   const dispName = sp.name || (name||'');
@@ -17932,6 +18001,7 @@ async function saveEditPlayer(){
         tm.players=tm.players.map(pn=>{if(pn===oldDisplayName){cnt++;return finalDisplayName;}return pn;});
       }));
       toast(cnt>0?'"'+finalDisplayName+'"으로 변경됨 ✅':'변경할 기록 없음','success');
+      savePlayersToLocalCache();
       cm('mEditP');renderAllP();
     }
     return;
@@ -17976,6 +18046,7 @@ async function saveEditPlayer(){
       registrySynced = await syncRegistryRow();
       toast('저장 완료 ✅','success');
     }
+    savePlayersToLocalCache();
     sl(false);cm('mEditP');renderAllP();
     if(window.renderRegistryTab) renderRegistryTab();
     await fbLog('선수수정: '+oldDisplayName+'→'+finalDisplayName+(registrySynced?' (등록명단 동기화)':''),'✏️');
@@ -20967,7 +21038,7 @@ function switchPlayersTab(tab){
     setTimeout(()=>initRegistryTab(),0);
   }
   if(tab==='records'){
-    loadRegistry(2026).then(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
+    Promise.all([loadRegistry(2026), ensurePlayersLoaded()]).then(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); }).catch(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
   }
 }
 
@@ -21168,6 +21239,7 @@ async function registryTabQuickAdd(){
     if(ge('rtabAddName')) ge('rtabAddName').value='';
     if(ge('rtabAddSubClub')) ge('rtabAddSubClub').value='';
     toast(`${name}(${club}) 추가 완료 ✅`,'success');
+    savePlayersToLocalCache();
     renderAllP();
     renderRegistryTab();
   }catch(e){ sl(false); toast('추가 실패: '+e.message,'error'); }
@@ -21191,6 +21263,7 @@ async function quickEditRegistryMember(year, idx){
     await saveRegistry(year);
     sl(false);
     toast(`${m.name} → ${trimmed} 수정 완료`,'success');
+    savePlayersToLocalCache();
     renderAllP();
     renderRegistryTab();
   }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
@@ -21210,6 +21283,7 @@ async function quickDeleteRegistryMember(year, idx){
     await saveRegistry(year);
     sl(false);
     toast(`${m.name} 삭제 완료`,'success');
+    savePlayersToLocalCache();
     renderAllP();
     renderRegistryTab();
   }catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
