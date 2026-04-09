@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v156-display-only-main-filter-safe";
+  const APP_VERSION = "2026-04-09-v157-reads-optimized";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4327,12 +4327,15 @@ async function initFB(){
     // players, activityLog는 1회 읽기로 변경 → reads 90% 절감
 
     // ① 대회 목록 - 실시간 감지 유지 (여러 기기 동시 사용 가능성)
-    onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')),s=>{
-      G.tournaments=s.docs.map(d=>({id:d.id,...d.data()}));onDU();
-    },e=>console.error(e));
+    // ── 읽기 최적화 v157: registrations/matches/draws를 활성 대회 ID 기반 동적 재구독으로 변경
+    // 전체 컬렉션 구독 → 활성 대회 1개만 where 필터링 → 경기이사 5명 동시 접속 시 reads ~90% 절감
 
-    // ② 팀등록 - 실시간 감지 유지
-    onSnapshot(collection(db,'registrations'),s=>{
+    // ── 동적 재구독 관리 변수
+    let _activeSubTid = null; // 현재 구독 중인 대회 ID
+    let _unsubRegs = null, _unsubMatches = null, _unsubDraws = null;
+
+    // registrations 구독용 콜백 (재사용)
+    function _onRegsSnap(s){
       G.teams={};G._regIdsByKey={};
       s.docs.forEach(d=>{
         const x=d.data()||{};const tid=x.tournamentId,div=x.division;
@@ -4345,14 +4348,10 @@ async function initFB(){
       });
       Object.keys(G.teams).forEach(k=>{G.teams[k].sort((a,b)=>(a.registeredAt||'').localeCompare(b.registeredAt||'')); const docs=(G.teams[k]||[]).map(t=>normalizeRegistrationPayloadForHash({tournamentId:k.slice(0,k.lastIndexOf('_')),division:k.slice(k.lastIndexOf('_')+1),club:t.club,players:t.players||[],registeredAt:t.registeredAt||'',...(t.tournamentType?{tournamentType:t.tournamentType}:{}),...(t.editPin?{editPin:t.editPin}:{}),...(Array.isArray(t.individualPlayers)?{individualPlayers:t.individualPlayers}:{}),...(t.clubTokens?{clubTokens:t.clubTokens}:{}),...(t.pairLabel!==undefined?{pairLabel:t.pairLabel}:{}),...(t.entryLabel!==undefined?{entryLabel:t.entryLabel}:{}),...(t.note!==undefined?{note:t.note}:{}),...(t.doublesCount!==undefined?{doublesCount:t.doublesCount}:{}),...(t.mainPlayerCount!==undefined?{mainPlayerCount:t.mainPlayerCount}:{}),...(t.tiebreakAge!==undefined?{tiebreakAge:Number(t.tiebreakAge||0)||0}:{})})); markFbWriteCache('teams',k,{docs,ids:(G._regIdsByKey[k]||[]).slice().sort(),deleted:[]});});
       onDU();
-    },e=>console.error(e));
+    }
 
-    // ③ 대진표/경기결과 - 실시간 감지 유지 (경기 중 업데이트 필요)
-    onSnapshot(collection(db,'draws'),s=>{
-      G.draws={};s.docs.forEach(d=>{G.draws[d.id]=d.data(); markFbWriteCache('draws', d.id, d.data()||{});});onDU();
-    },e=>console.error(e));
-
-    onSnapshot(collection(db,'matches'),s=>{
+    // matches 구독용 콜백 (재사용)
+    function _onMatchesSnap(s){
       const prevMatchMap=buildMatchAlertStateMap(G.matches||{});
       G.matches={};G._matchIdsByKey={};
       s.docs.forEach(d=>{
@@ -4370,6 +4369,53 @@ async function initFB(){
       }catch(alertErr){
         console.warn('order alert process failed', alertErr);
       }
+      onDU();
+    }
+
+    // draws 구독용 콜백 (재사용)
+    function _onDrawsSnap(s){
+      G.draws={};s.docs.forEach(d=>{G.draws[d.id]=d.data(); markFbWriteCache('draws', d.id, d.data()||{});});onDU();
+    }
+
+    // ── 활성 대회 ID가 바뀔 때 registrations/matches/draws 재구독
+    window._resubscribeByTid = function(newTid){
+      if(_activeSubTid === newTid) return; // 동일 대회면 재구독 불필요
+      _activeSubTid = newTid;
+
+      // 기존 구독 해제
+      if(_unsubRegs){ try{_unsubRegs();}catch(e){} _unsubRegs=null; }
+      if(_unsubMatches){ try{_unsubMatches();}catch(e){} _unsubMatches=null; }
+      if(_unsubDraws){ try{_unsubDraws();}catch(e){} _unsubDraws=null; }
+
+      if(!newTid){
+        // 선택된 대회 없으면 빈 상태 유지
+        G.teams={};G._regIdsByKey={};G.matches={};G._matchIdsByKey={};G.draws={};
+        onDU(); return;
+      }
+
+      // ② 팀등록 - 활성 대회만 구독 (전체→필터링으로 reads 대폭 절감)
+      _unsubRegs = onSnapshot(
+        query(collection(db,'registrations'), where('tournamentId','==',newTid)),
+        _onRegsSnap, e=>console.error('regs snap err',e)
+      );
+
+      // ③ 대진표 - 활성 대회 문서만 구독 (draws/{tid_div} 구조이므로 prefix 필터 불가 → 전체 유지하되 캐시 활용)
+      //    draws는 문서 수가 적고(부서 수만큼) 변경 빈도도 낮으므로 전체 구독 유지
+      _unsubDraws = onSnapshot(collection(db,'draws'), _onDrawsSnap, e=>console.error('draws snap err',e));
+
+      // ④ 경기결과 - 활성 대회만 구독
+      _unsubMatches = onSnapshot(
+        query(collection(db,'matches'), where('tournamentId','==',newTid)),
+        _onMatchesSnap, e=>console.error('matches snap err',e)
+      );
+    };
+
+    // ① 대회 목록 구독 → 대회 목록이 바뀌면 최신(가장 최근) 대회로 자동 재구독
+    onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')),s=>{
+      G.tournaments=s.docs.map(d=>({id:d.id,...d.data()}));
+      // 가장 최근 대회(첫 번째)를 활성 대회로 자동 선택하여 하위 컬렉션 재구독
+      const latestTid = G.tournaments.length ? G.tournaments[0].id : null;
+      window._resubscribeByTid(latestTid);
       onDU();
     },e=>console.error(e));
 
