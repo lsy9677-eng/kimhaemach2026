@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v136-persist-auto-court-and-filters";
+  const APP_VERSION = "2026-04-09-v147-main-bracket-playin-threshold-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -11456,10 +11456,28 @@ function computeMainBracketSpec(total){
   if(lower===t) return {mainSize:t, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true};
   const winnersNeeded=t-lower;
   const playInTeams=Math.min(t, winnersNeeded*2);
+  const playInMatches=Math.floor(playInTeams/2);
+
+  // 진출전은 최대 4경기까지만 허용.
+  // 4경기 이상이 필요한 구간은 상위 드로(예: 64강 -> 128강)로 올려
+  // 부전승을 늘리고 진출전 표시 없이 본선만 보이도록 한다.
+  if(playInMatches >= 4){
+    return {
+      mainSize: lower*2,
+      playInTeams: 0,
+      playInMatches: 0,
+      winnersNeeded: 0,
+      directCount: t,
+      exact: false,
+      promotedBracket: true,
+      baseMainSize: lower
+    };
+  }
+
   return {
     mainSize: lower,
     playInTeams,
-    playInMatches: Math.floor(playInTeams/2),
+    playInMatches,
     winnersNeeded,
     directCount: t-playInTeams,
     exact:false
@@ -11470,6 +11488,9 @@ function formatMainSpecSummary(spec){
   if(!spec || !spec.mainSize) return '';
   if(spec.playInMatches>0){
     return `직행 ${spec.directCount}팀 + 진출전 ${spec.playInTeams}팀(${spec.playInMatches}경기) → 승자 ${spec.winnersNeeded}팀이 ${spec.mainSize}강 합류`;
+  }
+  if(spec.promotedBracket && spec.baseMainSize){
+    return `진출전 ${Math.max(0, Math.floor((Number(spec.directCount||0)-Number(spec.baseMainSize||0))/2))}경기 구간은 상위 드로로 승격 → ${spec.mainSize}강 본선 (부전승 ${Math.max(0, spec.mainSize - spec.directCount)}팀)`;
   }
   return `${spec.mainSize}강 본선`;
 }
