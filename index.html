@@ -4122,19 +4122,12 @@ function getIndividualAutoAssignmentPlan(key){
   const courtCount=plan.pool.length;
   const groupCount=targetGroups.length;
 
-  // 조 수와 코트 수가 딱 나누어떨어질 때만 2조/3조씩 묶어서 고정 운영.
-  // 그 외에는 먼저 코트 수만큼 한 조씩 시작시키고, 남는 조는 공용 대기 우선순위로 넣는다.
-  let fixedGroups=[];
-  let remainderGroups=[];
-  let groupsPerCourt=1;
-  if(groupCount>courtCount && groupCount % courtCount === 0){
-    groupsPerCourt=Math.max(1, Math.floor(groupCount / courtCount));
-    fixedGroups=targetGroups.slice(0, Math.min(groupCount, groupsPerCourt * courtCount));
-    remainderGroups=targetGroups.slice(fixedGroups.length);
-  }else{
-    fixedGroups=targetGroups.slice(0, Math.min(groupCount, courtCount));
-    remainderGroups=targetGroups.slice(fixedGroups.length);
-  }
+  // 코트보다 조가 많으면 코트당 floor(조/코트)개 조까지 먼저 고정 배치하고,
+  // 남는 조만 공용 대기로 뺀다. 예: 16조/7코트 → 2조×7코트 고정 + 남은 2조 공용대기.
+  const groupsPerCourt = groupCount>courtCount ? Math.max(1, Math.floor(groupCount / courtCount)) : 1;
+  const fixedCapacity = Math.min(groupCount, groupsPerCourt * courtCount);
+  const fixedGroups = targetGroups.slice(0, fixedCapacity);
+  const remainderGroups = targetGroups.slice(fixedCapacity);
 
   let ptr=0;
   for(let ci=0; ci<plan.pool.length && ptr<fixedGroups.length; ci++){
@@ -4144,61 +4137,35 @@ function getIndividualAutoAssignmentPlan(key){
     if(gList.length) plan.fixed[court]=gList;
   }
 
-  const hasFreshRemainder = remainderGroups.some(gi=>getIndividualGroupAutoQueue(key,gi)[0]);
   const sharedFresh=[];
   const sharedFollow=[];
-  const pushShared=(gi, item, priority='follow')=>{
+  const pushShared=(gi, item, priority='follow', targetCourt='')=>{
     if(!item) return;
     const bucket = priority==='fresh' ? sharedFresh : sharedFollow;
-    bucket.push({type:'shared', courts:[...plan.pool], item, __gi:Number(gi), __started:getIndividualGroupStartedCount(key, gi)});
+    const entry={type:'shared', courts:[...plan.pool], item, __gi:Number(gi), __started:getIndividualGroupStartedCount(key, gi)};
+    if(targetCourt) entry.__sharedCourtLabel=String(targetCourt);
+    bucket.push(entry);
   };
 
   Object.entries(plan.fixed).forEach(([court, gis])=>{
-    if((gis||[]).length>1){
-      const perGroup=(gis||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
-      const maxLen=Math.max(0,...perGroup.map(arr=>arr.length));
-      for(let idx=0; idx<maxLen; idx++){
-        perGroup.forEach((arr, pos)=>{
-          if(!arr[idx]) return;
-          if(!plan.fixed.__items) plan.fixed.__items={};
-          if(!plan.fixed.__items[court]) plan.fixed.__items[court]=[];
-          if(idx===0){
-            plan.fixed.__items[court].push(arr[idx]);
-          }else if(hasFreshRemainder){
-            pushShared(gis[pos], arr[idx], 'follow');
-          }else{
-            plan.fixed.__items[court].push(arr[idx]);
-          }
-        });
-      }
-    }else if((gis||[]).length===1){
-      const gi=gis[0];
-      const q=getIndividualGroupAutoQueue(key,gi);
-      const started=getIndividualGroupStartedCount(key, gi);
-      const shouldDeferNext = hasFreshRemainder && started>0;
-      if(q[0] && !shouldDeferNext){
+    const perGroup=(gis||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
+    const maxLen=Math.max(0,...perGroup.map(arr=>arr.length));
+    for(let idx=0; idx<maxLen; idx++){
+      perGroup.forEach((arr)=>{
+        const item=arr[idx];
+        if(!item) return;
         if(!plan.fixed.__items) plan.fixed.__items={};
         if(!plan.fixed.__items[court]) plan.fixed.__items[court]=[];
-        plan.fixed.__items[court].push(q[0]);
-      }else if(q[0]){
-        pushShared(gi, q[0], 'follow');
-      }
-      if(hasFreshRemainder){
-        q.slice(1).forEach(item=>pushShared(gi, item, 'follow'));
-      }else{
-        if(q.length>1){
-          if(!plan.fixed.__items) plan.fixed.__items={};
-          if(!plan.fixed.__items[court]) plan.fixed.__items[court]=[];
-          q.slice(1).forEach(item=>{ if(item) plan.fixed.__items[court].push(item); });
-        }
-      }
+        plan.fixed.__items[court].push(item);
+      });
     }
   });
 
-  remainderGroups.forEach(gi=>{
+  remainderGroups.forEach((gi, remIdx)=>{
     const q=getIndividualGroupAutoQueue(key,gi);
-    if(q[0]) pushShared(gi, q[0], 'fresh');
-    q.slice(1).forEach(item=>pushShared(gi, item, 'follow'));
+    const targetCourt=plan.pool[remIdx % Math.max(1, plan.pool.length)] || '';
+    if(q[0]) pushShared(gi, q[0], 'fresh', targetCourt);
+    q.slice(1).forEach(item=>pushShared(gi, item, 'follow', targetCourt));
   });
 
   const sorter=(a,b)=>{
@@ -4208,7 +4175,8 @@ function getIndividualAutoAssignmentPlan(key){
     const sa=Number(a.__started||0), sb=Number(b.__started||0);
     if(sa!==sb) return sa-sb;
     const ga=Number(a.__gi||0), gb=Number(b.__gi||0);
-    return ga-gb;
+    if(ga!==gb) return ga-gb;
+    return String(a.__sharedCourtLabel||'').localeCompare(String(b.__sharedCourtLabel||''),'ko');
   };
   sharedFresh.sort(sorter);
   sharedFollow.sort(sorter);
@@ -10242,7 +10210,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
     const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
-    const hasMainOpFilter=(getSelectedMainMatchFilters(key).length||getSelectedCourtFilters(key).length);
+    const hasMainOpFilter=(getSelectedMainMatchFilters(key).length>0);
     html+= hasMainOpFilter
       ? `<div id="mainStage_${tid}_${div}" style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.8rem;color:#475569">운영 필터가 적용되어 본선 나무가지 대진표는 숨기고, 아래 선택 경기만 표시합니다.</div>`
       : `<div id="mainStage_${tid}_${div}">`+renderBracketTree(key,mMs,teams)+`</div>`;
@@ -13695,6 +13663,13 @@ function openIndividualMainDraw(tid,div){
   sl(true);
   stM(key).then(()=>{
     sl(false);
+    try{
+      setMainSectionCollapsed(key,false);
+      const selectedMain=getSelectedMainMatchFilters(key)||[];
+      if(Array.isArray(selectedMain) && selectedMain.length){
+        setSelectedMainMatchFilters(key,[]);
+      }
+    }catch(e){}
     toast(isPrelimDone ? '본선 대진 추첨 완료' : '본선 대진 추첨 완료 (조 순위 표시 — 예선 완료 후 이름 확정)','success');
     try{ renderBracket(); }catch(e){}
   }).catch(e=>{ sl(false); toast('저장 실패: '+e.message,'error'); });
