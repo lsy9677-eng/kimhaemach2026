@@ -9221,14 +9221,12 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
   return changed;
 }
 function scheduleAutoCourtAssignmentSave(key){
-  window.__autoCourtSaveTimers = window.__autoCourtSaveTimers || {};
-  clearTimeout(window.__autoCourtSaveTimers[key]);
-  window.__autoCourtSaveTimers[key]=setTimeout(()=>{
-    stM(key).catch(err=>console.warn('auto court save failed', err));
-  }, 250);
+  // 2026-04 hotfix: 자동 코트배정은 렌더 중 Firestore write를 발생시키지 않는다.
+  // 화면 표시용으로만 재계산하고, 실제 저장은 결과입력/수동저장 등 기존 저장 경로에서만 일어난다.
+  return false;
 }
 function ensureIndividualAutoCourtAssignmentsForKey(key){
-  if(rebuildIndividualAutoCourtAssignmentsForKey(key)) scheduleAutoCourtAssignmentSave(key);
+  return rebuildIndividualAutoCourtAssignmentsForKey(key);
 }
 window.toggleIndividualAutoCourtAssign = async function toggleIndividualAutoCourtAssign(){
   if(!AD){ toast('관리자만 변경할 수 있습니다','info'); return; }
