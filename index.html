@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v102-draw-manage-menus";
+  const APP_VERSION = "2026-04-09-v114-individual-game-diff-tie-age";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3452,21 +3452,52 @@ function getGroupCourtShareBadges(key, gi){
 function escAttr(v=''){
   return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-function renderCourtAccordionSelector(selectedCourts=[], usedCourtsMap=null, scope='group'){
+function renderNoticeTicker(text,label='📢 공지',compact=false){
+  const msg=String(text||'').trim();
+  if(!msg) return '';
+  const safeLabel=esc(String(label||'📢 공지'));
+  const safeMsg=esc(msg);
+  const outerStyle=compact
+    ? 'display:flex;align-items:center;gap:8px;width:100%;max-width:100%;padding:6px 10px;border-radius:999px;background:linear-gradient(135deg,#fff1f2,#ffe4e6 55%,#fff7ed);border:2px solid #fb7185;box-shadow:0 4px 12px rgba(244,63,94,.12);overflow:hidden;'
+    : 'display:flex;align-items:center;gap:10px;width:100%;max-width:100%;padding:9px 12px;border-radius:12px;background:linear-gradient(135deg,#fff1f2,#ffe4e6 55%,#fff7ed);border:2px solid #fb7185;box-shadow:0 4px 12px rgba(244,63,94,.12);overflow:hidden;';
+  const labelStyle=compact
+    ? 'flex:0 0 auto;display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#be123c;color:#fff;font-size:.74rem;font-weight:900;line-height:1;white-space:nowrap;'
+    : 'flex:0 0 auto;display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#be123c;color:#fff;font-size:.78rem;font-weight:900;line-height:1;white-space:nowrap;';
+  const viewportStyle='position:relative;flex:1 1 auto;min-width:0;overflow:hidden;height:'+(compact?'1.3em':'1.45em')+';display:flex;align-items:center;';
+  const trackStyle='display:inline-flex;align-items:center;gap:42px;white-space:nowrap;min-width:max-content;will-change:transform;animation:noticeMarquee 14s linear infinite;';
+  const msgStyle=compact
+    ? 'display:inline-block;font-size:.88rem;font-weight:900;color:#9f1239;white-space:nowrap;'
+    : 'display:inline-block;font-size:.92rem;font-weight:900;color:#9f1239;white-space:nowrap;';
+  return `<div class="notice-ticker-inline" style="${outerStyle}"><span class="notice-ticker-inline-label" style="${labelStyle}">${safeLabel}</span><div class="notice-ticker-inline-viewport" style="${viewportStyle}"><div class="notice-ticker-inline-track" style="${trackStyle}"><span class="notice-ticker-inline-msg" style="${msgStyle}">${safeMsg}</span><span class="notice-ticker-inline-msg" aria-hidden="true" style="${msgStyle}">${safeMsg}</span><span class="notice-ticker-inline-msg" aria-hidden="true" style="${msgStyle}">${safeMsg}</span></div></div></div>`;
+}
+
+function renderCourtAccordionSelector(selectedCourts=[], usedCourtsMap=null, scope='group', allowedCourts=null){
   const selected=new Set((selectedCourts||[]).filter(Boolean));
-  return COURT_GROUPS.map((g, idx)=>{
+  const allowedSet=allowedCourts && allowedCourts.length ? new Set((allowedCourts||[]).filter(Boolean)) : null;
+  const groups = COURT_GROUPS.map(g=>{
+    const courts=(g.courts||[]).filter(c=>!allowedSet || allowedSet.has(c));
+    return {...g, courts};
+  }).filter(g=>(g.courts||[]).length>0);
+
+  if(!groups.length){
+    return `<div style="padding:14px 12px;border:1px dashed #bfdbfe;border-radius:12px;background:#fff;font-size:.82rem;line-height:1.7;color:var(--text2)">
+      선택 가능한 코트가 없습니다.<br>먼저 조 코트를 배정해 주세요.
+    </div>`;
+  }
+
+  return groups.map((g, idx)=>{
     const boxId=`courtAcc_${scope}_${idx}_${Math.random().toString(36).slice(2,7)}`;
     const hasSelected=(g.courts||[]).some(c=>selected.has(c));
     const labels=(g.courts||[]).map(c=>{
       const isMine=selected.has(c);
       const usedBy=usedCourtsMap && usedCourtsMap[c] ? usedCourtsMap[c] : [];
-      const isUsed=!isMine && usedBy.length>0;
+      const isUsed=usedBy.length>0;
       const bg=isMine?'#e8f4fd':isUsed?'#fff8e1':'white';
       const border=isMine?'#1565c0':isUsed?'#f5a623':'var(--border)';
-      const extra=isUsed?`<span style="font-size:.62rem;color:#e67e22">⚠️ ${usedBy[0]} 대기중</span>`:'';
-      return `<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1.5px solid ${border};border-radius:999px;background:${bg};font-size:.88rem;cursor:pointer;flex-wrap:wrap">
+      const extra=isUsed?`<div style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:2px">${usedBy.slice(0,2).map(msg=>`<span style="font-size:.62rem;color:#b45309;line-height:1.35">⚠️ ${esc(msg)}</span>`).join('')}${usedBy.length>2?`<span style="font-size:.62rem;color:#92400e">외 ${usedBy.length-2}건</span>`:''}</div>`:'';
+      return `<label style="display:flex;align-items:flex-start;gap:6px;padding:8px 12px;border:1.5px solid ${border};border-radius:16px;background:${bg};font-size:.88rem;cursor:pointer;flex-wrap:wrap">
         <input type="checkbox" value="${escAttr(c)}" ${isMine?'checked':''}>
-        <span style="font-weight:${isMine?700:400}">${c}${isMine?' ✅':''}</span>
+        <span style="font-weight:${isMine?700:600};flex:1 1 auto">${c}${isMine?' ✅':''}</span>
         ${extra}
       </label>`;
     }).join('');
@@ -3543,15 +3574,13 @@ window.toggleCourtBoardHidden = toggleCourtBoardHidden;
 
 function getMatchCourtsForStatusBoard(key,m){
   if(!m) return [];
-  const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
+  // 조 코트 배정은 배포/표시용이고, 실제 코트 현황/대기열/알림은 경기 코트 배정만 사용한다.
   const ownCourts=Array.isArray(m.courts)&&m.courts.length ? m.courts : (m.court?[m.court]:[]);
-  return [...new Set([...(ownCourts||[]), ...(grpCourts||[])]).values()].filter(Boolean);
+  return [...new Set((ownCourts||[]).filter(Boolean))];
 }
 function getUsedCourtsForKey(key){
-  const draw=G.draws[key]||{};
-  const groupCourts=(draw.groups||[]).flatMap(g=>Array.isArray(g?.courts)?g.courts:[]);
   const matchCourts=(G.matches[key]||[]).flatMap(m=>getMatchCourtsForStatusBoard(key,m));
-  const all=[...new Set([...groupCourts, ...matchCourts].filter(Boolean))];
+  const all=[...new Set(matchCourts.filter(Boolean))];
   const idxMap=new Map(COURT_LIST.map((c,i)=>[c,i]));
   return all.sort((a,b)=>{
     const ia=idxMap.has(a)?idxMap.get(a):9999;
@@ -3574,29 +3603,35 @@ function describeCourtBoardMatch(key,m){
   return {label, title:`${dn1} vs ${dn2}`, score, started:!!st.started, done:!!st.done};
 }
 function getCourtStatusSnapshot(key){
+  const selectedCourts=getSelectedCourtFilters(key)||[];
   const usedCourts=getUsedCourtsForKey(key);
+  const targetCourts=(selectedCourts.length && isIndividualByKey(key))
+    ? [...new Set([...selectedCourts, ...usedCourts])]
+    : usedCourts;
   const list=G.matches[key]||[];
-  return usedCourts.map(court=>{
-    const related=list.filter(m=>getMatchCourtsForStatusBoard(key,m).includes(court)).sort((a,b)=>{
+  return targetCourts.map(court=>{
+    const related=list.filter(m=>getMatchCourtsForStatusBoard(key,m).includes(court) && m.winner==null).sort((a,b)=>{
       const aa=String(a.courtAssignedAt||'');
       const bb=String(b.courtAssignedAt||'');
       if(aa!==bb) return aa.localeCompare(bb);
       const pa=String(a.phase||''), pb=String(b.phase||'');
       if(pa!==pb) return pa.localeCompare(pb);
+      const ga=Number(a.group??-1), gb=Number(b.group??-1);
+      if(ga!==gb) return ga-gb;
       const ra=Number(a.round||0), rb=Number(b.round||0);
       if(ra!==rb) return ra-rb;
       return Number(a.slot||0)-Number(b.slot||0);
     });
-    const active=related.find(m=>m.winner==null && getMatchResultState(key,m).started);
-    const waiting=related.find(m=>m.winner==null && !getMatchResultState(key,m).started);
-    const current=active || waiting || null;
+    // 첫 배정 경기는 즉시 현재 경기로 간주한다. 이후 같은 코트 재배정은 대기열로 내려간다.
+    const current=related[0]||null;
+    const waiting=related.slice(1);
     let status='empty';
-    if(active) status='live';
-    else if(waiting) status='waiting';
-    return {court,status,current,related};
+    if(current) status=waiting.length?'live':'live';
+    return {court,status,current,waiting,related};
   });
 }
 function renderCourtStatusBoard(key, div){
+  const selectedCourts=getSelectedCourtFilters(key);
   const usedCourts=getUsedCourtsForKey(key);
   const st=getCourtBoardUIState(key);
   if(st.hidden){
@@ -3604,7 +3639,7 @@ function renderCourtStatusBoard(key, div){
       <button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="toggleCourtBoardHidden('${key}')">🎾 코트 현황판 열기</button>
     </div>`;
   }
-  const items=getCourtStatusSnapshot(key);
+  const items=getCourtStatusSnapshot(key).filter(item=>!selectedCourts.length || selectedCourts.includes(String(item.court)));
   const liveCount=items.filter(x=>x.status==='live').length;
   const waitingCount=items.filter(x=>x.status==='waiting').length;
   const emptyCount=items.filter(x=>x.status==='empty').length;
@@ -3612,32 +3647,45 @@ function renderCourtStatusBoard(key, div){
   const hasCourts=usedCourts.length>0;
   const cards=hasCourts ? items.map(item=>{
     const info=item.current ? describeCourtBoardMatch(key,item.current) : null;
-    const badge = item.status==='live'
-      ? `<span class="badge bg-green live-blink" style="font-size:.76rem;padding:4px 9px">진행중</span>`
-      : item.status==='waiting'
-        ? `<span class="badge bg-bronze" style="font-size:.76rem;padding:4px 9px">대기</span>`
-        : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">빈코트</span>`;
+    const badge = item.current
+      ? `<span class="badge bg-green live-blink" style="font-size:.76rem;padding:4px 9px">경기중</span>`
+      : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">빈코트</span>`;
     const line = info
       ? `<div style="font-size:.84rem;font-weight:800;color:var(--primary-dark);line-height:1.45">${esc(info.title)}</div>
          <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${info.label}${info.score?` · 현재 ${info.score}`:''}</div>`
       : `<div style="font-size:.84rem;font-weight:800;color:#64748b;line-height:1.45">배정된 진행 경기 없음</div>
-         <div style="font-size:.74rem;color:var(--text3);margin-top:4px">결과 입력 완료 후 자동 반영</div>`;
-    return `<div style="border:1px solid var(--border);border-radius:14px;padding:12px;background:${item.status==='live'?'linear-gradient(135deg,#eefbf3,#dce8fb)':item.status==='waiting'?'linear-gradient(135deg,#fff8df,#fffdf5)':'#fff'}">
+         <div style="font-size:.74rem;color:var(--text3);margin-top:4px">경기 코트 배정을 하면 이 코트에 표시됩니다.</div>`;
+    const waitingHtml = item.waiting && item.waiting.length
+      ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #f2c46d">
+          <div style="font-size:.76rem;font-weight:900;color:#9a6400;margin-bottom:6px">⏳ 대기중 ${item.waiting.length}경기</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${item.waiting.map(w=>{
+              const wi=describeCourtBoardMatch(key,w);
+              return `<div style="padding:8px 10px;border-radius:10px;background:#fff8e8;border:1px solid #f6d28b">
+                <div style="font-size:.78rem;font-weight:800;color:#7a4b00;line-height:1.45">${esc(wi.title)}</div>
+                <div style="font-size:.72rem;color:#9a6400;margin-top:3px">${wi.label}${wi.score?` · 현재 ${wi.score}`:''} · 대기중</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`
+      : `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(148,163,184,.35);font-size:.74rem;color:#64748b">대기중 경기 없음</div>`;
+    return `<div style="border:1px solid var(--border);border-radius:14px;padding:12px;background:${item.current?'linear-gradient(135deg,#eefbf3,#dce8fb)':'#fff'}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">🎾 ${item.court}</div>
         ${badge}
       </div>
       ${line}
+      ${waitingHtml}
     </div>`;
   }).join('') : `<div style="padding:18px 14px;border:1px dashed #bfdbfe;border-radius:14px;background:#fff">
-      <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin-bottom:6px">아직 배정된 코트가 없습니다</div>
-      <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조별 코트배정 또는 경기 코트배정을 하면 이 현황판에 자동으로 표시됩니다.</div>
+      <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin-bottom:6px">아직 경기 코트 배정이 없습니다</div>
+      <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조 코트 배정은 표시용입니다. 실제 코트 현황판은 경기 코트 배정 후 자동 반영됩니다.</div>
     </div>`;
   return `<div style="margin:10px 0 12px;border:2px solid #bfdbfe;border-radius:16px;background:linear-gradient(135deg,#f8fbff,#eef6ff);overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 14px;background:rgba(255,255,255,.72);border-bottom:${st.collapsed?'none':'1px solid #dbe7ff'}">
       <div>
         <div style="font-size:.96rem;font-weight:900;color:var(--primary-dark)">🎾 코트 사용 현황판</div>
-        <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${dl(div)} · 사용 코트 ${usedCourts.length}면 · 진행 ${liveCount} · 대기 ${waitingCount} · 빈코트 ${emptyCount}</div>
+        <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${dl(div)} · 사용 코트 ${(selectedCourts.length?items.length:usedCourts.length)}면 · 진행 ${liveCount} · 대기 ${waitingCount} · 빈코트 ${emptyCount}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-outline" style="font-size:.74rem;padding:5px 10px;min-height:32px" onclick="toggleCourtBoardCollapsed('${key}')">${st.collapsed?'📂 펼치기':'📁 접기'}</button>
@@ -3922,7 +3970,8 @@ async function stT(key){
       ...(t.entryLabel !== undefined ? {entryLabel: t.entryLabel} : {}),
       ...(t.note !== undefined ? {note: t.note} : {}),
       ...(t.doublesCount !== undefined ? {doublesCount: t.doublesCount} : {}),
-      ...(t.mainPlayerCount !== undefined ? {mainPlayerCount: t.mainPlayerCount} : {})
+      ...(t.mainPlayerCount !== undefined ? {mainPlayerCount: t.mainPlayerCount} : {}),
+      ...(t.tiebreakAge !== undefined ? {tiebreakAge: Number(t.tiebreakAge||0)||0} : {})
     };
     batch.set(doc(db,'registrations',docId), payload, {merge:true});
   });
@@ -4197,6 +4246,233 @@ window.toggleBracketSaveMenu = toggleBracketSaveMenu;
 window.closeBracketSaveMenu = closeBracketSaveMenu;
 
 function isOperatorMode(){ return !!(OP && !AD); }
+
+const INDIV_OPERATOR_FILTERS = {};
+function ensureOperatorFilters(key){
+  if(!INDIV_OPERATOR_FILTERS[key]) INDIV_OPERATOR_FILTERS[key]={groups:[],courts:[],mainMatches:[]};
+  const f=INDIV_OPERATOR_FILTERS[key];
+  if(!Array.isArray(f.groups)) f.groups=[];
+  if(!Array.isArray(f.courts)) f.courts=[];
+  if(!Array.isArray(f.mainMatches)) f.mainMatches=[];
+  return f;
+}
+function getIndivOperatorGroupFilter(key){
+  return ensureOperatorFilters(key).groups;
+}
+function toggleIndivOperatorGroupFilter(key, value){
+  const f=ensureOperatorFilters(key);
+  const v=String(value);
+  if(v==='__ALL__') f.groups=[];
+  else f.groups = f.groups.includes(v) ? f.groups.filter(x=>x!==v) : [...f.groups, v];
+  renderBracket();
+}
+function toggleIndivOperatorCourtFilter(key, value){
+  const f=ensureOperatorFilters(key);
+  const v=String(value);
+  if(v==='__ALL__') f.courts=[];
+  else f.courts = f.courts.includes(v) ? f.courts.filter(x=>x!==v) : [...f.courts, v];
+  renderBracket();
+}
+function toggleIndivOperatorMainMatchFilter(key, value){
+  const f=ensureOperatorFilters(key);
+  const v=String(value);
+  if(v==='__ALL__') f.mainMatches=[];
+  else f.mainMatches = f.mainMatches.includes(v) ? f.mainMatches.filter(x=>x!==v) : [...f.mainMatches, v];
+  renderBracket();
+}
+function clearIndivOperatorFilters(key){
+  INDIV_OPERATOR_FILTERS[key]={groups:[],courts:[],mainMatches:[]};
+  renderBracket();
+}
+window.toggleIndivOperatorGroupFilter = toggleIndivOperatorGroupFilter;
+window.toggleIndivOperatorCourtFilter = toggleIndivOperatorCourtFilter;
+window.toggleIndivOperatorMainMatchFilter = toggleIndivOperatorMainMatchFilter;
+window.clearIndivOperatorFilters = clearIndivOperatorFilters;
+
+let INDIV_FILTER_PICKER_STATE = null;
+function getIndivFilterHeading(){
+  return (AD || OP) ? '🎯 해당 경기·코트 골라 운영하기' : '🎯 해당 경기·코트 골라보기';
+}
+function getIndivFilterSubheading(){
+  return (AD || OP)
+    ? '조, 코트는 중복 선택 가능합니다. 선택한 조/코트만 보고, 선택한 코트로만 경기 코트 배정을 할 수 있습니다.'
+    : '보고 싶은 조, 코트, 본선 경기만 골라서 화면을 간단하게 볼 수 있습니다.';
+}
+function closeIndivFilterPicker(){
+  INDIV_FILTER_PICKER_STATE = null;
+  const existing = document.getElementById('indivFilterPickerOverlay');
+  if(existing) existing.remove();
+}
+function renderIndivFilterPicker(){
+  const state = INDIV_FILTER_PICKER_STATE;
+  const body = document.getElementById('indivFilterPickerBody');
+  if(!state || !body) return;
+  const draw = G.draws[state.key] || {};
+  const groups = Array.isArray(draw.groups) ? draw.groups : [];
+  const temp = state.temp || {groups:[], courts:[], mainMatches:[]};
+  const groupButtons = groups.map((grp, gi)=>{
+    const active = temp.groups.includes(String(gi));
+    const courts = (grp.courts||[]).filter(Boolean);
+    return `<button class="btn ${active?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap;${courts.length?'':'opacity:.78'}" onclick="toggleTempIndivFilter('groups','${gi}')">${grpLabel(gi)}${courts.length?` · ${courts.join('/')}`:' · 미배정'}</button>`;
+  }).join('');
+  const courtButtons = COURT_LIST.map(court=>{
+    const active = temp.courts.includes(String(court));
+    return `<button class="btn ${active?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="toggleTempIndivFilter('courts',${JSON.stringify(''+court).replace(/"/g,'&quot;')})">🎾 ${court}</button>`;
+  }).join('');
+  const mainButtons = getMainMatchSequenceList(state.key).map(item=>{
+    const active = temp.mainMatches.includes(String(item.id));
+    return `<button class="btn ${active?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="toggleTempIndivFilter('mainMatches','${item.id}')">${item.label}</button>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="display:grid;gap:12px">
+      <div>
+        <div style="font-size:.78rem;font-weight:900;color:var(--primary-dark);margin-bottom:7px">조 선택</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">${groupButtons || '<span style="font-size:.8rem;color:var(--text3)">조가 없습니다</span>'}</div>
+      </div>
+      <div>
+        <div style="font-size:.78rem;font-weight:900;color:var(--primary-dark);margin-bottom:7px">코트 선택</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:220px;overflow:auto;padding-right:4px">${courtButtons || '<span style="font-size:.8rem;color:var(--text3)">코트가 없습니다</span>'}</div>
+      </div>
+      ${mainButtons ? `<div>
+        <div style="font-size:.78rem;font-weight:900;color:var(--primary-dark);margin-bottom:7px">본선 경기 선택</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:180px;overflow:auto;padding-right:4px">${mainButtons}</div>
+      </div>` : ''}
+    </div>`;
+  const summary = document.getElementById('indivFilterPickerSummary');
+  if(summary){
+    summary.innerHTML = `선택 조 <b>${temp.groups.length}</b> · 선택 코트 <b>${temp.courts.length}</b>${getMainMatchSequenceList(state.key).length ? ` · 선택 본선 <b>${temp.mainMatches.length}</b>` : ''}`;
+  }
+}
+function openIndivFilterPicker(key){
+  closeIndivFilterPicker();
+  const current = ensureOperatorFilters(key);
+  INDIV_FILTER_PICKER_STATE = {
+    key,
+    temp: {
+      groups: [...current.groups],
+      courts: [...current.courts],
+      mainMatches: [...current.mainMatches],
+    }
+  };
+  const overlay = document.createElement('div');
+  overlay.id = 'indivFilterPickerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="width:min(980px,96vw);max-height:88vh;overflow:hidden;background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.24);border:1px solid #dbe7ff;display:flex;flex-direction:column">
+      <div style="padding:16px 18px 12px;border-bottom:1px solid #e8eefc;background:linear-gradient(135deg,#fff,#f8fbff)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:1rem;font-weight:900;color:var(--primary-dark)">${getIndivFilterHeading()}</div>
+            <div style="font-size:.78rem;color:var(--text2);margin-top:4px">${getIndivFilterSubheading()}</div>
+          </div>
+          <button class="btn btn-outline" style="padding:7px 12px;font-size:.8rem" onclick="closeIndivFilterPicker()">닫기</button>
+        </div>
+        <div id="indivFilterPickerSummary" style="margin-top:8px;font-size:.78rem;color:var(--text2)"></div>
+      </div>
+      <div id="indivFilterPickerBody" style="padding:16px 18px;overflow:auto"></div>
+      <div style="padding:14px 18px;border-top:1px solid #e8eefc;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#fff">
+        <button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" onclick="clearTempIndivFilters()">전체 보기로 초기화</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" style="padding:8px 14px;font-size:.82rem" onclick="closeIndivFilterPicker()">취소</button>
+          <button class="btn btn-primary" style="padding:8px 14px;font-size:.82rem" onclick="applyIndivFilterPicker()">적용</button>
+        </div>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeIndivFilterPicker(); });
+  document.body.appendChild(overlay);
+  renderIndivFilterPicker();
+}
+function toggleTempIndivFilter(type, value){
+  const state = INDIV_FILTER_PICKER_STATE;
+  if(!state) return;
+  const list = Array.isArray(state.temp[type]) ? state.temp[type] : (state.temp[type]=[]);
+  const v = String(value);
+  state.temp[type] = list.includes(v) ? list.filter(x=>x!==v) : [...list, v];
+  renderIndivFilterPicker();
+}
+function clearTempIndivFilters(){
+  const state = INDIV_FILTER_PICKER_STATE;
+  if(!state) return;
+  state.temp = {groups:[],courts:[],mainMatches:[]};
+  renderIndivFilterPicker();
+}
+function applyIndivFilterPicker(){
+  const state = INDIV_FILTER_PICKER_STATE;
+  if(!state) return;
+  INDIV_OPERATOR_FILTERS[state.key] = {
+    groups: [...(state.temp.groups||[])],
+    courts: [...(state.temp.courts||[])],
+    mainMatches: [...(state.temp.mainMatches||[])],
+  };
+  closeIndivFilterPicker();
+  renderBracket();
+}
+window.openIndivFilterPicker = openIndivFilterPicker;
+window.closeIndivFilterPicker = closeIndivFilterPicker;
+window.toggleTempIndivFilter = toggleTempIndivFilter;
+window.clearTempIndivFilters = clearTempIndivFilters;
+window.applyIndivFilterPicker = applyIndivFilterPicker;
+
+function getVisibleGroupIndexesForKey(key){
+  const draw=G.draws[key]||{};
+  const groups=Array.isArray(draw.groups)?draw.groups:[];
+  const allIdx=groups.map((_,i)=>i);
+  if(!isIndividualByKey(key)) return allIdx;
+  const selected=getIndivOperatorGroupFilter(key)||[];
+  if(!selected.length) return allIdx;
+  return allIdx.filter(i=>selected.includes(String(i)));
+}
+function getSelectedCourtFilters(key){
+  return ensureOperatorFilters(key).courts;
+}
+function getSelectedMainMatchFilters(key){
+  return ensureOperatorFilters(key).mainMatches;
+}
+function getMainMatchSequenceList(key){
+  return (G.matches[key]||[])
+    .filter(m=>m.phase==='main')
+    .sort((a,b)=>Number(a.round||0)-Number(b.round||0) || Number(a.slot||0)-Number(b.slot||0))
+    .map((m,i)=>({id:String(m.id), label:`본선 ${i+1}경기`, index:i+1, match:m}));
+}
+function isMatchVisibleByCourtFilter(key, m){
+  const selected=getSelectedCourtFilters(key);
+  if(!selected.length) return true;
+  const courts=getMatchCourtsForStatusBoard(key,m)||[];
+  return courts.some(c=>selected.includes(String(c)));
+}
+function isMainMatchVisibleByFilter(key,m){
+  const selected=getSelectedMainMatchFilters(key);
+  if(!selected.length) return true;
+  return selected.includes(String(m.id));
+}
+function getGroupAssignedCourts(key, gi){
+  return ((G.draws[key]?.groups?.[Number(gi)]?.courts)||[]).filter(Boolean);
+}
+function getAllowedCourtsForMatch(key,m){
+  if(!m) return [];
+  const selectedCourts=getSelectedCourtFilters(key)||[];
+  if(isOperatorMode() && isIndividualByKey(key) && selectedCourts.length){
+    return COURT_LIST.filter(c=>selectedCourts.includes(String(c)));
+  }
+  return COURT_LIST.slice();
+}
+function getCourtQueueInfo(key, court){
+  const related=(G.matches[key]||[]).filter(m=>getMatchCourtsForStatusBoard(key,m).includes(court) && m.winner==null).sort((a,b)=>{
+    const aa=String(a.courtAssignedAt||'');
+    const bb=String(b.courtAssignedAt||'');
+    if(aa!==bb) return aa.localeCompare(bb);
+    return String(a.id||'').localeCompare(String(b.id||''));
+  });
+  const active=related[0] || null;
+  const waiting=related.slice(1);
+  return {active, waiting, related};
+}
+function formatMatchQueueLabel(key,m){
+  if(!m) return '';
+  const base=(m.phase==='group'&&m.group!=null)?`${grpLabel(m.group)} ${getIndividualMatchLabel(key,m)||''}`.trim():describeCourtBoardMatch(key,m).label;
+  const st=getMatchResultState(key,m);
+  return `${base} ${st.started?'진행중':'대기중'}`.trim();
+}
 function canManageBracket(){ return !!(AD || OP); }
 function refreshRoleUI(){
   const opPages=['tournament','register','players'];
@@ -8761,6 +9037,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const isIndivKey = isIndividualByKey(key);
   const hasGroups = !!(draw && Array.isArray(draw.groups) && draw.groups.length > 0);
   const isGroupKO = cfg.format==='group_knockout' || (isIndivKey && (hasGroups || mMs.length > 0));
+  const visibleGroupIndexes = getVisibleGroupIndexesForKey(key);
   const canMainRedraw = isGroupKO && hasGroups;
   const prelimRedrawLabel = draw ? '예선 재추첨' : '예선 추첨';
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
@@ -8827,7 +9104,29 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     </div></div>`;
 
   html += renderMatchProgressSummary(key);
-  html += renderCourtStatusBoard(key, div);
+  if(isIndivKey && draw?.groups?.length){
+    const selectedGroups=getIndivOperatorGroupFilter(key)||[];
+    const selectedCourts=getSelectedCourtFilters(key)||[];
+    const selectedMainMatches=getSelectedMainMatchFilters(key)||[];
+    const summaryParts=[];
+    if(selectedGroups.length) summaryParts.push(`조 ${selectedGroups.length}개`);
+    if(selectedCourts.length) summaryParts.push(`코트 ${selectedCourts.length}개`);
+    if(selectedMainMatches.length) summaryParts.push(`본선 ${selectedMainMatches.length}경기`);
+    const summaryText = summaryParts.length ? summaryParts.join(' · ') : '전체 보기';
+    html += `<div style="margin:10px 0 12px;padding:12px 14px;border:1px solid #dbe7ff;border-radius:14px;background:linear-gradient(135deg,#fff,#f8fbff)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">${getIndivFilterHeading()}</div>
+          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">현재: <b style="color:var(--primary-dark)">${summaryText}</b></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="openIndivFilterPicker('${key}')">⚙️ 선택하기</button>
+          <button class="btn ${(!selectedGroups.length && !selectedCourts.length && !selectedMainMatches.length)?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="clearIndivOperatorFilters('${key}')">전체 보기</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  html += renderCourtStatusBoard(key, div, visibleGroupIndexes);
 
   // 예선 접기 버튼: 본선 여부와 무관하게 항상 표시 (개인전/단체전 공통)
   {
@@ -8859,6 +9158,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     </div>`;
     html+=`<div id="${prelimToggleId}" style="display:${prelimCollapsed?'none':'block'}">`;
     draw.groups.forEach((grp,gi)=>{
+      if(visibleGroupIndexes.length && !visibleGroupIndexes.includes(Number(gi))) return;
       const adv=cfg.advance||2;
       const stats=calcGS(key,gi,grp.teams,teams);
       const gms=gMs.filter(m=>m.group===gi);
@@ -8873,6 +9173,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       const indivMode=isIndividualByKey(key);
       const indivFlow=getIndividualGroupFlowText(key,gi);
       const indivCollapsed = indivMode ? true : false;
+      const grpMemo = getGroupMemo(key, gi);
+      const grpMemoHeaderUI = canManageBracket()
+        ? `<button class="btn btn-outline" style="padding:5px 13px;font-size:.82rem;white-space:nowrap;background:${grpMemo?'rgba(255,248,223,.22)':'rgba(255,255,255,.18)'};border:1.5px solid ${grpMemo?'#f6d365':'rgba(255,255,255,.5)'};color:${grpMemo?'#fff3bf':'white'};border-radius:999px;font-weight:700" onclick="openGroupMemoModal('${key}',${gi})">📢 공지(조)${grpMemo?' 수정':' 입력'}</button>`
+        : (grpMemo?renderNoticeTicker(grpMemo,'📢 공지(조)',true):'');
       const simpleGroupHint = (grp.teams.length===2 && gms.length===1)
         ? `<span style="background:rgba(255,255,255,.18);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700">단판 1경기</span>`
         : '';
@@ -8885,14 +9189,18 @@ function renderBracketHTMLForDiv(tid,div,isAll){
               :`<span style="background:rgba(255,255,255,.18);padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:600">${doneCnt}/${gms.length} 경기</span>`}
             ${simpleGroupHint}
             ${indivMode&&indivFlow?`<span style="font-size:.72rem;font-weight:700;background:rgba(255,255,255,.14);padding:4px 9px;border-radius:999px">${indivFlow}</span>`:''}
+            ${indivMode&&stats.some(s=>s.tiePending)&&canManageBracket()?`<button class="btn btn-outline" style="padding:4px 10px;font-size:.76rem;white-space:nowrap;background:rgba(255,248,223,.22);border:1.5px solid #f6d365;color:#fff3bf;border-radius:999px;font-weight:800" onclick="openIndividualTieAgePrompt('${key}',${gi})">🎂 동률 나이입력</button>`:''}
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${courtBadges}
             ${grpCourtShareBadges}
+            ${grpMemoHeaderUI}
+            ${canManageBracket()?`<button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:700" onclick="openGroupSmsModal('${key}',${gi})">📨 문자보내기</button>`:''}
             ${canManageBracket()?`<button class="btn btn-outline" style="padding:5px 13px;font-size:.88rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:600" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>`:''}
             ${indivMode?`<button id="indivGroupToggle_${key}_${gi}" class="btn btn-outline" style="padding:5px 13px;font-size:.86rem;white-space:nowrap;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:white;border-radius:999px;font-weight:700" onclick="toggleIndividualGroupMatches('${key}',${gi})">📂 경기 보기</button>`:''}
           </div>
-        </div>`;
+        </div>
+        ${grpMemo?renderNoticeTicker(grpMemo,'📢 공지(조)'):''}`;
       if(!indivMode){
         html+=`<div style="border-bottom:2px solid var(--border)">`;
         stats.forEach((s,r)=>{
@@ -8915,7 +9223,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
           const rankColor=hasRank?(s.rank===1?'#1d4ed8':s.rank===2?'#c2410c':'#475569'):'#475569';
           const diffColor=s.diff>0?'#1565c0':s.diff<0?'#c62828':'#64748b';
           const grpTeamLabel=getIndividualSideLabel(key,{group:gi},s.teamIdx)||`${s.slot||r+1}번`;
-          const leftLabel=hasRank?`${s.rank}위`:`${s.slot||r+1}번`;
+          const leftLabel=s.rankLabel||(hasRank?`${s.rank}위`:`${s.slot||r+1}번`);
           return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:${hasRank?(s.rank===1?'linear-gradient(135deg,#eff6ff,#f8fbff)':s.rank===2?'linear-gradient(135deg,#fff7ed,#fffaf5)':'#fff'):'#fff'}">
             <div style="flex:0 0 46px;text-align:center">
               <div style="font-size:.72rem;font-weight:900;color:${rankColor}">${leftLabel}</div>
@@ -8927,9 +9235,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
               ${hasRank?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
                 <span class="badge bg-blue" style="font-size:.72rem;padding:3px 8px">승 ${s.w}</span>
                 <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">패 ${s.l}</span>
-                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">득 ${s.pf}</span>
-                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">실 ${s.pa}</span>
-                <span class="badge" style="font-size:.72rem;padding:3px 8px;background:#f8fafc;color:${diffColor};border:1px solid ${diffColor==='\#64748b'?'#cbd5e1':diffColor}">득실 ${s.diff>0?'+':''}${s.diff}</span>
+                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">게임득 ${s.pf}</span>
+                <span class="badge bg-gray" style="font-size:.72rem;padding:3px 8px">게임실 ${s.pa}</span>
+                <span class="badge" style="font-size:.72rem;padding:3px 8px;background:#f8fafc;color:${diffColor};border:1px solid ${diffColor==='\#64748b'?'#cbd5e1':diffColor}">게임득실 ${s.diff>0?'+':''}${s.diff}</span>
+                ${s.tiePending?`<span class="badge" style="font-size:.72rem;padding:3px 8px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74">동률 · 나이입력 필요</span>`:''}
               </div>`:''}
             </div>
           </div>`;
@@ -8940,7 +9249,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         </div>
         <div id="indivGroupMatches_${key}_${gi}" class="grp-matches-section" style="padding-top:12px;display:none"><div class="grp-matches-label">📋 경기 목록</div>`;
       }
-      sortGroupMatchesForDisplay(key, gi, gms).forEach(m=>{
+      sortGroupMatchesForDisplay(key, gi, gms).filter(m=>isMatchVisibleByCourtFilter(key,m)).forEach(m=>{
         const mt1=teams[m.t1],mt2=teams[m.t2];
         if(!mt1||!mt2)return;
         const dn1=tdn(mt1,key,m.t1),dn2=tdn(mt2,key,m.t2);
@@ -9059,12 +9368,16 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     </div>`;
 
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
-    html+=`<div id="mainStage_${tid}_${div}">`+renderBracketTree(key,mMs,teams)+`</div>`;
+    const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
+    const hasMainOpFilter=(getSelectedMainMatchFilters(key).length||getSelectedCourtFilters(key).length);
+    html+= hasMainOpFilter
+      ? `<div id="mainStage_${tid}_${div}" style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.8rem;color:#475569">운영 필터가 적용되어 본선 나무가지 대진표는 숨기고, 아래 선택 경기만 표시합니다.</div>`
+      : `<div id="mainStage_${tid}_${div}">`+renderBracketTree(key,mMs,teams)+`</div>`;
 
     // 진출전(play-in) 경기 표시
     if(playInMs.length){
       html+=`<div class="sec-title" style="margin-top:14px">🪣 진출전(똥통) 경기 현황</div><div style="font-size:.74rem;color:var(--text2);margin:4px 0 8px">직행팀은 바로 본선으로 들어가고, 아래 경기 승자만 본선에 합류합니다.</div>`;
-      playInMs.forEach((pm,idx)=>{
+      playInMs.filter(pm=>isMatchVisibleByCourtFilter(key,pm)).forEach((pm,idx)=>{
         const mt1=pm.t1!==null?teams[pm.t1]:null;
         const mt2=pm.t2!==null?teams[pm.t2]:null;
         const dn1=mt1?tdn(mt1,key,pm.t1):(pm.source1Label||'TBD');
@@ -9084,7 +9397,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
     html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황</div>`;
     rounds.forEach(r=>{
-      const rms=mMs.filter(m=>Number(m.round||0)===r).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+      const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+      if(!rms.length) return;
       const rIdx=rounds.indexOf(r);
       const lbl=r===rounds[rounds.length-1]?'결승':rIdx===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-1-rIdx)*2}강`;
       html+=`<div style="font-size:.82rem;font-weight:700;color:var(--primary-dark);margin:8px 0 4px;padding-left:4px">— ${lbl}</div>`;
@@ -9251,6 +9565,9 @@ function getIndividualGroupStatsMap(key,gi){
       const hasRank=typeof s.rank==='number';
       out[String(teamKey)]={
         rank:hasRank?s.rank:null,
+        rankLabel:String(s.rankLabel||''),
+        tiePending:!!s.tiePending,
+        age:Number(s.age||0),
         slot:idx+1,
         w:Number(s.w||0),
         l:Number(s.l||0),
@@ -9264,12 +9581,16 @@ function getIndividualGroupStatsMap(key,gi){
 }
 function individualMiniStatHtml(st){
   try{
-    if(!st || st.rank==null) return '';
+    if(!st) return '';
+    const label=String(st.rankLabel||'').trim() || (typeof st.rank==='number'?`${st.rank}위`:'');
+    if(!label && !st.tiePending && Number(st.w||0)===0 && Number(st.l||0)===0 && Number(st.pf||0)===0 && Number(st.pa||0)===0) return '';
+    const numRank=typeof st.rank==='number'?st.rank:null;
     return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
-      <span style="font-size:.67rem;font-weight:900;color:${st.rank===1?'#1d4ed8':st.rank===2?'#c2410c':'#475569'}">${st.rank}위</span>
+      ${label?`<span style="font-size:.67rem;font-weight:900;color:${numRank===1?'#1d4ed8':numRank===2?'#c2410c':'#475569'}">${label}</span>`:''}
       <span style="font-size:.64rem;color:#64748b">${st.w}승 ${st.l}패</span>
-      <span style="font-size:.64rem;color:#64748b">득 ${st.pf} 실 ${st.pa}</span>
-      <span style="font-size:.64rem;color:${st.diff>0?'#1565c0':st.diff<0?'#c62828':'#64748b'}">득실 ${st.diff>0?'+':''}${st.diff}</span>
+      <span style="font-size:.64rem;color:#64748b">게임득 ${st.pf} 게임실 ${st.pa}</span>
+      <span style="font-size:.64rem;color:${st.diff>0?'#1565c0':st.diff<0?'#c62828':'#64748b'}">게임득실 ${st.diff>0?'+':''}${st.diff}</span>
+      ${st.tiePending?`<span style="font-size:.64rem;color:#c2410c">동률 · 나이입력 전</span>`:''}
     </div>`;
   }catch(e){ return ''; }
 }
@@ -9310,23 +9631,17 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
     const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
     const grpCourtShareBadges=(m.phase==='group' && m.group!=null)?getGroupCourtShareBadges(key, Number(m.group)):'';
-    const grpMemo=(m.phase==='group' && m.group!=null)?getGroupMemo(key, Number(m.group)):'';
     const matchMemo=getMatchMemoByObj(m);
     const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
     const groupCourtUI=canManageBracket() && m.phase==='group' && m.group!=null
       ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openGroupCourtModal('${key}',${Number(m.group)})">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`
       : (grpCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 조코트 ${grpCourts.join('/')}</span>`:'');
-    const grpMemoUI = m.phase==='group' && m.group!=null
-      ? (canManageBracket()
-          ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:${grpMemo?'#7a5600':'var(--primary-dark)'};border:1.5px solid ${grpMemo?'#f6d365':'var(--border)'};border-radius:999px;font-weight:800" onclick="openGroupMemoModal('${key}',${Number(m.group)})">📝 조메모${grpMemo?' 수정':' 입력'}</button>`
-          : (grpMemo?`<span class="badge bg-gold" style="font-size:.74rem;padding:4px 9px">📝 ${esc(grpMemo)}</span>`:''))
-      : '';
     const matchCourtUI=canManageBracket()
       ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800" onclick="openMatchCourtModal('${key}','${m.id}')">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button>`
       : (matchCourts.length?`<span class="badge bg-gray" style="font-size:.74rem;padding:4px 9px">🎾 경기코트 ${matchCourts.join('/')}</span>`:'');
     const matchMemoUI=canManageBracket()
-      ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border:1.5px solid ${matchMemo?'#f6d365':'var(--border)'};border-radius:999px;font-weight:800" onclick="openMatchMemoModal('${key}','${m.id}')">📝 경기메모${matchMemo?' 수정':' 입력'}</button>`
-      : (matchMemo?`<span class="badge bg-gold" style="font-size:.74rem;padding:4px 9px">📝 ${esc(matchMemo)}</span>`:'');
+      ? `<button style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border:1.5px solid ${matchMemo?'#f6d365':'var(--border)'};border-radius:999px;font-weight:800" onclick="openMatchMemoModal('${key}','${m.id}')">📢 공지(경기)${matchMemo?' 수정':' 입력'}</button>`
+      : (matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)',true):'');
     const info1=getIndividualTeamCompactInfo(teams[m.t1]||{});
     const info2=getIndividualTeamCompactInfo(teams[m.t2]||{});
     // 예선 미완료 본선 추첨 시: t1/t2가 null이면 source*Label(="A조1위" 등) 표시
@@ -9348,9 +9663,8 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label||'1경기'}</span></div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:`<span class="badge bg-gray" style="font-size:.78rem;padding:3px 9px">대기</span>`}${btn}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${matchMemoUI}${grpMemoUI}${grpCourtShareBadges}</div>
-        ${grpMemo?`<div style="margin-bottom:8px;font-size:.78rem;font-weight:800;line-height:1.55;padding:7px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 조메모: ${esc(grpMemo)}</div>`:''}
-        ${matchMemo?`<div style="margin-bottom:10px;font-size:.78rem;font-weight:800;line-height:1.55;padding:8px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 ${esc(matchMemo)}</div>`:''}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${matchMemoUI}${grpCourtShareBadges}</div>
+        ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}
         <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;margin-bottom:8px">
           <div style="${sideWrap1Style}">
             <div style="font-size:.74rem;font-weight:900;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
@@ -9379,9 +9693,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   let grpCourtBadge = '';
   let grpCourtShareBadge = '';
   const matchMemo = getMatchMemoByObj(m);
-  let matchMemoBadge = matchMemo
-    ? `<span style="font-size:.84rem;font-weight:800;background:rgba(255,248,223,.92);color:#7a5600;padding:3px 12px;border-radius:12px;border:1px solid rgba(246,211,101,.9)">📝 ${esc(matchMemo)}</span>`
-    : '';
+  let matchMemoBadge = matchMemo ? renderNoticeTicker(matchMemo,'📢 공지(경기)',true) : '';
   if(m && m.phase==='group' && m.group!=null){
     const gi = m.group;
     const grpCourts = (G.draws[key]?.groups?.[gi]?.courts) || [];
@@ -9441,7 +9753,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
       : '⚡ 결과입력';
   const _btnStyle = done ? 'btn-gray' : (useOrderHere ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
   const btn=(AD||canDirEdit)?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
-  const memoBtn=canManageBracket()?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border-color:${matchMemo?'#f6d365':'var(--border)'}" onclick="openMatchMemoModal('${key}','${m.id}')">📝 경기메모${matchMemo?' 수정':' 입력'}</button>`:'';
+  const memoBtn=canManageBracket()?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border-color:${matchMemo?'#f6d365':'var(--border)'}" onclick="openMatchMemoModal('${key}','${m.id}')">📢 공지(경기)${matchMemo?' 수정':' 입력'}</button>`:'';
   const orderBadge=useOrderHere?getOnlineOrderStatusBadgeHTML(key,m):'';
   const orderTeamStatus=useOrderHere?getOnlineOrderTeamStatusHTML(key,m):'';
   const unlockBtn=(AD&&useOrderHere)?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:#8a6412;border-color:#d4a017" onclick="CM_key='${key}';CM_id='${m.id}';confirmUnlockOrder()">🔓 오더초기화</button>`:'';
@@ -9455,7 +9767,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const teamWinTint=done&&wn1?'background:linear-gradient(135deg,#f7fff9,#eefbf3);border-color:#86efac;':done&&wn2?'background:linear-gradient(135deg,#fff7f7,#fef2f2);border-color:#fecaca;':'';
   return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${grpCourtShareBadge} ${matchMemoBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${memoBtn} ${btn}</div></div>
     <div class="m3body">
-      ${matchMemo?`<div style="margin-bottom:10px;font-size:.78rem;font-weight:800;line-height:1.55;padding:8px 10px;background:linear-gradient(135deg,#fff8df,#fff3bf);border:1px solid #f6d365;border-radius:10px;color:#7a5600">📝 ${esc(matchMemo)}</div>`:''}${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
+      ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
 }
@@ -9927,7 +10239,50 @@ function renderBracketTree(key,mMs,teams){
   </div></div></div>`;
 }
 
+function getIndividualTieAge(team){
+  const age=Number(team?.tiebreakAge||team?.tieBreakAge||team?.ageTie||0)||0;
+  return age>0?age:0;
+}
+function getIndividualTieLabel(rank){
+  return `공동${rank}위`;
+}
+async function openIndividualTieAgePrompt(key,gi){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 입력할 수 있습니다','info'); return; }
+  const grp=G.draws?.[key]?.groups?.[Number(gi)];
+  const tids=Array.isArray(grp?.teams)?grp.teams:[];
+  const teams=G.teams[key]||[];
+  if(!tids.length){ toast('대상 조가 없습니다','error'); return; }
+  for(const ti of tids){
+    const team=teams[ti];
+    if(!team) continue;
+    const title=tdn(team,key,ti)||`참가자 ${ti+1}`;
+    const prev=getIndividualTieAge(team);
+    const input=prompt(`${grpLabel(gi)} 동률 정렬용 대표 나이를 입력하세요.
+
+${title}
+(숫자만 입력, 비워두면 미입력 유지)`, prev?String(prev):'');
+    if(input===null) continue;
+    const v=String(input).trim();
+    if(!v){ delete team.tiebreakAge; continue; }
+    const age=Number(v.replace(/[^0-9]/g,''));
+    if(!Number.isFinite(age) || age<=0){ toast('나이는 숫자로 입력하세요','error'); return; }
+    team.tiebreakAge=age;
+  }
+  sl(true);
+  try{
+    await stT(key);
+    sl(false);
+    renderBracket();
+    toast('동률 정렬용 나이 저장 완료 ✅','success');
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+  }
+}
+window.openIndividualTieAgePrompt = openIndividualTieAgePrompt;
+
 function calcGS(key,gi,tidxs,teams){
+  const indivMode=isIndividualByKey(key);
   const rows=tidxs.map((ti,slotIdx)=>{
     const tm=teams[ti];let w=0,l=0,gw=0,gl=0,played=0;
     (G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi&&(m.t1===ti||m.t2===ti)).forEach(m=>{
@@ -9936,14 +10291,51 @@ function calcGS(key,gi,tidxs,teams){
       const hasRealScore=rubbers.some(rb=>rb&&((rb.score1!=null&&rb.score1!=='')||(rb.score2!=null&&rb.score2!=='')));
       if(!hasRealScore) return;
       played++;
-      const sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
+      if(indivMode){
+        const rb=rubbers[0]||{};
+        const sFor=Number(isT1?(rb.score1||0):(rb.score2||0));
+        const sAg=Number(isT1?(rb.score2||0):(rb.score1||0));
+        gw+=sFor; gl+=sAg;
+      }else{
+        const sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
+        gw+=sc; gl+=scO;
+      }
       if(m.winner===ti) w++; else if(m.winner!=null) l++;
-      gw+=sc;gl+=scO;
     });
-    return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl,slot:slotIdx+1,played};
-  }).sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
+    return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl,slot:slotIdx+1,played,age:getIndividualTieAge(tm),rank:null,rankLabel:'',tiePending:false};
+  });
   const hasAnyScore=rows.some(r=>Number(r.played||0)>0);
-  return rows.map((row,idx)=>({...row, rank:hasAnyScore?(idx+1):null}));
+  if(!hasAnyScore){
+    return rows.map((row,idx)=>({...row, rank:null, rankLabel:`${row.slot||idx+1}번`}));
+  }
+  if(!indivMode){
+    const sorted=rows.slice().sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
+    return sorted.map((row,idx)=>({...row, rank:idx+1, rankLabel:`${idx+1}위`}));
+  }
+  const sorted=rows.slice().sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
+  let idx=0;
+  let nextRank=1;
+  while(idx<sorted.length){
+    let j=idx+1;
+    while(j<sorted.length && sorted[j].w===sorted[idx].w && sorted[j].diff===sorted[idx].diff) j++;
+    const group=sorted.slice(idx,j);
+    if(group.length===1){
+      group[0].rank=nextRank;
+      group[0].rankLabel=`${nextRank}위`;
+    }else{
+      const allHaveAge=group.every(r=>Number(r.age||0)>0);
+      if(allHaveAge){
+        group.sort((a,b)=>b.age-a.age||a.slot-b.slot);
+        group.forEach((row,offset)=>{ row.rank=nextRank+offset; row.rankLabel=`${nextRank+offset}위`; });
+        sorted.splice(idx, group.length, ...group);
+      }else{
+        group.forEach(row=>{ row.rank=null; row.rankLabel=getIndividualTieLabel(nextRank); row.tiePending=true; });
+      }
+    }
+    idx += group.length;
+    nextRank += group.length;
+  }
+  return sorted;
 }
 function rbSc(m,idx){if(!m.rubbers)return 0;return m.rubbers.filter(rb=>rb&&rb.winner===idx).length;}
 function getMatchDoublesCount(key,m){
@@ -13886,7 +14278,7 @@ function openM3(key,mid){
       </div>
       <div class="m3body" style="padding:12px 12px 14px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px">${m.phase==='group'&&m.group!=null?`<button type="button" onclick="openGroupCourtModal('${key}',${Number(m.group)})" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`:''}<button type="button" onclick="openMatchCourtModal('${key}','${m.id}')" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button></div>
-        <div class="form-group" style="margin-bottom:12px"><label class="form-label">📝 경기 메모</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>
+        <div class="form-group" style="margin-bottom:12px"><label class="form-label">📢 경기 공지</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>
         <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px">
           <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
             <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
@@ -13940,7 +14332,7 @@ function openM3(key,mid){
   <span style="display:block;margin-top:4px;color:#b45309">제출 전에는 자유 수정 가능 · 제출 후에는 내 오더가 저장되며 · 양팀 제출 완료 후에는 완전 잠금됩니다.${isOperator?'<br><span style="color:#1d4ed8">경기진행자는 제출 전에도 양팀 명단은 볼 수 있지만, 제출 완료된 팀의 오더 선택은 양팀 모두 제출될 때까지 숨겨집니다.</span>':''}</span>`:''}</div>
   ${(useOrderHere?`<div id="mM3SubmitStatusCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#93c5fd')};background:${st.bothSubmitted?'linear-gradient(135deg,#ecfdf5,#dcfce7)':(st.mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)')}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-size:.82rem;line-height:1.6;color:var(--text2)"><div style="font-size:.9rem;font-weight:900;color:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')}">${st.bothSubmitted?'🔒 제출 완료 상태':(st.mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div><div style="margin-top:4px">${statusText}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'✅ 제출완료':'⏳ 미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}</div></div><div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')};color:#fff">${st.bothSubmitted?'수정 불가':(st.mySubmitted?'상대 제출 대기':'작성 가능')}</div></div></div>`:'')}
   ${((side1PhotoEditable||side2PhotoEditable||side1PhotoViewable||side2PhotoViewable||_orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2))?`<div id="mM3PhotoAssistCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)"><div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn1}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side1PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus1" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,1)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn2}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side2PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus2" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,2)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}</div></div>`:'')}`;
-  html+=`<div class="form-group" style="margin:12px 0"><label class="form-label">📝 경기 메모</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>`;
+  html+=`<div class="form-group" style="margin:12px 0"><label class="form-label">📢 경기 공지</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>`;
   for(let r=0;r<dbl;r++){
     const rb=exRb[r]||{};
     const submitted1=getSubmittedPlayersForSide(key,m,1,r);
@@ -14327,20 +14719,39 @@ async function saveM3(){
   try{
     await stM(key);
     saveLastOrderFromPicker(key, m);
-    if(hasFinalWinner && prevW==null && finishedCourts.length){
-      finishedCourts.forEach(courtName=>{
+    const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
+    if(hasFinalWinner && prevW==null){
+      if(finishedCourts.length){
+        finishedCourts.forEach(courtName=>{
+          enqueueStickyAlert({
+            kind:'court_complete',
+            title:'🎾 경기 완료 알림',
+            msg:`${courtName} 코트 경기 완료 · ${dn1} ${sc1}:${sc2} ${dn2}`,
+            type:'info',
+            tid,
+            div,
+            matchId:m.id
+          });
+        });
+      }else{
+        const phaseLabel = m.phase==='group'
+          ? `예선 ${grpLabel(m.group||0)}`
+          : m.phase==='main'
+            ? (getMainRoundLabelByRoundIndex(m.round||0, key) || '본선')
+            : m.phase==='bronze'
+              ? '3·4위전'
+              : '경기';
         enqueueStickyAlert({
           kind:'court_complete',
-          title:'🎾 코트 완료 알림',
-          msg:`${courtName} 시합 완료 되었습니다.`,
+          title:'🎾 경기 완료 알림',
+          msg:`${dl(div)} ${phaseLabel} 완료 · ${dn1} ${sc1}:${sc2} ${dn2}`,
           type:'info',
           tid,
           div,
           matchId:m.id
         });
-      });
+      }
     }
-    const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
     if(hasFinalWinner){
       await fbLog(`결과: ${dn1} ${sc1}:${sc2} ${dn2}`,'⚡');
       if(m.phase==='main')await autoAdv(key,m.id);
@@ -14661,7 +15072,7 @@ function renderLiveRanking(tid,div,cont){
     if(draw && gDS(t,d).format==='roundrobin'){
       const group=draw.groups?.[0];
       const stats=group?calcGS(key,0,group.teams,teams):[];
-      html+=`<div class="card"><div class="card-title">📋 최종 순위표</div><div class="table-wrap"><table><thead><tr><th>순위</th><th>팀</th><th>승</th><th>패</th><th>득실</th></tr></thead><tbody>${stats.map((s,r)=>`<tr><td>${r+1}</td><td style="font-weight:800">${s.nm}</td><td style="color:var(--success);font-weight:700">${s.w}</td><td style="color:var(--danger)">${s.l}</td><td style="font-weight:700;color:${s.diff>0?'var(--success)':s.diff<0?'var(--danger)':'inherit'}">${s.diff>0?'+':''}${s.diff}</td></tr>`).join('')}</tbody></table></div></div>`;
+      html+=`<div class="card"><div class="card-title">📋 최종 순위표</div><div class="table-wrap"><table><thead><tr><th>순위</th><th>팀</th><th>승</th><th>패</th><th>${isIndividualByKey(key)?'게임득실':'득실'}</th></tr></thead><tbody>${stats.map((s,r)=>`<tr><td>${s.rankLabel|| (typeof s.rank==='number'?`${s.rank}위`:`${r+1}`)}</td><td style="font-weight:800">${s.nm}</td><td style="color:var(--success);font-weight:700">${s.w}</td><td style="color:var(--danger)">${s.l}</td><td style="font-weight:700;color:${s.diff>0?'var(--success)':s.diff<0?'var(--danger)':'inherit'}">${s.diff>0?'+':''}${s.diff}</td></tr>`).join('')}</tbody></table></div></div>`;
     }
   });
   cont.innerHTML=html||'<div class="empty-state card"><p>데이터 없음</p></div>';
@@ -17695,6 +18106,7 @@ function openMatchCourtModal(key,mid){
   }
   if(!m) m={id:mid,courts:[],court:''};
   const mCourts = Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : []);
+  const allowedCourts = getAllowedCourtsForMatch(key,m);
   let label='경기';
   if(m.phase==='group') label=`${(m.group??0)+1}조 예선`;
   else if(m.phase==='main') label=`본선 R${m.round??''} #${(m.slot??0)+1}`;
@@ -17706,17 +18118,16 @@ function openMatchCourtModal(key,mid){
     const xC=Array.isArray(x.courts)?x.courts:(x.court?[x.court]:[]);
     xC.forEach(c=>{
       if(!usedCourts[c]) usedCourts[c]=[];
-      const tms=G.teams[key]||[];
-      const n1=(tms.find(t=>t.id===x.t1||t.name===x.t1)||{}).name||x.t1||'?';
-      const n2=(tms.find(t=>t.id===x.t2||t.name===x.t2)||{}).name||x.t2||'?';
-      usedCourts[c].push(`${n1} vs ${n2}`);
+      usedCourts[c].push(formatMatchQueueLabel(key,x));
     });
   });
 
-  const sectionsHtml = renderCourtAccordionSelector(mCourts, usedCourts, `match_${key}_${mid}`);
+  const sectionsHtml = renderCourtAccordionSelector(mCourts, usedCourts, `match_${key}_${mid}`, allowedCourts);
+  const isIndivRestricted = isIndividualByKey(key) && m.phase==='group';
   const hint=`<div style="font-size:.72rem;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border)">
-    ✅ 현재 배정된 코트 &nbsp;|&nbsp; ⚠️ 다른 경기 사용 중<br>
-    사용 중인 코트 선택 시 해당 경기는 <b>대기중</b>으로 변경됩니다.
+    ${isIndivRestricted
+      ? `✅ 이 경기는 해당 조에 배정된 코트만 선택할 수 있습니다.<br>⚠️ 이미 사용 중인 코트를 선택하면 이 경기는 해당 코트의 <b>대기 경기</b>로 등록됩니다.`
+      : `✅ 현재 배정된 코트 &nbsp;|&nbsp; ⚠️ 다른 경기 사용 중<br>사용 중인 코트 선택 시 해당 경기는 그 코트의 <b>대기중</b>으로 표시됩니다.`}
   </div>`;
   ge('mMCourtB').innerHTML=hint+sectionsHtml;
   om('mMCourt');
@@ -17731,17 +18142,17 @@ async function saveMatchCourtModal(){
   if(!m){ toast('경기를 찾을 수 없습니다','error'); return; }
   const box=ge('mMCourtB');
   const courts=[...box.querySelectorAll('input[type="checkbox"]:checked')].map(i=>i.value);
+  const allowedCourts=getAllowedCourtsForMatch(key,m);
+  if(allowedCourts.length){
+    const invalid=courts.filter(c=>!allowedCourts.includes(c));
+    if(invalid.length){ toast('해당 조에 배정된 코트만 선택할 수 있습니다','error'); return; }
+  }
 
-  let freed=0;
-  list.forEach(x=>{
-    if(x.id===mid) return;
-    const xC=Array.isArray(x.courts)?x.courts:(x.court?[x.court]:[]);
-    const overlap=xC.filter(c=>courts.includes(c));
-    if(overlap.length>0){
-      x.courts=xC.filter(c=>!courts.includes(c));
-      x.court=x.courts[0]||'';
-      freed++;
-    }
+  let waitingCount=0;
+  courts.forEach(c=>{
+    const queue=getCourtQueueInfo(key,c);
+    const hasOther=queue.related.some(x=>x.id!==m.id);
+    if(hasOther) waitingCount++;
   });
 
   m.courts=courts;
@@ -17751,7 +18162,7 @@ async function saveMatchCourtModal(){
   try{
     await stM(key);
     sl(false);
-    toast(freed>0?`코트 배정 저장 ✅ (${freed}경기 대기중 전환)`:'코트 배정 저장 ✅','success');
+    toast(waitingCount>0?`코트 배정 저장 ✅ (${waitingCount}개 코트 대기 등록)`: '코트 배정 저장 ✅','success');
     cm('mMCourt');
     renderBracket();
   }catch(e){
@@ -17765,8 +18176,11 @@ async function setCourt(key, mid, value){
   const list=G.matches[key]||[];
   const m=list.find(m=>m.id===mid);
   if(!m) return;
+  const allowedCourts=getAllowedCourtsForMatch(key,m);
+  if(value && allowedCourts.length && !allowedCourts.includes(value)){ toast('해당 조에 배정된 코트만 선택할 수 있습니다','error'); return; }
   m.court = value || '';
   m.courts = value ? [value] : [];
+  m.courtAssignedAt=new Date().toISOString();
   sl(true);
   try{
     await stM(key);
@@ -17999,14 +18413,14 @@ function ensureMatchMemoModal(){
   wrap.innerHTML=`
     <div class="modal-box" style="max-width:560px">
       <div class="modal-header">
-        <h3 id="mMMemoT">📝 경기 메모</h3>
+        <h3 id="mMMemoT">📢 경기 공지</h3>
         <button class="modal-close" onclick="cm('mMMemo')">✕</button>
       </div>
       <div class="modal-body">
         <div style="font-size:.74rem;color:var(--text2);margin-bottom:10px;line-height:1.6;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
-          예: 2번 코트 대기 / 바로 입장 / 순서 변경 / 운영 전달사항 등 경기 단위 메모를 남길 수 있습니다.
+          예: 2번 코트 대기 / 바로 입장 / 순서 변경 / 운영 전달사항 등 경기 단위 공지를 남길 수 있습니다.
         </div>
-        <textarea class="form-textarea" id="mMMemoInput" placeholder="경기 메모를 입력하세요"></textarea>
+        <textarea class="form-textarea" id="mMMemoInput" placeholder="경기 공지를 입력하세요"></textarea>
       </div>
       <div class="modal-footer">
         <button class="btn btn-gray" onclick="cm('mMMemo')">닫기</button>
@@ -18018,12 +18432,12 @@ function ensureMatchMemoModal(){
   wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
 }
 function openMatchMemoModal(key,mid){
-  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 경기 메모 입력 가능','info'); return; }
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 경기 공지 입력 가능','info'); return; }
   const m=(G.matches?.[key]||[]).find(x=>String(x.id)===String(mid));
   if(!m){ toast('경기를 찾을 수 없습니다','error'); return; }
   ensureMatchMemoModal();
   MM_MODAL={key,mid};
-  ge('mMMemoT').textContent=`📝 경기 메모`;
+  ge('mMMemoT').textContent=`📢 경기 공지`;
   ge('mMMemoInput').value=getMatchMemo(key,mid);
   om('mMMemo');
 }
@@ -18038,7 +18452,7 @@ async function saveMatchMemoModal(){
   try{
     await stM(key);
     sl(false);
-    toast('경기 메모 저장 ✅','success');
+    toast('경기 공지 저장 ✅','success');
     cm('mMMemo');
     renderBracket();
   }catch(e){
@@ -18054,6 +18468,236 @@ window.openMatchMemoModal = openMatchMemoModal;
 window.saveMatchMemoModal = saveMatchMemoModal;
 window.clearMatchMemoModal = clearMatchMemoModal;
 
+function getGroupNoticePhonesMap(key, gi){
+  try{
+    const grp=G.draws?.[key]?.groups?.[Number(gi)];
+    if(!grp) return {};
+    if(!grp.noticePhones || typeof grp.noticePhones!=='object') grp.noticePhones={};
+    return grp.noticePhones;
+  }catch(e){ return {}; }
+}
+function getGroupNoticeRecipients(key, gi){
+  const grp=G.draws?.[key]?.groups?.[Number(gi)];
+  const teams=G.teams?.[key]||[];
+  if(!grp) return [];
+  const recipients=[];
+  (grp.teams||[]).forEach((teamIdx, slotIdx)=>{
+    const team=teams[teamIdx]||{};
+    const isIndividual = team?.tournamentType==='individual_pair' || Array.isArray(team?.individualPlayers);
+    if(isIndividual){
+      const players=(Array.isArray(team.individualPlayers)&&team.individualPlayers.length)
+        ? team.individualPlayers.slice(0,2)
+        : (team.players||[]).slice(0,2).map((name)=>({name, clubsRaw:String(team?.club||'').trim(), clubs:parseClubAliases(team?.club||'')}));
+      players.forEach((p, pIdx)=>{
+        const info=getPlayerContactInfo(String(p?.name||'').trim(), String(p?.clubsRaw||'').trim(), String(p?.phone||'').trim(), String(p?.career||'').trim());
+        const label=`${String(p?.name||'').trim()||'-'}${info.club?` (${info.club})`:''}`;
+        recipients.push({
+          id:`player_${teamIdx}_${pIdx}`,
+          type:'player',
+          teamIdx,
+          playerIdx:pIdx,
+          label,
+          phone:formatPhoneLoose(String(info.phone||'')),
+          missing:!String(info.phone||'').trim()
+        });
+      });
+    }else{
+      const savedMap=getGroupNoticePhonesMap(key, gi);
+      const savedPhone=formatPhoneLoose(String(savedMap?.[teamIdx]||team?.noticePhone||team?.repPhone||''));
+      recipients.push({
+        id:`team_${teamIdx}`,
+        type:'team',
+        teamIdx,
+        label:`${tdn(team,key,teamIdx)} 대표`,
+        teamLabel:tdn(team,key,teamIdx),
+        phone:savedPhone,
+        missing:!savedPhone
+      });
+    }
+  });
+  return recipients;
+}
+function updateGroupSmsCount(){
+  const countEl=ge('mGroupSmsCount');
+  if(!countEl) return;
+  const rows=[...document.querySelectorAll('#mGroupSmsList .group-sms-row')];
+  const total=rows.length;
+  let selected=0, valid=0;
+  rows.forEach(row=>{
+    const cb=row.querySelector('.group-sms-check');
+    const input=row.querySelector('.group-sms-phone-input');
+    const phone=formatPhoneLoose(String(input?.value||''));
+    if(phone) valid++;
+    if(cb?.checked) selected++;
+  });
+  countEl.innerHTML=`선택 ${selected}명 / 전체 ${total}명 · 문자 가능 ${valid}명`;
+}
+function toggleAllGroupSmsRecipients(checked){
+  document.querySelectorAll('#mGroupSmsList .group-sms-row').forEach(row=>{
+    const cb=row.querySelector('.group-sms-check');
+    const input=row.querySelector('.group-sms-phone-input');
+    const hasPhone=!!formatPhoneLoose(String(input?.value||''));
+    if(cb){
+      cb.checked=checked && hasPhone;
+      cb.disabled=!hasPhone;
+    }
+  });
+  updateGroupSmsCount();
+}
+function onGroupSmsPhoneInput(rowId){
+  const row=ge(rowId);
+  if(!row) return;
+  const input=row.querySelector('.group-sms-phone-input');
+  const cb=row.querySelector('.group-sms-check');
+  const badge=row.querySelector('.group-sms-status');
+  const phone=formatPhoneLoose(String(input?.value||''));
+  if(input) input.value=phone;
+  if(cb){
+    cb.disabled=!phone;
+    if(!phone) cb.checked=false;
+  }
+  if(badge){
+    badge.textContent=phone ? phone : '번호 미등록';
+    badge.style.color=phone ? 'var(--text2)' : '#dc2626';
+    badge.style.fontWeight=phone ? '700' : '800';
+  }
+  updateGroupSmsCount();
+}
+function collectGroupSmsSelection(){
+  const rows=[...document.querySelectorAll('#mGroupSmsList .group-sms-row')];
+  const selected=[];
+  const persistMap={};
+  rows.forEach(row=>{
+    const type=row.dataset.type||'';
+    const teamIdx=row.dataset.teamIdx||'';
+    const playerIdx=row.dataset.playerIdx||'';
+    const label=row.dataset.label||'';
+    const input=row.querySelector('.group-sms-phone-input');
+    const cb=row.querySelector('.group-sms-check');
+    const phone=formatPhoneLoose(String(input?.value||''));
+    if(type==='team' && teamIdx!=='') persistMap[teamIdx]=phone;
+    if(cb?.checked && phone){
+      selected.push({type, teamIdx:Number(teamIdx), playerIdx:Number(playerIdx), label, phone});
+    }
+  });
+  return {selected, persistMap};
+}
+let GROUP_SMS_MODAL={key:null, gi:null};
+function ensureGroupSmsModal(){
+  if(document.getElementById('mGroupSms')) return;
+  const wrap=document.createElement('div');
+  wrap.className='modal-overlay';
+  wrap.id='mGroupSms';
+  wrap.innerHTML=`
+    <div class="modal-box" style="max-width:680px">
+      <div class="modal-header">
+        <h3 id="mGroupSmsT">📨 조 문자 보내기</h3>
+        <button class="modal-close" onclick="cm('mGroupSms')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:.74rem;color:var(--text2);margin-bottom:10px;line-height:1.6;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
+          개인전은 <b>개인별 전화번호</b>로, 단체전은 <b>이 조의 대표 전화번호</b>로 문자를 보냅니다. 단체전 대표 번호는 여기서 직접 입력해 저장할 수 있습니다.
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div id="mGroupSmsCount" style="font-size:.76rem;color:var(--text2);font-weight:800"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-gray" style="font-size:.74rem;padding:4px 10px;min-height:30px" onclick="toggleAllGroupSmsRecipients(true)">전체선택</button>
+            <button class="btn btn-gray" style="font-size:.74rem;padding:4px 10px;min-height:30px" onclick="toggleAllGroupSmsRecipients(false)">전체해제</button>
+          </div>
+        </div>
+        <div id="mGroupSmsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">문자 내용</label>
+          <textarea class="form-textarea" id="mGroupSmsMsg" placeholder="보낼 내용을 입력하세요"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
+        <button class="btn btn-gray" onclick="cm('mGroupSms')">닫기</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="saveGroupSmsRecipientPhones()">💾 번호 저장</button>
+          <button class="btn btn-primary" onclick="sendGroupSmsNow()">📨 문자 보내기</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+}
+function openGroupSmsModal(key, gi){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 문자 발송 가능','info'); return; }
+  ensureGroupSmsModal();
+  GROUP_SMS_MODAL={key, gi};
+  const listEl=ge('mGroupSmsList');
+  const msgEl=ge('mGroupSmsMsg');
+  const recipients=getGroupNoticeRecipients(key, gi);
+  ge('mGroupSmsT').textContent=`📨 ${grpLabel(gi)} 문자 보내기`;
+  listEl.innerHTML = recipients.length ? recipients.map((r, idx)=>{
+    const rowId=`groupSmsRow_${idx}_${Date.now()}`;
+    return `<div class="group-sms-row" id="${rowId}" data-type="${r.type}" data-team-idx="${r.teamIdx}" data-player-idx="${r.playerIdx??''}" data-label="${escAttr(r.label)}" style="padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#fff">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:180px">
+          <input type="checkbox" class="group-sms-check" ${r.phone?'checked':''} ${r.phone?'':'disabled'} onchange="updateGroupSmsCount()">
+          <span style="font-size:.9rem;font-weight:800;color:var(--primary-dark)">${esc(r.label)}</span>
+        </label>
+        <span class="group-sms-status" style="font-size:.74rem;${r.phone?'color:var(--text2);font-weight:700':'color:#dc2626;font-weight:800'}">${r.phone||'번호 미등록'}</span>
+      </div>
+      <input class="form-input group-sms-phone-input" value="${escAttr(r.phone||'')}" inputmode="tel" placeholder="${r.type==='team'?'이 조 대표 전화번호 입력':'선수 전화번호'}" oninput="onGroupSmsPhoneInput('${rowId}')">
+    </div>`;
+  }).join('') : `<div style="padding:18px 14px;border:1px dashed var(--border);border-radius:12px;background:#fff;font-size:.82rem;color:var(--text2)">이 조에서 문자 보낼 대상을 찾지 못했습니다.</div>`;
+  if(msgEl) msgEl.value = `${grpLabel(gi)} 안내:\n`;
+  updateGroupSmsCount();
+  om('mGroupSms');
+}
+async function saveGroupSmsRecipientPhones(){
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 저장 가능','info'); return; }
+  const {key, gi}=GROUP_SMS_MODAL;
+  if(key==null || gi==null) return;
+  const grp=G.draws?.[key]?.groups?.[Number(gi)];
+  if(!grp){ toast('조 정보를 찾을 수 없습니다','error'); return; }
+  const {persistMap}=collectGroupSmsSelection();
+  grp.noticePhones=persistMap;
+  sl(true);
+  try{
+    await stD(key);
+    sl(false);
+    toast('조 대표 번호 저장 ✅','success');
+    renderBracket();
+    updateGroupSmsCount();
+  }catch(e){
+    sl(false);
+    toast('번호 저장 실패: '+e.message,'error');
+  }
+}
+async function sendGroupSmsNow(){
+  const body=(ge('mGroupSmsMsg')?.value||'').trim();
+  if(!body){ toast('문자 내용을 입력하세요','error'); return; }
+  const {selected, persistMap}=collectGroupSmsSelection();
+  if(!selected.length){ toast('문자 보낼 대상을 선택하세요','error'); return; }
+  const {key, gi}=GROUP_SMS_MODAL;
+  const grp=G.draws?.[key]?.groups?.[Number(gi)];
+  if(grp) grp.noticePhones=persistMap;
+  const phones=[...new Set(selected.map(x=>String(x.phone||'').replace(/[^0-9+]/g,'')).filter(Boolean))];
+  if(!phones.length){ toast('문자 가능한 번호가 없습니다','error'); return; }
+  try{
+    if(grp) await stD(key);
+  }catch(e){}
+  const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(!isMobile){
+    const listing=selected.map(x=>`${x.label}: ${x.phone}`).join('\n');
+    const copied=await copyTextSafe(`[수신자]\n${listing}\n\n[내용]\n${body}`);
+    toast(copied?'📋 PC에서는 수신자와 내용이 복사되었습니다. 문자앱에 붙여넣으세요.':'내용을 수동으로 복사해 주세요','info');
+    return;
+  }
+  const recipients=phones.join(',');
+  location.href=`sms:${recipients}?body=${encodeURIComponent(body)}`;
+  toast(`문자창을 열었습니다 ✅ (${selected.length}명 선택)`,'success');
+}
+window.openGroupSmsModal = openGroupSmsModal;
+window.saveGroupSmsRecipientPhones = saveGroupSmsRecipientPhones;
+window.sendGroupSmsNow = sendGroupSmsNow;
+window.toggleAllGroupSmsRecipients = toggleAllGroupSmsRecipients;
+window.onGroupSmsPhoneInput = onGroupSmsPhoneInput;
+window.updateGroupSmsCount = updateGroupSmsCount;
+
 // ─── 조 메모 입력 모달 ───────────────────────────────────────────────
 let GM_MODAL = { key:null, gi:null };
 
@@ -18065,12 +18709,12 @@ function ensureGroupMemoModal(){
   wrap.innerHTML=`
     <div class="modal-box" style="max-width:560px">
       <div class="modal-header">
-        <h3 id="mGMemoT">📝 조 메모</h3>
+        <h3 id="mGMemoT">📢 공지(조)</h3>
         <button class="modal-close" onclick="cm('mGMemo')">✕</button>
       </div>
       <div class="modal-body">
         <div style="font-size:.74rem;color:var(--text2);margin-bottom:10px;line-height:1.6;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px">
-          예: 2번코트 대기 / 5분 뒤 출전 요망 / 경기순서 변경 등 운영 메모를 남길 수 있습니다.
+          예: 2번코트 대기 / 5분 뒤 출전 요망 / 경기순서 변경 등 조별 공지를 남길 수 있습니다.
         </div>
         <textarea class="form-textarea" id="mGMemoInput" placeholder="조별 운영 메모를 입력하세요"></textarea>
       </div>
@@ -18084,10 +18728,10 @@ function ensureGroupMemoModal(){
   wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
 }
 function openGroupMemoModal(key,gi){
-  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 조 메모 입력 가능','info'); return; }
+  if(!canManageBracket()){ toast('관리자 또는 경기진행자만 조 공지 입력 가능','info'); return; }
   ensureGroupMemoModal();
   GM_MODAL={key,gi};
-  ge('mGMemoT').textContent=`📝 ${grpLabel(gi)} 메모`;
+  ge('mGMemoT').textContent=`📢 ${grpLabel(gi)} 공지`;
   ge('mGMemoInput').value=getGroupMemo(key,gi);
   om('mGMemo');
 }
@@ -18101,7 +18745,7 @@ async function saveGroupMemoModal(){
   try{
     await stD(key);
     sl(false);
-    toast('조 메모 저장 ✅','success');
+    toast('조 공지 저장 ✅','success');
     cm('mGMemo');
     renderBracket();
   }catch(e){
@@ -21404,12 +22048,6 @@ function _prelimMemberHtml(team, key, ti){
   }
   return `<div class="player-name">${esc(fallback)}</div>`;
 }
-function _prelimSectionLayout(groups){
-  const count = Array.isArray(groups) ? groups.length : 0;
-  if(count >= 25) return { cols: 4, compact: 'xcompact' };
-  if(count >= 13) return { cols: 3, compact: 'compact' };
-  return { cols: 2, compact: 'normal' };
-}
 function _buildPrelimSectionsHtml(ctx){
   const {tid, tournament, selectedDivs} = ctx;
   const esc = _prelimEsc;
@@ -21419,7 +22057,6 @@ function _buildPrelimSectionsHtml(ctx){
     const draw = G.draws?.[key] || {};
     const teams = G.teams?.[key] || [];
     const groups = Array.isArray(draw.groups) ? draw.groups : [];
-    const layout = _prelimSectionLayout(groups);
 
     const groupHtml = groups.map((grp, gi) => {
       const teamIds = Array.isArray(grp?.teams) ? grp.teams : (Array.isArray(grp) ? grp : []);
@@ -21442,10 +22079,10 @@ function _buildPrelimSectionsHtml(ctx){
             <div class="group-name">${gi+1}조</div>
             ${courts.length ? `<div class="group-court">🎾 ${esc(courts.join(' / '))}</div>` : ``}
           </div>
-          ${memo ? `<div class="group-memo">📝 ${esc(memo)}</div>` : ``}
+          ${memo ? renderNoticeTicker(memo,'📢 공지(조)') : ``}
           <table class="group-table">
             <thead>
-              <tr><th style="width:44px">번호</th><th>선수</th></tr>
+              <tr><th style="width:52px">번호</th><th>선수</th></tr>
             </thead>
             <tbody>
               ${teamRows}
@@ -21456,7 +22093,7 @@ function _buildPrelimSectionsHtml(ctx){
     }).join('');
 
     return `
-      <section class="page ${layout.compact}" style="--prelim-cols:${layout.cols}">
+      <section class="page">
         <div class="sheet-title">${esc(tournament.name)}</div>
         <div class="sheet-sub">${esc(divName)} 예선 조 편성표${tournament.date ? ` · ${esc(tournament.date)}` : ''}</div>
         <div class="group-grid">${groupHtml}</div>
@@ -21478,7 +22115,7 @@ function _buildPrelimPopupHtml(ctx, mode){
 <title>${title}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  @page { size: A4 portrait; margin: 7mm; }
+  @page { size: A4 portrait; margin: 12mm; }
   *{ box-sizing:border-box; }
   body{
     margin:0;
@@ -21507,40 +22144,34 @@ function _buildPrelimPopupHtml(ctx, mode){
     color:#0f1e3a;
   }
   .page{
-    --prelim-cols:2;
     width:210mm;
     min-height:297mm;
-    margin:10px auto;
+    margin:14px auto;
     background:#fff;
-    padding:8mm 7mm;
+    padding:14mm 12mm;
     box-shadow:0 8px 30px rgba(15,30,58,.15);
   }
-  .page.compact{ padding:7mm 6mm; }
-  .page.xcompact{ padding:6mm 5mm; }
   .sheet-title{
-    font-size:17px;
+    font-size:22px;
     font-weight:900;
     color:#0f1e3a;
     text-align:center;
-    margin-bottom:3px;
-    line-height:1.25;
+    margin-bottom:6px;
   }
   .sheet-sub{
-    font-size:11px;
+    font-size:13px;
     color:#475569;
     text-align:center;
-    margin-bottom:8px;
-    line-height:1.3;
+    margin-bottom:14px;
   }
   .group-grid{
     display:grid;
-    grid-template-columns:repeat(var(--prelim-cols), minmax(0, 1fr));
-    gap:7px;
-    align-items:start;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:12px;
   }
   .group-card{
-    border:1.2px solid #cbd5e1;
-    border-radius:9px;
+    border:1.5px solid #cbd5e1;
+    border-radius:12px;
     overflow:hidden;
     break-inside:avoid;
     page-break-inside:avoid;
@@ -21550,26 +22181,34 @@ function _buildPrelimPopupHtml(ctx, mode){
     display:flex;
     justify-content:space-between;
     align-items:center;
-    gap:6px;
-    padding:7px 8px;
+    gap:8px;
+    padding:10px 12px;
     background:#0f1e3a;
     color:#fff;
   }
   .group-name{
-    font-size:15px;
+    font-size:17px;
     font-weight:900;
-    line-height:1.15;
   }
   .group-court{
-    font-size:10px;
+    font-size:11px;
     font-weight:800;
     opacity:.95;
     white-space:nowrap;
   }
-  .group-memo{
-    padding:5px 7px;
-    font-size:10px;
-    line-height:1.35;
+  
+.notice-ticker{position:relative;overflow:hidden;width:100%;max-width:100%;border-radius:12px;padding:9px 12px;background:linear-gradient(135deg,#fff1f2,#ffe4e6 55%,#fff7ed);border:2px solid #fb7185;color:#9f1239;font-weight:900;box-shadow:0 4px 12px rgba(244,63,94,.12);}
+.notice-ticker.track-compact{display:block;width:100%;padding:7px 12px;border-radius:999px;vertical-align:middle;}
+.notice-ticker .notice-ticker-inner{display:inline-flex;align-items:center;gap:30px;white-space:nowrap;min-width:max-content;will-change:transform;animation:noticeTickerMove 11s linear infinite;}
+.notice-ticker .notice-ticker-copy{display:inline-flex;align-items:center;gap:30px;white-space:nowrap;}
+.notice-ticker .notice-ticker-label{flex:0 0 auto;font-size:.82rem;font-weight:900;color:#be123c;}
+.notice-ticker .notice-ticker-text{display:inline-block;white-space:nowrap;font-size:.9rem;font-weight:900;letter-spacing:-.01em;}
+@keyframes noticeTickerMove{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}
+
+.group-memo{
+    padding:7px 10px;
+    font-size:11px;
+    line-height:1.5;
     color:#8a6412;
     background:#fff8df;
     border-bottom:1px solid #f3d27a;
@@ -21582,8 +22221,8 @@ function _buildPrelimPopupHtml(ctx, mode){
   .group-table th,
   .group-table td{
     border-top:1px solid #e2e8f0;
-    padding:5px 6px;
-    font-size:11px;
+    padding:9px 10px;
+    font-size:13px;
     vertical-align:top;
   }
   .group-table th{
@@ -21597,46 +22236,27 @@ function _buildPrelimPopupHtml(ctx, mode){
     font-weight:900;
     color:#0f1e3a;
     vertical-align:middle;
-    width:40px;
   }
   .group-table td.name{
     font-weight:800;
-    line-height:1.35;
+    line-height:1.5;
     word-break:keep-all;
   }
   .player-name{
     font-weight:800;
-    font-size:11px;
-    line-height:1.28;
+    font-size:14px;
+    line-height:1.45;
     color:#0f172a;
   }
   .player-gap{
-    height:3px;
+    height:6px;
   }
   .player-club{
-    margin-top:1px;
-    font-size:9px;
+    margin-top:2px;
+    font-size:11px;
     color:#64748b;
     font-weight:700;
-    line-height:1.2;
   }
-  .page.compact .group-grid{ gap:6px; }
-  .page.compact .group-head{ padding:6px 7px; }
-  .page.compact .group-name{ font-size:14px; }
-  .page.compact .group-table th,
-  .page.compact .group-table td{ padding:4px 5px; font-size:10px; }
-  .page.compact .player-name{ font-size:10px; }
-  .page.compact .player-club{ font-size:8.5px; }
-  .page.xcompact .group-grid{ gap:5px; }
-  .page.xcompact .group-head{ padding:5px 6px; }
-  .page.xcompact .group-name{ font-size:13px; }
-  .page.xcompact .group-court{ font-size:9px; }
-  .page.xcompact .group-memo{ padding:4px 6px; font-size:9px; }
-  .page.xcompact .group-table th,
-  .page.xcompact .group-table td{ padding:3px 4px; font-size:9px; }
-  .page.xcompact .group-table td.num{ width:32px; }
-  .page.xcompact .player-name{ font-size:9px; line-height:1.2; }
-  .page.xcompact .player-club{ font-size:7.5px; }
   .page-break{
     page-break-before:always;
     break-before:page;
@@ -21666,7 +22286,7 @@ function _buildPrelimPopupHtml(ctx, mode){
       try{
         const root = document.getElementById('captureRoot');
         if(!root) return;
-        const canvas = await html2canvas(root,{scale:3,backgroundColor:'#eef3f8',useCORS:true,logging:false});
+        const canvas = await html2canvas(root,{scale:2,backgroundColor:'#eef3f8',useCORS:true,logging:false});
         const a = document.createElement('a');
         a.href = canvas.toDataURL('image/png');
         a.download = 'prelim_sheet.png';
