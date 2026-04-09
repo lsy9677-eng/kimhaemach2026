@@ -3364,6 +3364,19 @@ const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheaten
 const _app=initializeApp(FB);
 const db=getFirestore(_app);
 const storage=getStorage(_app);
+const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
+if(FIRESTORE_WRITE_TRACE){
+  const wrapTrace=(name, fn)=>async (...args)=>{
+    try{ console.log('🔥', name, args[0]?.path||args[0]); console.trace(); }catch(e){}
+    return fn(...args);
+  };
+  try{
+    window.__OAI_setDoc = setDoc;
+    window.__OAI_updateDoc = updateDoc;
+    window.__OAI_addDoc = addDoc;
+  }catch(e){}
+}
+
 let AD=false;
 let OP=false; // 경기진행자 로그인 상태
 let REG=false; // 팀등록 로그인 상태
@@ -3774,13 +3787,13 @@ async function initFB(){
         if(!G._regIdsByKey[key])G._regIdsByKey[key]=[];
         G._regIdsByKey[key].push(d.id);
       });
-      Object.keys(G.teams).forEach(k=>G.teams[k].sort((a,b)=>(a.registeredAt||'').localeCompare(b.registeredAt||'')));
+      Object.keys(G.teams).forEach(k=>{G.teams[k].sort((a,b)=>(a.registeredAt||'').localeCompare(b.registeredAt||'')); const docs=(G.teams[k]||[]).map(t=>normalizeRegistrationPayloadForHash({tournamentId:k.slice(0,k.lastIndexOf('_')),division:k.slice(k.lastIndexOf('_')+1),club:t.club,players:t.players||[],registeredAt:t.registeredAt||'',...(t.tournamentType?{tournamentType:t.tournamentType}:{}),...(t.editPin?{editPin:t.editPin}:{}),...(Array.isArray(t.individualPlayers)?{individualPlayers:t.individualPlayers}:{}),...(t.clubTokens?{clubTokens:t.clubTokens}:{}),...(t.pairLabel!==undefined?{pairLabel:t.pairLabel}:{}),...(t.entryLabel!==undefined?{entryLabel:t.entryLabel}:{}),...(t.note!==undefined?{note:t.note}:{}),...(t.doublesCount!==undefined?{doublesCount:t.doublesCount}:{}),...(t.mainPlayerCount!==undefined?{mainPlayerCount:t.mainPlayerCount}:{}),...(t.tiebreakAge!==undefined?{tiebreakAge:Number(t.tiebreakAge||0)||0}:{})})); markFbWriteCache('teams',k,{docs,ids:(G._regIdsByKey[k]||[]).slice().sort(),deleted:[]});});
       onDU();
     },e=>console.error(e));
 
     // ③ 대진표/경기결과 - 실시간 감지 유지 (경기 중 업데이트 필요)
     onSnapshot(collection(db,'draws'),s=>{
-      G.draws={};s.docs.forEach(d=>{G.draws[d.id]=d.data();});onDU();
+      G.draws={};s.docs.forEach(d=>{G.draws[d.id]=d.data(); markFbWriteCache('draws', d.id, d.data()||{});});onDU();
     },e=>console.error(e));
 
     onSnapshot(collection(db,'matches'),s=>{
@@ -3795,7 +3808,7 @@ async function initFB(){
         if(!G._matchIdsByKey[key])G._matchIdsByKey[key]=[];
         G._matchIdsByKey[key].push(d.id);
       });
-      Object.keys(G.matches).forEach(k=>G.matches[k].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')));
+      Object.keys(G.matches).forEach(k=>{G.matches[k].sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')); const {tid,div}=_k2td(k); const docs=(G.matches[k]||[]).map(x=>{const payload={...x}; delete payload._id; payload.tournamentId=tid; payload.division=div; return normalizeMatchPayloadForHash(payload);}); markFbWriteCache('matches',k,{docs,ids:(G._matchIdsByKey[k]||[]).slice().sort(),deleted:[]});});
       try{
         processOnlineOrderAlerts(prevMatchMap, G.matches||{});
       }catch(alertErr){
@@ -3880,6 +3893,7 @@ async function loadMeta(){
       if(!G.meta.indivLockEnabled) G.meta.indivLockEnabled=false;
       if(!G.meta.indivLockStart) G.meta.indivLockStart='';
       if(!G.meta.indivLockEnd) G.meta.indivLockEnd='';
+      markFbWriteCache('meta','config',{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),clubContacts:(G.meta.clubContacts||{}),clubEmails:(G.meta.clubEmails||{}),clubPasswords:(G.meta.clubPasswords||{}),clubPasswordCustom:(G.meta.clubPasswordCustom||{}),regDeadlineDt:(G.meta.regDeadlineDt||''),adminFloatingNotice:(G.meta.adminFloatingNotice||''),adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,onlineOrderEnabled:!!G.meta.onlineOrderEnabled,operatorPw:(G.meta.operatorPw||'2026court'),regSessionVersion:Number(G.meta.regSessionVersion||1),drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),indivLockEnabled:!!G.meta.indivLockEnabled,indivLockStart:(G.meta.indivLockStart||''),indivLockEnd:(G.meta.indivLockEnd||'')});
     }else{
       await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0});
     }
@@ -3903,27 +3917,30 @@ async function loadMeta(){
 }
 async function saveMeta(){
   // memberRegistry2026 제외 - saveRegistry(2026)으로만 관리 (1MB 초과 방지)
+  const payload={
+    pw:G.meta.pw,
+    regPw:(G.meta.regPw||'202601'),
+    clubs:G.clubs,
+    adminPhone:(G.meta.adminPhone||''),
+    clubContacts:(G.meta.clubContacts||{}),
+    clubEmails:(G.meta.clubEmails||{}),
+    clubPasswords:(G.meta.clubPasswords||{}),
+    clubPasswordCustom:(G.meta.clubPasswordCustom||{}),
+    regDeadlineDt:(G.meta.regDeadlineDt||''),
+    adminFloatingNotice:(G.meta.adminFloatingNotice||''),
+    adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,
+    onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
+    operatorPw:(G.meta.operatorPw||'2026court'),
+    regSessionVersion:Number(G.meta.regSessionVersion||1),
+    drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),
+    indivLockEnabled:!!G.meta.indivLockEnabled,
+    indivLockStart:(G.meta.indivLockStart||''),
+    indivLockEnd:(G.meta.indivLockEnd||'')
+  };
   try{
-    await setDoc(doc(db,'meta','config'),{
-      pw:G.meta.pw,
-      regPw:(G.meta.regPw||'202601'),
-      clubs:G.clubs,
-      adminPhone:(G.meta.adminPhone||''),
-      clubContacts:(G.meta.clubContacts||{}),
-      clubEmails:(G.meta.clubEmails||{}),
-      clubPasswords:(G.meta.clubPasswords||{}),
-      clubPasswordCustom:(G.meta.clubPasswordCustom||{}),
-      regDeadlineDt:(G.meta.regDeadlineDt||''),
-      adminFloatingNotice:(G.meta.adminFloatingNotice||''),
-      adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,
-      onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
-      operatorPw:(G.meta.operatorPw||'2026court'),
-      regSessionVersion:Number(G.meta.regSessionVersion||1),
-      drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),
-      indivLockEnabled:!!G.meta.indivLockEnabled,
-      indivLockStart:(G.meta.indivLockStart||''),
-      indivLockEnd:(G.meta.indivLockEnd||'')
-    });
+    if(isSameFbWrite('meta','config',payload)) return;
+    await setDoc(doc(db,'meta','config'), payload);
+    markFbWriteCache('meta','config',payload);
   }catch(e){
     console.error('saveMeta 오류:', e);
     throw e;
@@ -3977,7 +3994,53 @@ function _k2td(key){const i=key.lastIndexOf('_');return {tid:key.slice(0,i), div
 function _rid(){return 'r_'+Math.random().toString(36).slice(2,10);}
 function _mid(){return 'm_'+Math.random().toString(36).slice(2,10);}
 
-const stD=k=>fbSet('draws',k,G.draws[k]||{}); // draws는 기존처럼 tid_div 문서 유지
+// Firestore no-op write 방지용 안정 해시
+const __FB_WRITE_CACHE = { meta:'', draws:{}, teams:{}, matches:{} };
+function stableStringify(value){
+  const seen = new WeakSet();
+  const walk = (v)=>{
+    if(v===null || typeof v!=='object') return v;
+    if(seen.has(v)) return null;
+    seen.add(v);
+    if(Array.isArray(v)) return v.map(walk);
+    const out={};
+    Object.keys(v).sort().forEach(k=>{ out[k]=walk(v[k]); });
+    return out;
+  };
+  try{ return JSON.stringify(walk(value)); }catch(e){ return JSON.stringify(value); }
+}
+function markFbWriteCache(kind, key, payload){
+  try{
+    if(kind==='meta') __FB_WRITE_CACHE.meta = stableStringify(payload);
+    else if(__FB_WRITE_CACHE[kind]) __FB_WRITE_CACHE[kind][key] = stableStringify(payload);
+  }catch(e){}
+}
+function isSameFbWrite(kind, key, payload){
+  try{
+    const next = stableStringify(payload);
+    if(kind==='meta') return __FB_WRITE_CACHE.meta === next;
+    return (__FB_WRITE_CACHE[kind]?.[key]||'') === next;
+  }catch(e){ return false; }
+}
+function normalizeRegistrationPayloadForHash(payload){
+  const x={...payload};
+  delete x.updatedAt;
+  return x;
+}
+function normalizeMatchPayloadForHash(payload){
+  const x={...payload};
+  delete x.updatedAt;
+  delete x.createdAt;
+  return x;
+}
+
+
+async function stD(k){
+  const payload=G.draws[k]||{};
+  if(isSameFbWrite('draws', k, payload)) return;
+  await fbSet('draws',k,payload);
+  markFbWriteCache('draws', k, payload);
+} // draws는 기존처럼 tid_div 문서 유지
 
 async function stT(key){
   const {tid,div}=_k2td(key);
@@ -3986,6 +4049,26 @@ async function stT(key){
   const curIds=new Set(cur.map(t=>t._id));
   const prevIds=new Set((G._regIdsByKey && G._regIdsByKey[key]) ? G._regIdsByKey[key] : []);
   const toDel=[...prevIds].filter(id=>!curIds.has(id));
+
+  const docsForHash=cur.map(t=>normalizeRegistrationPayloadForHash({
+    tournamentId: tid,
+    division: div,
+    club: t.club,
+    players: t.players||[],
+    registeredAt: t.registeredAt || '',
+    ...(t.tournamentType ? {tournamentType: t.tournamentType} : {}),
+    ...(t.editPin ? {editPin: t.editPin} : {}),
+    ...(Array.isArray(t.individualPlayers) ? {individualPlayers: t.individualPlayers} : {}),
+    ...(t.clubTokens ? {clubTokens: t.clubTokens} : {}),
+    ...(t.pairLabel !== undefined ? {pairLabel: t.pairLabel} : {}),
+    ...(t.entryLabel !== undefined ? {entryLabel: t.entryLabel} : {}),
+    ...(t.note !== undefined ? {note: t.note} : {}),
+    ...(t.doublesCount !== undefined ? {doublesCount: t.doublesCount} : {}),
+    ...(t.mainPlayerCount !== undefined ? {mainPlayerCount: t.mainPlayerCount} : {}),
+    ...(t.tiebreakAge !== undefined ? {tiebreakAge: Number(t.tiebreakAge||0)||0} : {})
+  }));
+  const hashPayload={ docs: docsForHash, ids:[...curIds].sort(), deleted:[...toDel].sort() };
+  if(isSameFbWrite('teams', key, hashPayload)) return;
 
   const batch=writeBatch(db);
   cur.forEach(t=>{
@@ -3997,7 +4080,6 @@ async function stT(key){
       players: t.players||[],
       registeredAt: t.registeredAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      // 개인전 전용 필드 - Firestore에 저장해야 수정/삭제 비밀번호 검증 가능
       ...(t.tournamentType ? {tournamentType: t.tournamentType} : {}),
       ...(t.editPin ? {editPin: t.editPin} : {}),
       ...(Array.isArray(t.individualPlayers) ? {individualPlayers: t.individualPlayers} : {}),
@@ -4013,6 +4095,7 @@ async function stT(key){
   });
   toDel.forEach(id=>batch.delete(doc(db,'registrations',id)));
   await batch.commit();
+  markFbWriteCache('teams', key, hashPayload);
   if(!G._regIdsByKey) G._regIdsByKey={};
   G._regIdsByKey[key]=[...curIds];
 }
@@ -4024,6 +4107,16 @@ async function stM(key){
   const curIds=new Set(cur.map(x=>x._id));
   const prevIds=new Set((G._matchIdsByKey && G._matchIdsByKey[key]) ? G._matchIdsByKey[key] : []);
   const toDel=[...prevIds].filter(id=>!curIds.has(id));
+
+  const docsForHash=cur.map(x=>{
+    const payload={...x};
+    delete payload._id;
+    payload.tournamentId = tid;
+    payload.division = div;
+    return normalizeMatchPayloadForHash(payload);
+  });
+  const hashPayload={ docs: docsForHash, ids:[...curIds].sort(), deleted:[...toDel].sort() };
+  if(isSameFbWrite('matches', key, hashPayload)) return;
 
   const batch=writeBatch(db);
   cur.forEach(x=>{
@@ -4038,6 +4131,7 @@ async function stM(key){
   });
   toDel.forEach(id=>batch.delete(doc(db,'matches',id)));
   await batch.commit();
+  markFbWriteCache('matches', key, hashPayload);
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=[...curIds];
 }
