@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-08-v92-a4-div-fix";
+  const APP_VERSION = "2026-04-09-v102-draw-manage-menus";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -66,231 +66,7 @@ window.om = function(id){
 document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderModal, 0); setTimeout(updateTournamentTypeUI, 0);});
 
 
-function exportPrelimSheet(){
-  try{
-    if(typeof window.G === 'undefined' || !window.G){
-      if(typeof toast === 'function') toast('데이터 로딩 후 다시 시도하세요','error');
-      else alert('데이터 로딩 후 다시 시도하세요');
-      return;
-    }
 
-    const byId = (id) => document.getElementById(id);
-    const app = window.G;
-    const tid = byId('brTS')?.value || '';
-    if(!tid){
-      if(typeof toast === 'function') toast('대회를 먼저 선택하세요','error');
-      else alert('대회를 먼저 선택하세요');
-      return;
-    }
-
-    const tournament = (app.tournaments || []).find(x => x && x.id === tid) || null;
-
-    // 현재 선택된 부서 — BR_MULTI_DIVS 전역변수 우선 사용 (칩 버튼 data-div 없이도 동작)
-    let selectedDivs = [];
-    const activeBR = Array.isArray(window.BR_MULTI_DIVS) ? window.BR_MULTI_DIVS : [];
-    if(activeBR.length && !activeBR.includes('__ALL__')){
-      selectedDivs = [...activeBR];
-    }
-    // 폴백: brDS select 값
-    if(!selectedDivs.length){
-      const hiddenDiv = byId('brDS')?.value || '';
-      if(hiddenDiv && hiddenDiv !== '__ALL__' && hiddenDiv !== '전체'){
-        selectedDivs = [hiddenDiv];
-      }
-    }
-
-    const divs = Array.isArray(tournament?.divisions)
-      ? tournament.divisions.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean)
-      : [];
-
-    const hasPrelimDraw = (divName) => {
-      const key = tid + '_' + divName;
-      const d = app.draws?.[key];
-      return !!(d && Array.isArray(d.groups) && d.groups.length);
-    };
-
-    // selectedDivs가 비어있으면 전체 부서 중 추첨된 것 모두 포함
-    if(!selectedDivs.length){
-      selectedDivs = divs.filter(hasPrelimDraw);
-    } else {
-      // 선택된 부서 중 추첨된 것만 필터 (없으면 전체로 폴백)
-      const filtered = selectedDivs.filter(hasPrelimDraw);
-      selectedDivs = filtered.length ? filtered : divs.filter(hasPrelimDraw);
-    }
-
-    if(!selectedDivs.length){
-      if(typeof toast === 'function') toast('예선 추첨 먼저 진행하세요','error');
-      else alert('예선 추첨 먼저 진행하세요');
-      return;
-    }
-
-    const esc = (v='') => String(v ?? '')
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
-
-    const buildTeamLabel = (teams, team, idx) => {
-      if(!team) return '-';
-
-      if(team.tournamentType === 'individual_pair' || Array.isArray(team.individualPlayers)){
-        const ps = Array.isArray(team.individualPlayers) && team.individualPlayers.length
-          ? team.individualPlayers
-          : (team.players || []).slice(0,2).map(n => ({ name:n, clubsRaw:team.club || '' }));
-
-        const pair = ps.map(p => {
-          const nm = (p?.name || '').trim();
-          const club = (p?.clubsRaw || '').trim();
-          return nm + (club ? `(${club})` : '');
-        }).filter(Boolean).join(' / ');
-
-        return pair || ((team.players || []).join(' / ')) || '-';
-      }
-
-      const club = team.club || team.name || '-';
-      const same = teams.filter(x => x && x.club === team.club);
-      if(same.length <= 1) return club;
-
-      let order = 0;
-      for(let i=0;i<idx;i++){
-        if(teams[i] && teams[i].club === team.club) order++;
-      }
-      return `${club}-${String.fromCharCode(65 + order)}`;
-    };
-
-    const sections = selectedDivs.map(divName => {
-      const key = tid + '_' + divName;
-      const draw = app.draws?.[key];
-      const teams = app.teams?.[key] || [];
-      const groups = Array.isArray(draw?.groups) ? draw.groups : [];
-
-      const groupsHtml = groups.map((g, gi) => {
-        // g는 {teams:[...], courts:[], memo:''} 형태의 객체
-        const teamIds = Array.isArray(g?.teams) ? g.teams : (Array.isArray(g) ? g : []);
-        const courts = Array.isArray(g?.courts) && g.courts.length ? g.courts.join(', ') : '';
-        const memo = String(g?.memo || '').trim();
-
-        const rows = teamIds.map((ti, i) => {
-          const team = teams[ti];
-          return `<tr>
-            <td class="num">${i+1}</td>
-            <td class="team">${esc(buildTeamLabel(teams, team, ti))}</td>
-          </tr>`;
-        }).join('');
-
-        const grpLetter = String.fromCharCode(65 + gi);
-        return `
-          <section class="group">
-            <div class="group-title">${grpLetter}조${courts ? `<span class="court-badge">🎾 ${esc(courts)}</span>` : ''}</div>
-            ${memo ? `<div class="group-memo">📝 ${esc(memo)}</div>` : ''}
-            <table>
-              <thead>
-                <tr><th style="width:42px">순</th><th>팀 / 선수</th></tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </section>
-        `;
-      }).join('');
-
-      return `
-        <section class="sheet">
-          <div class="header">
-            <div class="title">${esc(tournament?.name || '예선 대진표')}</div>
-            <div class="meta">
-              ${esc(tournament?.date || '') ? `${esc(tournament?.date || '')}<br>` : ''}
-              ${esc(divName)} 예선 조편성표
-            </div>
-          </div>
-          <div class="grid">${groupsHtml}</div>
-          <div class="footer">배포용 예선 대진표</div>
-        </section>
-      `;
-    }).join('<div class="page-break"></div>');
-
-    const htmlContent = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<title>예선 대진표</title>
-<style>
-  @page { size: A4 portrait; margin: 12mm; }
-  * { box-sizing:border-box; }
-  body {
-    font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
-    margin:0; color:#111827; background:#fff;
-  }
-  .sheet { width:100%; margin:0 auto; }
-  .header {
-    text-align:center; margin-bottom:14px; padding-bottom:10px;
-    border-bottom:2px solid #0f1e3a;
-  }
-  .title { font-size:20px; font-weight:800; color:#0f1e3a; margin-bottom:4px; }
-  .meta { font-size:12px; color:#475569; line-height:1.5; }
-  .grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
-  .group {
-    border:1.4px solid #cbd5e1; border-radius:10px; overflow:hidden;
-    break-inside:avoid; page-break-inside:avoid; background:#fff;
-  }
-  .group-title {
-    background:#0f1e3a; color:#fff; font-size:15px; font-weight:800; padding:8px 10px;
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-  }
-  .court-badge {
-    font-size:11px; font-weight:700; background:rgba(255,255,255,.18);
-    padding:2px 8px; border-radius:20px; white-space:nowrap;
-  }
-  .group-memo {
-    font-size:11px; color:#7a5600; background:#fff8df;
-    border-bottom:1px solid #f6d365; padding:5px 10px; font-weight:700; line-height:1.4;
-  }
-  table { width:100%; border-collapse:collapse; }
-  th, td { border-top:1px solid #e2e8f0; padding:8px 10px; font-size:12px; vertical-align:middle; }
-  th { background:#f8fafc; color:#334155; font-weight:800; text-align:center; }
-  td.num { text-align:center; font-weight:800; color:#0f1e3a; width:64px; }
-  td.team { text-align:left; font-weight:700; line-height:1.45; word-break:keep-all; }
-  .footer { margin-top:10px; font-size:11px; color:#64748b; text-align:right; }
-  .page-break { height:0; page-break-before:always; break-before:page; }
-  @media print {
-    .sheet { margin:0; }
-    .page-break { display:block; }
-  }
-</style>
-</head>
-<body>
-  ${sections}
-</body>
-</html>`;
-
-    const w = window.open('', '_blank', 'noopener,noreferrer');
-    if(!w){
-      if(typeof toast === 'function') toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.','error');
-      else alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.');
-      return;
-    }
-
-    w.document.open();
-    w.document.write(htmlContent);
-    w.document.close();
-
-    const triggerPrint = () => {
-      try{
-        w.focus();
-        w.print();
-      }catch(_e){}
-    };
-
-    if(w.document.readyState === 'complete'){
-      setTimeout(triggerPrint, 250);
-    }else{
-      w.onload = () => setTimeout(triggerPrint, 250);
-    }
-  }catch(err){
-    console.error(err);
-    if(typeof toast === 'function') toast('예선표 생성 중 오류가 발생했습니다','error');
-    else alert('예선표 생성 중 오류가 발생했습니다');
-  }
-}
 
 </script>
 
@@ -1937,10 +1713,17 @@ body.slider-ready .page:not(.active){
       🏆 <span id="myClubBracketBtnText">내 클럽 경기만 보기</span>
     </button>
   </div>
-  <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;flex-wrap:wrap" id="bracketExportBar" style="display:none">
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;flex-wrap:wrap" id="bracketExportBar">
     <button class="btn btn-outline" style="font-size:.78rem;padding:5px 10px" onclick="openBracketView()">📊 전체 대진표 보기</button>
-    <button class="btn btn-outline" style="font-size:.78rem;padding:5px 10px" onclick="bracketToImage()">🖼️ 이미지 저장</button>
-    <button class="btn btn-outline" style="font-size:.78rem;padding:5px 10px" onclick="bracketToPDF()">📄 PDF 저장</button><button class="btn btn-outline" style="font-size:.78rem;padding:5px 10px" onclick="exportPrelimSheet()">📄 예선표(A4)</button>
+    <div class="login-menu-wrap js-mini-menu" id="bracketSaveMenuWrap">
+      <button class="btn btn-outline" style="font-size:.78rem;padding:5px 12px" onclick="toggleBracketSaveMenu(event)">💾 저장하기</button>
+      <div class="login-menu-panel" id="bracketSaveMenuPanel" style="min-width:210px">
+        <button class="btn-sm login-menu-item" onclick="closeBracketSaveMenu();bracketToImage()" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">🖼️ 이미지 저장</button>
+        <button class="btn-sm login-menu-item" onclick="closeBracketSaveMenu();bracketToPDF()" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">📄 PDF 저장</button>
+        <button class="btn-sm login-menu-item" onclick="closeBracketSaveMenu();exportPrelimSheet()" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">📄 예선표(A4) 출력</button>
+        <button class="btn-sm login-menu-item" onclick="closeBracketSaveMenu();exportPrelimImage()" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">🖼️ 예선표 저장</button>
+      </div>
+    </div>
   </div>
   <div class="sec-title">대진표 · 경기 현황 <span style="font-size:.72rem;font-weight:400;color:var(--text2)">— 실시간 업데이트 🔥</span></div>
   <div class="card">
@@ -4376,11 +4159,42 @@ function closeLoginMenu(){
 }
 document.addEventListener('click',(e)=>{
   const wrap=ge('loginMenuWrap');
-  if(!wrap) return;
-  if(!wrap.contains(e.target)) wrap.classList.remove('open');
+  if(wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+  document.querySelectorAll('.js-mini-menu.open').forEach(node=>{
+    if(!node.contains(e.target)) node.classList.remove('open');
+  });
 });
 window.toggleLoginMenu = toggleLoginMenu;
 window.closeLoginMenu = closeLoginMenu;
+
+function toggleMiniMenu(ev, wrapId){
+  try{ ev?.stopPropagation?.(); }catch(e){}
+  const wrap=ge(wrapId);
+  if(!wrap) return;
+  document.querySelectorAll('.js-mini-menu.open').forEach(node=>{
+    if(node!==wrap) node.classList.remove('open');
+  });
+  wrap.classList.toggle('open');
+}
+function closeMiniMenu(wrapId){
+  const wrap=ge(wrapId);
+  if(wrap) wrap.classList.remove('open');
+}
+function closeAllMiniMenus(){
+  document.querySelectorAll('.js-mini-menu.open').forEach(node=>node.classList.remove('open'));
+}
+window.toggleMiniMenu = toggleMiniMenu;
+window.closeMiniMenu = closeMiniMenu;
+window.closeAllMiniMenus = closeAllMiniMenus;
+
+function toggleBracketSaveMenu(ev){
+  toggleMiniMenu(ev,'bracketSaveMenuWrap');
+}
+function closeBracketSaveMenu(){
+  closeMiniMenu('bracketSaveMenuWrap');
+}
+window.toggleBracketSaveMenu = toggleBracketSaveMenu;
+window.closeBracketSaveMenu = closeBracketSaveMenu;
 
 function isOperatorMode(){ return !!(OP && !AD); }
 function canManageBracket(){ return !!(AD || OP); }
@@ -8952,24 +8766,30 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
   const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
   const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const prelimMenuWrapId = `prelimMenuWrap_${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+  const mainMenuWrapId = `mainMenuWrap_${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
   const topActions=`<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:100%">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        <span style="font-size:.72rem;font-weight:800;color:var(--primary-dark);padding:4px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--border)">📊 예선</span>
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','prelim')">🗂 예선 추첨기록</button>
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestPrelimSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','prelim')" ${latestPrelimSavedDraw?'':'disabled'}>📋 예선 추첨 보기</button>
-        ${canManageBracket()?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="${prelimRedrawAction}">🎲 ${prelimRedrawLabel}</button>`:''}
+        <div class="login-menu-wrap js-mini-menu" id="${prelimMenuWrapId}">
+          <button class="btn btn-outline" style="padding:4px 10px;font-size:.72rem;min-height:34px;white-space:nowrap;font-weight:800" onclick="toggleMiniMenu(event,'${prelimMenuWrapId}')">🎲 예선 추첨 관리</button>
+          <div class="login-menu-panel" style="min-width:210px">
+            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');${prelimRedrawAction}" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">${draw?'🎲 예선 재추첨':'🎲 예선 추첨 시작'}</button>`:''}
+            <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');openLatestSavedDraw('${tid}','${div}','prelim')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12);${latestPrelimSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" ${latestPrelimSavedDraw?'':'disabled'}>📋 예선 결과 보기</button>
+            <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');openDrawHistory('${tid}','${div}','prelim')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">🗂 예선 추첨 기록</button>
+            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');resetPrelimDrawOnly('${key}')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">♻️ 예선 초기화</button>`:''}
+          </div>
+        </div>
+        ${isGroupKO ? `<div class="login-menu-wrap js-mini-menu" id="${mainMenuWrapId}">
+          <button class="btn btn-outline" style="padding:4px 10px;font-size:.72rem;min-height:34px;white-space:nowrap;font-weight:800;${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="${canMainRedraw?`toggleMiniMenu(event,'${mainMenuWrapId}')`:`toast('예선을 먼저 완료하세요','info')`}">🏆 본선 추첨 관리</button>
+          <div class="login-menu-panel" style="min-width:210px">
+            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${mainMenuWrapId}');buildMain('${tid}','${div}')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12);${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" ${canMainRedraw?'':'disabled'}>${latestMainSavedDraw || mMs.length ? '🎲 본선 재추첨' : '🎲 본선 추첨 시작'}</button>`:''}
+            <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${mainMenuWrapId}');openLatestSavedDraw('${tid}','${div}','main')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12);${latestMainSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" ${latestMainSavedDraw?'':'disabled'}>📋 본선 결과 보기</button>
+            <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${mainMenuWrapId}');openDrawHistory('${tid}','${div}','main')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">🗂 본선 추첨 기록</button>
+            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${mainMenuWrapId}');resetMainDrawOnly('${key}')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12);${(draw&&Array.isArray(draw.groups)&&draw.groups.length)?'':'opacity:.5;cursor:not-allowed;'}" ${(draw&&Array.isArray(draw.groups)&&draw.groups.length)?'':'disabled'}>♻️ 본선 초기화</button>`:''}
+          </div>
+        </div>` : ``}
+        ${canManageBracket()?`<button class="btn btn-outline" style="padding:4px 10px;font-size:.72rem;min-height:34px;white-space:nowrap" onclick="resetDrawOnly('${key}')">🧨 전체 초기화</button>`:''}
       </div>
-      ${isGroupKO ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        <span style="font-size:.72rem;font-weight:800;color:#166534;padding:4px 8px;border-radius:999px;background:linear-gradient(135deg,#eefbf3,#dcfce7);border:1px solid #86efac">🌳 본선</span>
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="openDrawHistory('${tid}','${div}','main')">🗂 본선 추첨기록</button>
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${latestMainSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="openLatestSavedDraw('${tid}','${div}','main')" ${latestMainSavedDraw?'':'disabled'}>🌳 본선 추첨 보기</button>
-        ${canManageBracket()?`<button class="btn btn-accent" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${canMainRedraw?'':'opacity:.5;cursor:not-allowed;'}" onclick="buildMain('${tid}','${div}')" ${canMainRedraw?'':'disabled'}>🎲 ${mainRedrawLabel}</button>`:''}
-      </div>` : ``}
-      ${canManageBracket()?`<div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="resetPrelimDrawOnly('${key}')">♻️ 예선 리셋</button>
-        ${isGroupKO?`<button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap;${(draw&&Array.isArray(draw.groups)&&draw.groups.length)?'':'opacity:.5;cursor:not-allowed;'}" onclick="resetMainDrawOnly('${key}')" ${(draw&&Array.isArray(draw.groups)&&draw.groups.length)?'':'disabled'}>♻️ 본선 리셋</button>`:''}
-        <button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;min-height:32px;white-space:nowrap" onclick="resetDrawOnly('${key}')">🧨 전체 리셋</button>
-      </div>`:''}
     </div>`;
 
   // 개인전은 참가자 목록 기본 접기
@@ -9726,13 +9546,24 @@ function renderCombinedBracketSection(tid, div){
           </div>
         </div>`;
       } else {
+        const isFixedPreview = ((draw.mainMode||'fixed')==='fixed');
+        const redrawPreview = buildIndivRedrawPreviewData(draw.groups||[], draw.grpSize||2);
+        const previewSlots = isFixedPreview ? (pv.matchSlots||[]) : (redrawPreview.matchSlots||[]);
+        const previewPlayIns = isFixedPreview ? (pv.playInMatches||[]) : (redrawPreview.playInMatches||[]);
+        const previewN = isFixedPreview ? (pv.n||0) : (redrawPreview.spec?.mainSize || pv.n || 0);
+        const previewBadge = isFixedPreview
+          ? `${adv}팀 진출 × ${grpCount}조 → ${pv.n}강`
+          : `${adv}팀 진출 × ${grpCount}조 → 재추첨 후 확정`;
+        const previewDesc = isFixedPreview
+          ? '📌 본선 대진표는 예선 중에도 계속 보입니다. 지금은 구조 미리보기이고, 실제 배정은 본선 추첨 후 확정됩니다.'
+          : '📌 본선을 재추첨으로 설정한 경우 예선 추첨 직후에는 본선 자리 배정을 미리 확정해서 보여주지 않습니다. 아래는 구조 미리보기만 표시되고, 실제 본선 배정은 본선 추첨 버튼을 눌렀을 때 확정됩니다.';
         mainHTML = `<div class="card" style="margin:0;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-            <div class="card-title" style="color:var(--primary-dark);margin:0">🌳 미리보기</div>
-            <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${pv.n}강</span>
+            <div class="card-title" style="color:var(--primary-dark);margin:0">🌳 ${isFixedPreview ? '미리보기' : '재추첨 구조 미리보기'}</div>
+            <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${previewBadge}</span>
           </div>
-          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px">📌 본선 대진표는 예선 중에도 계속 보입니다. 지금은 구조 미리보기이고, 실제 배정은 본선 추첨 후 확정됩니다.</div>
-          ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px;line-height:1.6">${previewDesc}</div>
+          ${renderMainPreviewHTML(previewSlots,previewN,true,previewPlayIns)}
         </div>`;
       }
     } else {
@@ -17305,10 +17136,9 @@ function backupPlayersExcel(){
 // ─── 대진표 이미지/PDF 저장 ─────────────────────────────
 async function bracketToImage(){
   const el=ge('bracketContent');
-  if(!el||!el.querySelector('.t-bracket,.grp-card')){toast('대진표를 먼저 불러오세요','info');return;}
+  if(!el||!el.querySelector('.t-bracket,.grp-card,.grp-block,.m3card')){toast('대진표를 먼저 불러오세요','info');return;}
   toast('이미지 생성 중...','info');
   try{
-    // html2canvas CDN 동적 로드
     if(!window.html2canvas){
       await new Promise((res,rej)=>{
         const s=document.createElement('script');
@@ -17316,10 +17146,18 @@ async function bracketToImage(){
         s.onload=res;s.onerror=rej;document.head.appendChild(s);
       });
     }
-    const canvas=await html2canvas(el,{scale:3,backgroundColor:'#f0f4fa',useCORS:true,logging:false});
+    const canvas=await html2canvas(el,{scale:3,backgroundColor:'#f0f4fa',useCORS:true,logging:false,windowWidth:Math.max(document.documentElement.clientWidth, el.scrollWidth || 0)});
+    const a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download=`대진표_${new Date().toISOString().substring(0,10)}.png`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     toast('이미지 저장 완료 🖼️','success');
-  }catch(e){toast('이미지 저장 실패: '+e.message,'error');}
+  }catch(e){
+    console.error(e);
+    toast('이미지 저장 실패: '+e.message,'error');
+  }
 }
 
 async function bracketToPDF(){
@@ -20572,48 +20410,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   refreshRoleUI();
 });
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
-  }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
-
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
-
-  htmlContent += `</body></html>`;
-
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
-}
 
 </script>
 
@@ -20636,48 +20433,7 @@ function exportPrelimSheet(){
     });
   }
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
-  }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
-
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
-
-  htmlContent += `</body></html>`;
-
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
-}
 
 </script>
 <script>
@@ -20804,48 +20560,7 @@ function exportPrelimSheet(){
   }, {passive:true});
 })();
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
-  }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
-
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
-
-  htmlContent += `</body></html>`;
-
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
-}
 
 </script>
 
@@ -21306,48 +21021,7 @@ function _getName_force(key, m, side){
   };
 })();
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
-  }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
-
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
-
-  htmlContent += `</body></html>`;
-
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
-}
 
 </script>
 <!-- ====== BV 본선 브라켓(가지형) 오버라이드 끝 ====== -->
@@ -21560,48 +21234,7 @@ function exportPrelimSheet(){
   });
 })();
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
-  }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
-
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
-
-  htmlContent += `</body></html>`;
-
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
-}
 
 </script>
 
@@ -21691,48 +21324,401 @@ function exportPrelimSheet(){
   }
 })();
 
-function exportPrelimSheet(){
-  const key = (ge('brTS')?.value||'') + '_' + (ge('brDS')?.value||'');
-  const draw = G.draws[key];
-  const teams = G.teams[key]||[];
-  if(!draw || !draw.groups){
-    toast('예선 추첨 먼저 진행하세요','error');
-    return;
+
+
+
+
+function _prelimEsc(v=''){
+  return String(v ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+function _prelimPopupContext(){
+  const tid = ge('brTS')?.value || '';
+  if(!tid){
+    toast('대회를 먼저 선택하세요','error');
+    return null;
+  }
+  const tournament = (G.tournaments||[]).find(t=>t.id===tid);
+  if(!tournament){
+    toast('대회 정보를 찾을 수 없습니다','error');
+    return null;
   }
 
-  let htmlContent = `
-  <html><head><meta charset="utf-8">
-  <style>
-    body{font-family:sans-serif;padding:20px}
-    h2{text-align:center;margin-bottom:20px}
-    table{width:100%;border-collapse:collapse;margin-bottom:20px}
-    th,td{border:1px solid #333;padding:6px;text-align:center;font-size:12px}
-    th{background:#f0f0f0}
-    .group{margin-bottom:16px}
-  </style>
-  </head><body>
-  <h2>예선 대진표</h2>
-  `;
+  let selectedDivs = [];
+  if(Array.isArray(window.BR_MULTI_DIVS) && window.BR_MULTI_DIVS.length){
+    selectedDivs = window.BR_MULTI_DIVS.filter(v => v && v !== '__ALL__' && v !== '전체');
+  }
+  if(!selectedDivs.length){
+    const brds = ge('brDS')?.value || '';
+    if(brds && brds !== '__ALL__' && brds !== '전체') selectedDivs = [brds];
+  }
 
-  draw.groups.forEach((g,gi)=>{
-    htmlContent += `<div class="group"><h3>${gi+1}조</h3><table><tr><th>번호</th><th>팀</th></tr>`;
-    g.forEach((ti,i)=>{
-      const t = teams[ti];
-      htmlContent += `<tr><td>${i+1}</td><td>${tdn(t,key,ti)}</td></tr>`;
-    });
-    htmlContent += `</table></div>`;
-  });
+  const allDivs = Array.isArray(tournament.divisions) ? tournament.divisions.filter(Boolean) : [];
+  const hasGroups = (divName) => {
+    const key = tid + '_' + divName;
+    const draw = G.draws?.[key];
+    return !!(draw && Array.isArray(draw.groups) && draw.groups.length);
+  };
 
-  htmlContent += `</body></html>`;
+  if(!selectedDivs.length){
+    selectedDivs = allDivs.filter(hasGroups);
+  }else{
+    selectedDivs = selectedDivs.filter(hasGroups);
+  }
 
-  const w = window.open('');
-  w.document.write(htmlContent);
-  w.document.close();
-
-  setTimeout(()=>{
-    w.print();
-  },300);
+  if(!selectedDivs.length){
+    toast('예선 추첨된 부서가 없습니다','error');
+    return null;
+  }
+  return {tid, tournament, selectedDivs};
 }
+function _prelimMemberHtml(team, key, ti){
+  const esc = _prelimEsc;
+  if(!team) return '<div class="player-name">-</div>';
+
+  const players = Array.isArray(team.players) ? team.players.filter(Boolean) : [];
+  const club = String(team.club || '').trim();
+
+  if(Array.isArray(team.individualPlayers) && team.individualPlayers.length){
+    const parts = team.individualPlayers.slice(0,2).map(p=>{
+      const nm = String(p?.name || '').trim();
+      const c = String(p?.clubsRaw || p?.club || '').trim();
+      return `<div class="player-name">${esc(nm || '-')}</div>${c ? `<div class="player-club">${esc(c)}</div>` : ''}`;
+    }).join('<div class="player-gap"></div>');
+    return parts || '<div class="player-name">-</div>';
+  }
+
+  if(players.length){
+    const pairs = players.map(nm => `<div class="player-name">${esc(nm)}</div>`).join('');
+    return `${pairs}${club ? `<div class="player-club">${esc(club)}</div>` : ''}`;
+  }
+
+  let fallback = '-';
+  try{
+    fallback = typeof tdn === 'function' ? tdn(team, key, ti) : (team?.club || team?.name || '-');
+  }catch(e){
+    fallback = team?.club || team?.name || '-';
+  }
+  return `<div class="player-name">${esc(fallback)}</div>`;
+}
+function _prelimSectionLayout(groups){
+  const count = Array.isArray(groups) ? groups.length : 0;
+  if(count >= 25) return { cols: 4, compact: 'xcompact' };
+  if(count >= 13) return { cols: 3, compact: 'compact' };
+  return { cols: 2, compact: 'normal' };
+}
+function _buildPrelimSectionsHtml(ctx){
+  const {tid, tournament, selectedDivs} = ctx;
+  const esc = _prelimEsc;
+
+  return selectedDivs.map(divName => {
+    const key = tid + '_' + divName;
+    const draw = G.draws?.[key] || {};
+    const teams = G.teams?.[key] || [];
+    const groups = Array.isArray(draw.groups) ? draw.groups : [];
+    const layout = _prelimSectionLayout(groups);
+
+    const groupHtml = groups.map((grp, gi) => {
+      const teamIds = Array.isArray(grp?.teams) ? grp.teams : (Array.isArray(grp) ? grp : []);
+      const courts = Array.isArray(grp?.courts) ? grp.courts.filter(Boolean) : [];
+      const memo = String(grp?.memo || '').trim();
+
+      const teamRows = teamIds.map((ti, idx) => {
+        const team = teams[ti];
+        return `
+          <tr>
+            <td class="num">${idx+1}</td>
+            <td class="name">${_prelimMemberHtml(team, key, ti)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <div class="group-card">
+          <div class="group-head">
+            <div class="group-name">${gi+1}조</div>
+            ${courts.length ? `<div class="group-court">🎾 ${esc(courts.join(' / '))}</div>` : ``}
+          </div>
+          ${memo ? `<div class="group-memo">📝 ${esc(memo)}</div>` : ``}
+          <table class="group-table">
+            <thead>
+              <tr><th style="width:44px">번호</th><th>선수</th></tr>
+            </thead>
+            <tbody>
+              ${teamRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <section class="page ${layout.compact}" style="--prelim-cols:${layout.cols}">
+        <div class="sheet-title">${esc(tournament.name)}</div>
+        <div class="sheet-sub">${esc(divName)} 예선 조 편성표${tournament.date ? ` · ${esc(tournament.date)}` : ''}</div>
+        <div class="group-grid">${groupHtml}</div>
+      </section>
+    `;
+  }).join('<div class="page-break"></div>');
+}
+function _buildPrelimPopupHtml(ctx, mode){
+  const sections = _buildPrelimSectionsHtml(ctx);
+  const title = mode === 'image' ? '예선 조 편성표 이미지' : '예선 조 편성표';
+  const actionBtn = mode === 'image'
+    ? '<button onclick="saveAsImage()">🖼️ 이미지 저장</button>'
+    : '<button onclick="window.print()">🖨️ 인쇄</button>';
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  @page { size: A4 portrait; margin: 7mm; }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:#eef3f8;
+    color:#111827;
+    font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+  }
+  .toolbar{
+    position:sticky;
+    top:0;
+    z-index:10;
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    padding:12px 14px;
+    background:#0f1e3a;
+  }
+  .toolbar button{
+    border:none;
+    border-radius:10px;
+    padding:10px 14px;
+    font-size:13px;
+    font-weight:800;
+    cursor:pointer;
+    background:#ffffff;
+    color:#0f1e3a;
+  }
+  .page{
+    --prelim-cols:2;
+    width:210mm;
+    min-height:297mm;
+    margin:10px auto;
+    background:#fff;
+    padding:8mm 7mm;
+    box-shadow:0 8px 30px rgba(15,30,58,.15);
+  }
+  .page.compact{ padding:7mm 6mm; }
+  .page.xcompact{ padding:6mm 5mm; }
+  .sheet-title{
+    font-size:17px;
+    font-weight:900;
+    color:#0f1e3a;
+    text-align:center;
+    margin-bottom:3px;
+    line-height:1.25;
+  }
+  .sheet-sub{
+    font-size:11px;
+    color:#475569;
+    text-align:center;
+    margin-bottom:8px;
+    line-height:1.3;
+  }
+  .group-grid{
+    display:grid;
+    grid-template-columns:repeat(var(--prelim-cols), minmax(0, 1fr));
+    gap:7px;
+    align-items:start;
+  }
+  .group-card{
+    border:1.2px solid #cbd5e1;
+    border-radius:9px;
+    overflow:hidden;
+    break-inside:avoid;
+    page-break-inside:avoid;
+    background:#fff;
+  }
+  .group-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:6px;
+    padding:7px 8px;
+    background:#0f1e3a;
+    color:#fff;
+  }
+  .group-name{
+    font-size:15px;
+    font-weight:900;
+    line-height:1.15;
+  }
+  .group-court{
+    font-size:10px;
+    font-weight:800;
+    opacity:.95;
+    white-space:nowrap;
+  }
+  .group-memo{
+    padding:5px 7px;
+    font-size:10px;
+    line-height:1.35;
+    color:#8a6412;
+    background:#fff8df;
+    border-bottom:1px solid #f3d27a;
+    font-weight:800;
+  }
+  .group-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  .group-table th,
+  .group-table td{
+    border-top:1px solid #e2e8f0;
+    padding:5px 6px;
+    font-size:11px;
+    vertical-align:top;
+  }
+  .group-table th{
+    background:#f8fafc;
+    color:#334155;
+    font-weight:900;
+    text-align:center;
+  }
+  .group-table td.num{
+    text-align:center;
+    font-weight:900;
+    color:#0f1e3a;
+    vertical-align:middle;
+    width:40px;
+  }
+  .group-table td.name{
+    font-weight:800;
+    line-height:1.35;
+    word-break:keep-all;
+  }
+  .player-name{
+    font-weight:800;
+    font-size:11px;
+    line-height:1.28;
+    color:#0f172a;
+  }
+  .player-gap{
+    height:3px;
+  }
+  .player-club{
+    margin-top:1px;
+    font-size:9px;
+    color:#64748b;
+    font-weight:700;
+    line-height:1.2;
+  }
+  .page.compact .group-grid{ gap:6px; }
+  .page.compact .group-head{ padding:6px 7px; }
+  .page.compact .group-name{ font-size:14px; }
+  .page.compact .group-table th,
+  .page.compact .group-table td{ padding:4px 5px; font-size:10px; }
+  .page.compact .player-name{ font-size:10px; }
+  .page.compact .player-club{ font-size:8.5px; }
+  .page.xcompact .group-grid{ gap:5px; }
+  .page.xcompact .group-head{ padding:5px 6px; }
+  .page.xcompact .group-name{ font-size:13px; }
+  .page.xcompact .group-court{ font-size:9px; }
+  .page.xcompact .group-memo{ padding:4px 6px; font-size:9px; }
+  .page.xcompact .group-table th,
+  .page.xcompact .group-table td{ padding:3px 4px; font-size:9px; }
+  .page.xcompact .group-table td.num{ width:32px; }
+  .page.xcompact .player-name{ font-size:9px; line-height:1.2; }
+  .page.xcompact .player-club{ font-size:7.5px; }
+  .page-break{
+    page-break-before:always;
+    break-before:page;
+  }
+  @media print{
+    body{ background:#fff; }
+    .toolbar{ display:none; }
+    .page{
+      width:auto;
+      min-height:auto;
+      margin:0;
+      padding:0;
+      box-shadow:none;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    ${actionBtn}
+    <button onclick="window.close()">닫기</button>
+  </div>
+  <div id="captureRoot">${sections}</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+  <script>
+    async function saveAsImage(){
+      try{
+        const root = document.getElementById('captureRoot');
+        if(!root) return;
+        const canvas = await html2canvas(root,{scale:3,backgroundColor:'#eef3f8',useCORS:true,logging:false});
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'prelim_sheet.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }catch(err){
+        alert('이미지 저장 중 오류가 발생했습니다.');
+        console.error(err);
+      }
+    }
+  <\/script>
+</body>
+</html>`;
+}
+function exportPrelimSheet(){
+  try{
+    const ctx = _prelimPopupContext();
+    if(!ctx) return;
+    const html = _buildPrelimPopupHtml(ctx, 'print');
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if(!w){
+      toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.','error');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }catch(err){
+    console.error(err);
+    toast('예선표 생성 중 오류가 발생했습니다','error');
+  }
+}
+function exportPrelimImage(){
+  try{
+    const ctx = _prelimPopupContext();
+    if(!ctx) return;
+    const html = _buildPrelimPopupHtml(ctx, 'image');
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if(!w){
+      toast('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.','error');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }catch(err){
+    console.error(err);
+    toast('예선표 이미지 생성 중 오류가 발생했습니다','error');
+  }
+}
+
 
 </script>
 
