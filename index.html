@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v114-individual-game-diff-tie-age";
+  const APP_VERSION = "2026-04-09-v133-shared-wait-priority-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3602,19 +3602,81 @@ function getUsedCourtsForKey(key){
     return String(a).localeCompare(String(b),'ko');
   });
 }
+function getCourtBoardSafeTeamName(key, teamIdx){
+  const teams=G.teams[key]||[];
+  const team=teams[teamIdx] ?? teams.find(t=>t&&((t.id!=null&&t.id===teamIdx)||(t.name&&t.name===teamIdx)));
+  return team ? tdn(team,key,teamIdx) : 'TBD';
+}
+function getGroupSlotNames(key, gi){
+  const grp=G.draws?.[key]?.groups?.[Number(gi)];
+  const arr=Array.isArray(grp?.teams) ? grp.teams : [];
+  return arr.map(ti=>getCourtBoardSafeTeamName(key, ti));
+}
+function buildCourtBoardGroupHeadline(key, m, autoTitle, rawTitle){
+  const gi=Number(m?.group||0);
+  const slots=getGroupSlotNames(key, gi);
+  const s1=slots[0]||'1번';
+  const s2=slots[1]||'2번';
+  const s3=slots[2]||'3번';
+  const label=String(autoTitle||'').trim();
+  const detail=`예선 ${grpLabel(m.group||0)}`;
+  if(!label) return {headline: rawTitle, detail};
+  if(label==='1번 vs 2번') return {headline: `${s1} vs ${s2}`, detail};
+  if(label==='1번 vs 3번') return {headline: `${s1} vs ${s3}`, detail};
+  if(label==='2번 vs 3번') return {headline: `${s2} vs ${s3}`, detail};
+
+  const grp=G.draws?.[key]?.groups?.[gi];
+  const teams=Array.isArray(grp?.teams) ? grp.teams : [];
+  let win12='1,2번 승자';
+  let lose12='1,2번 패자';
+  if(teams.length>=2){
+    const m12=findGroupMatchByTeams(key, gi, teams[0], teams[1]);
+    if(m12 && m12.winner!=null){
+      const winnerId=m12.winner;
+      const loserId=(winnerId===teams[0]) ? teams[1] : teams[0];
+      win12=getCourtBoardSafeTeamName(key, winnerId);
+      lose12=getCourtBoardSafeTeamName(key, loserId);
+    }
+  }
+
+  if(label==='1,2번 승자 vs 3번') return {headline: `${win12} vs ${s3}`, detail};
+  if(label==='1,2번 패자 vs 3번') return {headline: `${lose12} vs ${s3}`, detail};
+  return {headline: label, detail};
+}
 function describeCourtBoardMatch(key,m){
-  const {t1,t2}=getMatchTeamObjects(key,m);
-  const dn1=t1?tdn(t1,key,m.t1):'TBD';
-  const dn2=t2?tdn(t2,key,m.t2):'TBD';
-  const autoTitle=(m&&m.autoCourtLabel)||'';
-  const st=getMatchResultState(key,m);
+  const base=(m&&m.__autoItem&&m.__autoItem.match)?m.__autoItem.match:m;
+  const autoTitle=(m&&m.__autoItem&&m.__autoItem.autoLabel) || (m&&m.autoCourtLabel) || '';
+  const {t1,t2}=getMatchTeamObjects(key,base||m);
+  const dn1=t1?tdn(t1,key,(base||m).t1):'TBD';
+  const dn2=t2?tdn(t2,key,(base||m).t2):'TBD';
+  const rawTitle=`${dn1} vs ${dn2}`;
+  const st=getMatchResultState(key,base||m);
   let label='경기';
-  if(m.phase==='group') label=`예선 ${grpLabel(m.group||0)}`;
-  else if(m.phase==='playin') label='진출전';
-  else if(m.phase==='main') label=getMainRoundLabelByRoundIndex(m.round||0, key) || '본선';
-  else if(m.phase==='bronze') label='3·4위전';
+  if((base||m).phase==='group') label=`예선 ${grpLabel((base||m).group||0)}`;
+  else if((base||m).phase==='playin') label='진출전';
+  else if((base||m).phase==='main') label=getMainRoundLabelByRoundIndex((base||m).round||0, key) || '본선';
+  else if((base||m).phase==='bronze') label='3·4위전';
   const score=(st.started || st.done) ? `${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}` : '';
-  return {label, title:(autoTitle || `${dn1} vs ${dn2}`), score, started:!!st.started, done:!!st.done};
+  let title=(autoTitle || rawTitle);
+  let detail='';
+  if(String((base||m)?.phase||'')==='group'){
+    const built=buildCourtBoardGroupHeadline(key,base||m,autoTitle,rawTitle);
+    title=built.headline || title;
+    detail=built.detail || '';
+  }else if(autoTitle && rawTitle && rawTitle!=='TBD vs TBD'){
+    detail=rawTitle;
+  }else if(!autoTitle && rawTitle && rawTitle!=='TBD vs TBD'){
+    detail='';
+  }
+  if(detail===title || detail===`${label} · ${title}`) detail='';
+  return {label, title, rawTitle, autoTitle, detail, score, started:!!st.started, done:!!st.done};
+}
+function getAutoAssignedGroupsForCourt(key, court){
+  try{
+    const plan=getIndividualAutoAssignmentPlan(key);
+    const list=(plan && plan.fixed && plan.fixed[court]) ? plan.fixed[court] : [];
+    return Array.isArray(list) ? list.slice() : [];
+  }catch(e){ return []; }
 }
 function getCourtStatusSnapshot(key){
   const selectedCourts=getSelectedCourtFilters(key)||[];
@@ -3659,14 +3721,23 @@ function renderCourtStatusBoard(key, div){
   const emptyCount=items.filter(x=>x.status==='empty').length;
   const bodyDisplay=st.collapsed?'none':'block';
   const hasCourts=usedCourts.length>0;
+  const sharedWaiting=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? getIndividualAutoSharedWaitingItems(key) : [];
+  const sharedWaitingHtml = sharedWaiting.length ? `<div style="margin-bottom:12px;padding:12px 14px;border:1px solid #f6d28b;border-radius:14px;background:#fff8e8">
+      <div style="font-size:.84rem;font-weight:900;color:#9a6400;margin-bottom:8px">⏳ ${((selectedCourts&&selectedCourts.length)?selectedCourts:usedCourts).join(', ')} 공용 대기 ${sharedWaiting.length}경기</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${sharedWaiting.map(w=>{ const wi=describeCourtBoardMatch(key,w); const headline=((wi.title&&wi.title!=='TBD vs TBD')?wi.title:((wi.rawTitle&&wi.rawTitle!=='TBD vs TBD')?wi.rawTitle:(wi.autoTitle||'경기 대기'))); const detail=[wi.label, wi.detail, '공용 대기'].filter(Boolean).join(' · '); return `<div style="padding:8px 10px;border-radius:10px;background:#fff;border:1px solid #f6d28b"><div style="font-size:.78rem;font-weight:800;color:#7a4b00;line-height:1.45">${esc(headline)}</div><div style="font-size:.72rem;color:#9a6400;margin-top:3px">${esc(detail)}</div></div>`; }).join('')}
+      </div>
+    </div>` : '';
   const cards=hasCourts ? items.map(item=>{
     const info=item.current ? describeCourtBoardMatch(key,item.current) : null;
+    const assignedGroups=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? getAutoAssignedGroupsForCourt(key, item.court) : [];
+    const assignedGroupText=assignedGroups.length ? `<div style="margin-top:4px;font-size:.72rem;color:#64748b;font-weight:700">운영조 ${assignedGroups.map(gi=>grpLabel(gi)).join(', ')}</div>` : '';
     const badge = item.current
       ? `<span class="badge bg-green live-blink" style="font-size:.76rem;padding:4px 9px">경기중</span>`
       : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">빈코트</span>`;
     const line = info
       ? `<div style="font-size:.84rem;font-weight:800;color:var(--primary-dark);line-height:1.45">${esc(info.title)}</div>
-         <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${info.label}${info.score?` · 현재 ${info.score}`:''}</div>`
+         <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${[info.label, info.detail, info.score?`현재 ${info.score}`:''].filter(Boolean).join(' · ')}</div>`
       : `<div style="font-size:.84rem;font-weight:800;color:#64748b;line-height:1.45">배정된 진행 경기 없음</div>
          <div style="font-size:.74rem;color:var(--text3);margin-top:4px">경기 코트 배정을 하면 이 코트에 표시됩니다.</div>`;
     const waitingHtml = item.waiting && item.waiting.length
@@ -3677,7 +3748,7 @@ function renderCourtStatusBoard(key, div){
               const wi=describeCourtBoardMatch(key,w);
               return `<div style="padding:8px 10px;border-radius:10px;background:#fff8e8;border:1px solid #f6d28b">
                 <div style="font-size:.78rem;font-weight:800;color:#7a4b00;line-height:1.45">${esc(wi.title)}</div>
-                <div style="font-size:.72rem;color:#9a6400;margin-top:3px">${wi.label}${wi.score?` · 현재 ${wi.score}`:''} · 대기중</div>
+                <div style="font-size:.72rem;color:#9a6400;margin-top:3px">${[wi.label, wi.detail, wi.score?`현재 ${wi.score}`:'', '대기중'].filter(Boolean).join(' · ')}</div>
               </div>`;
             }).join('')}
           </div>
@@ -3707,6 +3778,7 @@ function renderCourtStatusBoard(key, div){
       </div>
     </div>
     <div style="display:${bodyDisplay};padding:12px 14px">
+      ${sharedWaitingHtml}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">${cards}</div>
     </div>
   </div>`;
@@ -3750,6 +3822,121 @@ function getFilteredGroupCourtAssignments(key, groupIndexes){
     if(court) out[gi]=court;
   });
   return out;
+}
+function getIndividualGroupStartedCount(key, gi){
+  try{
+    return (G.matches[key]||[]).filter(m=>m && m.phase==='group' && Number(m.group)===Number(gi) && (m.winner!=null || Number(m.sc1||0)!==0 || Number(m.sc2||0)!==0)).length;
+  }catch(e){ return 0; }
+}
+function getIndividualAutoAssignmentPlan(key){
+  const groups=(G.draws[key]?.groups)||[];
+  const selectedGroups=(getIndivOperatorGroupFilter(key)||[]).map(v=>Number(v)).filter(v=>Number.isFinite(v));
+  const targetGroups=(selectedGroups.length ? selectedGroups : groups.map((_,i)=>i)).sort((a,b)=>a-b);
+  const selectedCourts=(getSelectedCourtFilters(key)||[]).filter(Boolean).map(String);
+  const pool=(selectedCourts.length ? selectedCourts : getIndividualAutoCourtPool(key).map(String)).filter(Boolean);
+  const plan={pool:[...new Set(pool)], fixed:{}, shared:[]};
+  if(!targetGroups.length || !plan.pool.length) return plan;
+
+  const courtCount=plan.pool.length;
+  const groupCount=targetGroups.length;
+
+  // 조 수와 코트 수가 딱 나누어떨어질 때만 2조/3조씩 묶어서 고정 운영.
+  // 그 외에는 먼저 코트 수만큼 한 조씩 시작시키고, 남는 조는 공용 대기 우선순위로 넣는다.
+  let fixedGroups=[];
+  let remainderGroups=[];
+  let groupsPerCourt=1;
+  if(groupCount>courtCount && groupCount % courtCount === 0){
+    groupsPerCourt=Math.max(1, Math.floor(groupCount / courtCount));
+    fixedGroups=targetGroups.slice(0, Math.min(groupCount, groupsPerCourt * courtCount));
+    remainderGroups=targetGroups.slice(fixedGroups.length);
+  }else{
+    fixedGroups=targetGroups.slice(0, Math.min(groupCount, courtCount));
+    remainderGroups=targetGroups.slice(fixedGroups.length);
+  }
+
+  let ptr=0;
+  for(let ci=0; ci<plan.pool.length && ptr<fixedGroups.length; ci++){
+    const court=plan.pool[ci];
+    const gList=[];
+    for(let j=0; j<groupsPerCourt && ptr<fixedGroups.length; j++) gList.push(fixedGroups[ptr++]);
+    if(gList.length) plan.fixed[court]=gList;
+  }
+
+  const hasFreshRemainder = remainderGroups.some(gi=>getIndividualGroupAutoQueue(key,gi)[0]);
+  const sharedFresh=[];
+  const sharedFollow=[];
+  const pushShared=(gi, item, priority='follow')=>{
+    if(!item) return;
+    const bucket = priority==='fresh' ? sharedFresh : sharedFollow;
+    bucket.push({type:'shared', courts:[...plan.pool], item, __gi:Number(gi), __started:getIndividualGroupStartedCount(key, gi)});
+  };
+
+  Object.entries(plan.fixed).forEach(([court, gis])=>{
+    if((gis||[]).length>1){
+      const perGroup=(gis||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
+      const maxLen=Math.max(0,...perGroup.map(arr=>arr.length));
+      for(let idx=0; idx<maxLen; idx++){
+        perGroup.forEach((arr, pos)=>{
+          if(!arr[idx]) return;
+          if(!plan.fixed.__items) plan.fixed.__items={};
+          if(!plan.fixed.__items[court]) plan.fixed.__items[court]=[];
+          if(idx===0){
+            plan.fixed.__items[court].push(arr[idx]);
+          }else if(hasFreshRemainder){
+            pushShared(gis[pos], arr[idx], 'follow');
+          }else{
+            plan.fixed.__items[court].push(arr[idx]);
+          }
+        });
+      }
+    }else if((gis||[]).length===1){
+      const gi=gis[0];
+      const q=getIndividualGroupAutoQueue(key,gi);
+      const started=getIndividualGroupStartedCount(key, gi);
+      const shouldDeferNext = hasFreshRemainder && started>0;
+      if(q[0] && !shouldDeferNext){
+        if(!plan.fixed.__items) plan.fixed.__items={};
+        if(!plan.fixed.__items[court]) plan.fixed.__items[court]=[];
+        plan.fixed.__items[court].push(q[0]);
+      }else if(q[0]){
+        pushShared(gi, q[0], 'follow');
+      }
+      q.slice(1).forEach(item=>pushShared(gi, item, 'follow'));
+    }
+  });
+
+  remainderGroups.forEach(gi=>{
+    const q=getIndividualGroupAutoQueue(key,gi);
+    if(q[0]) pushShared(gi, q[0], 'fresh');
+    q.slice(1).forEach(item=>pushShared(gi, item, 'follow'));
+  });
+
+  const sorter=(a,b)=>{
+    const pa = Number(a.__started||0)===0 ? 0 : 1;
+    const pb = Number(b.__started||0)===0 ? 0 : 1;
+    if(pa!==pb) return pa-pb;
+    const sa=Number(a.__started||0), sb=Number(b.__started||0);
+    if(sa!==sb) return sa-sb;
+    const ga=Number(a.__gi||0), gb=Number(b.__gi||0);
+    return ga-gb;
+  };
+  sharedFresh.sort(sorter);
+  sharedFollow.sort(sorter);
+  plan.shared=[...sharedFresh, ...sharedFollow].map(({__gi,__started,...rest})=>rest);
+
+  return plan;
+}
+function getIndividualAutoSharedWaitingItems(key){
+  const plan=getIndividualAutoAssignmentPlan(key);
+  return (plan.shared||[]).map(x=>{
+    const item=x&&x.item;
+    const m=item&&item.match ? item.match : item;
+    if(!m) return null;
+    const cloned={...m};
+    if(item&&item.autoLabel) cloned.autoCourtLabel=item.autoLabel;
+    if(item) cloned.__autoItem=item;
+    return cloned;
+  }).filter(Boolean);
 }
 
 // ── 과거대회 요강(첨부 이미지) 내장 ─────────────────────────────────────
@@ -4588,17 +4775,8 @@ function getAllowedCourtsForMatch(key,m){
     ? getGroupAssignedCourts(key, Number(m.group)).filter(Boolean).map(String)
     : [];
 
-  const unique=(arr)=>[...new Set((arr||[]).map(v=>String(v)).filter(Boolean))];
-  const intersect=(a,b)=>{
-    const setB=new Set(unique(b));
-    return unique(a).filter(v=>setB.has(v));
-  };
-
-  if(selectedCourts.length && groupCourts.length){
-    const both=intersect(groupCourts, selectedCourts);
-    if(both.length) return allCourts.filter(c=>both.includes(String(c)));
-    return [];
-  }
+  // 개인전 운영 필터에서 코트를 고른 경우에는 그 코트만 수동 배정 가능하게 한다.
+  // 조 코트 표시는 참고용으로만 남기고, 수동 팝업의 제한은 운영 필터 코트를 우선한다.
   if(selectedCourts.length){
     return allCourts.filter(c=>selectedCourts.includes(String(c)));
   }
@@ -9195,7 +9373,7 @@ function getIndividualGroupAutoQueue(key, gi){
   if(teams.length<2) return [];
   if(teams.length===2){
     const m=findGroupMatchByTeams(key, gi, teams[0], teams[1]);
-    return (m && m.winner==null) ? [{match:m, autoLabel:''}] : [];
+    return (m && m.winner==null) ? [{match:m, autoLabel:'1번 vs 2번'}] : [];
   }
   const [a,b,c]=teams;
   const m12=findGroupMatchByTeams(key, gi, a, b);
@@ -9203,20 +9381,20 @@ function getIndividualGroupAutoQueue(key, gi){
   const m23=findGroupMatchByTeams(key, gi, b, c);
   const queue=[];
   if(m12 && m12.winner==null){
-    queue.push({match:m12, autoLabel:''});
-    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1경기 승자 vs 3번'});
-    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'1경기 패자 vs 3번'});
+    queue.push({match:m12, autoLabel:'1번 vs 2번'});
+    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1,2번 승자 vs 3번'});
+    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'1,2번 패자 vs 3번'});
     return queue;
   }
   if(m12){
     const winner=m12.winner;
     const second = winner===a ? m13 : m23;
     const third = winner===a ? m23 : m13;
-    if(second && second.winner==null) queue.push({match:second, autoLabel:''});
-    if(third && third.winner==null) queue.push({match:third, autoLabel:''});
+    if(second && second.winner==null) queue.push({match:second, autoLabel:'1,2번 승자 vs 3번'});
+    if(third && third.winner==null) queue.push({match:third, autoLabel:'1,2번 패자 vs 3번'});
   } else {
-    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:''});
-    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:''});
+    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1번 vs 3번'});
+    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'2번 vs 3번'});
   }
   return queue;
 }
@@ -9250,6 +9428,14 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
   });
   const assignedIds=new Set();
   let tick=0;
+  const markShared=(item)=>{
+    if(!item || !item.match || item.match.winner!=null) return;
+    const m=item.match;
+    const prev=prevState.get(String(m.id)) || {courts:'[]', assignedAt:'', autoLabel:''};
+    if(prev.courts!=='[]' || prev.assignedAt || prev.autoLabel!==String(item.autoLabel||'')) changed=true;
+    m.courts=[]; m.court=''; delete m.courtAssignedAt;
+    if(item.autoLabel) m.autoCourtLabel=item.autoLabel; else delete m.autoCourtLabel;
+  };
   const assign=(court, item)=>{
     if(!court || !item || !item.match || item.match.winner!=null) return;
     const m=item.match;
@@ -9263,54 +9449,40 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     if(item.autoLabel) m.autoCourtLabel=item.autoLabel; else delete m.autoCourtLabel;
     assignedIds.add(String(m.id));
   };
-  const groups=(G.draws[key]?.groups)||[];
-  const selectedGroups=(getIndivOperatorGroupFilter(key)||[]).map(v=>Number(v)).filter(v=>Number.isFinite(v));
-  const selectedCourts=(getSelectedCourtFilters(key)||[]).filter(Boolean).map(String);
-  const fallbackPool=(selectedCourts.length ? selectedCourts : getIndividualAutoCourtPool(key).map(String)).filter(Boolean);
-  const filteredGroupAssignments = (selectedGroups.length && selectedCourts.length)
-    ? getFilteredGroupCourtAssignments(key, selectedGroups)
-    : {};
-  const groupCourtsMap={};
-  const unassignedGroups=[];
-  groups.forEach((grp,gi)=>{
-    const filteredCourt = filteredGroupAssignments[Number(gi)] ? String(filteredGroupAssignments[Number(gi)]) : '';
-    const primaryCourt=filteredCourt || String((((grp?.courts)||[]).filter(Boolean)[0]||''));
-    if(primaryCourt){
-      groupCourtsMap[primaryCourt]=groupCourtsMap[primaryCourt]||[];
-      groupCourtsMap[primaryCourt].push(Number(gi));
-    }else{
-      unassignedGroups.push(Number(gi));
+
+  const plan=getIndividualAutoAssignmentPlan(key);
+  const fixedItems=(plan.fixed && plan.fixed.__items) ? plan.fixed.__items : {};
+  const pool=(plan.pool||[]).filter(Boolean).map(String);
+  const courtNames=[...new Set([...pool, ...Object.keys(fixedItems)])];
+  let hasPendingGroups=false;
+  const sharedEntries=[...(plan.shared||[])];
+
+  courtNames.forEach(court=>{
+    const items=[...(fixedItems[court]||[])];
+    if(items.length){
+      hasPendingGroups=true;
+      items.forEach(item=>assign(court,item));
+      return;
+    }
+    const nextShared=sharedEntries.shift();
+    if(nextShared && nextShared.item){
+      hasPendingGroups=true;
+      assign(court, nextShared.item);
     }
   });
-  if(unassignedGroups.length && fallbackPool.length){
-    unassignedGroups.forEach((gi, idx)=>{
-      const court=fallbackPool[idx % fallbackPool.length];
-      groupCourtsMap[court]=groupCourtsMap[court]||[];
-      groupCourtsMap[court].push(Number(gi));
-    });
-  }
-  Object.keys(groupCourtsMap).forEach(c=>groupCourtsMap[c].sort((a,b)=>a-b));
-  const groupCourtNames=Object.keys(groupCourtsMap);
-  const pendingGroupMap={};
-  groupCourtNames.forEach(court=>{
-    pendingGroupMap[court]=(groupCourtsMap[court]||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
-  });
-  const hasPendingGroups=groupCourtNames.some(c=>pendingGroupMap[c].some(arr=>arr.length));
-  groupCourtNames.forEach(court=>{
-    const perGroup=pendingGroupMap[court]||[];
-    const maxLen=Math.max(0,...perGroup.map(arr=>arr.length));
-    for(let idx=0; idx<maxLen; idx++){
-      perGroup.forEach(arr=>{ if(arr[idx]) assign(court, arr[idx]); });
-    }
-  });
+  sharedEntries.forEach(entry=>markShared(entry.item));
+
   if(!hasPendingGroups){
-    const pool=(selectedCourts.length ? selectedCourts : getIndividualAutoCourtPool(key)).filter(Boolean).map(String);
     const mainQueue=getIndividualMainAutoQueue(key);
     mainQueue.forEach((item,idx)=>assign(pool[idx % Math.max(1,pool.length)], item));
   }
   prevState.forEach((prev, mid)=>{
     if(assignedIds.has(mid)) return;
-    if(prev.courts!=='[]' || prev.assignedAt || prev.autoLabel) changed=true;
+    const cur=list.find(x=>String(x.id)===String(mid));
+    const curCourts=JSON.stringify(Array.isArray(cur?.courts)?cur.courts:(cur?.court?[cur.court]:[]));
+    const curAssigned=String(cur?.courtAssignedAt||'');
+    const curLabel=String(cur?.autoCourtLabel||'');
+    if(prev.courts!==curCourts || prev.assignedAt!==curAssigned || prev.autoLabel!==curLabel) changed=true;
   });
   return changed;
 }
