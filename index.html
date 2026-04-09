@@ -10211,9 +10211,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
     const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
     const hasMainOpFilter=(getSelectedMainMatchFilters(key).length>0);
-    html+= hasMainOpFilter
-      ? `<div id="mainStage_${tid}_${div}" style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.8rem;color:#475569">운영 필터가 적용되어 본선 나무가지 대진표는 숨기고, 아래 선택 경기만 표시합니다.</div>`
-      : `<div id="mainStage_${tid}_${div}">`+renderBracketTree(key,mMs,teams)+`</div>`;
+    html+= `<div id="mainStage_${tid}_${div}">`+renderBracketTree(key,mMs,teams)+`</div>`;
 
     // 진출전(play-in) 경기 표시
     if(playInMs.length){
@@ -14576,6 +14574,13 @@ async function startMainDraw(){
       };
       await stD(key);
       await stM(key);
+      try{
+        setMainSectionCollapsed(key,false);
+        const selectedMain=getSelectedMainMatchFilters(key)||[];
+        if(Array.isArray(selectedMain) && selectedMain.length){
+          setSelectedMainMatchFilters(key,[]);
+        }
+      }catch(e){}
       try{ renderBracket(); }catch(e){}
     }
 
