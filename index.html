@@ -4289,20 +4289,28 @@ function getIndividualAutoAssignmentPlan(key){
   const targetGroups=groups.map((_,i)=>i).sort((a,b)=>a-b);
   // ⚠️ 보기 필터는 실제 자동 코트 배정에 영향을 주지 않는다.
   // 예선 자동 배정 원칙:
-  // 1) 코트당 최대 2개 조까지만 자동 배정
-  // 2) 1번코트=1·2조, 2번코트=3·4조 ... 식으로 연속 조를 묶음
-  // 3) 코트 내부 대기 순서는 각 조가 번갈아 진행되도록 교차 배치
-  // 4) 코트 수×2를 초과하는 나머지 1~2개 조만 공용 대기로 뺀다
+  // 1) 2팀조는 코트 수에 맞게 균등 분배한다. (예: 24조/8코트=코트당 3조)
+  // 2) 3팀조 이상은 코트당 최대 2개 조를 기본으로 묶고, 넘치는 1~2개 조만 공용 대기로 뺀다.
+  // 3) 코트 내부 대기 순서는 각 조가 번갈아 진행되도록 교차 배치한다.
   const pool=getIndividualAutoCourtPool(key).map(String).filter(Boolean);
   const plan={pool:[...new Set(pool)], fixed:{}, shared:[]};
   if(!targetGroups.length || !plan.pool.length) return plan;
 
-  const maxFixedGroupCount = plan.pool.length * 2;
-  const fixedGroups = targetGroups.slice(0, maxFixedGroupCount);
-  const sharedGroups = targetGroups.slice(maxFixedGroupCount);
+  const groupTeamCounts=targetGroups.map(gi=>Array.isArray(groups[gi]?.teams)?groups[gi].teams.filter(Boolean).length:0);
+  const maxTeamsPerGroup=Math.max(0,...groupTeamCounts);
+  const isTwoTeamMode=maxTeamsPerGroup<=2;
+
+  let groupsPerCourt=2;
+  if(isTwoTeamMode){
+    groupsPerCourt=Math.max(1, Math.floor(targetGroups.length / plan.pool.length));
+    if(!Number.isFinite(groupsPerCourt) || groupsPerCourt<1) groupsPerCourt=1;
+  }
+  const maxFixedGroupCount=Math.min(targetGroups.length, plan.pool.length * groupsPerCourt);
+  const fixedGroups=targetGroups.slice(0, maxFixedGroupCount);
+  const sharedGroups=targetGroups.slice(maxFixedGroupCount);
 
   fixedGroups.forEach((gi, idx)=>{
-    const courtIdx = Math.floor(idx / 2);
+    const courtIdx=Math.floor(idx / groupsPerCourt);
     const court=plan.pool[courtIdx] || '';
     if(!court) return;
     if(!plan.fixed[court]) plan.fixed[court]=[];
