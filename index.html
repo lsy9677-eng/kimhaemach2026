@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-10-v159-no-activity-log-stable";
+  const APP_VERSION = "2026-04-10-v161-prelim-unlimited-main3-shared";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4185,8 +4185,11 @@ function renderCourtStatusBoard(key, div){
       ? `<span class="badge bg-green live-blink" style="font-size:.76rem;padding:4px 9px">경기중</span>`
       : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">빈코트</span>`;
     const isCurrentManual = !!String(item.current?.manualCourtTarget||'').trim() || !!item.current?.manualSharedHold;
+    const phaseChip = info
+      ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px"><span class="badge ${info.label.includes('예선')?'bg-blue':'bg-green'}" style="font-size:.68rem;padding:3px 8px">${esc(info.label||'경기')}</span>${info.detail?`<span style="font-size:.72rem;color:var(--text2);font-weight:700">${esc(info.detail)}</span>`:''}</div>`
+      : '';
     const line = info
-      ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="font-size:.84rem;font-weight:800;color:var(--primary-dark);line-height:1.45;flex:1">${esc(info.title)}</div>${isCurrentManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}</div>`
+      ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="font-size:.84rem;font-weight:800;color:var(--primary-dark);line-height:1.45;flex:1">${esc(info.title)}</div>${isCurrentManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}</div>${phaseChip}`
       : `<div style="font-size:.84rem;font-weight:800;color:#64748b;line-height:1.45">배정된 진행 경기 없음</div>
          <div style="font-size:.74rem;color:var(--text3);margin-top:4px">경기 코트 배정을 하면 이 코트에 표시됩니다.</div>`;
     const waitingList=[...(item.__visibleWaiting||[])];
@@ -4212,7 +4215,6 @@ function renderCourtStatusBoard(key, div){
         ${badge}
       </div>
       ${line}
-      ${assignedGroups.length ? `<div style="margin-top:4px;font-size:.72rem;color:#64748b;font-weight:700">운영조 ${assignedGroups.map(gi=>grpLabel(gi)).join(', ')}</div>` : ''}
       ${waitingHtml}
       <div class="court-drop-hint">카드를 이 코트로 드래그하면 현재 경기 뒤 대기열로 들어갑니다.</div>
     </div>`;
@@ -4285,39 +4287,27 @@ function getIndividualGroupStartedCount(key, gi){
 function getIndividualAutoAssignmentPlan(key){
   const groups=(G.draws[key]?.groups)||[];
   const targetGroups=groups.map((_,i)=>i).sort((a,b)=>a-b);
-  // ⚠️ '해당 경기·코트만 골라보기'는 화면 필터일 뿐이며,
-  // 실제 자동 코트 배정 계획은 부서에 저장된 운영 코트만 기준으로 계산한다.
+  // ⚠️ 보기 필터는 실제 자동 코트 배정에 영향을 주지 않는다.
+  // 예선 자동 배정 원칙:
+  // 1) 코트당 최대 2개 조까지만 자동 배정
+  // 2) 1번코트=1·2조, 2번코트=3·4조 ... 식으로 연속 조를 묶음
+  // 3) 코트 내부 대기 순서는 각 조가 번갈아 진행되도록 교차 배치
+  // 4) 코트 수×2를 초과하는 나머지 1~2개 조만 공용 대기로 뺀다
   const pool=getIndividualAutoCourtPool(key).map(String).filter(Boolean);
   const plan={pool:[...new Set(pool)], fixed:{}, shared:[]};
   if(!targetGroups.length || !plan.pool.length) return plan;
 
-  const courtCount=plan.pool.length;
-  const groupCount=targetGroups.length;
+  const maxFixedGroupCount = plan.pool.length * 2;
+  const fixedGroups = targetGroups.slice(0, maxFixedGroupCount);
+  const sharedGroups = targetGroups.slice(maxFixedGroupCount);
 
-  // 코트보다 조가 많으면 코트당 floor(조/코트)개 조까지 먼저 고정 배치하고,
-  // 남는 조만 공용 대기로 뺀다. 예: 16조/7코트 → 2조×7코트 고정 + 남은 2조 공용대기.
-  const groupsPerCourt = groupCount>courtCount ? Math.max(1, Math.floor(groupCount / courtCount)) : 1;
-  const fixedCapacity = Math.min(groupCount, groupsPerCourt * courtCount);
-  const fixedGroups = targetGroups.slice(0, fixedCapacity);
-  const remainderGroups = targetGroups.slice(fixedCapacity);
-
-  let ptr=0;
-  for(let ci=0; ci<plan.pool.length && ptr<fixedGroups.length; ci++){
-    const court=plan.pool[ci];
-    const gList=[];
-    for(let j=0; j<groupsPerCourt && ptr<fixedGroups.length; j++) gList.push(fixedGroups[ptr++]);
-    if(gList.length) plan.fixed[court]=gList;
-  }
-
-  const sharedFresh=[];
-  const sharedFollow=[];
-  const pushShared=(gi, item, priority='follow', targetCourt='')=>{
-    if(!item) return;
-    const bucket = priority==='fresh' ? sharedFresh : sharedFollow;
-    const entry={type:'shared', courts:[...plan.pool], item, __gi:Number(gi), __started:getIndividualGroupStartedCount(key, gi)};
-    if(targetCourt) entry.__sharedCourtLabel=String(targetCourt);
-    bucket.push(entry);
-  };
+  fixedGroups.forEach((gi, idx)=>{
+    const courtIdx = Math.floor(idx / 2);
+    const court=plan.pool[courtIdx] || '';
+    if(!court) return;
+    if(!plan.fixed[court]) plan.fixed[court]=[];
+    plan.fixed[court].push(gi);
+  });
 
   Object.entries(plan.fixed).forEach(([court, gis])=>{
     const perGroup=(gis||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
@@ -4333,26 +4323,14 @@ function getIndividualAutoAssignmentPlan(key){
     }
   });
 
-  remainderGroups.forEach((gi, remIdx)=>{
-    const q=getIndividualGroupAutoQueue(key,gi);
-    const targetCourt=plan.pool[remIdx % Math.max(1, plan.pool.length)] || '';
-    if(q[0]) pushShared(gi, q[0], 'fresh', targetCourt);
-    q.slice(1).forEach(item=>pushShared(gi, item, 'follow', targetCourt));
+  sharedGroups.forEach((gi, sharedIdx)=>{
+    const q=getIndividualGroupAutoQueue(key, gi);
+    const targetCourt=plan.pool[sharedIdx % Math.max(1, plan.pool.length)] || '';
+    q.forEach(item=>{
+      if(!item) return;
+      plan.shared.push({type:'shared', courts:[...plan.pool], item, __sharedCourtLabel:targetCourt});
+    });
   });
-
-  const sorter=(a,b)=>{
-    const pa = Number(a.__started||0)===0 ? 0 : 1;
-    const pb = Number(b.__started||0)===0 ? 0 : 1;
-    if(pa!==pb) return pa-pb;
-    const sa=Number(a.__started||0), sb=Number(b.__started||0);
-    if(sa!==sb) return sa-sb;
-    const ga=Number(a.__gi||0), gb=Number(b.__gi||0);
-    if(ga!==gb) return ga-gb;
-    return String(a.__sharedCourtLabel||'').localeCompare(String(b.__sharedCourtLabel||''),'ko');
-  };
-  sharedFresh.sort(sorter);
-  sharedFollow.sort(sorter);
-  plan.shared=[...sharedFresh, ...sharedFollow].map(({__gi,__started,...rest})=>rest);
 
   return plan;
 }
@@ -4377,7 +4355,13 @@ function getIndividualAutoSharedWaitingItems(key){
     if(item) cloned.__autoItem=item;
     return cloned;
   }).filter(Boolean);
-  return [...held, ...auto];
+  const taken=new Set([...held, ...auto].map(m=>String(m?.id||'')));
+  const mainQueue=getIndividualMainAutoQueue(key)
+    .map(x=>x?.match)
+    .filter(Boolean)
+    .filter(m=>!taken.has(String(m.id)) && !String(m.manualCourtTarget||'').trim() && !(getMatchCourtsForStatusBoard(key,m)||[]).length)
+    .map(m=>({...m,__sharedCourtLabel:''}));
+  return [...held, ...auto, ...mainQueue];
 }
 
 // ── 과거대회 요강(첨부 이미지) 내장 ─────────────────────────────────────
@@ -7737,10 +7721,28 @@ function getIndividualNameOnlyDisplayLine(team){
     return ps.join(' / ') || ((team?.players||[]).slice(0,2).map(v=>String(v||'').trim()).filter(Boolean).join(' / ')) || '?';
   }catch(e){ return '?'; }
 }
-function getBracketTreeTeamLabel(team,key,idx){
-  if(!team) return '?';
+function stripIndividualClubLabel(text=''){
+  const raw=String(text||'').trim();
+  if(!raw) return '';
+  return raw.split('/').map(part=>String(part||'').replace(/\s*\([^)]*\)\s*$/,'').trim()).filter(Boolean).join(' / ') || raw;
+}
+function getMainBracketDisplayName(key, team, idx){
+  if(!team) return 'TBD';
   const isIndividual = team?.tournamentType==='individual_pair' || Array.isArray(team?.individualPlayers);
   return isIndividual ? getIndividualNameOnlyDisplayLine(team) : tdn(team,key,idx);
+}
+function getResolvedMainPlaceholderName(key, label=''){
+  const raw=String(label||'').trim();
+  if(!raw) return '';
+  const map=getPrelimResolvedLabelMap(key)||{};
+  return map[raw]?.name || map[raw.replace(/\s+/g,' ')]?.name || '';
+}
+function getMainBracketSourceLabel(key, label=''){
+  const raw=String(label||'').trim();
+  if(!raw) return '';
+  const resolved=getResolvedMainPlaceholderName(key, raw);
+  if(resolved) return stripIndividualClubLabel(resolved);
+  return stripIndividualClubLabel(raw);
 }
 function getCourtBoardTeamName(team,key,idx){
   if(!team) return '?';
@@ -10121,7 +10123,16 @@ function getPrelimCollapsedState(key, hasMain, mainFinished){
   if(Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE, key)){
     return !!window.BRACKET_PRELIM_TOGGLE[key];
   }
-  return !!hasMain;
+  // ★ 본선이 있으면 기본적으로 접힘 (예선 완료 여부 무관)
+  // ★ 본선이 없어도 예선이 전부 완료됐으면 접힘
+  if(hasMain) return true;
+  // 예선 전 경기 완료 여부 확인
+  try{
+    const gMs=(G.matches[key]||[]).filter(m=>m && String(m.phase||'')==='group');
+    const allDone = gMs.length>0 && gMs.every(m=>getMatchResultState(key,m).done);
+    if(allDone) return true;
+  }catch(e){}
+  return false;
 }
 function getMainCollapsedState(key){
   window.BRACKET_MAIN_TOGGLE = window.BRACKET_MAIN_TOGGLE || {};
@@ -10181,31 +10192,40 @@ function getIndividualGroupAutoQueue(key, gi){
     const m=findGroupMatchByTeams(key, gi, teams[0], teams[1]);
     return (m && m.winner==null) ? [{match:m, autoLabel:'1번 vs 2번'}] : [];
   }
+
+  // 3팀조 예선 순서는 고정:
+  // 1) 1번 vs 2번
+  // 2) (1vs2) 승자 vs 3번
+  // 3) (1vs2) 패자 vs 3번
+  // 단, 운영자는 대기열에서 전체 경기 수를 미리 알아야 하므로
+  // 첫 경기 결과 전에도 2·3번째 경기를 placeholder 라벨과 함께 보여준다.
   const [a,b,c]=teams;
   const m12=findGroupMatchByTeams(key, gi, a, b);
   const m13=findGroupMatchByTeams(key, gi, a, c);
   const m23=findGroupMatchByTeams(key, gi, b, c);
   const queue=[];
-  if(m12 && m12.winner==null){
-    queue.push({match:m12, autoLabel:'1번 vs 2번'});
-    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1,2번 승자 vs 3번'});
-    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'1,2번 패자 vs 3번'});
+  if(m12 && m12.winner==null) queue.push({match:m12, autoLabel:'1번 vs 2번'});
+
+  if(m12 && m12.winner!=null){
+    const winner=m12.winner;
+    const loser=(winner===a)?b:a;
+    const winnerVs3=(winner===a)?m13:m23;
+    const loserVs3=(loser===a)?m13:m23;
+    if(winnerVs3 && winnerVs3.winner==null) queue.push({match:winnerVs3, autoLabel:'1,2번 승자 vs 3번'});
+    if(loserVs3 && loserVs3.winner==null) queue.push({match:loserVs3, autoLabel:'1,2번 패자 vs 3번'});
     return queue;
   }
-  if(m12){
-    const winner=m12.winner;
-    const second = winner===a ? m13 : m23;
-    const third = winner===a ? m23 : m13;
-    if(second && second.winner==null) queue.push({match:second, autoLabel:'1,2번 승자 vs 3번'});
-    if(third && third.winner==null) queue.push({match:third, autoLabel:'1,2번 패자 vs 3번'});
-  } else {
-    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1번 vs 3번'});
-    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'2번 vs 3번'});
+
+  if(m12 && m12.winner==null){
+    if(m13 && m13.winner==null) queue.push({match:m13, autoLabel:'1,2번 승자 vs 3번'});
+    if(m23 && m23.winner==null) queue.push({match:m23, autoLabel:'1,2번 패자 vs 3번'});
   }
   return queue;
 }
 function getIndividualMainAutoQueue(key){
   const list=(G.matches[key]||[]).filter(m=>m && m.winner==null && !m.bye && (m.phase==='playin' || m.phase==='main'));
+  const firstRoundCount=getMainFirstRoundMatchCount(key);
+  const firstRoundOrder=hybridSpreadOrder(firstRoundCount||0);
   return list
     .filter(m=>m.t1!=null && m.t2!=null)
     .sort((a,b)=>{
@@ -10213,6 +10233,11 @@ function getIndividualMainAutoQueue(key){
       if(pa!==pb) return pa-pb;
       const ra=Number(a.round||0), rb=Number(b.round||0);
       if(ra!==rb) return ra-rb;
+      if(ra===0 && firstRoundOrder.length){
+        const ia=firstRoundOrder.indexOf(Number(a.slot||0));
+        const ib=firstRoundOrder.indexOf(Number(b.slot||0));
+        if(ia!==ib) return (ia<0?999:ia) - (ib<0?999:ib);
+      }
       return Number(a.slot||0)-Number(b.slot||0);
     })
     .map(m=>({match:m, autoLabel:''}));
@@ -10317,52 +10342,79 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
   let hasPendingGroups=false;
   const preservedIds=new Set(Object.values(preservedByCourt).flat().map(item=>String(item.match?.id||'')));
   const sharedEntries=[...(plan.shared||[])].filter(entry=>!(entry && entry.item && (manualIds.has(String(entry.item.match?.id||entry.item.id||'')) || manualSharedIds.has(String(entry.item.match?.id||entry.item.id||'')) || preservedIds.has(String(entry.item.match?.id||entry.item.id||'')))));
+  const mainQueue=getIndividualMainAutoQueue(key).filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || manualSharedIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)))));
 
   const deferredManualByCourt={};
-  const emptyCourts=[];
+  const hasGroupItemsInFixed = Object.values(fixedItems).some(arr=>Array.isArray(arr) && arr.some(item=>String(item?.match?.phase||'')==='group'));
+  const hasGroupItemsPreserved = Object.values(preservedByCourt).some(arr=>Array.isArray(arr) && arr.some(item=>String(item?.match?.phase||'')==='group'));
+  const hasGroupItemsManual = Object.values(manualByCourt).some(arr=>Array.isArray(arr) && arr.some(m=>String(m?.phase||'')==='group'));
+  const groupWorkActive = hasGroupItemsInFixed || hasGroupItemsPreserved || hasGroupItemsManual || sharedEntries.length>0;
+
+  const appendNextPendingToCourt=(court, maxFill=1)=>{
+    let filled=0;
+    while(filled < maxFill){
+      if(sharedEntries.length){
+        const nextShared=sharedEntries.shift();
+        if(!nextShared || !nextShared.item) break;
+        hasPendingGroups=true;
+        assign(court, nextShared.item);
+        filled++;
+        continue;
+      }
+      if(!groupWorkActive){
+        const nextMain=mainQueue.shift();
+        if(!nextMain) break;
+        assign(court, nextMain);
+        filled++;
+        continue;
+      }
+      break;
+    }
+    return filled>0;
+  };
   courtNames.forEach(court=>{
     const preservedItems=[...(preservedByCourt[court]||[])];
     const items=[...(fixedItems[court]||[])].filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)))));
     const manualItems=(manualByCourt[court]||[]).map(m=>({match:m, autoLabel:String(m.autoCourtLabel||'')}));
+    const preservedMainCount = preservedItems.filter(item=>String(item?.match?.phase||'')!=='group').length;
+    const freshMainCount = items.filter(item=>String(item?.match?.phase||'')!=='group').length;
 
     if(preservedItems.length){
-      hasPendingGroups=true;
+      hasPendingGroups = hasPendingGroups || preservedItems.some(item=>String(item?.match?.phase||'')==='group');
       preservedItems.forEach(item=>assign(court,item));
       items.forEach(item=>assign(court,item));
       manualItems.forEach(item=>assign(court,item,true));
+      // 예선은 제한 없이 그대로 붙이고, 본선은 코트별 최대 3경기까지만 자동 부착한다.
+      const alreadyFilledMain = preservedMainCount + freshMainCount;
+      appendNextPendingToCourt(court, groupWorkActive ? 0 : Math.max(0, 3 - alreadyFilledMain));
       return;
     }
     if(items.length){
-      hasPendingGroups=true;
+      hasPendingGroups = hasPendingGroups || items.some(item=>String(item?.match?.phase||'')==='group');
       items.forEach(item=>assign(court,item));
       manualItems.forEach(item=>assign(court,item,true));
+      const alreadyFilledMain = freshMainCount;
+      appendNextPendingToCourt(court, groupWorkActive ? 0 : Math.max(0, 3 - alreadyFilledMain));
       return;
     }
-    const nextShared=sharedEntries.shift();
-    if(nextShared && nextShared.item){
-      hasPendingGroups=true;
-      assign(court, nextShared.item);
+    const filledFromPending = appendNextPendingToCourt(court, groupWorkActive ? 1 : 3);
+    if(filledFromPending){
       manualItems.forEach(item=>assign(court,item,true));
       return;
     }
     if(manualItems.length){
       deferredManualByCourt[court]=manualItems;
-      return;
     }
-    emptyCourts.push(court);
   });
   sharedEntries.forEach(entry=>markShared(entry.item));
 
-  const mainQueue=getIndividualMainAutoQueue(key).filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)) || assignedIds.has(String(item.match.id)))));
-  if(emptyCourts.length && mainQueue.length){
-    emptyCourts.forEach(court=>{
-      const item=mainQueue.shift();
-      if(item) assign(court,item);
+  if(!groupWorkActive && mainQueue.length){
+    // 본선은 코트마다 최대 3경기까지만 자동 부착하고, 초과분은 공용 대기로 남긴다.
+    courtNames.forEach(court=>{
+      const already=(list||[]).filter(m=>m && m.winner==null && String(m.phase||'')!=='group' && (Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[])).includes(court)).length;
+      const left=Math.max(0, 3 - already);
+      for(let i=0;i<left && mainQueue.length;i++) assign(court, mainQueue.shift());
     });
-  }
-
-  if(!hasPendingGroups && mainQueue.length){
-    mainQueue.forEach((item,idx)=>assign(pool[idx % Math.max(1,pool.length)], item));
   }
   Object.entries(deferredManualByCourt).forEach(([court, manualItems])=>{
     (manualItems||[]).forEach(item=>assign(court,item,true));
@@ -10410,9 +10462,6 @@ window.toggleIndividualAutoCourtAssign = async function toggleIndividualAutoCour
 
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
-  if(isIndividualByKey(key)){
-    try{ syncIndividualMainBracketFromPrelim(key); }catch(e){}
-  }
   if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
     const pendingAuto=(G.matches[key]||[]).some(m=>m && m.winner==null && ['group','playin','main'].includes(String(m.phase||'')) && !m.manualSharedHold && !String(m.manualCourtTarget||'').trim() && !(Array.isArray(m.courts)&&m.courts.length) && !String(m.court||'').trim());
     if(pendingAuto) ensureIndividualAutoCourtAssignmentsForKey(key);
@@ -10766,7 +10815,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     html+=`<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <span id="mainStageTitle_${tid}_${div}">🏆 본선 토너먼트 대진표</span>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="toggleMainSection('${key}')">${mainCollapsed?'🏆 본선 대진표 펼치기':'🏆 본선 대진표 접기'}</button>
+        <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 본선 대진표 펼치기':'📁 본선 대진표 접기'}</button>
         ${canManageBracket()?`<div style="display:flex;gap:6px">
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">✏️ 수동수정</button>
@@ -10785,8 +10834,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       playInMs.filter(pm=>isMatchVisibleByCourtFilter(key,pm)).forEach((pm,idx)=>{
         const mt1=pm.t1!==null?teams[pm.t1]:null;
         const mt2=pm.t2!==null?teams[pm.t2]:null;
-        const dn1=mt1?getBracketTreeTeamLabel(mt1,key,pm.t1):((isIndividualByKey(key)?resolvePrelimPlaceholderLabel(key, pm.source1Label, true):'') || (pm.source1Label||'TBD'));
-        const dn2=mt2?getBracketTreeTeamLabel(mt2,key,pm.t2):((isIndividualByKey(key)?resolvePrelimPlaceholderLabel(key, pm.source2Label, true):'') || (pm.source2Label||'TBD'));
+        const dn1=mt1?tdn(mt1,key,pm.t1):(pm.source1Label||'TBD');
+        const dn2=mt2?tdn(mt2,key,pm.t2):(pm.source2Label||'TBD');
         const st=getMatchResultState(key,pm);
         const doneHtml=st.done?`<span class="badge bg-green" style="font-size:.76rem">완료</span>`:'';
         const winnerHtml=st.done&&pm.winner!==null?`<div style="font-size:.76rem;color:#166534;margin-top:4px">✅ 승자 → ${tdn(teams[pm.winner],key,pm.winner)} → ${pm.winnerLabel||'본선 합류'}</div>`:`<div style="font-size:.72rem;color:var(--text3);margin-top:4px">승자 → ${pm.winnerLabel||'본선 합류'}</div>`;
@@ -10801,12 +10850,15 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     }
 
     html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황</div>`;
-    rounds.forEach(r=>{
+    rounds.forEach((r,rIdx)=>{
       const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
       if(!rms.length) return;
-      const rIdx=rounds.indexOf(r);
       const lbl=r===rounds[rounds.length-1]?'결승':rIdx===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-1-rIdx)*2}강`;
-      html+=`<div style="font-size:.82rem;font-weight:700;color:var(--primary-dark);margin:8px 0 4px;padding-left:4px">— ${lbl}</div>`;
+      // 라운드별 색상 태그
+      const roundColors=['#334155','#475569','#1e40af','#0f766e','#0369a1','#7c3aed','#d4a017'];
+      const rcIdx = Math.min(rIdx, roundColors.length-1);
+      const rColor = r===rounds[rounds.length-1] ? '#d4a017' : (rIdx===totalR-2&&totalR>2 ? '#7c3aed' : roundColors[rcIdx]);
+      html+=`<div style="font-size:.82rem;font-weight:900;color:${rColor};margin:10px 0 4px;padding:4px 10px;border-left:3px solid ${rColor};background:${rColor}11;border-radius:0 6px 6px 0">— ${lbl}</div>`;
       rms.forEach(m=>{
         if(m.bye){
           const bt=m.winner!==null?teams[m.winner]:null;
@@ -11555,10 +11607,8 @@ function renderBracketTree(key,mMs,teams){
       const mt2 = m.t2 !== null ? teams[m.t2] : null;
       const useSource1 = (m.round===0 && (m.source1Label||'')) || m.phase==='playin';
       const useSource2 = (m.round===0 && (m.source2Label||'')) || m.phase==='playin';
-      const resolvedDn1 = useSource1 && isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, m.source1Label, true) : '';
-      const resolvedDn2 = useSource2 && isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, m.source2Label, true) : '';
-      const dn1 = useSource1 ? (resolvedDn1 || m.source1Label||'TBD') : (mt1 ? getBracketTreeTeamLabel(mt1,key,m.t1) : ((m.source1Label||'') || (m.t1===null&&!m.bye ? 'TBD' : '?')));
-      const dn2 = useSource2 ? (resolvedDn2 || m.source2Label||'TBD') : (mt2 ? getBracketTreeTeamLabel(mt2,key,m.t2) : ((m.source2Label||'') || 'TBD'));
+      const dn1 = useSource1 ? (getMainBracketSourceLabel(key, m.source1Label||'TBD')||'TBD') : (mt1 ? getMainBracketDisplayName(key,mt1,m.t1) : (getMainBracketSourceLabel(key, (m.source1Label||'')) || (m.t1===null&&!m.bye ? 'TBD' : '?')));
+      const dn2 = useSource2 ? (getMainBracketSourceLabel(key, m.source2Label||'TBD')||'TBD') : (mt2 ? getMainBracketDisplayName(key,mt2,m.t2) : (getMainBracketSourceLabel(key, (m.source2Label||'')) || 'TBD'));
       const st  = getMatchResultState(key, m);
       const done=st.done, wn1=done&&st.winner===m.t1, wn2=done&&st.winner===m.t2;
       const sc1=st.sc1, sc2=st.sc2;
@@ -11569,8 +11619,7 @@ function renderBracketTree(key,mMs,teams){
 
       if(m.bye){
         const byeEntryLabel = String(m.source1Label || '').trim();
-        const byeResolved = isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, byeEntryLabel, true) : '';
-        const byeTeam = mt1 ? getBracketTreeTeamLabel(mt1,key,m.t1) : (byeResolved || byeEntryLabel || '?');
+        const byeTeam = mt1 ? getMainBracketDisplayName(key,mt1,m.t1) : (getMainBracketSourceLabel(key, byeEntryLabel) || '?');
         cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid #d4a017;border-radius:7px;overflow:hidden;background:white;box-shadow:${shadowClr}">
           <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:linear-gradient(to right,#1565c0 3px,#dce8fb 3px)">
             <span style="font-size:.78rem;font-weight:800;color:#0c3880;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👑 ${byeTeam}</span>
@@ -11583,8 +11632,8 @@ function renderBracketTree(key,mMs,teams){
         return;
       }
 
-      const slot1Bg  = wn1 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn2 ? '#f4f6fb' : '#f8fbff';
-      const slot2Bg  = wn2 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn1 ? '#f4f6fb' : '#f8fafc';
+      const slot1Bg  = wn1 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn2 ? '#f4f6fb' : theme.headerBg;
+      const slot2Bg  = wn2 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn1 ? '#f4f6fb' : (theme.headerBg==='#f8fafc'?'#f8fafc':'#fff');
       const slot1Clr = wn1 ? '#0c3880' : wn2 ? '#94a3b8' : 'var(--text)';
       const slot2Clr = wn2 ? '#0c3880' : wn1 ? '#94a3b8' : 'var(--text)';
       const slot1Fw  = wn1 ? 800 : 500;
@@ -11592,12 +11641,12 @@ function renderBracketTree(key,mMs,teams){
       const slot1Op  = wn2 ? '.45' : '1';
       const slot2Op  = wn1 ? '.45' : '1';
 
-      cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-radius:7px;overflow:hidden;background:white;box-shadow:${shadowClr}">
+      cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-left:3px solid ${borderClr};border-radius:7px;overflow:hidden;background:white;box-shadow:${shadowClr}">
         <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:${slot1Bg};opacity:${slot1Op}">
           <span style="font-size:.78rem;font-weight:${slot1Fw};color:${slot1Clr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${wn1?'🏆 ':''}${dn1}</span>
           ${sc1!==null?`<span style="font-family:'Oswald',sans-serif;font-weight:800;font-size:.9rem;color:${wn1?'#0c3880':'#94a3b8'};min-width:22px;text-align:right;flex-shrink:0">${sc1}</span>`:''}
         </div>
-        <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:${slot2Bg};border-top:1px solid #e5eaf3;opacity:${slot2Op}">
+        <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:${slot2Bg};border-top:1px solid ${theme.headerBorder};opacity:${slot2Op}">
           <span style="font-size:.78rem;font-weight:${slot2Fw};color:${slot2Clr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${wn2?'🏆 ':''}${dn2}</span>
           ${sc2!==null?`<span style="font-family:'Oswald',sans-serif;font-weight:800;font-size:.9rem;color:${wn2?'#0c3880':'#94a3b8'};min-width:22px;text-align:right;flex-shrink:0">${sc2}</span>`:''}
         </div>
@@ -11611,9 +11660,8 @@ function renderBracketTree(key,mMs,teams){
     const x     = ri * COL_W;
     const isFin = ri === totalR - 1;
     const lbl   = isFin ? '결승' : ri === totalR - 2 && totalR > 2 ? '준결승' : `${Math.pow(2, totalR - ri)}강`;
-    const bg    = isFin ? 'var(--accent)' : '#0f1e3a';
-    const clr   = isFin ? 'var(--text)' : 'white';
-    titlesHtml += `<div style="position:absolute;left:${x}px;top:0;width:${CARD_W}px;background:${bg};color:${clr};text-align:center;padding:5px 4px;border-radius:4px 4px 0 0;font-size:.7rem;font-weight:700">${lbl}</div>`;
+    const th    = getRoundTheme(ri, totalR);
+    titlesHtml += `<div style="position:absolute;left:${x}px;top:0;width:${CARD_W}px;background:${th.titleBg};color:${th.titleClr};text-align:center;padding:5px 4px;border-radius:4px 4px 0 0;font-size:.7rem;font-weight:700">${lbl}</div>`;
   });
 
   // ── 시상 ─────────────────────────────────────────────
@@ -11927,23 +11975,15 @@ function getPrelimResolvedLabelMap(key){
       const resolved=topStats.every(row=>row && row.ti!=null && row.rank!=null && !row.tiePending);
       if(!resolved) return;
       topStats.forEach((row,idx)=>{
-        const team=teams[row.ti];
-        const entry={ti:row.ti,nm:tdn(team,key,row.ti),gn:gi+1,rk:idx+1,grpSize};
+        const entry={ti:row.ti,nm:tdn(teams[row.ti],key,row.ti),gn:gi+1,rk:idx+1,grpSize};
         const label=getMainEntryBracketLabel(entry);
         if(label){
-          map[String(label).trim()]={ti:row.ti,name:tdn(team,key,row.ti),shortName:getBracketTreeTeamLabel(team,key,row.ti)};
+          map[String(label).trim()]={ti:row.ti,name:tdn(teams[row.ti],key,row.ti)};
         }
       });
     });
     return map;
   }catch(e){ return {}; }
-}
-function resolvePrelimPlaceholderLabel(key,label, shortOnly=false){
-  try{
-    const entry=getPrelimResolvedLabelMap(key)[String(label||'').trim()];
-    if(!entry) return '';
-    return shortOnly ? String(entry.shortName||entry.name||'').trim() : String(entry.name||entry.shortName||'').trim();
-  }catch(e){ return ''; }
 }
 function propagateResolvedMainAdvancements(key){
   const list=G.matches[key]||[];
@@ -14634,7 +14674,7 @@ function getMainEntryBracketLabel(entry){
   const gn=Number(entry.gn||0);
   const rk=Number(entry.rk||0);
   if(gn>=1 && rk>=1) return `${grpLabel(gn-1)} ${rk}위`;
-  return String(entry.nm||'').trim();
+  return stripIndividualClubLabel(String(entry.nm||'').trim());
 }
 
 
@@ -15373,12 +15413,8 @@ function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
     const top = cy - CARD_H / 2;
 
     const isBye = !!ms.bye;
-    const topLabel = ms.t1
-      ? getBracketTreeTeamLabel(ms.t1,'',ms.t1?.ti)
-      : ((ms.source1Label||'') || (getMainEntryBracketLabel(ms.t1) || '추첨 대기'));
-    const botLabel = isBye
-      ? '부전승'
-      : (ms.t2 ? getBracketTreeTeamLabel(ms.t2,'',ms.t2?.ti) : ((ms.source2Label||'') || (getMainEntryBracketLabel(ms.t2) || '추첨 대기')));
+    const topLabel = (ms.source1Label||'') || (ms.t1 ? (getMainEntryBracketLabel(ms.t1) || '추첨 대기') : '추첨 대기');
+    const botLabel = isBye ? '부전승' : ((ms.source2Label||'') || (ms.t2 ? (getMainEntryBracketLabel(ms.t2) || '추첨 대기') : '추첨 대기'));
 
     const topBg   = ms.t1 ? '#eef4ff' : '#f8fafc';
     const botBg   = isBye ? '#fff8e6' : (ms.t2 ? '#f0fdf4' : '#f8fafc');
@@ -16314,9 +16350,11 @@ async function saveM3(){
       }
     }
     if(hasFinalWinner){
-      if(m.phase==='group' && isIndividualByKey(key)){
-        const syncedMain = syncIndividualMainBracketFromPrelim(key);
-        if(syncedMain){
+      if(isIndividualByKey(key)){
+        let syncedMain=false;
+        if(m.phase==='group') syncedMain = syncIndividualMainBracketFromPrelim(key);
+        const autoChanged = isIndividualAutoCourtAssignEnabled() ? ensureIndividualAutoCourtAssignmentsForKey(key) : false;
+        if(syncedMain || autoChanged){
           await stM(key);
         }
       }
@@ -23061,8 +23099,11 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{
       const t=(G.teams[key]||[])[ti];
       if(!t) return "TBD";
-      return typeof tdn==="function" ? tdn(t,key,ti) : ((t.club||"")+(t.no?` ${t.no}
-function _getName_force(key, m, side){
+      return typeof getMainBracketDisplayName==="function" ? getMainBracketDisplayName(key,t,ti) : (typeof tdn==="function" ? tdn(t,key,ti) : ((t.club||"")+(t.no?` ${t.no}`:"")));
+    }catch(e){ return "TBD"; }
+  }
+
+  function _getName_force(key, m, side){
   if(side==='t1' && m.source1Label) return m.source1Label;
   if(side==='t2' && m.source2Label) return m.source2Label;
   return null;
@@ -23134,11 +23175,11 @@ function _getName_force(key, m, side){
         <div style="font-size:.76rem;color:var(--text2);line-height:1.65;margin-bottom:10px">직행팀은 바로 본선으로 들어가고, 아래 경기 승자만 본선에 합류합니다.</div>
         ${playInMs.map((pm,idx)=>`<div class="bv-match" style="position:relative;top:auto;left:auto;right:auto;margin-bottom:8px" data-mid="${pm.id}" data-key="${key}">
           <div class="bv-slot ${pm.winner!=null && pm.winner===pm.t1 ? 'win' : (pm.t1==null?'tbd':'')}">
-            <span class="nm">${pm.source1Label || (pm.t1!==null ? pm.source1Label || _getName(key, pm.t1) : 'TBD')}</span>
+            <span class="nm">${getMainBracketSourceLabel(key, pm.source1Label || '') || (pm.t1!==null ? _getName_force(key,pm,'t1') || _getName(key, pm.t1) : 'TBD')}</span>
             ${(typeof rbSc==="function" && (rbSc(pm,0)>0 || rbSc(pm,1)>0 || pm.winner!=null)) ? `<span class="sc">${rbSc(pm,0)}</span>` : ``}
           </div>
           <div class="bv-slot ${pm.winner!=null && pm.winner===pm.t2 ? 'win' : (pm.t2==null?'tbd':'')}">
-            <span class="nm">${pm.source2Label || (pm.t2!==null ? pm.source2Label || _getName(key, pm.t2) : 'TBD')}</span>
+            <span class="nm">${getMainBracketSourceLabel(key, pm.source2Label || '') || (pm.t2!==null ? _getName_force(key,pm,'t2') || _getName(key, pm.t2) : 'TBD')}</span>
             ${(typeof rbSc==="function" && (rbSc(pm,0)>0 || rbSc(pm,1)>0 || pm.winner!=null)) ? `<span class="sc">${rbSc(pm,1)}</span>` : ``}
           </div>
           <div style="margin-top:6px;font-size:.72rem;color:var(--text3)">승자 → ${pm.winnerLabel||'본선 합류'}</div>
@@ -23173,8 +23214,8 @@ function _getName_force(key, m, side){
         const isBye = !!m.bye;
         const showSource1 = (m.round===0 && (m.source1Label||'')) || m.phase==='playin';
         const showSource2 = (m.round===0 && (m.source2Label||'')) || m.phase==='playin';
-        const t1n = showSource1 ? (m.source1Label||"TBD") : (m.t1!=null ? _getName_force(key,m,'t1') || _getName(key, m.t1) : (m.source1Label||"TBD"));
-        const t2n = isBye ? '' : (showSource2 ? (m.source2Label||"TBD") : (m.t2!=null ? _getName_force(key,m,'t2') || _getName(key, m.t2) : (m.source2Label||"TBD")));
+        const t1n = showSource1 ? (getMainBracketSourceLabel(key, m.source1Label||"TBD")||"TBD") : (m.t1!=null ? _getName_force(key,m,'t1') || _getName(key, m.t1) : (getMainBracketSourceLabel(key, m.source1Label||"")||"TBD"));
+        const t2n = isBye ? '' : (showSource2 ? (getMainBracketSourceLabel(key, m.source2Label||"TBD")||"TBD") : (m.t2!=null ? _getName_force(key,m,'t2') || _getName(key, m.t2) : (getMainBracketSourceLabel(key, m.source2Label||"")||"TBD")));
         const w1 = m.winner!=null && m.t1!=null && m.winner===m.t1;
         const w2 = m.winner!=null && m.t2!=null && m.winner===m.t2;
 
