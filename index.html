@@ -11566,6 +11566,66 @@ function getRoundTheme(roundIndex,totalRounds){
   return mid;
 }
 
+function getRoundCardTheme(roundIndex,totalRounds){
+  const ri = Number(roundIndex||0);
+  const total = Math.max(1, Number(totalRounds||1));
+  if(total >= 7 && ri === 0){
+    return {
+      cardBg:'#f3e8ff', cardAltBg:'#faf5ff', cardBorder:'#c084fc',
+      slotWinBg:'linear-gradient(to right,#9333ea 4px,#f5e8ff 4px)', winColor:'#6b21a8',
+      mutedColor:'#a78bfa', lineColor:'#c084fc'
+    };
+  }
+  const roundSize = Math.pow(2, total - ri);
+  if(ri >= total - 1 || roundSize === 2){
+    return {
+      cardBg:'#fff7dd', cardAltBg:'#fffdf3', cardBorder:'#facc15',
+      slotWinBg:'linear-gradient(to right,#d4a017 4px,#fff5cc 4px)', winColor:'#a16207',
+      mutedColor:'#d4a017', lineColor:'#facc15'
+    };
+  }
+  if(total >= 3 && ri === total - 2){
+    return {
+      cardBg:'#eef2ff', cardAltBg:'#f8faff', cardBorder:'#818cf8',
+      slotWinBg:'linear-gradient(to right,#2563eb 4px,#e8efff 4px)', winColor:'#1d4ed8',
+      mutedColor:'#818cf8', lineColor:'#818cf8'
+    };
+  }
+  if(roundSize === 8){
+    return {
+      cardBg:'#fff7ed', cardAltBg:'#fffaf5', cardBorder:'#fdba74',
+      slotWinBg:'linear-gradient(to right,#ea580c 4px,#ffedd5 4px)', winColor:'#c2410c',
+      mutedColor:'#fb923c', lineColor:'#fdba74'
+    };
+  }
+  if(roundSize === 16){
+    return {
+      cardBg:'#f0fdf4', cardAltBg:'#f7fff9', cardBorder:'#86efac',
+      slotWinBg:'linear-gradient(to right,#16a34a 4px,#dcfce7 4px)', winColor:'#15803d',
+      mutedColor:'#86efac', lineColor:'#86efac'
+    };
+  }
+  if(roundSize === 32){
+    return {
+      cardBg:'#ecfeff', cardAltBg:'#f7feff', cardBorder:'#67e8f9',
+      slotWinBg:'linear-gradient(to right,#0891b2 4px,#cffafe 4px)', winColor:'#0f766e',
+      mutedColor:'#67e8f9', lineColor:'#67e8f9'
+    };
+  }
+  if(roundSize === 64){
+    return {
+      cardBg:'#eff6ff', cardAltBg:'#f8fbff', cardBorder:'#60a5fa',
+      slotWinBg:'linear-gradient(to right,#2563eb 4px,#dbeafe 4px)', winColor:'#1d4ed8',
+      mutedColor:'#60a5fa', lineColor:'#60a5fa'
+    };
+  }
+  return {
+    cardBg:'#f8fafc', cardAltBg:'#ffffff', cardBorder:'#cbd5e1',
+    slotWinBg:'linear-gradient(to right,#64748b 4px,#e2e8f0 4px)', winColor:'#334155',
+    mutedColor:'#94a3b8', lineColor:'#cbd5e1'
+  };
+}
+
 function renderBracketTree(key,mMs,teams){
   // round 값이 문자열/숫자 혼용으로 저장될 수 있으므로 Number()로 정규화
   let normalizedMs = mMs.map(m=>({...m, round: Number(m.round||0), slot: Number(m.slot||0)}));
@@ -11757,8 +11817,9 @@ function renderBracketTree(key,mMs,teams){
       const sc1=(st.disp1 ?? st.sc1), sc2=(st.disp2 ?? st.sc2);
       const hasWinner = done && (wn1 || wn2);
 
-      const borderClr = hasWinner ? '#1565c0' : (isFinal ? '#d4a017' : '#d5dbea');
-      const shadowClr = hasWinner ? '0 0 0 1.5px #1565c044,0 2px 8px rgba(21,101,192,.12)' : '0 1px 6px rgba(15,30,58,.07)';
+      const roundTheme = getRoundCardTheme(ri, totalR);
+      const borderClr = hasWinner ? roundTheme.winColor : (roundTheme.cardBorder || (isFinal ? '#d4a017' : '#d5dbea'));
+      const shadowClr = hasWinner ? `0 0 0 1.5px ${roundTheme.lineColor || borderClr}44,0 2px 8px rgba(15,30,58,.10)` : '0 1px 6px rgba(15,30,58,.07)';
 
       if(m.bye){
         const byeEntryLabel = String(m.source1Label || '').trim();
@@ -11775,19 +11836,19 @@ function renderBracketTree(key,mMs,teams){
         return;
       }
 
-      const slot1Bg  = wn1 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn2 ? '#f4f6fb' : '#f8fafc';
-      const slot2Bg  = wn2 ? 'linear-gradient(to right,#1565c0 3px,#dce8fb 3px)' : wn1 ? '#f4f6fb' : '#fff';
-      const slot1Clr = wn1 ? '#0c3880' : wn2 ? '#94a3b8' : 'var(--text)';
-      const slot2Clr = wn2 ? '#0c3880' : wn1 ? '#94a3b8' : 'var(--text)';
+      const slot1Bg  = wn1 ? roundTheme.slotWinBg : wn2 ? roundTheme.cardAltBg : roundTheme.cardBg;
+      const slot2Bg  = wn2 ? roundTheme.slotWinBg : wn1 ? roundTheme.cardAltBg : '#fff';
+      const slot1Clr = wn1 ? roundTheme.winColor : wn2 ? roundTheme.mutedColor : 'var(--text)';
+      const slot2Clr = wn2 ? roundTheme.winColor : wn1 ? roundTheme.mutedColor : 'var(--text)';
       const slot1Fw  = wn1 ? 800 : 500;
       const slot2Fw  = wn2 ? 800 : 500;
       const slot1Op  = wn2 ? '.45' : '1';
       const slot2Op  = wn1 ? '.45' : '1';
 
-      cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-left:3px solid ${borderClr};border-radius:7px;overflow:hidden;background:white;box-shadow:${shadowClr}">
+      cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-left:4px solid ${borderClr};border-radius:7px;overflow:hidden;background:${roundTheme.cardAltBg};box-shadow:${shadowClr}">
         <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:${slot1Bg};opacity:${slot1Op}">
           <span style="font-size:.78rem;font-weight:${slot1Fw};color:${slot1Clr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${wn1?'🏆 ':''}${dn1}</span>
-          ${sc1!==null?`<span style="font-family:'Oswald',sans-serif;font-weight:800;font-size:.9rem;color:${wn1?'#0c3880':'#94a3b8'};min-width:22px;text-align:right;flex-shrink:0">${sc1}</span>`:''}
+          ${sc1!==null?`<span style="font-family:'Oswald',sans-serif;font-weight:800;font-size:.9rem;color:${wn1?roundTheme.winColor:roundTheme.mutedColor};min-width:22px;text-align:right;flex-shrink:0">${sc1}</span>`:''}
         </div>
         <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:${slot2Bg};border-top:1px solid #e5eaf3;opacity:${slot2Op}">
           <span style="font-size:.78rem;font-weight:${slot2Fw};color:${slot2Clr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${wn2?'🏆 ':''}${dn2}</span>
@@ -23396,6 +23457,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     for(let r=0; r<totalRounds; r++){
       const title = _roundLabel(r, totalRounds);
       const isFinal = r===totalRounds-1;
+      const roundTheme = getRoundCardTheme(r, totalRounds);
       const ms = byR[r];
       const mc = matchCount(r);
 
@@ -23408,9 +23470,9 @@ document.addEventListener('DOMContentLoaded',()=>{
         const top = matchTop(r, i);
 
         if(!m){
-          html += `<div class="bv-match" style="top:${top}px;left:${COL_PAD}px;right:${COL_PAD}px">
-            <div class="bv-slot tbd"><span class="nm">TBD</span></div>
-            <div class="bv-slot tbd"><span class="nm">TBD</span></div>
+          html += `<div class="bv-match" style="top:${top}px;left:${COL_PAD}px;right:${COL_PAD}px;border:1.5px solid ${roundTheme.cardBorder};background:${roundTheme.cardAltBg}">
+            <div class="bv-slot tbd" style="background:${roundTheme.cardBg}"><span class="nm">TBD</span></div>
+            <div class="bv-slot tbd" style="background:${roundTheme.cardAltBg}"><span class="nm">TBD</span></div>
           </div>`;
           continue;
         }
@@ -23430,15 +23492,15 @@ document.addEventListener('DOMContentLoaded',()=>{
         const s1cls = m.t1==null?'tbd':(w1?'win':'');
         const s2cls = isBye?'bye-slot':(m.t2==null?'tbd':(w2?'win':''));
 
-        html += `<div class="bv-match" style="top:${top}px;left:${COL_PAD}px;right:${COL_PAD}px" data-mid="${m.id}" data-key="${key}">
-          <div class="bv-slot ${s1cls}">
+        html += `<div class="bv-match" style="top:${top}px;left:${COL_PAD}px;right:${COL_PAD}px;border:1.5px solid ${roundTheme.cardBorder};background:${roundTheme.cardAltBg}" data-mid="${m.id}" data-key="${key}">
+          <div class="bv-slot ${s1cls}" style="background:${w1?roundTheme.slotWinBg:(w2?roundTheme.cardAltBg:roundTheme.cardBg)}">
             <span class="nm">${w1?'🏆 ':''}${t1n||'TBD'}</span>
-            ${showSc?`<span class="sc" style="${w1?'color:var(--success)':'color:var(--text3)'}">${sc1}</span>`:''}
+            ${showSc?`<span class="sc" style="color:${w1?roundTheme.winColor:roundTheme.mutedColor}">${sc1}</span>`:''}
           </div>
-          <div class="bv-slot ${s2cls}">
+          <div class="bv-slot ${s2cls}" style="background:${w2?roundTheme.slotWinBg:(w1?roundTheme.cardAltBg:'#fff')}">
             ${isBye
               ? `<span class="nm">🎫 부전승 직행</span>`
-              : `<span class="nm">${w2?'🏆 ':''}${t2n||'TBD'}</span>${showSc?`<span class="sc" style="${w2?'color:var(--success)':'color:var(--text3)'}">${sc2}</span>`:''}`
+              : `<span class="nm">${w2?'🏆 ':''}${t2n||'TBD'}</span>${showSc?`<span class="sc" style="color:${w2?roundTheme.winColor:roundTheme.mutedColor}">${sc2}</span>`:''}`
             }
           </div>
         </div>`;
