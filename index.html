@@ -4070,8 +4070,9 @@ window.applyCourtMovePicker = applyCourtMovePicker;
 
 
 function getCourtBoardDisplayLimitsForMatch(m){
-  const phase=String(m?.phase||'');
-  return phase==='group' ? {bucket:'group', limit:Number.POSITIVE_INFINITY} : {bucket:'main', limit:1};
+  // 코트에 올린 카드는 실제 대기열 순서대로 모두 보여줘야 한다.
+  // 특정 단계(main)만 1개 표시하면 공용대기→코트 이동 시 기존 대기 카드가 다시 공용대기로 밀려나는 것처럼 보일 수 있다.
+  return {bucket:'all', limit:Number.POSITIVE_INFINITY};
 }
 function getCourtBoardVisibleWaiting(item){
   const waiting=[...(item?.waiting||[])];
@@ -4120,16 +4121,8 @@ function getCourtBoardSharedOverflowItems(key, items, selectedCourts, usedCourts
     const clone={...m};
     const target=String(m.__sharedCourtLabel||m.manualCourtTarget||'').trim();
     if(target) clone.__sharedCourtLabel=target;
-    const targetItem = target ? itemMap.get(target) : null;
-    const cfg=getCourtBoardDisplayLimitsForMatch(clone);
-    const counts=visibleCountsByCourt[target] || {group:0,main:0};
-    if(targetItem && (counts[cfg.bucket]||0) < cfg.limit){
-      if(!targetItem.__visibleWaiting) targetItem.__visibleWaiting=[];
-      targetItem.__visibleWaiting.push(clone);
-      counts[cfg.bucket]=(counts[cfg.bucket]||0)+1;
-      visibleCountsByCourt[target]=counts;
-      return;
-    }
+    // 공용대기 항목은 targetCourt 라벨이 있더라도 공용대기에 그대로 남겨둔다.
+    // 여기서 코트 대기열로 흡수하면 카드가 사라지지 않거나 다른 코트 대기가 밀려나는 것처럼 보일 수 있다.
     existingShared.add(mid);
     shared.push(clone);
   });
@@ -4432,6 +4425,7 @@ async function initFB(){
     // matches 구독용 콜백 (재사용)
     function _onMatchesSnap(s){
       const prevMatchMap=buildMatchAlertStateMap(G.matches||{});
+      const prevCourtMap=buildCourtNotificationStateMap(G.matches||{});
       G.matches={};G._matchIdsByKey={};
       s.docs.forEach(d=>{
         const x=d.data()||{};const tid=x.tournamentId,div=x.division;
@@ -4447,6 +4441,12 @@ async function initFB(){
         processOnlineOrderAlerts(prevMatchMap, G.matches||{});
       }catch(alertErr){
         console.warn('order alert process failed', alertErr);
+      }
+      try{
+        const nextCourtMap=buildCourtNotificationStateMap(G.matches||{});
+        processCourtSmsAlerts(prevCourtMap, nextCourtMap);
+      }catch(courtAlertErr){
+        console.warn('court sms alert process failed', courtAlertErr);
       }
       onDU();
     }
@@ -4669,6 +4669,26 @@ async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new 
 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
 function _k2td(key){const i=key.lastIndexOf('_');return {tid:key.slice(0,i), div:key.slice(i+1)};}
+
+function getMainRoundLabelByRoundIndex(round, key){
+  try{
+    const mains=(G.matches?.[key]||[]).filter(m=>String(m?.phase||'')==='main');
+    if(!mains.length){
+      const r=Number(round||0);
+      return r===0 ? '결승' : '본선';
+    }
+    const rounds=[...new Set(mains.map(m=>Number(m?.round||0)).filter(Number.isFinite))].sort((a,b)=>a-b);
+    const idx=rounds.indexOf(Number(round||0));
+    const total=rounds.length;
+    if(idx<0) return '본선';
+    if(idx===total-1) return '결승';
+    if(idx===total-2 && total>1) return '준결승';
+    return `${Math.pow(2,total-idx)}강`;
+  }catch(e){
+    return '본선';
+  }
+}
+
 function _rid(){return 'r_'+Math.random().toString(36).slice(2,10);}
 function _mid(){return 'm_'+Math.random().toString(36).slice(2,10);}
 
@@ -7518,17 +7538,157 @@ function openSupportModal(){
 }
 
 function _openSMS(phone, body){
-  const p = (phone||'').replace(/[^0-9\+]/g,'').replace(/^82/, '+82'); // best-effort
+  const raw=String(phone||'').trim();
+  const normalized=raw.split(/[;,]/).map(v=>v.trim()).filter(Boolean).map(v=>v.replace(/[^0-9\+]/g,'').replace(/^82/, '+82'));
+  const p = normalized.join(',');
   const msg = encodeURIComponent(body||'');
-  // sms URI: Android/most browsers
   const url = `sms:${p}?body=${msg}`;
-  // 시도
   try{
     window.location.href = url;
   }catch(e){
-    // fallback: 클립보드
+    // fallback handled by caller
   }
 }
+function _normalizePhoneList(values=[]){
+  const seen=new Set();
+  return (Array.isArray(values)?values:[values]).flatMap(v=>String(v||'').split(/[;,]/)).map(v=>formatPhoneLoose(v)).map(v=>String(v||'').trim()).filter(v=>v && v.replace(/[^0-9]/g,'').length>=9 && !seen.has(v) && (seen.add(v), true));
+}
+function _openSMSForRecipients(recipients=[], body=''){
+  const phones=_normalizePhoneList(recipients.map(r=>r?.phone||''));
+  if(!phones.length){ toast('문자 받을 번호가 없습니다','error'); return false; }
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if(!isMobile){
+    const lines=[body||'', '', '받는 번호', ...phones];
+    navigator.clipboard?.writeText(lines.join('\n')).then(()=>{
+      toast('PC에서는 문자앱을 열 수 없어 문구와 번호를 복사했습니다. 휴대폰에서 붙여넣어 보내주세요.','info');
+    }).catch(()=>{
+      toast('PC에서는 문자앱 열기가 제한될 수 있습니다. 휴대폰에서 보내주세요.','info');
+    });
+    return false;
+  }
+  _openSMS(phones.join(','), body);
+  return true;
+}
+function getMatchNotificationRecipients(key,m){
+  try{
+    const {t1,t2}=getMatchTeamObjects(key,m);
+    const teams=[t1,t2].filter(Boolean);
+    const isIndividual = teams.some(team=>team?.tournamentType==='individual_pair' || Array.isArray(team?.individualPlayers));
+    if(isIndividual){
+      const out=[];
+      const seen=new Set();
+      teams.forEach(team=>{
+        getIndividualPlayers(team).slice(0,2).forEach((p,idx)=>{
+          const phone=formatPhoneLoose(p?.phone||'');
+          if(!phone) return;
+          if(seen.has(phone)) return;
+          seen.add(phone);
+          const nm=String(p?.name||'').trim() || `참가자${idx+1}`;
+          out.push({name:nm, phone, role:'player'});
+        });
+      });
+      return out;
+    }
+    const contacts=G.meta?.clubContacts||{};
+    const seen=new Set();
+    return teams.map((team,idx)=>{
+      const club=String(team?.club||'').trim();
+      const phone=formatPhoneLoose(contacts[club]||'');
+      const label=tdn(team,key, idx===0?m?.t1:m?.t2);
+      return {name:label||club||`팀${idx+1}`, phone, role:'captain', club};
+    }).filter(r=>r.phone && !seen.has(r.phone) && (seen.add(r.phone), true));
+  }catch(e){ return []; }
+}
+function buildCourtNotificationMessage(kind,key,m,meta={}){
+  const info=describeCourtBoardMatch(key,m||{});
+  const court=String(meta.court||'').trim();
+  const queuePos=Number(meta.queuePos||0)||0;
+  const queueText=queuePos>0 ? `${queuePos}번째 대기` : '';
+  const prefix=`[김해시테니스협회]`;
+  if(kind==='match_started') return `${prefix} 경기 시작합니다. 5분 내에 출전하세요. ${court?`${court} 코트`:''} ${info.title||''}`.replace(/\s+/g,' ').trim();
+  if(kind==='court_changed') return `${prefix} 대기 코트가 변경되었습니다. ${court?`${court} 코트`:''} ${queueText||'대기 등록'} 되었습니다. ${info.title||''}`.replace(/\s+/g,' ').trim();
+  return `${prefix} ${court?`${court} 코트`:''} ${queueText||'대기 등록'} 되었습니다. ${info.title||''}`.replace(/\s+/g,' ').trim();
+}
+function buildCourtNotificationApprovalPayload(kind,key,m,meta={}){
+  const recipients=getMatchNotificationRecipients(key,m);
+  const body=buildCourtNotificationMessage(kind,key,m,meta);
+  const info=describeCourtBoardMatch(key,m||{});
+  const title = kind==='match_started' ? '🎾 경기 시작 문자 확인' : (kind==='court_changed' ? '🔄 코트 변경 문자 확인' : '⏳ 대기 등록 문자 확인');
+  const recipientLabel = recipients.length ? recipients.map(r=>`${r.name}(${r.phone})`).join(', ') : '번호 없음';
+  const queueText = meta.queuePos>0 ? ` · ${meta.queuePos}번째 대기` : '';
+  return {
+    msg:`${info.title||'경기'}
+${meta.court?meta.court+' 코트':''}${queueText}
+받는 사람: ${recipientLabel}`.trim(),
+    title,
+    kind:'court_sms',
+    actionType:'sms_approval',
+    smsRecipients:recipients,
+    smsBody:body,
+    tid:meta.tid||'',
+    div:meta.div||'',
+    matchId:m?.id||m?._id||'',
+    dedupeKey:`court_sms:${kind}:${meta.tid||''}:${meta.div||''}:${m?.id||m?._id||''}:${meta.court||''}:${meta.queuePos||0}`
+  };
+}
+const COURT_ALERT_BOOTSTRAPPED = { value:false };
+function buildCourtNotificationStateMap(matchesObj){
+  const out={};
+  Object.keys(matchesObj||{}).forEach(key=>{
+    const items=getCourtStatusSnapshot(key)||[];
+    items.forEach(item=>{
+      const court=String(item?.court||'').trim();
+      if(item?.current){
+        const mid=String(item.current.id||item.current._id||'');
+        if(mid) out[mid]={key, tid:_k2td(key).tid, div:_k2td(key).div, status:'current', court, queuePos:0, match:item.current};
+      }
+      const waiting=[...(item?.__visibleWaiting||item?.waiting||[])];
+      waiting.forEach((m,idx)=>{
+        const mid=String(m?.id||m?._id||'');
+        if(mid) out[mid]={key, tid:_k2td(key).tid, div:_k2td(key).div, status:'waiting', court, queuePos:idx+1, match:m};
+      });
+    });
+    const shared=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? getCourtBoardSharedOverflowItems(key, items, getSelectedCourtFilters(key), (items||[]).map(x=>x.court)) : [];
+    shared.forEach((m,idx)=>{
+      const mid=String(m?.id||m?._id||'');
+      if(mid) out[mid]={key, tid:_k2td(key).tid, div:_k2td(key).div, status:'waiting', court:String(m?.__sharedCourtLabel||'').trim(), queuePos:idx+1, match:m};
+    });
+  });
+  return out;
+}
+function processCourtSmsAlerts(prevMap,nextMap){
+  if(!COURT_ALERT_BOOTSTRAPPED.value){
+    COURT_ALERT_BOOTSTRAPPED.value=true;
+    return;
+  }
+  if(!(AD||OP)) return;
+  Object.entries(nextMap||{}).forEach(([mid,next])=>{
+    if(!next?.match || next.match?.winner!=null) return;
+    const prev=prevMap?.[mid]||null;
+    let kind='';
+    if(next.status==='current' && (!prev || prev.status!=='current' || prev.court!==next.court)) kind='match_started';
+    else if(next.status==='waiting' && (!prev || prev.status==='none')) kind='waiting_registered';
+    else if(next.status==='waiting' && prev && (prev.court!==next.court || prev.queuePos!==next.queuePos)) kind='court_changed';
+    if(!kind) return;
+    const payload=buildCourtNotificationApprovalPayload(kind,next.key,next.match,{court:next.court,queuePos:next.queuePos,tid:next.tid,div:next.div});
+    if(!payload.smsRecipients?.length) return;
+    enqueueStickyAlert(payload,'info');
+  });
+}
+function sendStickyAlertSMS(){
+  const wrap=ge('stickyAlertWrap');
+  if(!wrap) return;
+  try{
+    const recipients=JSON.parse(wrap.getAttribute('data-sms-recipients')||'[]');
+    const body=wrap.getAttribute('data-sms-body')||'';
+    if(!_openSMSForRecipients(recipients, body)) return;
+    closeStickyAlert(true);
+    toast('문자 앱을 열었습니다','success');
+  }catch(e){
+    toast('문자앱 열기 실패: '+e.message,'error');
+  }
+}
+window.sendStickyAlertSMS = sendStickyAlertSMS;
 
 async function sendSupportSMS(){
   const phone=(G.meta.adminPhone||'').trim();
@@ -7576,6 +7736,11 @@ function getIndividualNameOnlyDisplayLine(team){
     const ps=getIndividualPlayers(team).slice(0,2).map(p=>String(p?.name||'').trim()).filter(Boolean);
     return ps.join(' / ') || ((team?.players||[]).slice(0,2).map(v=>String(v||'').trim()).filter(Boolean).join(' / ')) || '?';
   }catch(e){ return '?'; }
+}
+function getBracketTreeTeamLabel(team,key,idx){
+  if(!team) return '?';
+  const isIndividual = team?.tournamentType==='individual_pair' || Array.isArray(team?.individualPlayers);
+  return isIndividual ? getIndividualNameOnlyDisplayLine(team) : tdn(team,key,idx);
 }
 function getCourtBoardTeamName(team,key,idx){
   if(!team) return '?';
@@ -10114,6 +10279,32 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
   Object.keys(manualByCourt).forEach(court=>{
     manualByCourt[court].sort((a,b)=>String(a.manualCourtPinnedAt||a.courtAssignedAt||'').localeCompare(String(b.manualCourtPinnedAt||b.courtAssignedAt||'')) || String(a.id||'').localeCompare(String(b.id||''),'ko'));
   });
+
+  // 결과 저장 후에는 기존 코트 대기열 순서를 먼저 보존해야 한다.
+  // 그렇지 않으면 1번 코트의 다음 대기가 아니라 전역 자동배정 기준(예: 8번조)이 끼어들 수 있다.
+  const preservedByCourt={};
+  list.forEach(m=>{
+    if(!m || m.winner!=null || !scopes.has(String(m.phase||''))) return;
+    const mid=String(m.id);
+    if(manualIds.has(mid) || manualSharedIds.has(mid)) return;
+    const prev=prevState.get(mid);
+    if(!prev) return;
+    let prevCourts=[];
+    try{ prevCourts=JSON.parse(prev.courts||'[]'); }catch(e){ prevCourts=[]; }
+    const court=String((Array.isArray(prevCourts) && prevCourts[0]) || '').trim();
+    if(!court) return;
+    if(!preservedByCourt[court]) preservedByCourt[court]=[];
+    preservedByCourt[court].push({match:m, autoLabel:String(prev.autoLabel||m.autoCourtLabel||'')});
+  });
+  Object.keys(preservedByCourt).forEach(court=>{
+    preservedByCourt[court].sort((a,b)=>{
+      const pa=prevState.get(String(a.match?.id)) || {assignedAt:'', autoLabel:''};
+      const pb=prevState.get(String(b.match?.id)) || {assignedAt:'', autoLabel:''};
+      if(String(pa.assignedAt||'')!==String(pb.assignedAt||'')) return String(pa.assignedAt||'').localeCompare(String(pb.assignedAt||''));
+      return String(a.match?.id||'').localeCompare(String(b.match?.id||''),'ko');
+    });
+  });
+
   manualShared.forEach(m=>{
     const prev=prevState.get(String(m.id)) || {courts:'[]', assignedAt:'', autoLabel:'', manualCourtTarget:'', manualCourtPinnedAt:'', manualSharedHold:false};
     if(prev.courts!=='[]' || prev.assignedAt || prev.autoLabel || !prev.manualSharedHold) changed=true;
@@ -10122,13 +10313,25 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     m.manualSharedHold=true;
   });
 
-  const courtNames=[...new Set([...pool, ...Object.keys(fixedItems), ...Object.keys(manualByCourt)])];
+  const courtNames=[...new Set([...pool, ...Object.keys(fixedItems), ...Object.keys(manualByCourt), ...Object.keys(preservedByCourt)])];
   let hasPendingGroups=false;
-  const sharedEntries=[...(plan.shared||[])].filter(entry=>!(entry && entry.item && (manualIds.has(String(entry.item.match?.id||entry.item.id||'')) || manualSharedIds.has(String(entry.item.match?.id||entry.item.id||'')))));
+  const preservedIds=new Set(Object.values(preservedByCourt).flat().map(item=>String(item.match?.id||'')));
+  const sharedEntries=[...(plan.shared||[])].filter(entry=>!(entry && entry.item && (manualIds.has(String(entry.item.match?.id||entry.item.id||'')) || manualSharedIds.has(String(entry.item.match?.id||entry.item.id||'')) || preservedIds.has(String(entry.item.match?.id||entry.item.id||'')))));
 
+  const deferredManualByCourt={};
+  const emptyCourts=[];
   courtNames.forEach(court=>{
-    const items=[...(fixedItems[court]||[])].filter(item=>!(item && item.match && manualIds.has(String(item.match.id))));
+    const preservedItems=[...(preservedByCourt[court]||[])];
+    const items=[...(fixedItems[court]||[])].filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)))));
     const manualItems=(manualByCourt[court]||[]).map(m=>({match:m, autoLabel:String(m.autoCourtLabel||'')}));
+
+    if(preservedItems.length){
+      hasPendingGroups=true;
+      preservedItems.forEach(item=>assign(court,item));
+      items.forEach(item=>assign(court,item));
+      manualItems.forEach(item=>assign(court,item,true));
+      return;
+    }
     if(items.length){
       hasPendingGroups=true;
       items.forEach(item=>assign(court,item));
@@ -10143,15 +10346,27 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
       return;
     }
     if(manualItems.length){
-      manualItems.forEach(item=>assign(court,item,true));
+      deferredManualByCourt[court]=manualItems;
+      return;
     }
+    emptyCourts.push(court);
   });
   sharedEntries.forEach(entry=>markShared(entry.item));
 
-  if(!hasPendingGroups){
-    const mainQueue=getIndividualMainAutoQueue(key).filter(item=>!(item && item.match && manualIds.has(String(item.match.id))));
+  const mainQueue=getIndividualMainAutoQueue(key).filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)) || assignedIds.has(String(item.match.id)))));
+  if(emptyCourts.length && mainQueue.length){
+    emptyCourts.forEach(court=>{
+      const item=mainQueue.shift();
+      if(item) assign(court,item);
+    });
+  }
+
+  if(!hasPendingGroups && mainQueue.length){
     mainQueue.forEach((item,idx)=>assign(pool[idx % Math.max(1,pool.length)], item));
   }
+  Object.entries(deferredManualByCourt).forEach(([court, manualItems])=>{
+    (manualItems||[]).forEach(item=>assign(court,item,true));
+  });
   prevState.forEach((prev, mid)=>{
     if(assignedIds.has(mid)) return;
     const cur=list.find(x=>String(x.id)===String(mid));
@@ -10195,7 +10410,13 @@ window.toggleIndividualAutoCourtAssign = async function toggleIndividualAutoCour
 
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
-  if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ensureIndividualAutoCourtAssignmentsForKey(key);
+  if(isIndividualByKey(key)){
+    try{ syncIndividualMainBracketFromPrelim(key); }catch(e){}
+  }
+  if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
+    const pendingAuto=(G.matches[key]||[]).some(m=>m && m.winner==null && ['group','playin','main'].includes(String(m.phase||'')) && !m.manualSharedHold && !String(m.manualCourtTarget||'').trim() && !(Array.isArray(m.courts)&&m.courts.length) && !String(m.court||'').trim());
+    if(pendingAuto) ensureIndividualAutoCourtAssignmentsForKey(key);
+  }
   const teams=G.teams[key]||[];
   const draw=G.draws[key];
   const t=G.tournaments.find(t=>t.id===tid);
@@ -10564,8 +10785,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       playInMs.filter(pm=>isMatchVisibleByCourtFilter(key,pm)).forEach((pm,idx)=>{
         const mt1=pm.t1!==null?teams[pm.t1]:null;
         const mt2=pm.t2!==null?teams[pm.t2]:null;
-        const dn1=mt1?tdn(mt1,key,pm.t1):(pm.source1Label||'TBD');
-        const dn2=mt2?tdn(mt2,key,pm.t2):(pm.source2Label||'TBD');
+        const dn1=mt1?getBracketTreeTeamLabel(mt1,key,pm.t1):((isIndividualByKey(key)?resolvePrelimPlaceholderLabel(key, pm.source1Label, true):'') || (pm.source1Label||'TBD'));
+        const dn2=mt2?getBracketTreeTeamLabel(mt2,key,pm.t2):((isIndividualByKey(key)?resolvePrelimPlaceholderLabel(key, pm.source2Label, true):'') || (pm.source2Label||'TBD'));
         const st=getMatchResultState(key,pm);
         const doneHtml=st.done?`<span class="badge bg-green" style="font-size:.76rem">완료</span>`:'';
         const winnerHtml=st.done&&pm.winner!==null?`<div style="font-size:.76rem;color:#166534;margin-top:4px">✅ 승자 → ${tdn(teams[pm.winner],key,pm.winner)} → ${pm.winnerLabel||'본선 합류'}</div>`:`<div style="font-size:.72rem;color:var(--text3);margin-top:4px">승자 → ${pm.winnerLabel||'본선 합류'}</div>`;
@@ -11334,8 +11555,10 @@ function renderBracketTree(key,mMs,teams){
       const mt2 = m.t2 !== null ? teams[m.t2] : null;
       const useSource1 = (m.round===0 && (m.source1Label||'')) || m.phase==='playin';
       const useSource2 = (m.round===0 && (m.source2Label||'')) || m.phase==='playin';
-      const dn1 = useSource1 ? (m.source1Label||'TBD') : (mt1 ? tdn(mt1,key,m.t1) : ((m.source1Label||'') || (m.t1===null&&!m.bye ? 'TBD' : '?')));
-      const dn2 = useSource2 ? (m.source2Label||'TBD') : (mt2 ? tdn(mt2,key,m.t2) : ((m.source2Label||'') || 'TBD'));
+      const resolvedDn1 = useSource1 && isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, m.source1Label, true) : '';
+      const resolvedDn2 = useSource2 && isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, m.source2Label, true) : '';
+      const dn1 = useSource1 ? (resolvedDn1 || m.source1Label||'TBD') : (mt1 ? getBracketTreeTeamLabel(mt1,key,m.t1) : ((m.source1Label||'') || (m.t1===null&&!m.bye ? 'TBD' : '?')));
+      const dn2 = useSource2 ? (resolvedDn2 || m.source2Label||'TBD') : (mt2 ? getBracketTreeTeamLabel(mt2,key,m.t2) : ((m.source2Label||'') || 'TBD'));
       const st  = getMatchResultState(key, m);
       const done=st.done, wn1=done&&st.winner===m.t1, wn2=done&&st.winner===m.t2;
       const sc1=st.sc1, sc2=st.sc2;
@@ -11346,7 +11569,8 @@ function renderBracketTree(key,mMs,teams){
 
       if(m.bye){
         const byeEntryLabel = String(m.source1Label || '').trim();
-        const byeTeam = mt1 ? tdn(mt1,key,m.t1) : (byeEntryLabel || '?');
+        const byeResolved = isIndividualByKey(key) ? resolvePrelimPlaceholderLabel(key, byeEntryLabel, true) : '';
+        const byeTeam = mt1 ? getBracketTreeTeamLabel(mt1,key,m.t1) : (byeResolved || byeEntryLabel || '?');
         cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid #d4a017;border-radius:7px;overflow:hidden;background:white;box-shadow:${shadowClr}">
           <div style="display:flex;align-items:center;padding:5px 9px;min-height:34px;background:linear-gradient(to right,#1565c0 3px,#dce8fb 3px)">
             <span style="font-size:.78rem;font-weight:800;color:#0c3880;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👑 ${byeTeam}</span>
@@ -11703,15 +11927,23 @@ function getPrelimResolvedLabelMap(key){
       const resolved=topStats.every(row=>row && row.ti!=null && row.rank!=null && !row.tiePending);
       if(!resolved) return;
       topStats.forEach((row,idx)=>{
-        const entry={ti:row.ti,nm:tdn(teams[row.ti],key,row.ti),gn:gi+1,rk:idx+1,grpSize};
+        const team=teams[row.ti];
+        const entry={ti:row.ti,nm:tdn(team,key,row.ti),gn:gi+1,rk:idx+1,grpSize};
         const label=getMainEntryBracketLabel(entry);
         if(label){
-          map[String(label).trim()]={ti:row.ti,name:tdn(teams[row.ti],key,row.ti)};
+          map[String(label).trim()]={ti:row.ti,name:tdn(team,key,row.ti),shortName:getBracketTreeTeamLabel(team,key,row.ti)};
         }
       });
     });
     return map;
   }catch(e){ return {}; }
+}
+function resolvePrelimPlaceholderLabel(key,label, shortOnly=false){
+  try{
+    const entry=getPrelimResolvedLabelMap(key)[String(label||'').trim()];
+    if(!entry) return '';
+    return shortOnly ? String(entry.shortName||entry.name||'').trim() : String(entry.name||entry.shortName||'').trim();
+  }catch(e){ return ''; }
 }
 function propagateResolvedMainAdvancements(key){
   const list=G.matches[key]||[];
@@ -14196,114 +14428,40 @@ function openIndividualMainDraw(tid,div){
 // 개인전 본선 대진 생성 — play-in 포함
 // groupLabelOnly=true: 예선 미완료 시 ti 대신 null, source*Label에 "A조1위" 형태만 저장
 function buildIndivMainMatchesFixed(advT, key, teams, groupLabelOnly=false){
-  const spec=computeMainBracketSpec(advT.length);
-  const hasPlayIn=spec.playInTeams>0;
+  const seededEntries=(advT||[]).map(e=>({
+    ...e,
+    nm:e.nm||getMainEntryBracketLabel(e)||`T${e.ti??''}`,
+    _groupLabel:`${grpLabel((e.gn||1)-1)} ${e.rk}위`
+  }));
+  const plan=buildSeededMainSlots(seededEntries, nextPow2(Math.max(2, seededEntries.length)), Date.now()%10+1, key, 'individual');
+  let matches=buildMainMatches((plan?.matchSlots)||[], plan?.n||0, (plan?.playInMatches)||[]);
 
-  // 각 엔트리에 _groupLabel 추가
-  const withLabel=(e)=>({...e, _groupLabel:`${grpLabel((e.gn||1)-1)} ${e.rk}위`});
-  // 슬롯에 팀/레이블 설정
-  const applyEntry=(slot,side,e)=>{
-    if(!e) return;
-    const lbl = e.playInPlaceholder ? (e._groupLabel||e.nm||'') : (e._groupLabel||'');
-    if(side===1){
-      slot.t1 = groupLabelOnly ? null : (e.ti??null);
-      slot.source1Label = groupLabelOnly ? lbl : (e.ti===null ? lbl : '');
-    } else {
-      slot.t2 = groupLabelOnly ? null : (e.ti??null);
-      slot.source2Label = groupLabelOnly ? lbl : (e.ti===null ? lbl : '');
-    }
-  };
-
-  // 셔플
-  let rank1=[...advT.filter(e=>e.rk===1)].map(withLabel);
-  let rank2=[...advT.filter(e=>e.rk!==1)].map(withLabel);
-  const shuffle=(arr)=>{ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
-  shuffle(rank1); shuffle(rank2);
-
-  if(!hasPlayIn){
-    const bracketN=nextPow2(advT.length);
-    const matchCount=bracketN/2;
-    const byeIdxs=pickByeMatchIndices(matchCount,bracketN-advT.length);
-    const byeSet=new Set(byeIdxs);
-    const normalIdxs=hybridSpreadOrder(matchCount).filter(i=>!byeSet.has(i));
-    const slots=Array.from({length:matchCount},(_,i)=>({
-      id:`main_${i}_${Date.now()}`,phase:'main',round:0,slot:i,
-      t1:null,t2:null,winner:null,rubbers:[],court:'',courts:[],bye:byeSet.has(i),
-      source1Label:'',source2Label:''
-    }));
-    for(const si of byeIdxs){
-      const p=rank1.shift()||rank2.shift()||null;
-      if(p){ applyEntry(slots[si],1,p); if(!groupLabelOnly&&slots[si].t1!==null) slots[si].winner=slots[si].t1; }
-    }
-    for(const si of normalIdxs){ const p1=rank1.shift()||null; if(p1) applyEntry(slots[si],1,p1); }
-    for(const si of normalIdxs){
-      if(slots[si].t1===null&&!slots[si].source1Label) continue;
-      const t1gn=rank1.concat(rank2).find(e=>
-        groupLabelOnly ? (slots[si].source1Label===e._groupLabel) : (e.ti!==null&&e.ti===slots[si].t1)
-      )?.gn ?? advT.find(e=>e.ti===slots[si].t1)?.gn;
-      const opp=removeFirstMatch(rank2,e=>e&&e.gn!==t1gn)||rank2.shift()||null;
-      if(opp) applyEntry(slots[si],2,opp);
-    }
-    const leftover=[...rank1,...rank2];
-    for(const si of normalIdxs){
-      if(slots[si].t1===null&&!slots[si].source1Label){ const p=leftover.shift(); if(p) applyEntry(slots[si],1,p); }
-      if(!slots[si].bye&&slots[si].t2===null&&!slots[si].source2Label){ const p=leftover.shift(); if(p) applyEntry(slots[si],2,p); }
-    }
-    return buildTournamentTree(slots, matchCount);
-  }
-
-  // play-in 있는 경우: 2위팀 중 spec.playInTeams명이 진출전 진행
-  const playInEntries=rank2.splice(0, spec.playInTeams);
-  const directEntries=[...rank1, ...rank2];
-  const playInMs=[];
-  for(let i=0;i<spec.playInMatches;i++){
-    const e1=playInEntries[i*2]||null, e2=playInEntries[i*2+1]||null;
-    playInMs.push({
-      id:`playin_${i}_${Date.now()}`,phase:'playin',round:0,slot:i,
-      t1: groupLabelOnly ? null : (e1?.ti??null),
-      t2: groupLabelOnly ? null : (e2?.ti??null),
-      winner:null,rubbers:[],court:'',courts:[],bye:false,
-      source1Label: groupLabelOnly ? (e1?._groupLabel||e1?.nm||'TBD') : (e1?.nm||'TBD'),
-      source2Label: groupLabelOnly ? (e2?._groupLabel||e2?.nm||'TBD') : (e2?.nm||'TBD'),
-      winnerLabel:`${spec.mainSize}강 합류`, playInId:i+1
+  if(groupLabelOnly){
+    const labelByTeam=new Map();
+    seededEntries.forEach(e=>{ if(e && e.ti!=null) labelByTeam.set(Number(e.ti), String(e._groupLabel||e.nm||'')); });
+    matches=matches.map(m=>{
+      const out={...m};
+      if(out.phase==='playin'){
+        if(out.t1!=null) out.source1Label = labelByTeam.get(Number(out.t1)) || out.source1Label || 'TBD';
+        if(out.t2!=null) out.source2Label = labelByTeam.get(Number(out.t2)) || out.source2Label || 'TBD';
+        out.t1=null;
+        out.t2=null;
+        out.winner=null;
+      }else if(out.phase==='main' && Number(out.round||0)===0){
+        if(out.t1!=null) out.source1Label = labelByTeam.get(Number(out.t1)) || out.source1Label || '';
+        if(out.t2!=null) out.source2Label = labelByTeam.get(Number(out.t2)) || out.source2Label || '';
+        if(out.source1PlayInId) out.source1Label = `진출전 승자${out.source1PlayInId}`;
+        if(out.source2PlayInId) out.source2Label = out.bye ? '부전승' : `진출전 승자${out.source2PlayInId}`;
+        out.t1=null;
+        out.t2=null;
+        out.winner=null;
+      }
+      return out;
     });
   }
-  const placeholders=Array.from({length:spec.winnersNeeded},(_,i)=>({
-    ti:null,nm:`진출전 승자${i+1}`,gn:null,rk:99,playInPlaceholder:true,playInId:i+1,
-    _groupLabel:`진출전 승자${i+1}`
-  }));
-  const mainEntries=[...directEntries,...placeholders];
-  const mainMatchCount=spec.mainSize/2;
-  const byeCount2=spec.mainSize-mainEntries.length;
-  const byeIdxs2=pickByeMatchIndices(mainMatchCount,byeCount2);
-  const byeSet2=new Set(byeIdxs2);
-  const normalIdxs2=hybridSpreadOrder(mainMatchCount).filter(i=>!byeSet2.has(i));
-  const slots=Array.from({length:mainMatchCount},(_,i)=>({
-    id:`main_${i}_${Date.now()}`,phase:'main',round:0,slot:i,
-    t1:null,t2:null,winner:null,rubbers:[],court:'',courts:[],bye:byeSet2.has(i),
-    source1Label:'',source2Label:''
-  }));
-  let mr1=mainEntries.filter(e=>!e.playInPlaceholder&&e.rk===1);
-  let mr2=mainEntries.filter(e=>!e.playInPlaceholder&&e.rk!==1);
-  let mpl=mainEntries.filter(e=>e.playInPlaceholder);
-  for(const si of byeIdxs2){
-    const p=mr1.shift()||mr2.shift()||null;
-    if(p&&!p.playInPlaceholder){ applyEntry(slots[si],1,p); if(!groupLabelOnly&&slots[si].t1!==null) slots[si].winner=slots[si].t1; }
-  }
-  for(const si of normalIdxs2){ const p1=mr1.shift()||null; if(p1) applyEntry(slots[si],1,p1); }
-  for(const si of normalIdxs2){
-    if(slots[si].t1===null&&!slots[si].source1Label) continue;
-    const t1gn=advT.find(e=>e.ti===slots[si].t1)?.gn;
-    const opp=removeFirstMatch(mr2,e=>e&&e.gn!==t1gn)||mr2.shift()||mpl.shift()||null;
-    if(opp) applyEntry(slots[si],2,opp);
-  }
-  const leftover2=[...mr1,...mr2,...mpl];
-  for(const si of normalIdxs2){
-    if(slots[si].t1===null&&!slots[si].source1Label){ const p=leftover2.shift(); if(p) applyEntry(slots[si],1,p); }
-    if(!slots[si].bye&&slots[si].t2===null&&!slots[si].source2Label){ const p=leftover2.shift(); if(p) applyEntry(slots[si],2,p); }
-  }
-  return [...playInMs, ...buildTournamentTree(slots, mainMatchCount)];
+  return matches;
 }
+
 
 function buildTournamentTree(slots, matchCount){
   // 이미 round=0, slot=i 부여됨. 상위 라운드 매치 생성
@@ -15215,8 +15373,12 @@ function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
     const top = cy - CARD_H / 2;
 
     const isBye = !!ms.bye;
-    const topLabel = (ms.source1Label||'') || (ms.t1 ? (getMainEntryBracketLabel(ms.t1) || '추첨 대기') : '추첨 대기');
-    const botLabel = isBye ? '부전승' : ((ms.source2Label||'') || (ms.t2 ? (getMainEntryBracketLabel(ms.t2) || '추첨 대기') : '추첨 대기'));
+    const topLabel = ms.t1
+      ? getBracketTreeTeamLabel(ms.t1,'',ms.t1?.ti)
+      : ((ms.source1Label||'') || (getMainEntryBracketLabel(ms.t1) || '추첨 대기'));
+    const botLabel = isBye
+      ? '부전승'
+      : (ms.t2 ? getBracketTreeTeamLabel(ms.t2,'',ms.t2?.ti) : ((ms.source2Label||'') || (getMainEntryBracketLabel(ms.t2) || '추첨 대기')));
 
     const topBg   = ms.t1 ? '#eef4ff' : '#f8fafc';
     const botBg   = isBye ? '#fff8e6' : (ms.t2 ? '#f0fdf4' : '#f8fafc');
@@ -16111,19 +16273,6 @@ async function saveM3(){
   else await adjustPlayerStatsForUnfinalized();
 
   const finishedCourts = hasFinalWinner ? (Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : [])) : [];
-  if(finishedCourts.length > 0){
-    const allMList = G.matches[key] || [];
-    const myAssignedAt = m.courtAssignedAt || '';
-    finishedCourts.forEach(c => {
-      allMList.forEach(x => {
-        if(x.id === m.id || x.winner != null) return;
-        const xC = Array.isArray(x.courts) ? x.courts : (x.court ? [x.court] : []);
-        if(xC.includes(c) && (x.courtAssignedAt || '') > myAssignedAt){
-          x.courtAssignedAt = myAssignedAt;
-        }
-      });
-    });
-  }
 
   sl(true);
   try{
@@ -18842,17 +18991,24 @@ function renderNextStickyAlert(){
   if(!item) return;
   STICKY_ALERT_OPEN=true;
   const alertTitle = item.title || (item.kind==='court_complete' ? '🎾 코트 완료 알림' : '🔔 오더 제출 알림');
+  const actions = item.actionType==='sms_approval'
+    ? `<button type="button" class="sticky-alert-btn primary" onclick="window.sendStickyAlertSMS()">문자앱 열기</button><button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">이번만 닫기</button>`
+    : `<button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">확인</button>`;
   wrap.innerHTML=`<div class="sticky-alert-card">
     <div class="sticky-alert-title">${esc(alertTitle)}</div>
     <div class="sticky-alert-msg">${esc(item.msg||'')}</div>
-    <div class="sticky-alert-actions">
-      <button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">확인</button>
-    </div>
+    <div class="sticky-alert-actions">${actions}</div>
   </div>`;
   wrap.setAttribute('data-msg', String(item.msg||'').trim());
   if(item.matchId) wrap.setAttribute('data-mid', String(item.matchId));
   if(item.tid) wrap.setAttribute('data-tid', String(item.tid));
   if(item.div) wrap.setAttribute('data-div', String(item.div));
+  if(item.smsBody) wrap.setAttribute('data-sms-body', String(item.smsBody));
+  else wrap.removeAttribute('data-sms-body');
+  if(item.smsRecipients) wrap.setAttribute('data-sms-recipients', JSON.stringify(item.smsRecipients));
+  else wrap.removeAttribute('data-sms-recipients');
+  if(item.dedupeKey) wrap.setAttribute('data-dedupe-key', String(item.dedupeKey));
+  else wrap.removeAttribute('data-dedupe-key');
   wrap.classList.add('show');
 }
 window.closeStickyAlert = closeStickyAlert;
@@ -18865,14 +19021,14 @@ window.openIndividualMainDraw = openIndividualMainDraw;
 
 function enqueueStickyAlert(payload,type='info'){
   const item=(payload && typeof payload==='object' && !Array.isArray(payload))
-    ? {msg:String(payload.msg||'').trim(), type:payload.type||type, tid:payload.tid||'', div:payload.div||'', matchId:payload.matchId||payload.mid||'', title:String(payload.title||''), kind:String(payload.kind||'')}
-    : {msg:String(payload||'').trim(), type, tid:'', div:'', matchId:'', title:'', kind:''};
-  const key=item.msg;
+    ? {msg:String(payload.msg||'').trim(), type:payload.type||type, tid:payload.tid||'', div:payload.div||'', matchId:payload.matchId||payload.mid||'', title:String(payload.title||''), kind:String(payload.kind||''), actionType:String(payload.actionType||''), smsRecipients:Array.isArray(payload.smsRecipients)?payload.smsRecipients:[], smsBody:String(payload.smsBody||''), dedupeKey:String(payload.dedupeKey||'')}
+    : {msg:String(payload||'').trim(), type, tid:'', div:'', matchId:'', title:'', kind:'', actionType:'', smsRecipients:[], smsBody:'', dedupeKey:''};
+  const key=item.dedupeKey || item.msg;
   if(!key) return;
   const wrap=ge('stickyAlertWrap');
-  const current=wrap ? wrap.getAttribute('data-msg')||'' : '';
+  const current=(wrap ? (wrap.getAttribute('data-dedupe-key')||wrap.getAttribute('data-msg')||'') : '');
   if(current===key) return;
-  if(STICKY_ALERT_QUEUE.some(x=>x&&x.msg===key)) return;
+  if(STICKY_ALERT_QUEUE.some(x=>x&&((x.dedupeKey||x.msg)===key))) return;
   STICKY_ALERT_QUEUE.push(item);
   renderNextStickyAlert();
 }
