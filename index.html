@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-10-v177-main-minfill-stage-balance-fix";
+  const APP_VERSION = "2026-04-10-v181-round-color-queue-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3852,18 +3852,25 @@ function describeCourtBoardMatch(key,m){
 }
 
 function getCourtBoardPhaseColor(info, match){
+  const phase=String(match?.phase||'');
   const label=String(info?.label||'');
-  if(String(match?.phase||'')==='playin') return {bg:'#fff7ed', bd:'#fb923c', fg:'#c2410c', chipBg:'#ffedd5', chipFg:'#c2410c'};
-  const m=label.match(/(128|64|32|16|8)/);
+  // 예선은 조 번호(예: 예선 32조) 안의 숫자를 32강으로 오인하면 안 된다.
+  if(phase==='group' || label.includes('예선')){
+    return {bg:'#f8fafc', bd:'#cbd5e1', fg:'#475569', chipBg:'#e2e8f0', chipFg:'#334155'};
+  }
+  if(phase==='playin'){
+    return {bg:'#fff7ed', bd:'#f97316', fg:'#9a3412', chipBg:'#ffedd5', chipFg:'#9a3412'};
+  }
+  const m=label.match(/(128|64|32|16|8)강/);
   const n=m?Number(m[1]):0;
-  if(n===128) return {bg:'#f3e8ff', bd:'#c084fc', fg:'#6b21a8', chipBg:'#ede9fe', chipFg:'#6d28d9'};
-  if(n===64) return {bg:'#eff6ff', bd:'#60a5fa', fg:'#1d4ed8', chipBg:'#dbeafe', chipFg:'#1d4ed8'};
-  if(n===32) return {bg:'#ecfeff', bd:'#67e8f9', fg:'#0f766e', chipBg:'#cffafe', chipFg:'#0f766e'};
-  if(n===16) return {bg:'#f0fdf4', bd:'#86efac', fg:'#15803d', chipBg:'#dcfce7', chipFg:'#166534'};
-  if(n===8) return {bg:'#fff7ed', bd:'#fdba74', fg:'#c2410c', chipBg:'#ffedd5', chipFg:'#c2410c'};
-  if(label.includes('준결승')) return {bg:'#eef2ff', bd:'#818cf8', fg:'#4338ca', chipBg:'#e0e7ff', chipFg:'#4338ca'};
-  if(label.includes('결승')) return {bg:'#fff7dd', bd:'#facc15', fg:'#a16207', chipBg:'#fef3c7', chipFg:'#a16207'};
-  return {bg:'#fff8e8', bd:'#f6d28b', fg:'#7a4b00', chipBg:'#fff3cd', chipFg:'#9a6400'};
+  if(n===128) return {bg:'#faf5ff', bd:'#a855f7', fg:'#6b21a8', chipBg:'#f3e8ff', chipFg:'#6b21a8'};
+  if(n===64) return {bg:'#eff6ff', bd:'#2563eb', fg:'#1d4ed8', chipBg:'#dbeafe', chipFg:'#1e40af'};
+  if(n===32) return {bg:'#ecfeff', bd:'#0891b2', fg:'#0f766e', chipBg:'#cffafe', chipFg:'#155e75'};
+  if(n===16) return {bg:'#f0fdf4', bd:'#16a34a', fg:'#166534', chipBg:'#dcfce7', chipFg:'#166534'};
+  if(n===8) return {bg:'#fff7ed', bd:'#ea580c', fg:'#c2410c', chipBg:'#ffedd5', chipFg:'#9a3412'};
+  if(label.includes('준결승')) return {bg:'#eef2ff', bd:'#4f46e5', fg:'#3730a3', chipBg:'#e0e7ff', chipFg:'#3730a3'};
+  if(label.includes('결승')) return {bg:'#fff7dd', bd:'#eab308', fg:'#a16207', chipBg:'#fef3c7', chipFg:'#92400e'};
+  return {bg:'#fff8e8', bd:'#f59e0b', fg:'#92400e', chipBg:'#fff3cd', chipFg:'#9a6400'};
 }
 
 function getAutoAssignedGroupsForCourt(key, court){
