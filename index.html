@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-09-v158-read-burst-reduced";
+  const APP_VERSION = "2026-04-10-v159-no-activity-log-stable";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1470,7 +1470,6 @@ body.slider-ready .page:not(.active){
   </div>
   <div class="g2">
     <div class="card fade-in"><div class="card-title">📌 현재 대회</div><div id="homeTournInfo"><p class="muted">등록된 대회가 없습니다</p></div></div>
-    <div class="card fade-in"><div class="card-title">📋 최근 활동</div><ul class="ri-list" id="recentLog"><li class="ri"><div class="ri-icon">⏳</div><div class="ri-text"><div>활동 없음</div></div></li></ul></div>
   </div>
   
   <div class="card fade-in">
@@ -4508,12 +4507,9 @@ async function initFB(){
     //    로컬 캐시만 우선 사용하고, 선수기록 탭/선수상세를 열 때만 필요 시 1회 로드
     loadPlayersFromLocalCache();
     popCF();
-    // ⑤ 활동로그 - 최근 10개만 1회 읽기 (실시간 불필요)
-    try{
-      const logSnap=await getDocs(query(collection(db,'activityLog'),orderBy('time','desc'),limit(10)));
-      G.log=logSnap.docs.map(d=>d.data());
-      upLog();
-    }catch(e2){G.log=[];} // 로그 실패해도 앱 작동
+    // ⑤ 활동로그 제거: 홈 최근 활동 UI/읽기/쓰기 모두 사용하지 않음
+    G.log=[];
+
 
     try{
       const dhSnap = await getDocs(collection(db,'drawHistory'));
@@ -4834,7 +4830,8 @@ function baseClub(club){
 }
 function pKeyParse(key){ const i=(key||'').lastIndexOf('__'); return i>0?{name:key.slice(0,i),club:key.slice(i+2)}:{name:key,club:''}; }
 async function stP(k){try{const pk=pKeyParse(k);const pureName=cleanName(pk.name||k);await setDoc(doc(db,'players',k.replace(/[\\/\\.#\\$\\[\\]]/g,'_')),{...G.players[k],key:k,name:pureName,club:pk.club||''});}catch(e){}}
-async function fbLog(t,i='📌'){try{await addDoc(collection(db,'activityLog'),{text:t,icon:i,time:new Date().toISOString()});}catch(e){}}
+async function fbLog(t,i='📌'){ return; }
+
 function onDU(){
   // 새로고침 후 관리자 세션 복원
   if(!AD && localStorage.getItem('adm')==='1'){
@@ -17452,21 +17449,8 @@ function updateFilterBtnUI(tab, isOn){
 }
 
 
-function upLog(){
-  const el=ge('recentLog');
-  if(!el) return;
-  const logs=(Array.isArray(G.log)?G.log:[]).slice(0,8);
-  if(!logs.length){
-    el.innerHTML='<li class="ri"><div class="ri-icon">⏳</div><div class="ri-text"><div>활동 없음</div></div></li>';
-    return;
-  }
-  el.innerHTML = logs.map(x=>{
-    const icon = x?.icon || '📌';
-    const text = x?.text || '활동';
-    const time = x?.time ? fmtDt(x.time) : '';
-    return `<li class="ri"><div class="ri-icon">${icon}</div><div class="ri-text"><div>${esc(text)}</div></div><div class="ri-time">${time}</div></li>`;
-  }).join('');
-}
+function upLog(){ return; }
+
 
 function upDash(){
   // ── 홈 현황판 4개: 2026년 협회 전체 기준 ──────────────────
