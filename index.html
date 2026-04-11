@@ -7986,6 +7986,12 @@ function enqueueCourtCompleteAlert(payload){
   flushStickyCourtSmsAlertsForFinishedMatch(payload?.matchId||'');
   enqueueStickyAlert(payload,'info');
 }
+function enqueueCourtCompleteAlertReliable(payload){
+  const item={...(payload||{})};
+  const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+  if(isMobile && !(Number(item.autoCloseMs||0)>0 && Number(item.autoCloseMs||0)>=9000)) item.autoCloseMs=9000;
+  setTimeout(()=>enqueueCourtCompleteAlert(item), 180);
+}
 function sendStickyAlertSMS(){
   const wrap=ge('stickyAlertWrap');
   if(!wrap) return;
@@ -10748,6 +10754,7 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
   const mainQueue=getIndividualMainAutoQueue(key).filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || manualSharedIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)))));
 
   const deferredManualByCourt={};
+  const delayedFillBusyCourts=[];
   const hasGroupItemsInFixed = Object.values(fixedItems).some(arr=>Array.isArray(arr) && arr.some(item=>String(item?.match?.phase||'')==='group'));
   const hasGroupItemsPreserved = Object.values(preservedByCourt).some(arr=>Array.isArray(arr) && arr.some(item=>String(item?.match?.phase||'')==='group'));
   const hasGroupItemsManual = Object.values(manualByCourt).some(arr=>Array.isArray(arr) && arr.some(m=>String(m?.phase||'')==='group'));
@@ -10796,10 +10803,11 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
       // preservedItems(이전 배정 보존 경기)만 기준으로 한다.
       // fixedItems는 이 코트 전담 그룹의 경기이므로 공용대기 슬롯과 무관하다.
       const alreadyFilledGroup = preservedItems.filter(item=>String(item?.match?.phase||'')==='group').length;
-      // 예선/본선 공통: 코트의 대기칸이 비면 공용대기에서 즉시 한 칸 당겨온다.
-      // 예선은 최소 "현재 경기 + 대기 1"(총 2경기) 를 유지하고,
-      // 본선은 최소 "현재 경기 + 대기 1"(총 2경기) 를 유지한다.
-      appendNextPendingToCourt(court, groupWorkActive ? Math.max(0, 2 - alreadyFilledGroup) : Math.max(0, 2 - alreadyFilledMain));
+      // 빈 코트가 먼저 채워져야 하므로, 이미 진행중/배정된 코트의 추가 대기 채우기는 2차 패스로 미룬다.
+      delayedFillBusyCourts.push({
+        court,
+        maxFill: groupWorkActive ? Math.max(0, 2 - alreadyFilledGroup) : Math.max(0, 2 - alreadyFilledMain)
+      });
       return;
     }
     if(items.length){
@@ -10811,7 +10819,11 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
       // 마지막 대기 경기 이후부터 가능하므로, preserved가 없는 경우(신규 배정)
       // 공용대기 채우기 여유를 1로 고정해 1경기를 당겨온다.
       const alreadyFilledGroup = Math.min(1, items.filter(item=>String(item?.match?.phase||'')==='group').length);
-      appendNextPendingToCourt(court, groupWorkActive ? Math.max(0, 2 - alreadyFilledGroup) : Math.max(0, 2 - alreadyFilledMain));
+      // 빈 코트 우선 원칙: 현재 경기/배정이 있는 코트의 추가 대기는 나중에 채운다.
+      delayedFillBusyCourts.push({
+        court,
+        maxFill: groupWorkActive ? Math.max(0, 2 - alreadyFilledGroup) : Math.max(0, 2 - alreadyFilledMain)
+      });
       return;
     }
     // 예선(group) 작업이 남아 있을 때만 빈 코트에 공용대기 1경기를 먼저 올린다.
@@ -10825,6 +10837,9 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     if(manualItems.length){
       deferredManualByCourt[court]=manualItems;
     }
+  });
+  delayedFillBusyCourts.forEach(({court,maxFill})=>{
+    appendNextPendingToCourt(court, maxFill);
   });
   sharedEntries.forEach(entry=>markShared(entry.item));
 
@@ -16968,7 +16983,7 @@ async function saveM3(){
     if(hasFinalWinner && prevW==null){
       if(finishedCourts.length){
         finishedCourts.forEach(courtName=>{
-          enqueueCourtCompleteAlert({
+          enqueueCourtCompleteAlertReliable({
             kind:'court_complete',
             title:'🎾 경기 완료 알림',
             msg:`${courtName} 코트 경기 완료 · ${dn1} ${alertScoreText} ${dn2}`,
@@ -16987,7 +17002,7 @@ async function saveM3(){
             : m.phase==='bronze'
               ? '3·4위전'
               : '경기';
-        enqueueCourtCompleteAlert({
+        enqueueCourtCompleteAlertReliable({
           kind:'court_complete',
           title:'🎾 경기 완료 알림',
           msg:`${dl(div)} ${phaseLabel} 완료 · ${dn1} ${alertScoreText} ${dn2}`,
