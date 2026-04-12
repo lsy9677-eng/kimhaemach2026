@@ -8311,7 +8311,7 @@ function buildCourtNotificationApprovalPayload(kind,key,m,meta={}){
   const recipients=(kind==='match_completed') ? getMatchResultNotificationRecipients(key,m) : getMatchNotificationRecipients(key,m);
   const body=buildCourtNotificationMessage(kind,key,m,meta);
   const info=describeCourtBoardMatch(key,m||{});
-  const title = kind==='match_completed' ? '✅ 경기 완료 문자 확인' : (kind==='match_started' ? '🎾 경기 시작 문자 확인' : (kind==='court_changed' ? '🔄 코트 변경 문자 확인' : '⏳ 대기 등록 문자 확인'));
+  const title = kind==='match_completed' ? '✅ 경기 완료 알림' : (kind==='match_started' ? '🎾 경기 시작 알림' : (kind==='court_changed' ? '🔄 대기 코트 알림' : '⏳ 대기 배정 알림'));
   const recipientLabel = recipients.length ? recipients.map(r=>`${r.name}(${r.phone})`).join(', ') : '번호 없음';
   const queueText = meta.queuePos>0 ? ` · ${meta.queuePos}번째 대기` : '';
   return {
@@ -8371,7 +8371,6 @@ function buildCourtSmsAlertPayloads(prevMap,nextMap){
   return payloads;
 }
 function enqueueCourtSmsAlertsFromState(prevMap,nextMap){
-  if(!(AD||OP)) return;
   buildCourtSmsAlertPayloads(prevMap,nextMap).forEach(payload=>enqueueStickyAlert(payload,'info'));
 }
 
@@ -17423,6 +17422,7 @@ function tC(cid,player){
 }
 
 async function saveM3(){
+  const prevCourtState=captureCourtNotificationState();
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
   const m=list[idx];
@@ -17582,38 +17582,8 @@ async function saveM3(){
     const indivScoreText=isIndividualByKey(key)?(getIndividualActualScoreText(m)||`${sc1}:${sc2}`):'';
     const alertScoreText=indivScoreText||`${sc1}:${sc2}`;
     if(hasFinalWinner && prevW==null){
-      if(finishedCourts.length){
-        finishedCourts.forEach(courtName=>{
-          enqueueCourtCompleteAlertReliable({
-            kind:'court_complete',
-            title:'🎾 경기 완료 알림',
-            msg:`${courtName} 코트 경기 완료 · ${dn1} ${alertScoreText} ${dn2}`,
-            type:'info',
-            tid,
-            div,
-            matchId:m.id,
-            autoCloseMs:5000
-          });
-        });
-      }else{
-        const phaseLabel = m.phase==='group'
-          ? `예선 ${grpLabel(m.group||0)}`
-          : m.phase==='main'
-            ? (getMainRoundLabelByRoundIndex(m.round||0, key) || '본선')
-            : m.phase==='bronze'
-              ? '3·4위전'
-              : '경기';
-        enqueueCourtCompleteAlertReliable({
-          kind:'court_complete',
-          title:'🎾 경기 완료 알림',
-          msg:`${dl(div)} ${phaseLabel} 완료 · ${dn1} ${alertScoreText} ${dn2}`,
-          type:'info',
-          tid,
-          div,
-          matchId:m.id,
-          autoCloseMs:5000
-        });
-      }
+      // 경기 종료 팝업 알림은 운영 가치가 낮아 비활성화합니다.
+      // 종료 후 새 코트 배정/대기 배정 알림만 유지합니다.
     }
     if(hasFinalWinner){
       if(isIndividualByKey(key)){
@@ -17647,6 +17617,7 @@ async function saveM3(){
       }
       await fbLog(`실시간점수: ${dn1} ${alertScoreText} ${dn2}`,'📝');
     }
+    dispatchLocalCourtNotificationAlerts(prevCourtState);
     sl(false);cm('mM3');toast(hasFinalWinner ? '결과 저장 ✅' : (isTieState ? '동점 상태로 실시간 스코어 저장 ✅' : '실시간 스코어 저장 ✅'),'success');renderBracket();
   }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
 }
@@ -20324,7 +20295,7 @@ function renderNextStickyAlert(){
   const canApproveSms = item.actionType==='sms_approval' && (AD||OP);
   const actions = canApproveSms
     ? `${hasSmsRecipients?`<button type="button" class="sticky-alert-btn primary" onclick="window.sendStickyAlertSMS()">문자 보내기</button>`:`<button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">번호 없음</button>`}<button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">닫기</button>`
-    : `<button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">${item.actionType==='sms_approval'?'닫기':'확인'}</button>`;
+    : `<button type="button" class="sticky-alert-btn secondary" onclick="window.closeStickyAlert()">${item.actionType==='sms_approval'?'확인':'확인'}</button>`;
   wrap.innerHTML=`<div class="sticky-alert-card">
     <div class="sticky-alert-title">${esc(alertTitle)}</div>
     <div class="sticky-alert-msg">${esc(item.msg||'')}</div>
