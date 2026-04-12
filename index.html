@@ -5388,6 +5388,17 @@ function isOperatorMode(){ return !!(OP && !AD); }
 
 const INDIV_OPERATOR_FILTERS = {};
 const INDIV_FILTER_STORAGE_KEY = 'kimhae_indiv_operator_filters_v1';
+const BRACKET_OPERATION_VIEW_MODE = {};
+function getBracketOperationViewMode(key){
+  return BRACKET_OPERATION_VIEW_MODE[key] || 'all';
+}
+function setBracketOperationViewMode(key, mode){
+  const v=(mode==='group'||mode==='main') ? mode : 'all';
+  BRACKET_OPERATION_VIEW_MODE[key]=v;
+  renderBracket();
+}
+window.setBracketOperationViewMode = setBracketOperationViewMode;
+
 // 보기 필터는 화면 렌더링 전용이다. 실제 코트 배정 허용 범위, 자동 코트 배정,
 // 수동 코트 이동, 저장 데이터에는 절대 영향을 주지 않는다.
 
@@ -7841,10 +7852,11 @@ function renderOpStickyRibbonFromMarker(marker){
   const mobileLowered = window.innerWidth <= 680 ? ' mobile-lowered' : '';
   el.className='op-sticky-ribbon show '+cls+mobileLowered;
   const label=marker.dataset.opLabel||'운영';
+  const phase=marker.dataset.opPhase||'운영중';
   const stats=marker.dataset.opStats||'';
   const sub=marker.dataset.opSub||'';
   el.style.display='inline-flex';
-  el.innerHTML=`<span>🏁 ${label}</span><span class="mini">운영중</span>${stats?`<span class="mini">${stats}</span>`:''}${sub?`<span class="sub">${sub}</span>`:''}<button class="closex" onclick="hideOpStickyRibbon()">숨기기</button>`;
+  el.innerHTML=`<span>🏁 ${label}</span><span class="mini">${phase}</span>${stats?`<span class="mini">${stats}</span>`:''}${sub?`<span class="sub">${sub}</span>`:''}<button class="closex" onclick="hideOpStickyRibbon()">숨기기</button>`;
 }
 window.hideOpStickyRibbon = hideOpStickyRibbon;
 window.resetOpStickyRibbon = resetOpStickyRibbon;
@@ -11376,7 +11388,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const entryListId = `entryList_${key}`;
   const entryListCollapsed = isIndivKey; // 개인전이면 기본 접힘
 
-  let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
+  const operationViewMode=getBracketOperationViewMode(key);
+  const operationBannerLabel = operationViewMode==='main' ? '본선 운영' : (operationViewMode==='group' ? '예선 운영' : '전체 운영');
+
+  let html=`${renderOperationDivisionBanner(tid,div,key,teams,operationBannerLabel)}<div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div>
         <div style="font-weight:700;font-size:.96rem">${t.name} — ${dl(div)}</div>
@@ -11407,6 +11422,23 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     </div></div>`;
 
   html += renderMatchProgressSummary(key);
+  const showPrelimSection=(operationViewMode!=='main');
+  const showMainSection=(operationViewMode!=='group');
+  if(draw?.groups?.length){
+    html += `<div style="margin:10px 0 12px;padding:12px 14px;border:1px solid #dbe7ff;border-radius:14px;background:linear-gradient(135deg,#fff,#f8fbff)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">🧭 운영 보기</div>
+          <div style="font-size:.76rem;color:var(--text2);margin-top:4px">예선과 본선 운영 화면을 분리해서 볼 수 있습니다.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ${operationViewMode==='all'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setBracketOperationViewMode('${key}','all')">전체</button>
+          <button class="btn ${operationViewMode==='group'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setBracketOperationViewMode('${key}','group')">예선</button>
+          <button class="btn ${operationViewMode==='main'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setBracketOperationViewMode('${key}','main')">본선 운영</button>
+        </div>
+      </div>
+    </div>`;
+  }
   if(isIndivKey && draw?.groups?.length){
     const selectedGroups=getDisplayGroupFilters(key)||[];
     const selectedCourts=getDisplayCourtFilters(key)||[];
@@ -11428,7 +11460,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   html += renderCourtStatusBoard(key, div, visibleGroupIndexes);
 
   // 예선 접기 버튼: 본선 여부와 무관하게 항상 표시 (개인전/단체전 공통)
-  {
+  if(showPrelimSection){
     const prelimBtnLabel = prelimCollapsed ? '📂 예선내용 펼치기' : '📁 예선내용 접기';
     html += `<div class="prelim-sticky-toggle-wrap"><button class="prelim-sticky-toggle-btn" onclick="togglePrelimSection('${key}')">${prelimBtnLabel}</button></div>`;
   }
@@ -11451,9 +11483,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     return html;
   }
 
-  if(draw.groups?.length){
+  if(draw.groups?.length && showPrelimSection){
     html+=`<div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
       <span>${isIndividualByKey(key)?'📋 예선 경기표':'📋 예선 조별 대진표'}</span>
+      <span class="badge" style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;font-size:.74rem;padding:4px 10px">예선 운영</span>
     </div>`;
     html+=`<div id="${prelimToggleId}" style="display:${prelimCollapsed?'none':'block'}">`;
     draw.groups.forEach((grp,gi)=>{
@@ -11646,11 +11679,11 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     }
   }
 
-  if(draw.groups?.length){
+  if(draw.groups?.length && showPrelimSection){
     html+=`</div>`;
   }
 
-  if(mMs.length){
+  if(mMs.length && showMainSection){
     const rounds=[...new Set(mMs.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
     const totalR=rounds.length;
 
@@ -11658,9 +11691,10 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       html+=`<div style="margin:6px 0 10px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,#eef4ff,#f8fbff);border:1px solid #cfe0ff;font-size:.82rem;font-weight:700;color:#1d4ed8">📌 예선 내용은 접혀 있습니다. 위의 <b>예선내용 펼치기</b>를 누르면 전체 내용을 다시 볼 수 있습니다.</div>`;
     }
 
-    html+=`<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    html+=`${renderOperationDivisionBanner(tid,div,key,teams,'본선 운영')}<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <span id="mainStageTitle_${tid}_${div}">🏆 본선 토너먼트 대진표</span>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="badge" style="background:#f3e8ff;color:#7c3aed;border:1px solid #d8b4fe;font-size:.74rem;padding:4px 10px">본선 운영</span>
         <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 가지형 대진표 펼치기':'📁 가지형 대진표 접기'}</button>
         ${canManageBracket()?`<div style="display:flex;gap:6px">
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>
@@ -19825,7 +19859,7 @@ function divisionHeaderClass(div){
   if(div==='테린이' || div==='terinee') return 'op-green';
   return 'op-blue';
 }
-function renderOperationDivisionBanner(tid,div,key,teams){
+function renderOperationDivisionBanner(tid,div,key,teams,phase='예선 운영'){
   const t=G.tournaments.find(x=>x.id===tid);
   const allMs=G.matches[key]||[];
   const total=allMs.length;
@@ -19834,7 +19868,7 @@ function renderOperationDivisionBanner(tid,div,key,teams){
   const remain=Math.max(0,total-done);
   const label=dl(div).replace(/^[^\s]+\s*/,'').trim()||dl(div);
   const stats=`${teams.length}팀 · 완료 ${done}/${total} · 진행 ${playing} · 잔여 ${remain}`;
-  return `<div class="op-div-marker ${divisionBannerClass(div)}" data-op-label="${esc(label)}" data-op-stats="${esc(stats)}" data-op-sub="${esc(t?.name||'')}" aria-hidden="true"></div>`;
+  return `<div class="op-div-marker ${divisionBannerClass(div)}" data-op-label="${esc(label)}" data-op-phase="${esc(phase||'운영중')}" data-op-stats="${esc(stats)}" data-op-sub="${esc(t?.name||'')}" aria-hidden="true"></div>`;
 }
 function renderFinalSummaryCard(label,items){
   return `<div class="card" style="margin-bottom:12px"><div class="card-title">🏅 ${label} 최종 결과 요약</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">${items.map(it=>`<div style="padding:14px 12px;border-radius:14px;background:${it.bg};border:1.5px solid ${it.border};text-align:center"><div style="font-size:1.35rem;margin-bottom:6px">${it.emoji}</div><div style="font-size:.78rem;color:var(--text2);font-weight:700;margin-bottom:4px">${it.title}</div><div style="font-size:1rem;font-weight:900;line-height:1.35">${it.value||'-'}</div></div>`).join('')}</div></div>`;
