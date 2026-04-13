@@ -3385,7 +3385,8 @@ function setRegClubInputMode(isIndividual){
   const noGroup=ge('regNoLabel')?.closest('.form-group');
   if(selWrap) selWrap.style.display=freeClubInput?'none':'block';
   if(txtWrap) txtWrap.style.display=freeClubInput?'block':'none';
-  if(clubGroup) clubGroup.style.display='';
+  // 개인전은 참가자별 클럽 입력칸만 사용하고, 상단 공통 클럽/대표팀 입력칸은 숨긴다.
+  if(clubGroup) clubGroup.style.display=isIndividual?'none':'';
   if(noGroup) noGroup.style.display=isIndividual?'none':'';
   if(ge('regClubLabel')) ge('regClubLabel').innerHTML = isIndividual ? '대표 클럽/팀명' : (freeClubInput ? '클럽/팀명<span class="req">*</span>' : '클럽<span class="req">*</span>');
   if(ge('regClubText')) ge('regClubText').placeholder = isIndividual ? '예: 모던,나이스 / 개인전 팀명 입력' : '예: 모던 / 김해 / 자체 대회 클럽명 입력';
