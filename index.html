@@ -5006,33 +5006,32 @@ function getIndividualAutoAssignmentPlan(key){
   const targetGroups=groups.map((_,i)=>i).sort((a,b)=>a-b);
   // ⚠️ 보기 필터는 실제 자동 코트 배정에 영향을 주지 않는다.
   // 예선 자동 배정 원칙:
-  // 1) 2팀조는 코트 수에 맞게 균등 분배한다. (예: 24조/8코트=코트당 3조)
-  // 2) 3팀조 이상은 코트당 최대 2개 조를 기본으로 묶고, 넘치는 1~2개 조만 공용 대기로 뺀다.
-  // 3) 코트 내부 대기 순서는 각 조가 번갈아 진행되도록 교차 배치한다.
+  // 1) 빈 코트가 있으면 각 조의 첫 경기를 서로 다른 코트에 우선 배정한다.
+  // 2) 예선은 가능한 한 모든 잔여 경기를 코트 내부 대기열에 붙인다.
+  // 3) 코트가 부족하면 여러 조를 한 코트에 묶되, 조 순서를 라운드로빈으로 섞는다.
+  //    예) A조 1번vs2번 → B조 1번vs2번 → A조 승자vs3번 → B조 승자vs3번 ...
+  // 4) 본선만 현재경기+대기1번 중심, 나머지는 공용대기로 유지한다.
   const pool=getIndividualAutoCourtPool(key).map(String).filter(Boolean);
   const plan={pool:[...new Set(pool)], fixed:{}, shared:[]};
   if(!targetGroups.length || !plan.pool.length) return plan;
 
-  const groupTeamCounts=targetGroups.map(gi=>Array.isArray(groups[gi]?.teams)?groups[gi].teams.filter(Boolean).length:0);
-  const maxTeamsPerGroup=Math.max(0,...groupTeamCounts);
-  const isTwoTeamMode=maxTeamsPerGroup<=2;
+  const courtCount=Math.max(1, plan.pool.length);
+  const groupCount=targetGroups.length;
+  const basePerCourt=Math.floor(groupCount / courtCount);
+  const extraCourts=groupCount % courtCount;
 
-  let groupsPerCourt=2;
-  if(isTwoTeamMode){
-    groupsPerCourt=Math.max(1, Math.floor(targetGroups.length / plan.pool.length));
-    if(!Number.isFinite(groupsPerCourt) || groupsPerCourt<1) groupsPerCourt=1;
-  }
-  const maxFixedGroupCount=Math.min(targetGroups.length, plan.pool.length * groupsPerCourt);
-  const fixedGroups=targetGroups.slice(0, maxFixedGroupCount);
-  const sharedGroups=targetGroups.slice(maxFixedGroupCount);
-
-  fixedGroups.forEach((gi, idx)=>{
-    const courtIdx=Math.floor(idx / groupsPerCourt);
+  let cursor=0;
+  for(let courtIdx=0; courtIdx<courtCount; courtIdx++){
     const court=plan.pool[courtIdx] || '';
-    if(!court) return;
+    if(!court) continue;
+    const takeCount=basePerCourt + (courtIdx < extraCourts ? 1 : 0);
+    if(takeCount<=0) continue;
+    const assignedGroups=targetGroups.slice(cursor, cursor + takeCount);
+    cursor += takeCount;
+    if(!assignedGroups.length) continue;
     if(!plan.fixed[court]) plan.fixed[court]=[];
-    plan.fixed[court].push(gi);
-  });
+    plan.fixed[court].push(...assignedGroups);
+  }
 
   Object.entries(plan.fixed).forEach(([court, gis])=>{
     const perGroup=(gis||[]).map(gi=>getIndividualGroupAutoQueue(key,gi));
@@ -5048,7 +5047,10 @@ function getIndividualAutoAssignmentPlan(key){
     }
   });
 
-  sharedGroups.forEach((gi, sharedIdx)=>{
+  // 예선은 가능한 한 코트 내부 대기열에 모두 표시한다.
+  // 공용대기는 코트가 전혀 없는 예외 상황에서만 사용한다.
+  const remainingGroups=targetGroups.slice(cursor);
+  remainingGroups.forEach((gi, sharedIdx)=>{
     const q=getIndividualGroupAutoQueue(key, gi);
     const targetCourt=plan.pool[sharedIdx % Math.max(1, plan.pool.length)] || '';
     q.forEach(item=>{
