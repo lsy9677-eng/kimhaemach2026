@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-13-v189b-round128-lime-only";
+  const APP_VERSION = "2026-04-13-v193-personal-next-match-group-first";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3385,8 +3385,7 @@ function setRegClubInputMode(isIndividual){
   const noGroup=ge('regNoLabel')?.closest('.form-group');
   if(selWrap) selWrap.style.display=freeClubInput?'none':'block';
   if(txtWrap) txtWrap.style.display=freeClubInput?'block':'none';
-  // 개인전은 참가자별 클럽 입력칸만 사용하고, 상단 공통 클럽/대표팀 입력칸은 숨긴다.
-  if(clubGroup) clubGroup.style.display=isIndividual?'none':'';
+  if(clubGroup) clubGroup.style.display='';
   if(noGroup) noGroup.style.display=isIndividual?'none':'';
   if(ge('regClubLabel')) ge('regClubLabel').innerHTML = isIndividual ? '대표 클럽/팀명' : (freeClubInput ? '클럽/팀명<span class="req">*</span>' : '클럽<span class="req">*</span>');
   if(ge('regClubText')) ge('regClubText').placeholder = isIndividual ? '예: 모던,나이스 / 개인전 팀명 입력' : '예: 모던 / 김해 / 자체 대회 클럽명 입력';
@@ -3443,6 +3442,202 @@ function formatPhoneLoose(raw=''){
   if(digits.length===10) return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
   return v.replace(/[^0-9-]/g,'');
 }
+
+const PERSONAL_MATCH_PHONE_KEY='kimhae_personal_match_phone_v1';
+function normalizePhoneDigits(raw=''){
+  return String(raw||'').replace(/[^0-9]/g,'');
+}
+function getPersonalMatchPhone(){
+  try{return normalizePhoneDigits(localStorage.getItem(PERSONAL_MATCH_PHONE_KEY)||'');}catch(e){return '';}
+}
+function setPersonalMatchPhone(raw=''){
+  const digits=normalizePhoneDigits(raw);
+  if(digits.length<9){ toast('전화번호를 다시 확인해 주세요','error'); return false; }
+  try{ localStorage.setItem(PERSONAL_MATCH_PHONE_KEY, digits); }catch(e){}
+  toast('내 경기 전화번호를 저장했습니다 ✅','success');
+  try{ renderBracket(); }catch(e){}
+  return true;
+}
+function promptPersonalMatchPhone(){
+  const prev=formatPhoneLoose(getPersonalMatchPhone());
+  const raw=window.prompt('개인전 내 경기 확인용 전화번호를 입력하세요.\n(참가 등록 때 입력한 번호)', prev||'');
+  if(raw===null) return;
+  setPersonalMatchPhone(raw);
+}
+function clearPersonalMatchPhone(){
+  try{ localStorage.removeItem(PERSONAL_MATCH_PHONE_KEY); }catch(e){}
+  toast('저장된 전화번호를 지웠습니다','success');
+  try{ renderBracket(); }catch(e){}
+}
+function teamHasPersonalPhone(team, digits=''){
+  const target=normalizePhoneDigits(digits);
+  if(!target) return false;
+  const players=getIndividualPlayers(team);
+  return players.some(p=>normalizePhoneDigits(p?.phone||'')===target);
+}
+function getPersonalSideInfo(team, digits=''){
+  const target=normalizePhoneDigits(digits);
+  if(!target) return null;
+  const players=getIndividualPlayers(team);
+  const idx=players.findIndex(p=>normalizePhoneDigits(p?.phone||'')===target);
+  if(idx<0) return null;
+  const p=players[idx]||{};
+  return {index:idx, player:p, name:String(p?.name||'').trim(), club:String(p?.clubsRaw||'').trim()};
+}
+function getPersonalizedIndividualMatches(tid, divs, digits=''){
+  const target=normalizePhoneDigits(digits);
+  if(!tid || !target) return [];
+  const out=[];
+  (divs||[]).forEach(div=>{
+    const key=tid+'_'+div;
+    const teams=G.teams[key]||[];
+    (G.matches[key]||[]).forEach(m=>{
+      if(!m || m.bye) return;
+      const t1=teams[m.t1]??teams.find(t=>t&&((t.id!=null&&t.id===m.t1)||(t.name&&t.name===m.t1)));
+      const t2=teams[m.t2]??teams.find(t=>t&&((t.id!=null&&t.id===m.t2)||(t.name&&t.name===m.t2)));
+      const side1=teamHasPersonalPhone(t1,target);
+      const side2=teamHasPersonalPhone(t2,target);
+      if(!side1 && !side2) return;
+      out.push({tid,div,key,match:m,team1:t1,team2:t2,mySide:side1?1:2,myInfo:side1?getPersonalSideInfo(t1,target):getPersonalSideInfo(t2,target)});
+    });
+  });
+  return out.sort((a,b)=>{
+    const ma=a.match||{}, mb=b.match||{};
+    const pa=String(ma.phase||''), pb=String(mb.phase||'');
+    const order=(p)=>p==='group'?0:(p==='playin'?1:(p==='main'?2:3));
+    if(order(pa)!==order(pb)) return order(pa)-order(pb);
+    if(Number(ma.group??-1)!==Number(mb.group??-1)) return Number(ma.group??-1)-Number(mb.group??-1);
+    if(Number(ma.round||0)!==Number(mb.round||0)) return Number(ma.round||0)-Number(mb.round||0);
+    if(Number(ma.slot||0)!==Number(mb.slot||0)) return Number(ma.slot||0)-Number(mb.slot||0);
+    return String(ma.id||'').localeCompare(String(mb.id||''),'ko');
+  });
+}
+function getPersonalMatchStatusLabel(key, m){
+  const st=getMatchResultState(key,m);
+  const courts=getMatchCourtsForStatusBoard(key,m)||[];
+  const courtTxt=courts.length?` · 🎾 ${courts.join('/')}`:'';
+  if(st.done){
+    const winSide=st.winner===m.t1?1:(st.winner===m.t2?2:0);
+    return {text:`경기 완료${courtTxt}`, tone:'#166534', bg:'#dcfce7', border:'#86efac', winSide, code:'done', priority:90, waitingOrder:999};
+  }
+  if(st.started){
+    return {text:`경기중 ${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}${courtTxt}`, tone:'#b45309', bg:'#fff7ed', border:'#fdba74', winSide:0, code:'live', priority:0, waitingOrder:0};
+  }
+  if(courts.length){
+    const queue=getCourtQueueInfo(key,courts[0]);
+    const currentId=String(queue?.active?.id||'');
+    if(currentId===String(m?.id||'')){
+      return {text:`곧 시작${courtTxt}`, tone:'#92400e', bg:'#fff7ed', border:'#fdba74', winSide:0, code:'start_soon', priority:1, waitingOrder:0};
+    }
+    const waiting=(queue?.waiting||[]).map(x=>String(x?.id||''));
+    const idx=waiting.indexOf(String(m?.id||''));
+    if(idx>=0){
+      const isSoon=idx===0;
+      return {text:`코트 대기 ${idx+1}번${courtTxt}`, tone:isSoon?'#92400e':'#9a3412', bg:'#fff7ed', border:'#fdba74', winSide:0, code:isSoon?'start_soon':'court_wait', priority:isSoon?2:(10+idx), waitingOrder:idx+1};
+    }
+    return {text:`코트 배정 완료${courtTxt}`, tone:'#7c3aed', bg:'#f5f3ff', border:'#c4b5fd', winSide:0, code:'assigned', priority:20, waitingOrder:98};
+  }
+  return {text:`경기 대기${courtTxt}`, tone:'#1d4ed8', bg:'#eff6ff', border:'#93c5fd', winSide:0, code:'waiting', priority:30, waitingOrder:99};
+}
+function getPersonalMatchStartSoonChip(status){
+  if(!status) return '';
+  if(status.code==='live'){
+    return `<span class="my-match-summary-chip" style="border:1.5px solid #f59e0b;background:#fff7ed;color:#92400e">🎾 경기중</span>`;
+  }
+  if(status.code==='start_soon'){
+    return `<span class="my-match-summary-chip" style="border:1.5px solid #ef4444;background:#fef2f2;color:#b91c1c">⏰ 곧 시작</span>`;
+  }
+  return '';
+}
+function getPersonalNextMatchRow(rows=[]){
+  const pending=(rows||[]).filter(row=>row && row.status && row.status.code!=='done');
+  if(!pending.length) return null;
+  const hasPendingGroup = pending.some(row=>String(row?.match?.phase||'')==='group');
+  const target = hasPendingGroup
+    ? pending.filter(row=>String(row?.match?.phase||'')==='group')
+    : pending;
+  return target.sort((a,b)=>{
+    const pa=Number(a?.status?.priority||999), pb=Number(b?.status?.priority||999);
+    if(pa!==pb) return pa-pb;
+    if(String(a?.div||'')!==String(b?.div||'')) return String(a?.div||'').localeCompare(String(b?.div||''),'ko');
+    const ma=a?.match||{}, mb=b?.match||{};
+    const phaseOrder=(m)=>{
+      const p=String(m?.phase||'');
+      return p==='group'?0:(p==='playin'?1:(p==='main'?2:3));
+    };
+    if(phaseOrder(ma)!==phaseOrder(mb)) return phaseOrder(ma)-phaseOrder(mb);
+    if(Number(ma.group??-1)!==Number(mb.group??-1)) return Number(ma.group??-1)-Number(mb.group??-1);
+    if(Number(ma.round||0)!==Number(mb.round||0)) return Number(ma.round||0)-Number(mb.round||0);
+    if(Number(ma.slot||0)!==Number(mb.slot||0)) return Number(ma.slot||0)-Number(mb.slot||0);
+    return String(ma.id||'').localeCompare(String(mb.id||''),'ko');
+  })[0]||null;
+}
+function renderPersonalNextMatchCard(row){
+  if(!row) return '';
+  const m=row.match, key=row.key, status=row.status||getPersonalMatchStatusLabel(key,m);
+  const info=describeCourtBoardMatch(key,m);
+  const n1=tdn(row.team1,key,m.t1)||'?';
+  const n2=tdn(row.team2,key,m.t2)||'?';
+  const soonChip=getPersonalMatchStartSoonChip(status);
+  const detail=[dl(row.div), info?.label, info?.detail].filter(Boolean).join(' · ');
+  return `<div style="padding:12px 14px;margin-bottom:10px;border:2px solid ${status.code==='start_soon'?'#ef4444':(status.code==='live'?'#f59e0b':'#2563eb')};border-radius:14px;background:linear-gradient(135deg,#ffffff,#f8fbff)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div style="min-width:220px;flex:1">
+        <div style="font-size:.76rem;font-weight:900;color:#1d4ed8;letter-spacing:.02em">📌 내 다음 경기</div>
+        <div style="font-size:1rem;font-weight:900;color:var(--primary-dark);line-height:1.4;margin-top:4px">${n1} <span style="color:var(--text3);font-weight:700">vs</span> ${n2}</div>
+        <div style="font-size:.78rem;color:var(--text2);margin-top:4px;line-height:1.55">${detail}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:${status.bg};border:1px solid ${status.border};font-size:.8rem;font-weight:900;color:${status.tone}">${status.text}</span>
+          ${soonChip}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <button class="my-match-toggle-btn" onclick="event.stopPropagation();goBracketMatch('${row.tid}','${row.div}','${m.id}');" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">해당 경기로</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderPersonalMatchBanner(tid, targetDivs=[]){
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  if(!t || getTournamentTypeById(tid)!=='individual_pair') return '';
+  const digits=getPersonalMatchPhone();
+  const saved=formatPhoneLoose(digits);
+  const rows=digits?getPersonalizedIndividualMatches(tid,targetDivs,digits):[];
+  const headerBtns=`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="my-match-toggle-btn" onclick="event.stopPropagation();promptPersonalMatchPhone()" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">${saved?'📱 번호 변경':'📱 전화번호 입력'}</button>${saved?'<button class="my-match-toggle-btn" onclick="event.stopPropagation();clearPersonalMatchPhone()" style="border:1px solid #64748b;border-radius:999px;background:white;color:#475569;cursor:pointer">초기화</button>':''}</div>`;
+  if(!saved){
+    return `<div style="padding:10px 12px;background:linear-gradient(135deg,#eef4ff,#fffdf5);border:1.5px solid #93c5fd;border-radius:10px;margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><div class="my-match-panel-title">📱 개인전 내 경기 찾기</div><div style="font-size:.82rem;color:#1e3a8a;margin-top:4px;line-height:1.6">참가 등록 때 입력한 전화번호를 저장하면 이 기기에서 <b>내 경기만 바로 모아보기</b>가 됩니다.</div></div>${headerBtns}</div></div>`;
+  }
+  const rowsWithStatus=rows.map(row=>({
+    ...row,
+    status:getPersonalMatchStatusLabel(row.key,row.match)
+  }));
+  const nextRow=getPersonalNextMatchRow(rowsWithStatus);
+  const nextCard=renderPersonalNextMatchCard(nextRow);
+  const cards=rowsWithStatus.length?rowsWithStatus.map(row=>{
+    const key=row.key, m=row.match, t1=row.team1, t2=row.team2;
+    const n1=tdn(t1,key,m.t1)||'?';
+    const n2=tdn(t2,key,m.t2)||'?';
+    const info=describeCourtBoardMatch(key,m);
+    const status=row.status||getPersonalMatchStatusLabel(key,m);
+    const amIWinner=!!(status.winSide && row.mySide===status.winSide);
+    const isNext=nextRow && String(nextRow.match?.id||'')===String(m.id||'') && String(nextRow.div||'')===String(row.div||'');
+    const orderSummary=(function(){
+      if(!G.meta.onlineOrderEnabled) return '';
+      const st=getOnlineOrderState(key,m);
+      const mySubmitted=row.mySide===1?st.s1:st.s2;
+      const oppSubmitted=row.mySide===1?st.s2:st.s1;
+      const chip=(label,done,color)=>`<span class="my-match-summary-chip" style="border:1.5px solid ${done?color:'#cbd5e1'};background:${done?'#ecfdf5':'#f8fafc'};color:${done?'#166534':'#475569'}">${label} · ${done?'완료':'대기'}</span>`;
+      const pub=st.bothSubmitted?`<span class="my-match-summary-pub" style="border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 오더 공개</span>`:'';
+      return `<div class="my-match-summary-wrap" style="justify-content:flex-start">${chip('내 오더',mySubmitted,'#2563eb')}${chip('상대 오더',oppSubmitted,'#16a34a')}${pub}${getPersonalMatchStartSoonChip(status)}</div>`;
+    })() || (getPersonalMatchStartSoonChip(status)?`<div class="my-match-summary-wrap" style="justify-content:flex-start">${getPersonalMatchStartSoonChip(status)}</div>`:'');
+    const title=`${n1} <span style="color:var(--text3);font-weight:700">vs</span> ${n2}`;
+    const sub=[dl(row.div), info?.label, info?.detail].filter(Boolean).join(' · ');
+    return `<div style="background:white;border:1.5px solid ${isNext?(status.code==='start_soon'?'#ef4444':'#2563eb'):(amIWinner?'#16a34a':'#2563eb')};border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;box-shadow:${isNext?'0 0 0 3px rgba(37,99,235,.12)':'none'}" onclick="goBracketMatch('${tid}','${row.div}','${m.id}')"><div style="flex:1;min-width:220px"><div class="my-match-card-title">${isNext?'<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:.72rem;font-weight:900;margin-right:6px">다음 경기</span>':''}${title}</div><div style="font-size:.78rem;color:var(--text2);margin-top:3px">${sub}</div><div style="font-size:.78rem;color:${status.tone};font-weight:800;margin-top:5px;display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:${status.bg};border:1px solid ${status.border}">${amIWinner?'🏆 내 승리 · ':''}${status.text}</div>${orderSummary}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button class="my-match-toggle-btn" onclick="event.stopPropagation();goBracketMatch('${tid}','${row.div}','${m.id}');" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">해당 경기로</button></div></div>`;
+  }).join(''):`<div style="font-size:.88rem;color:#1e3a8a;font-weight:700">저장된 번호와 일치하는 현재 대회 경기가 없습니다</div>`;
+  return `<div style="padding:10px 12px;background:linear-gradient(135deg,#eef4ff,#fffdf5);border:1.5px solid #93c5fd;border-radius:10px;margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:${cards?8:0}px"><div><div class="my-match-panel-title">📱 개인전 내 경기 모아보기</div><div style="font-size:.8rem;color:#1e3a8a;margin-top:4px;line-height:1.6">저장 번호: <b>${saved}</b> · 현재 대회 ${rows.length}경기</div></div>${headerBtns}</div>${nextCard}${cards}</div>`;
+}
+window.promptPersonalMatchPhone = promptPersonalMatchPhone;
+window.clearPersonalMatchPhone = clearPersonalMatchPhone;
 function getIndividualDisplayLine(team){
   const parts=getIndividualPlayers(team).slice(0,2).map(p=>{
     const name=(p?.name||'').trim()||'-';
@@ -10354,8 +10549,10 @@ function onBrTC(){
 function renderBracket(){
   const tid=ge('brTS').value;
   const selectedDivs=getBracketSelectedDivs(tid);
-  const isAll = !tid ? true : (BR_MULTI_DIVS.includes('__ALL__') || selectedDivs.length === (G.tournaments.find(t=>t.id===tid)?.divisions||[]).length);
+  const currentTournament=G.tournaments.find(t=>t.id===tid);
+  const isAll = !tid ? true : (BR_MULTI_DIVS.includes('__ALL__') || selectedDivs.length === (currentTournament?.divisions||[]).length);
   const div=isAll?'__ALL__':(selectedDivs[0]||'__ALL__');
+  const targetDivs = isAll ? (currentTournament?.divisions||[]) : selectedDivs;
   const cont=ge('bracketContent');
 
   updateFilterBtnUI('bracket', MY_CLUB_FILTER);
@@ -10366,6 +10563,8 @@ function renderBracket(){
     const _bp=ge('page-bracket');
     if(_bp) _bp.insertBefore(_bBanner,_bp.firstChild);
   }
+  const _personalBanner = renderPersonalMatchBanner(tid, targetDivs);
+
   if(MY_CLUB_FILTER&&REG_CLUB){
     const _mbc=baseClub(REG_CLUB);
     const _atid=ge('brTS').value;
@@ -10424,7 +10623,7 @@ function renderBracket(){
       ${_myMatchCards||'<div style="font-size:.9rem;color:#166534;font-weight:700">등록된 경기가 없습니다</div>'}
     </div>`;
   } else {
-    _bBanner.innerHTML='';
+    _bBanner.innerHTML=_personalBanner||'';
   }
 
   if(!tid){
@@ -10432,13 +10631,12 @@ function renderBracket(){
     return;
   }
 
-  const t=G.tournaments.find(t=>t.id===tid);
+  const t=currentTournament;
   if(!t){
     cont.innerHTML='<div class="empty-state card"><div class="empty-icon">🎲</div><p>대회 정보를 찾을 수 없습니다</p></div>';
     return;
   }
 
-  const targetDivs = isAll ? (t.divisions||[]) : selectedDivs;
   targetDivs.forEach(d=>{ ensureAutoTeamMainBracketIfReady(tid,d).then(changed=>{ if(changed) try{ renderBracket(); }catch(e){}; }).catch(()=>{}); });
   const parts = targetDivs.map(d=>renderBracketHTMLForDiv(tid,d,isAll)).filter(Boolean);
   cont.innerHTML = parts.length ? parts.join('<div style="height:14px"></div>') : '<div class="empty-state card"><div class="empty-icon">🎲</div><p>표시할 부서가 없습니다</p></div>';
