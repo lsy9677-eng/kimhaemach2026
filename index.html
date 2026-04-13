@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-12-v188f-time-fix2";
+  const APP_VERSION = "2026-04-13-v189b-round128-lime-only";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -4291,9 +4291,9 @@ function getRoundVisualTheme(label='', phase=''){
   if(safePhase==='playin'){
     return {bg:'#fff7ed', bd:'#ea580c', fg:'#9a3412', chipBg:'#fed7aa', chipFg:'#9a3412', softBg:'#fff7ed', strongBg:'#fed7aa'};
   }
-  // 128강: 진한 자홍(마젠타) — 배경·테두리·텍스트 모두 진하게
+  // 128강: 연두 계열 — 64강 파랑과 명확히 구분
   if(/128강/.test(safeLabel)){
-    return {bg:'#fdf2f8', bd:'#c026d3', fg:'#86198f', chipBg:'#f0abfc', chipFg:'#4a044e', softBg:'#fdf2f8', strongBg:'#e879f9'};
+    return {bg:'#f7fee7', bd:'#65a30d', fg:'#365314', chipBg:'#d9f99d', chipFg:'#365314', softBg:'#f7fee7', strongBg:'#bef264'};
   }
   // 64강: 진한 파랑 — 128강과 명확히 구분
   if(/64강/.test(safeLabel)){
