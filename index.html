@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-14-v194-prelim-court-wait-fix";
+  const APP_VERSION = "2026-04-14-v195-mobile-back-navigation-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -6441,6 +6441,87 @@ function updatePlayersAdminControls(){
   if(regBtns) regBtns.style.display=(AD && regActive)?'flex':'none';
 }
 
+let __APP_NAV_HISTORY_READY = false;
+let __APP_NAV_SUPPRESS_PUSH = false;
+let __APP_MODAL_SYNCING = false;
+const __APP_ROOT_GUARD_TAG = '__root_guard__';
+
+function getActiveModalId(){
+  const modals=[...document.querySelectorAll('.modal-overlay.open')];
+  if(!modals.length) return '';
+  return modals[modals.length-1].id || '';
+}
+function closeTopModal(){
+  const modals=[...document.querySelectorAll('.modal-overlay.open')];
+  if(!modals.length) return false;
+  const top=modals[modals.length-1];
+  if(top?.id) cm(top.id);
+  return true;
+}
+function syncModalStateTo(targetModalId=''){
+  const current=getActiveModalId();
+  if(current===String(targetModalId||'')) return;
+  __APP_MODAL_SYNCING = true;
+  try{
+    document.querySelectorAll('.modal-overlay.open').forEach(el=>{
+      if(!targetModalId || el.id!==targetModalId) cm(el.id);
+    });
+    if(targetModalId){
+      const target=document.getElementById(targetModalId);
+      if(target && !target.classList.contains('open')) om(targetModalId);
+    }
+  }finally{
+    __APP_MODAL_SYNCING = false;
+  }
+}
+function buildAppHistoryState(page, modalId='', isGuard=false){
+  return {__appNav:true, page:String(page||'home'), modalId:String(modalId||''), guard:isGuard?__APP_ROOT_GUARD_TAG:''};
+}
+function appPushHistoryState(page, modalId='', isGuard=false){
+  if(!__APP_NAV_HISTORY_READY) return;
+  try{
+    const state=buildAppHistoryState(page, modalId, isGuard);
+    const hash='#'+encodeURIComponent(String(page||'home'));
+    history.pushState(state, '', hash);
+  }catch(e){}
+}
+function appReplaceHistoryState(page, modalId='', isGuard=false){
+  try{
+    const state=buildAppHistoryState(page, modalId, isGuard);
+    const hash='#'+encodeURIComponent(String(page||'home'));
+    history.replaceState(state, '', hash);
+  }catch(e){}
+}
+function ensureAppHistoryReady(){
+  if(__APP_NAV_HISTORY_READY) return;
+  const current=document.querySelector('.page.active')?.id?.replace('page-','')||'home';
+  appReplaceHistoryState(current, '', false);
+  appPushHistoryState(current, '', true);
+  __APP_NAV_HISTORY_READY = true;
+}
+function handleAppPopState(ev){
+  const state=ev?.state;
+  if(!state || !state.__appNav){
+    __APP_NAV_SUPPRESS_PUSH = true;
+    try{ syncModalStateTo(''); showPage('home'); }finally{ __APP_NAV_SUPPRESS_PUSH = false; }
+    appPushHistoryState('home', '', true);
+    return;
+  }
+  const targetPage=String(state.page||'home');
+  const targetModal=String(state.modalId||'');
+  __APP_NAV_SUPPRESS_PUSH = true;
+  try{
+    syncModalStateTo(targetModal);
+    showPage(targetPage);
+  }finally{
+    __APP_NAV_SUPPRESS_PUSH = false;
+  }
+  if(state.guard===__APP_ROOT_GUARD_TAG){
+    appPushHistoryState(targetPage, targetModal, true);
+  }
+}
+window.addEventListener('popstate', handleAppPopState);
+
 function showPage(n){
   if(isOperatorMode() && ['tournament','register','players'].includes(n)){
     toast('경기진행자 권한에서는 대진표/시합결과만 운영할 수 있습니다','info');
@@ -6497,8 +6578,16 @@ function showPage(n){
   try{ syncTournamentDataForPage(n, getSelectedTournamentIdForPage(n) || getRealtimeTargetTournamentId() || null, false).catch(e=>console.warn('page sync failed', e)); }catch(e){}
   ensureViewerBracketPolling(n, getSelectedTournamentIdForPage(n) || getRealtimeTargetTournamentId() || null);
   refreshRoleUI();
-  // refreshRoleUI가 탭 display를 덮어쓰므로 잠금 재적용
   try{ applyIndivLock(); }catch(e){}
+
+  if(__APP_NAV_HISTORY_READY && !__APP_NAV_SUPPRESS_PUSH){
+    const currentState=history.state||{};
+    const currentPage=String(currentState.page||'');
+    const currentModal=String(currentState.modalId||'');
+    if(currentPage!==String(n) || currentModal){
+      appPushHistoryState(n, '', false);
+    }
+  }
 }
 
 function toggleAdmin(){ closeLoginMenu();
@@ -20433,8 +20522,31 @@ window.mShowTab=function(n){
     }
   });
 };
-function om(id){document.getElementById(id)?.classList.add('open');}
-function cm(id){const el=document.getElementById(id);if(!el)return;el.classList.remove('open');const box=el.querySelector('.modal-box');if(box)box.classList.remove('fullscreen');el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');}
+function om(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.add('open');
+  if(__APP_NAV_HISTORY_READY && !__APP_NAV_SUPPRESS_PUSH && !__APP_MODAL_SYNCING){
+    const curPage=document.querySelector('.page.active')?.id?.replace('page-','')||'home';
+    const state=history.state||{};
+    if(String(state.modalId||'')!==String(id)) appPushHistoryState(curPage, id, false);
+  }
+}
+function cm(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const wasOpen=el.classList.contains('open');
+  el.classList.remove('open');
+  const box=el.querySelector('.modal-box');
+  if(box)box.classList.remove('fullscreen');
+  el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');
+  if(wasOpen && __APP_NAV_HISTORY_READY && !__APP_NAV_SUPPRESS_PUSH && !__APP_MODAL_SYNCING){
+    const state=history.state||{};
+    if(String(state.modalId||'')===String(id)) {
+      try{ history.back(); }catch(e){}
+    }
+  }
+}
 function toggleModalFullscreen(id,btn){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;const isFull=box.classList.toggle('fullscreen');if(btn)btn.textContent=isFull?'🗗':'⛶';}
 function setModalFullscreenState(id,on=true){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;box.classList.toggle('fullscreen',!!on);overlay.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent=on?'🗗':'⛶');}
 
@@ -24272,6 +24384,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   initFB();
   refreshRoleUI();
+  ensureAppHistoryReady();
 });
 
 
