@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-15-v200-elapsed-timer-fix";
+  const APP_VERSION = "2026-04-15-v199-elapsed-clock-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3672,13 +3672,8 @@ function renderPersonalMatchBanner(tid, targetDivs=[]){
     const amIWinner=!!(status.winSide && row.mySide===status.winSide);
     const isNext=nextRow && String(nextRow.match?.id||'')===String(m.id||'') && String(nextRow.div||'')===String(row.div||'');
     const orderSummary=(function(){
-      if(!G.meta.onlineOrderEnabled) return renderPersonalStatusChipRow(status);
-      const st=getOnlineOrderState(key,m);
-      const mySubmitted=row.mySide===1?st.s1:st.s2;
-      const oppSubmitted=row.mySide===1?st.s2:st.s1;
-      const chip=(label,done,color)=>`<span class="my-match-summary-chip" style="border:1.5px solid ${done?color:'#cbd5e1'};background:${done?'#ecfdf5':'#f8fafc'};color:${done?'#166534':'#475569'}">${label} · ${done?'완료':'대기'}</span>`;
-      const pub=st.bothSubmitted?`<span class="my-match-summary-pub" style="border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 오더 공개</span>`:'';
-      return `<div class="my-match-summary-wrap" style="justify-content:flex-start">${chip('내 오더',mySubmitted,'#2563eb')}${chip('상대 오더',oppSubmitted,'#16a34a')}${pub}${getPersonalMatchStartSoonChip(status)}</div>${renderPersonalStatusChipRow(status)}`;
+      // 개인전은 오더 제출 기능이 없으므로 오더 관련 칩을 표시하지 않는다.
+      return renderPersonalStatusChipRow(status);
     })();
     const title=`${n1} <span style="color:var(--text3);font-weight:700">vs</span> ${n2}`;
     const sub=[dl(row.div), info?.label, info?.detail].filter(Boolean).join(' · ');
@@ -6355,8 +6350,7 @@ function courtBoardClockTick(){
 }
 function startCourtBoardClock(){
   if(_courtClockTimer) clearInterval(_courtClockTimer);
-  // 렌더 직후 즉시 한 번 틱 실행 → 렌더링이 반복돼도 경과시간이 리셋되지 않음
-  courtBoardClockTick();
+  // 즉시 실행하면 renderBracket 직후라 0분으로 표시됨 → 첫 틱은 60초 후
   _courtClockTimer = setInterval(courtBoardClockTick, 60000);
 }
 window.courtBoardClockTick = courtBoardClockTick;
