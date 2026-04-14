@@ -11875,8 +11875,8 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     if(firstWaiting){
       const prev=prevState.get(String(firstWaiting.id)) || {waitingFirstAt:'', courts:'[]'};
       const currentCourts=JSON.stringify(Array.isArray(firstWaiting.courts)?firstWaiting.courts:(firstWaiting.court?[firstWaiting.court]:[]));
-      if(prev.waitingFirstAt && prev.courts===currentCourts){
-        firstWaiting.waitingFirstAt=prev.waitingFirstAt;
+      if(prev.courts===currentCourts && (prev.waitingFirstAt || prev.lastWaitingFirstAt)){
+        firstWaiting.waitingFirstAt=prev.waitingFirstAt || prev.lastWaitingFirstAt;
       }else{
         firstWaiting.waitingFirstAt=new Date().toISOString();
         changed=true;
@@ -21889,12 +21889,20 @@ async function saveMatchCourtModal(){
     if(hasOther) waitingCount++;
   });
 
+  const prevCourtsJson = JSON.stringify(Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]));
+  const nextCourtsJson = JSON.stringify((courts||[]).filter(Boolean));
+  const sameCourts = prevCourtsJson===nextCourtsJson;
+  const nowIso = new Date().toISOString();
+  const assignedAt = (sameCourts && m.courtAssignedAt) ? m.courtAssignedAt : nowIso;
+  const queueOrder = (sameCourts && m.courtQueueOrder) ? m.courtQueueOrder : assignedAt;
   m.courts=courts;
   m.court=courts[0]||'';
-  m.courtAssignedAt=new Date().toISOString();
-  m.courtQueueOrder=m.courtAssignedAt;
-  delete m.waitingFirstAt;
-  if(isIndividualByKey(key) && courts[0]){ m.manualCourtTarget=String(courts[0]); m.manualCourtPinnedAt=m.courtAssignedAt; }
+  m.courtAssignedAt=assignedAt;
+  m.courtQueueOrder=queueOrder;
+  if(!courts.length){
+    delete m.waitingFirstAt;
+  }
+  if(isIndividualByKey(key) && courts[0]){ m.manualCourtTarget=String(courts[0]); m.manualCourtPinnedAt=assignedAt; }
   else if(isIndividualByKey(key) && !courts[0]){ delete m.manualCourtTarget; delete m.manualCourtPinnedAt; }
   sl(true);
   try{
@@ -21918,12 +21926,18 @@ async function setCourt(key, mid, value){
   if(!m) return;
   const allowedCourts=getAllowedCourtsForMatch(key,m);
   if(value && allowedCourts.length && !allowedCourts.includes(value)){ toast('해당 조에 배정된 코트만 선택할 수 있습니다','error'); return; }
+  const prevCourtsJson = JSON.stringify(Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]));
+  const nextCourtsJson = JSON.stringify(value ? [value] : []);
+  const sameCourts = prevCourtsJson===nextCourtsJson;
+  const nowIso = new Date().toISOString();
+  const assignedAt = (sameCourts && m.courtAssignedAt) ? m.courtAssignedAt : nowIso;
+  const queueOrder = (sameCourts && m.courtQueueOrder) ? m.courtQueueOrder : assignedAt;
   m.court = value || '';
   m.courts = value ? [value] : [];
-  m.courtAssignedAt=new Date().toISOString();
-  m.courtQueueOrder=m.courtAssignedAt;
-  delete m.waitingFirstAt;
-  if(isIndividualByKey(key) && value){ m.manualCourtTarget=String(value); m.manualCourtPinnedAt=m.courtAssignedAt; }
+  m.courtAssignedAt=assignedAt;
+  m.courtQueueOrder=queueOrder;
+  if(!value) delete m.waitingFirstAt;
+  if(isIndividualByKey(key) && value){ m.manualCourtTarget=String(value); m.manualCourtPinnedAt=assignedAt; }
   else if(isIndividualByKey(key) && !value){ delete m.manualCourtTarget; delete m.manualCourtPinnedAt; }
   sl(true);
   try{
