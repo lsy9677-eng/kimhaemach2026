@@ -1406,6 +1406,68 @@ body.slider-ready .page:not(.active){
 .court-wait-priority{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:#0f1e3a;color:#fff;font-size:.68rem;font-weight:900;line-height:1;}
 .court-drop-hint{margin-top:6px;font-size:.68rem;color:#64748b;}
 
+
+/* === mobile bottom tab navigation === */
+@media (max-width: 768px){
+  .nav-tabs{
+    display:none !important;
+  }
+  #swipeDots,
+  .swipe-indicator{
+    display:none !important;
+  }
+  body{
+    padding-bottom:78px !important;
+  }
+  .main-content{
+    padding-bottom:96px !important;
+  }
+  .bottom-tab-bar{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:99999;
+    display:flex;
+    align-items:stretch;
+    justify-content:space-between;
+    height:66px;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:linear-gradient(180deg,#091225 0%, #0f1e3a 100%);
+    border-top:1px solid rgba(255,255,255,.14);
+    box-shadow:0 -8px 24px rgba(0,0,0,.22);
+  }
+  .bottom-tab-bar button{
+    flex:1 1 16.66%;
+    min-width:0;
+    border:none;
+    background:transparent;
+    color:rgba(255,255,255,.72);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    font-family:'Noto Sans KR',sans-serif;
+    font-size:11px;
+    font-weight:800;
+    line-height:1.1;
+    cursor:pointer;
+  }
+  .bottom-tab-bar button .icon{
+    font-size:16px;
+    line-height:1;
+  }
+  .bottom-tab-bar button.active{
+    color:#facc15;
+  }
+}
+@media (min-width: 769px){
+  .bottom-tab-bar{
+    display:none !important;
+  }
+}
+
 </style>
 
 <!-- PWA -->
@@ -5791,6 +5853,68 @@ function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='
   #mainStep2 > div > div:last-child > div:first-child{
     font-size:.86rem!important;
     margin-bottom:4px!important;
+  }
+}
+
+
+/* === mobile bottom tab navigation === */
+@media (max-width: 768px){
+  .nav-tabs{
+    display:none !important;
+  }
+  #swipeDots,
+  .swipe-indicator{
+    display:none !important;
+  }
+  body{
+    padding-bottom:78px !important;
+  }
+  .main-content{
+    padding-bottom:96px !important;
+  }
+  .bottom-tab-bar{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:99999;
+    display:flex;
+    align-items:stretch;
+    justify-content:space-between;
+    height:66px;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:linear-gradient(180deg,#091225 0%, #0f1e3a 100%);
+    border-top:1px solid rgba(255,255,255,.14);
+    box-shadow:0 -8px 24px rgba(0,0,0,.22);
+  }
+  .bottom-tab-bar button{
+    flex:1 1 16.66%;
+    min-width:0;
+    border:none;
+    background:transparent;
+    color:rgba(255,255,255,.72);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    font-family:'Noto Sans KR',sans-serif;
+    font-size:11px;
+    font-weight:800;
+    line-height:1.1;
+    cursor:pointer;
+  }
+  .bottom-tab-bar button .icon{
+    font-size:16px;
+    line-height:1;
+  }
+  .bottom-tab-bar button.active{
+    color:#facc15;
+  }
+}
+@media (min-width: 769px){
+  .bottom-tab-bar{
+    display:none !important;
   }
 }
 
@@ -25211,6 +25335,68 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 }
 
+
+/* === mobile bottom tab navigation === */
+@media (max-width: 768px){
+  .nav-tabs{
+    display:none !important;
+  }
+  #swipeDots,
+  .swipe-indicator{
+    display:none !important;
+  }
+  body{
+    padding-bottom:78px !important;
+  }
+  .main-content{
+    padding-bottom:96px !important;
+  }
+  .bottom-tab-bar{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:99999;
+    display:flex;
+    align-items:stretch;
+    justify-content:space-between;
+    height:66px;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:linear-gradient(180deg,#091225 0%, #0f1e3a 100%);
+    border-top:1px solid rgba(255,255,255,.14);
+    box-shadow:0 -8px 24px rgba(0,0,0,.22);
+  }
+  .bottom-tab-bar button{
+    flex:1 1 16.66%;
+    min-width:0;
+    border:none;
+    background:transparent;
+    color:rgba(255,255,255,.72);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    font-family:'Noto Sans KR',sans-serif;
+    font-size:11px;
+    font-weight:800;
+    line-height:1.1;
+    cursor:pointer;
+  }
+  .bottom-tab-bar button .icon{
+    font-size:16px;
+    line-height:1;
+  }
+  .bottom-tab-bar button.active{
+    color:#facc15;
+  }
+}
+@media (min-width: 769px){
+  .bottom-tab-bar{
+    display:none !important;
+  }
+}
+
 </style>
 
 <script>
@@ -26021,6 +26207,68 @@ function _buildPrelimPopupHtml(ctx, mode){
     .group-grid{ gap:3px; }
     .group-grid.cols-5{ grid-template-columns:repeat(5, minmax(0,1fr)); }
   }
+
+/* === mobile bottom tab navigation === */
+@media (max-width: 768px){
+  .nav-tabs{
+    display:none !important;
+  }
+  #swipeDots,
+  .swipe-indicator{
+    display:none !important;
+  }
+  body{
+    padding-bottom:78px !important;
+  }
+  .main-content{
+    padding-bottom:96px !important;
+  }
+  .bottom-tab-bar{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:99999;
+    display:flex;
+    align-items:stretch;
+    justify-content:space-between;
+    height:66px;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:linear-gradient(180deg,#091225 0%, #0f1e3a 100%);
+    border-top:1px solid rgba(255,255,255,.14);
+    box-shadow:0 -8px 24px rgba(0,0,0,.22);
+  }
+  .bottom-tab-bar button{
+    flex:1 1 16.66%;
+    min-width:0;
+    border:none;
+    background:transparent;
+    color:rgba(255,255,255,.72);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    font-family:'Noto Sans KR',sans-serif;
+    font-size:11px;
+    font-weight:800;
+    line-height:1.1;
+    cursor:pointer;
+  }
+  .bottom-tab-bar button .icon{
+    font-size:16px;
+    line-height:1;
+  }
+  .bottom-tab-bar button.active{
+    color:#facc15;
+  }
+}
+@media (min-width: 769px){
+  .bottom-tab-bar{
+    display:none !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -26085,6 +26333,64 @@ document.addEventListener('DOMContentLoaded',()=>{
   }catch(e){ console.error(e); }
 });
 ${scriptClose}
+
+<div class="bottom-tab-bar" id="bottomTabBar">
+  <button type="button" data-page="home"><span class="icon">🏠</span><span>홈</span></button>
+  <button type="button" data-page="tournament"><span class="icon">🏆</span><span>대회관리</span></button>
+  <button type="button" data-page="register"><span class="icon">📋</span><span>팀등록</span></button>
+  <button type="button" data-page="bracket"><span class="icon">🎾</span><span>대진표</span></button>
+  <button type="button" data-page="players"><span class="icon">👤</span><span>기록</span></button>
+  <button type="button" data-page="ranking"><span class="icon">📊</span><span>결과</span></button>
+</div>
+
+<script>
+(function(){
+  function syncBottomTabActive(){
+    var active = document.querySelector('.nav-tab.active');
+    var page = active ? active.getAttribute('data-page') : 'home';
+    document.querySelectorAll('#bottomTabBar button').forEach(function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-page') === page);
+    });
+  }
+
+  function initBottomTabs(){
+    var bar = document.getElementById('bottomTabBar');
+    if(!bar) return;
+
+    bar.querySelectorAll('button[data-page]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var page = btn.getAttribute('data-page') || 'home';
+        if(typeof showPage === 'function'){
+          showPage(page);
+          setTimeout(syncBottomTabActive, 30);
+          setTimeout(syncBottomTabActive, 200);
+        }
+      });
+    });
+
+    document.querySelectorAll('.nav-tab').forEach(function(tab){
+      tab.addEventListener('click', function(){
+        setTimeout(syncBottomTabActive, 30);
+        setTimeout(syncBottomTabActive, 200);
+      });
+    });
+
+    syncBottomTabActive();
+
+    var obs = new MutationObserver(syncBottomTabActive);
+    document.querySelectorAll('.nav-tab').forEach(function(tab){
+      obs.observe(tab, {attributes:true, attributeFilter:['class']});
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initBottomTabs);
+  }else{
+    initBottomTabs();
+  }
+})();
+</script>
+
 </body>
 </html>`;
 }
@@ -26282,6 +26588,64 @@ function exportPrelimImage(){
       popHandling = false;
     }
   });
+})();
+</script>
+
+
+<div class="bottom-tab-bar" id="bottomTabBar">
+  <button type="button" data-page="home"><span class="icon">🏠</span><span>홈</span></button>
+  <button type="button" data-page="tournament"><span class="icon">🏆</span><span>대회관리</span></button>
+  <button type="button" data-page="register"><span class="icon">📋</span><span>팀등록</span></button>
+  <button type="button" data-page="bracket"><span class="icon">🎾</span><span>대진표</span></button>
+  <button type="button" data-page="players"><span class="icon">👤</span><span>기록</span></button>
+  <button type="button" data-page="ranking"><span class="icon">📊</span><span>결과</span></button>
+</div>
+
+<script>
+(function(){
+  function syncBottomTabActive(){
+    var active = document.querySelector('.nav-tab.active');
+    var page = active ? active.getAttribute('data-page') : 'home';
+    document.querySelectorAll('#bottomTabBar button').forEach(function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-page') === page);
+    });
+  }
+
+  function initBottomTabs(){
+    var bar = document.getElementById('bottomTabBar');
+    if(!bar) return;
+
+    bar.querySelectorAll('button[data-page]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var page = btn.getAttribute('data-page') || 'home';
+        if(typeof showPage === 'function'){
+          showPage(page);
+          setTimeout(syncBottomTabActive, 30);
+          setTimeout(syncBottomTabActive, 200);
+        }
+      });
+    });
+
+    document.querySelectorAll('.nav-tab').forEach(function(tab){
+      tab.addEventListener('click', function(){
+        setTimeout(syncBottomTabActive, 30);
+        setTimeout(syncBottomTabActive, 200);
+      });
+    });
+
+    syncBottomTabActive();
+
+    var obs = new MutationObserver(syncBottomTabActive);
+    document.querySelectorAll('.nav-tab').forEach(function(tab){
+      obs.observe(tab, {attributes:true, attributeFilter:['class']});
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initBottomTabs);
+  }else{
+    initBottomTabs();
+  }
 })();
 </script>
 
