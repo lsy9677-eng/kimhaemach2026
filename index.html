@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-13-v193-personal-next-match-group-first";
+  const APP_VERSION = "2026-04-14-v194-prelim-court-wait-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -11572,9 +11572,10 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     const preservedItems=[...(preservedByCourt[court]||[])];
     const items=[...(fixedItems[court]||[])].filter(item=>!(item && item.match && (manualIds.has(String(item.match.id)) || preservedIds.has(String(item.match.id)))));
     const manualItems=(manualByCourt[court]||[]).map(m=>({match:m, autoLabel:String(m.autoCourtLabel||'')}));
-    const visibleSlotsLeft=Math.max(0, 2 - preservedItems.length);
+    const hasGroupFixedItems = items.some(item=>String(item?.match?.phase||'')==='group');
+    const visibleSlotsLeft=hasGroupFixedItems ? Number.POSITIVE_INFINITY : Math.max(0, 2 - preservedItems.length);
     const visibleItems=items.slice(0, visibleSlotsLeft);
-    const overflowItems=items.slice(visibleSlotsLeft);
+    const overflowItems=hasGroupFixedItems ? [] : items.slice(visibleSlotsLeft);
     overflowItems.forEach(item=>pushCarryToShared(court, item));
     const preservedMainCount = preservedItems.filter(item=>String(item?.match?.phase||'')!=='group').length;
     const freshMainCount = visibleItems.filter(item=>String(item?.match?.phase||'')!=='group').length;
