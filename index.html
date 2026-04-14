@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-14-v196-bracket-a4-sync-from-matchapp";
+  const APP_VERSION = "2026-04-15-v197-court-card-disappear-time-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -3514,30 +3514,70 @@ function getPersonalizedIndividualMatches(tid, divs, digits=''){
 }
 function getPersonalMatchStatusLabel(key, m){
   const st=getMatchResultState(key,m);
+  const targetId=String(m?.id||'');
   const courts=getMatchCourtsForStatusBoard(key,m)||[];
   const courtTxt=courts.length?` · 🎾 ${courts.join('/')}`:'';
+  const makeStatus=(text,tone,bg,border,code,priority,waitingOrder,extra={})=>({text,tone,bg,border,code,priority,waitingOrder,...extra});
   if(st.done){
     const winSide=st.winner===m.t1?1:(st.winner===m.t2?2:0);
-    return {text:`경기 완료${courtTxt}`, tone:'#166534', bg:'#dcfce7', border:'#86efac', winSide, code:'done', priority:90, waitingOrder:999};
+    return makeStatus(`경기 완료${courtTxt}`,'#166534','#dcfce7','#86efac','done',90,999,{winSide});
   }
   if(st.started){
-    return {text:`경기중 ${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}${courtTxt}`, tone:'#b45309', bg:'#fff7ed', border:'#fdba74', winSide:0, code:'live', priority:0, waitingOrder:0};
+    return makeStatus(`경기중 ${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}${courtTxt}`,'#b45309','#fff7ed','#fdba74','live',0,0,{winSide:0});
   }
-  if(courts.length){
-    const queue=getCourtQueueInfo(key,courts[0]);
-    const currentId=String(queue?.active?.id||'');
-    if(currentId===String(m?.id||'')){
-      return {text:`곧 시작${courtTxt}`, tone:'#92400e', bg:'#fff7ed', border:'#fdba74', winSide:0, code:'start_soon', priority:1, waitingOrder:0};
+  const buildQueueStatus=(courtList)=>{
+    if(!courtList.length) return null;
+    for(const court of courtList){
+      const queue=getCourtQueueInfo(key,court);
+      const currentId=String(queue?.active?.id||'');
+      if(currentId===targetId){
+        return makeStatus(`곧 시작 · 🎾 ${court}`,'#92400e','#fff7ed','#fdba74','start_soon',1,0,{court,winSide:0});
+      }
+      const waiting=(queue?.waiting||[]).map(x=>String(x?.id||''));
+      const idx=waiting.indexOf(targetId);
+      if(idx>=0){
+        const isSoon=idx===0;
+        return makeStatus(`코트 대기 ${idx+1}번 · 🎾 ${court}`,isSoon?'#92400e':'#9a3412','#fff7ed','#fdba74',isSoon?'start_soon':'court_wait',isSoon?2:(10+idx),idx+1,{court,winSide:0});
+      }
     }
-    const waiting=(queue?.waiting||[]).map(x=>String(x?.id||''));
-    const idx=waiting.indexOf(String(m?.id||''));
-    if(idx>=0){
-      const isSoon=idx===0;
-      return {text:`코트 대기 ${idx+1}번${courtTxt}`, tone:isSoon?'#92400e':'#9a3412', bg:'#fff7ed', border:'#fdba74', winSide:0, code:isSoon?'start_soon':'court_wait', priority:isSoon?2:(10+idx), waitingOrder:idx+1};
-    }
-    return {text:`코트 배정 완료${courtTxt}`, tone:'#7c3aed', bg:'#f5f3ff', border:'#c4b5fd', winSide:0, code:'assigned', priority:20, waitingOrder:98};
+    return courtList.length ? makeStatus(`코트 배정 완료 · 🎾 ${courtList.join('/')}`,'#7c3aed','#f5f3ff','#c4b5fd','assigned',20,98,{court:courtList[0],winSide:0}) : null;
+  };
+  const directStatus=buildQueueStatus(courts);
+  if(directStatus) return directStatus;
+
+  if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
+    try{
+      const snapshots=getCourtStatusSnapshot(key)||[];
+      for(const item of snapshots){
+        const court=String(item?.court||'').trim();
+        if(!court) continue;
+        const currentId=String(item?.current?.id||'');
+        if(currentId===targetId){
+          return makeStatus(`곧 시작 · 🎾 ${court}`,'#92400e','#fff7ed','#fdba74','start_soon',1,0,{court,winSide:0});
+        }
+        const waiting=(item?.waiting||[]).map(x=>String(x?.id||''));
+        const idx=waiting.indexOf(targetId);
+        if(idx>=0){
+          const isSoon=idx===0;
+          return makeStatus(`코트 대기 ${idx+1}번 · 🎾 ${court}`,isSoon?'#92400e':'#9a3412','#fff7ed','#fdba74',isSoon?'start_soon':'court_wait',isSoon?2:(10+idx),idx+1,{court,winSide:0});
+        }
+      }
+      const shared=(typeof getVisibleSharedWaitingOrderForAssign==='function'
+        ? (getVisibleSharedWaitingOrderForAssign(key)||[])
+        : (typeof getIndividualAutoSharedWaitingItems==='function' ? (getIndividualAutoSharedWaitingItems(key)||[]) : []));
+      const sIdx=shared.findIndex(x=>String(x?.id||'')===targetId);
+      if(sIdx>=0){
+        const entry=shared[sIdx]||{};
+        const targetCourt=String(entry.__sharedCourtLabel||entry.manualCourtTarget||'').trim();
+        return makeStatus(`공용 대기 ${sIdx+1}번${targetCourt?` · 🎾 ${targetCourt}`:''}`,'#1d4ed8','#eff6ff','#93c5fd','shared_wait',40+sIdx,sIdx+1,{court:targetCourt,winSide:0});
+      }
+      const pinnedCourt=String(m?.manualCourtTarget||'').trim();
+      if(pinnedCourt){
+        return makeStatus(`코트 배정 완료 · 🎾 ${pinnedCourt}`,'#7c3aed','#f5f3ff','#c4b5fd','assigned',20,98,{court:pinnedCourt,winSide:0});
+      }
+    }catch(e){}
   }
-  return {text:`경기 대기${courtTxt}`, tone:'#1d4ed8', bg:'#eff6ff', border:'#93c5fd', winSide:0, code:'waiting', priority:30, waitingOrder:99};
+  return makeStatus(`경기 대기${courtTxt}`,'#1d4ed8','#eff6ff','#93c5fd','waiting',30,99,{winSide:0});
 }
 function getPersonalMatchStartSoonChip(status){
   if(!status) return '';
@@ -3547,7 +3587,20 @@ function getPersonalMatchStartSoonChip(status){
   if(status.code==='start_soon'){
     return `<span class="my-match-summary-chip" style="border:1.5px solid #ef4444;background:#fef2f2;color:#b91c1c">⏰ 곧 시작</span>`;
   }
+  if(status.code==='court_wait'){
+    return `<span class="my-match-summary-chip" style="border:1.5px solid #f59e0b;background:#fff7ed;color:#9a3412">⏳ 코트 대기</span>`;
+  }
+  if(status.code==='shared_wait'){
+    return `<span class="my-match-summary-chip" style="border:1.5px solid #60a5fa;background:#eff6ff;color:#1d4ed8">📋 공용 대기</span>`;
+  }
   return '';
+}
+function renderPersonalStatusChipRow(status){
+  if(!status) return '';
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">
+    <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:${status.bg};border:1px solid ${status.border};font-size:.8rem;font-weight:900;color:${status.tone}">${status.text}</span>
+    ${getPersonalMatchStartSoonChip(status)}
+  </div>`;
 }
 function getPersonalNextMatchRow(rows=[]){
   const pending=(rows||[]).filter(row=>row && row.status && row.status.code!=='done');
@@ -3586,10 +3639,7 @@ function renderPersonalNextMatchCard(row){
         <div style="font-size:.76rem;font-weight:900;color:#1d4ed8;letter-spacing:.02em">📌 내 다음 경기</div>
         <div style="font-size:1rem;font-weight:900;color:var(--primary-dark);line-height:1.4;margin-top:4px">${n1} <span style="color:var(--text3);font-weight:700">vs</span> ${n2}</div>
         <div style="font-size:.78rem;color:var(--text2);margin-top:4px;line-height:1.55">${detail}</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">
-          <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:${status.bg};border:1px solid ${status.border};font-size:.8rem;font-weight:900;color:${status.tone}">${status.text}</span>
-          ${soonChip}
-        </div>
+        ${renderPersonalStatusChipRow(status)}
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <button class="my-match-toggle-btn" onclick="event.stopPropagation();goBracketMatch('${row.tid}','${row.div}','${m.id}');" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">해당 경기로</button>
@@ -3622,14 +3672,14 @@ function renderPersonalMatchBanner(tid, targetDivs=[]){
     const amIWinner=!!(status.winSide && row.mySide===status.winSide);
     const isNext=nextRow && String(nextRow.match?.id||'')===String(m.id||'') && String(nextRow.div||'')===String(row.div||'');
     const orderSummary=(function(){
-      if(!G.meta.onlineOrderEnabled) return '';
+      if(!G.meta.onlineOrderEnabled) return renderPersonalStatusChipRow(status);
       const st=getOnlineOrderState(key,m);
       const mySubmitted=row.mySide===1?st.s1:st.s2;
       const oppSubmitted=row.mySide===1?st.s2:st.s1;
       const chip=(label,done,color)=>`<span class="my-match-summary-chip" style="border:1.5px solid ${done?color:'#cbd5e1'};background:${done?'#ecfdf5':'#f8fafc'};color:${done?'#166534':'#475569'}">${label} · ${done?'완료':'대기'}</span>`;
       const pub=st.bothSubmitted?`<span class="my-match-summary-pub" style="border:1.5px solid #16a34a;background:#dcfce7;color:#166534">🔓 오더 공개</span>`:'';
-      return `<div class="my-match-summary-wrap" style="justify-content:flex-start">${chip('내 오더',mySubmitted,'#2563eb')}${chip('상대 오더',oppSubmitted,'#16a34a')}${pub}${getPersonalMatchStartSoonChip(status)}</div>`;
-    })() || (getPersonalMatchStartSoonChip(status)?`<div class="my-match-summary-wrap" style="justify-content:flex-start">${getPersonalMatchStartSoonChip(status)}</div>`:'');
+      return `<div class="my-match-summary-wrap" style="justify-content:flex-start">${chip('내 오더',mySubmitted,'#2563eb')}${chip('상대 오더',oppSubmitted,'#16a34a')}${pub}${getPersonalMatchStartSoonChip(status)}</div>${renderPersonalStatusChipRow(status)}`;
+    })();
     const title=`${n1} <span style="color:var(--text3);font-weight:700">vs</span> ${n2}`;
     const sub=[dl(row.div), info?.label, info?.detail].filter(Boolean).join(' · ');
     return `<div style="background:white;border:1.5px solid ${isNext?(status.code==='start_soon'?'#ef4444':'#2563eb'):(amIWinner?'#16a34a':'#2563eb')};border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;box-shadow:${isNext?'0 0 0 3px rgba(37,99,235,.12)':'none'}" onclick="goBracketMatch('${tid}','${row.div}','${m.id}')"><div style="flex:1;min-width:220px"><div class="my-match-card-title">${isNext?'<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:.72rem;font-weight:900;margin-right:6px">다음 경기</span>':''}${title}</div><div style="font-size:.78rem;color:var(--text2);margin-top:3px">${sub}</div><div style="font-size:.78rem;color:${status.tone};font-weight:800;margin-top:5px;display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:${status.bg};border:1px solid ${status.border}">${amIWinner?'🏆 내 승리 · ':''}${status.text}</div>${orderSummary}</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button class="my-match-toggle-btn" onclick="event.stopPropagation();goBracketMatch('${tid}','${row.div}','${m.id}');" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">해당 경기로</button></div></div>`;
@@ -4632,22 +4682,44 @@ async function moveCourtQueueCard(key, mid, targetCourt){
     m.manualSharedHold=true;
     m.manualCourtPinnedAt=new Date().toISOString();
   }
+  const nowIso = new Date().toISOString();
   if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
     if(court){
+      // [BUG FIX] rebuild 전에 m.courts/m.court를 즉시 설정해두어야
+      // renderBracket() 시점에 snapshot에서 카드가 사라지지 않는다.
+      m.courts=[court];
+      m.court=court;
+      if(!m.courtAssignedAt) m.courtAssignedAt=nowIso;
       ensureIndividualAutoCourtAssignmentsForKey(key);
+      // rebuild 후에도 m.courts가 올바르게 설정됐는지 보장
+      if(!Array.isArray(m.courts)||!m.courts.length){ m.courts=[court]; m.court=court; }
     }else{
       m.courts=[];
       m.court='';
       delete m.courtAssignedAt;
       delete m.autoCourtLabel;
+      delete m.waitingFirstAt;
     }
   }else{
     if(court){
+      const prevCourt=String(m.court||'').trim();
+      const isNewCourt = prevCourt!==court;
       m.courts=[court];
       m.court=court;
-      m.courtAssignedAt=new Date().toISOString();
+      if(!m.courtAssignedAt || isNewCourt) m.courtAssignedAt=nowIso;
+      // [BUG FIX] 코트 대기열로 이동할 때 waitingFirstAt 기록
+      const currentOnCourt=(G.matches[key]||[]).find(x=>
+        x.winner==null && String(x.id)!==String(mid) &&
+        (Array.isArray(x.courts)?x.courts:[x.court||'']).includes(court) &&
+        String(x.courtQueueOrder||x.courtAssignedAt||'') < String(m.courtAssignedAt||nowIso)
+      );
+      if(currentOnCourt){
+        if(!m.waitingFirstAt) m.waitingFirstAt=nowIso;
+      }else{
+        delete m.waitingFirstAt;
+      }
     }else{
-      m.courts=[]; m.court=''; delete m.courtAssignedAt;
+      m.courts=[]; m.court=''; delete m.courtAssignedAt; delete m.waitingFirstAt;
     }
   }
   sl(true);
@@ -11542,6 +11614,9 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     m.courtQueueOrder=queueOrder;
     if(item.autoLabel) m.autoCourtLabel=item.autoLabel; else delete m.autoCourtLabel;
     m.manualSharedHold=false;
+    // [BUG FIX] rebuild 시 prevState에 저장된 waitingFirstAt/lastWaitingFirstAt 복원
+    if(prev.waitingFirstAt) m.waitingFirstAt=prev.waitingFirstAt; else delete m.waitingFirstAt;
+    if(prev.lastWaitingFirstAt) m.lastWaitingFirstAt=prev.lastWaitingFirstAt; else delete m.lastWaitingFirstAt;
     assignedIds.add(String(m.id));
   };
 
@@ -11669,17 +11744,17 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     const preservedMainCount = preservedItems.filter(item=>String(item?.match?.phase||'')!=='group').length;
     const freshMainCount = visibleItems.filter(item=>String(item?.match?.phase||'')!=='group').length;
 
+    // [BUG FIX] 수동 배정(manualItems)은 슬롯 제한 없이 항상 최우선으로 assign한다.
+    // 기존에는 (2 - preservedItems - visibleItems) 슬롯이 남을 때만 assign되어
+    // 코트에 이미 2경기가 있으면 수동 배정 카드가 완전히 무시되는 버그가 있었다.
+    manualItems.forEach(item=>assign(court,item,true));
+
     if(preservedItems.length){
       hasPendingGroups = hasPendingGroups || preservedItems.some(item=>String(item?.match?.phase||'')==='group');
       preservedItems.forEach(item=>assign(court,item));
       visibleItems.forEach(item=>assign(court,item));
-      manualItems.slice(0, Math.max(0, 2 - preservedItems.length - visibleItems.length)).forEach(item=>assign(court,item,true));
       const alreadyFilledMain = preservedMainCount + freshMainCount;
-      // 공용대기 채우기 여유 계산: fixedItems(코트 전담 그룹 경기)는 제외하고
-      // preservedItems(이전 배정 보존 경기)만 기준으로 한다.
-      // fixedItems는 이 코트 전담 그룹의 경기이므로 공용대기 슬롯과 무관하다.
       const alreadyFilledGroup = preservedItems.filter(item=>String(item?.match?.phase||'')==='group').length;
-      // 빈 코트가 먼저 채워져야 하므로, 이미 진행중/배정된 코트의 추가 대기 채우기는 2차 패스로 미룬다.
       delayedFillBusyCourts.push({
         court,
         maxFill: groupWorkActive ? Math.max(0, 1 - alreadyFilledGroup) : Math.max(0, 1 - alreadyFilledMain),
@@ -11690,13 +11765,8 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
     if(items.length){
       hasPendingGroups = hasPendingGroups || items.some(item=>String(item?.match?.phase||'')==='group');
       visibleItems.forEach(item=>assign(court,item));
-      manualItems.slice(0, Math.max(0, 2 - visibleItems.length)).forEach(item=>assign(court,item,true));
       const alreadyFilledMain = freshMainCount;
-      // fixedItems는 이 코트 전담 그룹의 경기. 공용대기 슬롯은 fixedItems 중
-      // 마지막 대기 경기 이후부터 가능하므로, preserved가 없는 경우(신규 배정)
-      // 공용대기 채우기 여유를 1로 고정해 1경기를 당겨온다.
       const alreadyFilledGroup = Math.min(1, items.filter(item=>String(item?.match?.phase||'')==='group').length);
-      // 빈 코트 우선 원칙: 현재 경기/배정이 있는 코트의 추가 대기는 나중에 채운다.
       delayedFillBusyCourts.push({
         court,
         maxFill: groupWorkActive ? Math.max(0, 1 - alreadyFilledGroup) : Math.max(0, 1 - alreadyFilledMain),
@@ -11705,16 +11775,11 @@ function rebuildIndividualAutoCourtAssignmentsForKey(key){
       return;
     }
     // 예선(group) 작업이 남아 있을 때만 빈 코트에 공용대기 1경기를 먼저 올린다.
-    // 본선(main/playin)은 아래 stageQueues 라운드로빈 단계에서 한 번에 균등 배정해야 한다.
-    // 여기서 먼저 3개씩 채워버리면 1,2번 코트에만 몰리고 7,8번 코트가 비게 된다.
     const filledFromPending = groupWorkActive ? appendNextPendingToCourt(court, 1) : false;
     if(filledFromPending){
-      manualItems.forEach(item=>assign(court,item,true));
-      return;
+      return; // manualItems는 이미 위에서 assign 완료
     }
-    if(manualItems.length){
-      deferredManualByCourt[court]=manualItems;
-    }
+    // manualItems는 이미 위에서 assign 완료
   });
   if(sharedCarry.length) sharedEntries.push(...sharedCarry);
   delayedFillBusyCourts.forEach(({court,maxFill})=>{
@@ -12598,11 +12663,14 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const dispSc1=st2.disp1??sc1, dispSc2=st2.disp2??sc2;
     const sideWrap1Style=done&&wn1?'padding:10px;border:1.5px solid #86efac;border-radius:12px;background:linear-gradient(135deg,#ecfdf5,#dcfce7);min-width:0;overflow:hidden':done&&wn2?'padding:10px;border:1.5px solid #fecaca;border-radius:12px;background:linear-gradient(135deg,#fff7f7,#fef2f2);min-width:0;overflow:hidden':'padding:10px;border:1.5px solid var(--border);border-radius:12px;background:#fff;min-width:0;overflow:hidden';
     const sideWrap2Style=done&&wn2?'padding:10px;border:1.5px solid #86efac;border-radius:12px;background:linear-gradient(135deg,#ecfdf5,#dcfce7);min-width:0;overflow:hidden':done&&wn1?'padding:10px;border:1.5px solid #fecaca;border-radius:12px;background:linear-gradient(135deg,#fff7f7,#fef2f2);min-width:0;overflow:hidden':'padding:10px;border:1.5px solid var(--border);border-radius:12px;background:#fff;min-width:0;overflow:hidden';
+    const personalStatus = getPersonalMatchStatusLabel(key,m);
+    const statusMainChip = `<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:${personalStatus.bg};border:1px solid ${personalStatus.border};font-size:.78rem;font-weight:900;color:${personalStatus.tone}">${personalStatus.text}</span>`;
+    const statusSoonChip = getPersonalMatchStartSoonChip(personalStatus);
     return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${done?(wn1?'border:2px solid #86efac;box-shadow:0 0 0 3px rgba(22,163,74,.08)':wn2?'border:2px solid #86efac;box-shadow:0 0 0 3px rgba(22,163,74,.08)':''):(MY_CLUB_FILTER?'':'border:1.5px solid var(--border);box-shadow:none')}">
       <div class="m3body" style="padding:12px 14px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label||'1경기'}</span></div>
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:`<span class="badge bg-gray" style="font-size:.78rem;padding:3px 9px">대기</span>`}${btn}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${statusMainChip}${statusSoonChip}${done?`<span class="badge bg-green" style="font-size:.78rem;padding:3px 9px">완료</span>`:''}${btn}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">${groupCourtUI}${matchCourtUI}${matchMemoUI}${grpCourtShareBadges}</div>
         ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}
@@ -18601,7 +18669,29 @@ function goBracketMatch(tid,div,matchId){
     return;
   }
 
-  // 내 클럽만 보기 상태는 사용자가 직접 해제하기 전까지 유지
+  const matchList=(G.matches?.[matchKey]||[]);
+  const targetMatch=matchList.find(m=>String(m?.id||m?._id||'')===String(matchId)) || null;
+  const ensureTargetSectionOpen=()=>{
+    try{
+      if(targetMatch && String(targetMatch.phase||'')==='group'){
+        window.BRACKET_PRELIM_TOGGLE = window.BRACKET_PRELIM_TOGGLE || {};
+        window.BRACKET_PRELIM_TOGGLE[matchKey] = false;
+        try{ setIndividualGroupMatchesOpen(matchKey, Number(targetMatch.group||0), true); }catch(e){}
+      }
+      if(targetMatch && (String(targetMatch.phase||'')==='main' || String(targetMatch.phase||'')==='playin' || String(targetMatch.phase||'')==='bronze')){
+        window.BRACKET_MAIN_TOGGLE = window.BRACKET_MAIN_TOGGLE || {};
+        window.BRACKET_MAIN_TOGGLE[matchKey] = false;
+        try{
+          const rk = `${matchKey}__${Number(targetMatch.round||0)}`;
+          window.MAIN_STATUS_ROUND_TOGGLE = window.MAIN_STATUS_ROUND_TOGGLE || {};
+          window.MAIN_STATUS_DONE_MATCH_TOGGLE = window.MAIN_STATUS_DONE_MATCH_TOGGLE || {};
+          window.MAIN_STATUS_ROUND_TOGGLE[rk] = false;
+          window.MAIN_STATUS_DONE_MATCH_TOGGLE[rk] = false;
+        }catch(e){}
+      }
+    }catch(e){}
+  };
+
   showPage('bracket');
   const brTS = ge('brTS');
   if(brTS) brTS.value = tid;
@@ -18609,13 +18699,16 @@ function goBracketMatch(tid,div,matchId){
 
   const applyAndFocus = ()=>{
     try{ setBracketSelectedDivs([div], tid); }catch(_e){}
+    ensureTargetSectionOpen();
     try{ renderBracket(); }catch(_e){}
 
     let tries = 0;
     const finder = ()=>{
+      ensureTargetSectionOpen();
       const scope = pageBracket || document;
       const exactId = getMatchCardDomId(matchKey, matchId);
-      const exact = scope.querySelector(`#${CSS.escape(exactId)}`);
+      const safeId = (typeof CSS!=='undefined' && typeof CSS.escape==='function') ? CSS.escape(exactId) : exactId.replace(/([^a-zA-Z0-9_-])/g,'\$1');
+      const exact = scope.querySelector(`#${safeId}`);
       const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
       const el = exact || byData;
 
@@ -18625,7 +18718,8 @@ function goBracketMatch(tid,div,matchId){
       }
 
       tries++;
-      if(tries < 30){
+      if(tries < 36){
+        try{ renderBracket(); }catch(_e){}
         setTimeout(finder, 180);
       }else{
         toast('해당 경기를 찾지 못했습니다. 선택된 부서를 확인해 주세요.','info');
