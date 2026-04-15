@@ -6751,6 +6751,7 @@ function ensureAppHistoryReady(){
   __APP_NAV_HISTORY_READY = true;
 }
 function handleAppPopState(ev){
+  if(window.__disableLegacyAppPopState) return;
   const state=ev?.state;
   if(!state || !state.__appNav){
     __APP_NAV_SUPPRESS_PUSH = true;
@@ -26439,8 +26440,10 @@ function exportPrelimImage(){
 (function mobileBackNavigationLayer(){
   if(window.__mobileBackNavigationLayerInstalled) return;
   window.__mobileBackNavigationLayerInstalled = true;
+  window.__disableLegacyAppPopState = true;
 
   const APP_NAV_NS = '__app_nav__';
+  const ROOT_GUARD = '__root_guard__';
   let suppressHistoryPush = false;
   let popHandling = false;
   let modalSeq = 0;
@@ -26470,6 +26473,19 @@ function exportPrelimImage(){
     const state = { [APP_NAV_NS]: true, type: 'page', page: String(page || currentPage()), modalId: '' };
     try{ history.replaceState(state, '', '#' + state.page); }catch(e){}
   }
+  function pushRootGuard(page){
+    const target = String(page || currentPage() || 'home');
+    const st = history.state || {};
+    if(st && st[APP_NAV_NS] && st.type === 'guard' && st.page === target) return;
+    try{ history.pushState({ [APP_NAV_NS]: true, type: 'guard', page: target, modalId: '', guard: ROOT_GUARD }, '', '#' + target); }catch(e){}
+  }
+  function ensureRootGuard(page){
+    const target = String(page || currentPage() || 'home');
+    try{
+      replaceBaseState(target);
+      pushRootGuard(target);
+    }catch(e){}
+  }
   function pushPageState(page){
     const target = String(page || currentPage());
     const st = history.state || {};
@@ -26495,7 +26511,7 @@ function exportPrelimImage(){
     return true;
   }
 
-  replaceBaseState(currentPage());
+  ensureRootGuard(currentPage());
 
   const priorShowPage = window.showPage;
   if(typeof priorShowPage === 'function'){
@@ -26508,7 +26524,7 @@ function exportPrelimImage(){
         if(next !== prev && !suppressHistoryPush){
           pushPageState(next);
         }else if(!history.state || !history.state[APP_NAV_NS]){
-          replaceBaseState(next);
+          ensureRootGuard(next);
         }
       }
       return res;
@@ -26542,7 +26558,7 @@ function exportPrelimImage(){
         if(st && st[APP_NAV_NS] && st.type === 'modal' && st.modalId === target){
           try{ history.back(); }catch(e){}
         }else if(!st || !st[APP_NAV_NS]){
-          replaceBaseState(currentPage());
+          ensureRootGuard(currentPage());
         }
       }
       return res;
@@ -26556,13 +26572,12 @@ function exportPrelimImage(){
       if(state && state[APP_NAV_NS]){
         const page = String(state.page || currentPage() || 'home');
         const wantModal = String(state.modalId || '');
-        const openIds = openModalIds();
+        const stateType = String(state.type || 'page');
         if(wantModal){
-          while(openIds.length){
+          while(topModalId()){
             const top = topModalId();
             if(top === wantModal) break;
             if(!closeTopModalDirect(top)) break;
-            openIds.pop();
           }
           applyPageState(page);
           if(!document.getElementById(wantModal)?.classList.contains('open') && typeof window.__appOriginalOm === 'function'){
@@ -26573,15 +26588,18 @@ function exportPrelimImage(){
             if(!closeTopModalDirect(topModalId())) break;
           }
           applyPageState(page);
+          if(stateType === 'guard' && state.guard === ROOT_GUARD){
+            pushRootGuard(page);
+          }
         }
       }else{
         const openTop = topModalId();
         if(openTop){
           closeTopModalDirect(openTop);
-          replaceBaseState(currentPage());
+          ensureRootGuard(currentPage());
         }else{
           applyPageState('home');
-          replaceBaseState('home');
+          ensureRootGuard('home');
         }
       }
     }finally{
@@ -26591,6 +26609,16 @@ function exportPrelimImage(){
 })();
 </script>
 
+<script>
+(function initAppBackNavigationReady(){
+  function boot(){
+    try{ if(typeof ensureAppHistoryReady === 'function') ensureAppHistoryReady(); }catch(e){}
+    try{ if(typeof appReplaceHistoryState === 'function') appReplaceHistoryState((document.querySelector('.page.active')?.id||'page-home').replace('page-',''), '', false); }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
+  else boot();
+})();
+</script>
 
 <div class="bottom-tab-bar" id="bottomTabBar">
   <button type="button" data-page="home"><span class="icon">🏠</span><span>홈</span></button>
