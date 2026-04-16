@@ -25548,6 +25548,65 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 }
 
+
+/* === mobile bottom nav / modal safe area fix === */
+@media (max-width: 768px){
+  body{
+    padding-bottom:66px !important;
+  }
+  .main-content{
+    padding-bottom:84px !important;
+  }
+  .bottom-tab-bar{
+    height:58px !important;
+    padding-bottom:env(safe-area-inset-bottom, 0px) !important;
+  }
+  .bottom-tab-bar button{
+    gap:2px !important;
+    font-size:10px !important;
+    padding:2px 0 !important;
+  }
+  .bottom-tab-bar button .icon{
+    font-size:15px !important;
+  }
+
+  .modal-overlay{
+    align-items:flex-start !important;
+    padding:8px 8px calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .modal-box{
+    margin:0 auto auto !important;
+    max-height:calc(100vh - 16px - 66px - env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .modal-body{
+    -webkit-overflow-scrolling:touch;
+  }
+  .modal-footer{
+    position:sticky !important;
+    bottom:0 !important;
+    z-index:6 !important;
+    background:#fff !important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    box-shadow:0 -6px 16px rgba(15,30,58,.08);
+  }
+
+  #mDraw.modal-overlay,
+  #mMain.modal-overlay{
+    padding:0 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0 !important;
+    align-items:flex-start !important;
+  }
+  #mDraw .modal-box,
+  #mMain .modal-box{
+    height:calc(100vh - 58px - env(safe-area-inset-bottom, 0px)) !important;
+    max-height:calc(100vh - 58px - env(safe-area-inset-bottom, 0px)) !important;
+    margin:0 auto auto !important;
+  }
+  #mDraw .modal-body,
+  #mMain .modal-body{
+    max-height:calc(100vh - 58px - 186px - env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
 </style>
 
 <script>
