@@ -103,6 +103,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:linear-gradient(180deg,#f4
 .login-menu-btn{min-width:102px;}
 .login-menu-panel{position:absolute;right:0;top:calc(100% + 8px);display:none;flex-direction:column;gap:8px;min-width:190px;padding:10px;background:rgba(9,18,37,.98);border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 14px 32px rgba(0,0,0,.28);z-index:1400}
 .login-menu-wrap.open .login-menu-panel{display:flex}
+.js-mini-menu.open .login-menu-panel{display:none !important}
 .login-menu-panel .login-menu-item{width:100%;justify-content:flex-start;padding:8px 12px;font-size:.76rem;min-height:36px;border-radius:10px}
 .login-menu-panel #regClubNameBadge{display:none;max-width:100%;text-align:left}
 @media(max-width:680px){
@@ -1251,14 +1252,17 @@ body.slider-ready .page:not(.active){
   #mDraw .modal-header,#mMain .modal-header{border-radius:0!important;padding:12px 14px!important;}
   #mDraw .modal-body,#mMain .modal-body{
     padding:12px!important;
-    max-height:calc(100vh - 122px)!important;
+    max-height:calc(100vh - 186px)!important;
     overflow-y:auto!important;
     -webkit-overflow-scrolling:touch;
   }
   #mDraw .modal-footer,#mMain .modal-footer{
     padding:10px 12px!important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px))!important;
     gap:8px!important;
     flex-wrap:nowrap!important;
+    position:relative;
+    z-index:1;
   }
   #mDraw .modal-footer .btn,#mMain .modal-footer .btn{
     flex:1 1 0;
@@ -5775,14 +5779,17 @@ function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='
   #mDraw .modal-header,#mMain .modal-header{border-radius:0!important;padding:12px 14px!important;}
   #mDraw .modal-body,#mMain .modal-body{
     padding:12px!important;
-    max-height:calc(100vh - 122px)!important;
+    max-height:calc(100vh - 186px)!important;
     overflow-y:auto!important;
     -webkit-overflow-scrolling:touch;
   }
   #mDraw .modal-footer,#mMain .modal-footer{
     padding:10px 12px!important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px))!important;
     gap:8px!important;
     flex-wrap:nowrap!important;
+    position:relative;
+    z-index:1;
   }
   #mDraw .modal-footer .btn,#mMain .modal-footer .btn{
     flex:1 1 0;
@@ -5937,31 +5944,153 @@ document.addEventListener('click',(e)=>{
   const wrap=ge('loginMenuWrap');
   if(wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
   document.querySelectorAll('.js-mini-menu.open').forEach(node=>{
-    if(!node.contains(e.target)) node.classList.remove('open');
+    if(!node.contains(e.target)){ node.classList.remove('open'); }
   });
 });
 window.toggleLoginMenu = toggleLoginMenu;
 window.closeLoginMenu = closeLoginMenu;
 
-function toggleMiniMenu(ev, wrapId){
-  try{ ev?.stopPropagation?.(); }catch(e){}
-  const wrap=ge(wrapId);
-  if(!wrap) return;
-  document.querySelectorAll('.js-mini-menu.open').forEach(node=>{
-    if(node!==wrap) node.classList.remove('open');
-  });
-  wrap.classList.toggle('open');
-}
-function closeMiniMenu(wrapId){
-  const wrap=ge(wrapId);
-  if(wrap) wrap.classList.remove('open');
-}
-function closeAllMiniMenus(){
-  document.querySelectorAll('.js-mini-menu.open').forEach(node=>node.classList.remove('open'));
-}
-window.toggleMiniMenu = toggleMiniMenu;
-window.closeMiniMenu = closeMiniMenu;
-window.closeAllMiniMenus = closeAllMiniMenus;
+/* ── 포탈 드롭다운: body에 직접 fixed 패널을 띄워 overflow/z-index 문제 완전 해결 ── */
+(function(){
+  let _portalEl = null;       // body에 붙은 포탈 div
+  let _activeWrapId = null;   // 현재 열린 wrap ID
+  let _scrollHandler = null;
+
+  function getPortal(){
+    if(!_portalEl){
+      _portalEl = document.createElement('div');
+      _portalEl.id = '__miniMenuPortal__';
+      _portalEl.style.cssText = [
+        'position:fixed','z-index:99999','display:none',
+        'flex-direction:column','gap:6px','padding:8px',
+        'background:rgba(9,18,37,.98)',
+        'border:1px solid rgba(255,255,255,.12)',
+        'border-radius:14px','box-shadow:0 14px 32px rgba(0,0,0,.28)',
+        'min-width:184px','max-width:calc(100vw - 16px)','max-height:calc(100vh - 110px)','overflow-y:auto',
+        'font-family:inherit'
+      ].join(';');
+      document.body.appendChild(_portalEl);
+
+      // 포탈 외부 클릭 시 닫기
+      document.addEventListener('click', function(e){
+        if(!_portalEl || _portalEl.style.display==='none') return;
+        const wrap = _activeWrapId ? document.getElementById(_activeWrapId) : null;
+        if(!_portalEl.contains(e.target) && (!wrap || !wrap.contains(e.target))){
+          _closePortal();
+        }
+      }, true);
+
+      // 스크롤/리사이즈 시 위치 재계산 또는 닫기
+      window.addEventListener('resize', _closePortal);
+    }
+    return _portalEl;
+  }
+
+  function _positionPortal(btn){
+    const portal = getPortal();
+    const rect = btn.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const isMobile = vw <= 768;
+    const sideGap = isMobile ? 8 : 6;
+    const bottomSafe = isMobile ? 86 : 10;
+    const desiredW = isMobile ? Math.min(Math.max(rect.width, 176), vw - sideGap * 2) : Math.min(Math.max(rect.width, 184), 220);
+    portal.style.width = desiredW + 'px';
+    portal.style.minWidth = desiredW + 'px';
+    portal.style.maxWidth = `calc(100vw - ${sideGap*2}px)`;
+    portal.style.maxHeight = `calc(100vh - ${bottomSafe + 24}px)`;
+
+    const panelW = Math.min(desiredW, vw - sideGap * 2);
+    const panelH = portal.offsetHeight || portal.scrollHeight || 180;
+
+    let left = isMobile ? rect.left : rect.right - panelW;
+    if(left < sideGap) left = sideGap;
+    if(left + panelW > vw - sideGap) left = vw - panelW - sideGap;
+
+    let top = rect.bottom + 6;
+    if(top + panelH > vh - bottomSafe) top = rect.top - panelH - 6;
+    if(top < 6) top = Math.min(rect.bottom + 6, vh - panelH - bottomSafe);
+
+    portal.style.left = Math.max(sideGap, left) + 'px';
+    portal.style.top  = Math.max(6, top)  + 'px';
+  }
+
+  function _closePortal(){
+    if(!_portalEl) return;
+    _portalEl.style.display = 'none';
+    _portalEl.innerHTML = '';
+    if(_activeWrapId){
+      const wrap = document.getElementById(_activeWrapId);
+      if(wrap) wrap.classList.remove('open');
+    }
+    _activeWrapId = null;
+    if(_scrollHandler){
+      window.removeEventListener('scroll', _scrollHandler, true);
+      _scrollHandler = null;
+    }
+  }
+
+  function toggleMiniMenu(ev, wrapId){
+    try{ ev?.stopPropagation?.(); }catch(e){}
+    const wrap = document.getElementById(wrapId);
+    if(!wrap) return;
+
+    // 이미 같은 메뉴 열려있으면 닫기
+    if(_activeWrapId === wrapId){
+      _closePortal();
+      return;
+    }
+
+    // 다른 메뉴 닫기
+    _closePortal();
+
+    // 원본 panel 내용을 포탈로 복사
+    const origPanel = wrap.querySelector('.login-menu-panel');
+    if(!origPanel) return;
+
+    const portal = getPortal();
+    portal.innerHTML = origPanel.innerHTML;
+
+    // 스타일 복사 (min-width 등 inline style)
+    const origStyle = origPanel.getAttribute('style') || '';
+    if(origStyle) portal.setAttribute('style', portal.getAttribute('style') + ';' + origStyle);
+
+    // btn-sm login-menu-item 스타일 보정
+    portal.querySelectorAll('.login-menu-item').forEach(btn=>{
+      btn.style.cssText = (btn.getAttribute('style')||'') +
+        ';width:100%;display:flex;align-items:center;justify-content:flex-start;' +
+        'padding:7px 10px;font-size:.74rem;min-height:34px;border-radius:10px;' +
+        'cursor:pointer;font-family:inherit;font-weight:700;line-height:1.25;white-space:normal;word-break:keep-all;';
+    });
+
+    portal.style.display = 'flex';
+    _activeWrapId = wrapId;
+    wrap.classList.add('open');
+
+    // 버튼 위치 기준으로 패널 위치 설정
+    const triggerBtn = wrap.querySelector('button');
+    if(triggerBtn){
+      // 렌더링 후 높이 계산
+      requestAnimationFrame(()=>{ _positionPortal(triggerBtn); });
+    }
+
+    // 스크롤 시 닫기
+    _scrollHandler = _closePortal;
+    window.addEventListener('scroll', _scrollHandler, true);
+  }
+
+  function closeMiniMenu(wrapId){
+    if(_activeWrapId === wrapId || !wrapId) _closePortal();
+  }
+
+  function closeAllMiniMenus(){
+    _closePortal();
+  }
+
+  window.toggleMiniMenu    = toggleMiniMenu;
+  window.closeMiniMenu     = closeMiniMenu;
+  window.closeAllMiniMenus = closeAllMiniMenus;
+  window._closePortalMenu  = _closePortal;
+})();
 
 function toggleBracketSaveMenu(ev){
   toggleMiniMenu(ev,'bracketSaveMenuWrap');
@@ -25273,14 +25402,17 @@ document.addEventListener('DOMContentLoaded',()=>{
   #mDraw .modal-header,#mMain .modal-header{border-radius:0!important;padding:12px 14px!important;}
   #mDraw .modal-body,#mMain .modal-body{
     padding:12px!important;
-    max-height:calc(100vh - 122px)!important;
+    max-height:calc(100vh - 186px)!important;
     overflow-y:auto!important;
     -webkit-overflow-scrolling:touch;
   }
   #mDraw .modal-footer,#mMain .modal-footer{
     padding:10px 12px!important;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px))!important;
     gap:8px!important;
     flex-wrap:nowrap!important;
+    position:relative;
+    z-index:1;
   }
   #mDraw .modal-footer .btn,#mMain .modal-footer .btn{
     flex:1 1 0;
