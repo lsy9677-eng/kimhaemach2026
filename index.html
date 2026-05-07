@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-04-15-v199-elapsed-clock-fix";
+  const APP_VERSION = "2026-05-07-v206-notice-mobile-drag-no-reset";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -511,15 +511,15 @@ body{overflow-x:hidden;}
 .op-sticky-ribbon .closex:hover{background:rgba(15,30,58,.2);} 
 .op-side-ribbon .mini{font-size:.66rem;font-weight:800;opacity:.9}
 .op-side-ribbon .sub{display:none}
-.br-floating-notice{position:fixed;left:50%;top:148px;transform:translateX(-50%);z-index:3000;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.28);font-weight:900}
+.br-floating-notice{position:fixed;left:50%;top:148px;transform:translateX(-50%);z-index:3000;display:none;align-items:center;gap:10px;min-width:min(760px,calc(100vw - 20px));max-width:min(960px,calc(100vw - 20px));padding:10px 14px;border-radius:14px;border:2px solid #d4a017;background:linear-gradient(135deg,#fff8df,#ffe68a);color:#4a3510;box-shadow:0 12px 30px rgba(15,30,58,.28);font-weight:900;cursor:move;user-select:none;touch-action:none}
 .br-floating-notice.show{display:flex !important}
 .br-floating-notice .tag{flex:0 0 auto;padding:4px 10px;border-radius:999px;background:#0f1e3a;color:#fff;font-size:.76rem;letter-spacing:.02em}
 .br-floating-notice .text{flex:1;min-width:0;overflow:hidden;position:relative;height:1.45em;display:flex;align-items:center}
 .br-floating-notice .text .marquee{display:inline-flex;align-items:center;gap:46px;white-space:nowrap;will-change:transform;animation:noticeMarquee 18s linear infinite}
 .br-floating-notice .text .msg{display:inline-block;font-size:.95rem;font-weight:900;white-space:nowrap;flex:0 0 auto}
 .br-floating-notice .text.static .marquee{animation:none;transform:none}
-.br-floating-notice .actions{display:flex;gap:6px;flex:0 0 auto}
-.br-floating-notice .btnx{border:none;background:#0f1e3a;color:#fff;border-radius:999px;padding:6px 10px;font-size:.72rem;font-weight:800;cursor:pointer}
+.br-floating-notice .actions{display:flex;gap:6px;flex:0 0 auto;cursor:auto}
+.br-floating-notice .btnx{border:none;background:#0f1e3a;color:#fff;border-radius:999px;padding:6px 10px;font-size:.72rem;font-weight:800;cursor:pointer;touch-action:manipulation}
 @keyframes noticeMarquee{0%{transform:translateX(0)}100%{transform:translateX(calc(-50% - 23px))}}
 @media(max-width:680px){
   .op-division-banner{top:84px;padding:9px 11px}
@@ -1494,6 +1494,27 @@ body.slider-ready .page:not(.active){
 @media (min-width: 769px){
   .bottom-tab-bar{
     display:none !important;
+  }
+}
+
+
+/* === v-notice-mobile-drag-fix: 전체공지 모바일 드래그 보정 === */
+.br-floating-notice{touch-action:none !important;-webkit-user-select:none !important;user-select:none !important;}
+.br-floating-notice .text{pointer-events:none;}
+.br-floating-notice .actions,.br-floating-notice .actions *{pointer-events:auto;}
+@media(max-width:680px){
+  .br-floating-notice{
+    min-width:0 !important;
+    width:min(520px, calc(100vw - 28px)) !important;
+    max-width:calc(100vw - 28px) !important;
+    left:14px !important;
+    top:86px !important;
+    right:auto !important;
+    transform:none !important;
+  }
+  .br-floating-notice[data-moved="1"]{
+    width:min(520px, calc(100vw - 28px)) !important;
+    max-width:calc(100vw - 28px) !important;
   }
 }
 
@@ -8710,13 +8731,100 @@ function ensureFloatingNoticeEl(){
   el=document.createElement('div');
   el.id='brFloatingNotice';
   el.className='br-floating-notice';
-  el.innerHTML=`<span class="tag">📢 전체 공지</span><div class="text"><div class="marquee"><span class="msg"></span><span class="msg" aria-hidden="true"></span></div></div><div class="actions"><button class="btnx" onclick="hideFloatingNoticeForNow()">숨기기</button></div>`;
+  el.innerHTML=`<span class="tag" title="끌어서 위치 이동">📢 전체 공지</span><div class="text"><div class="marquee"><span class="msg"></span><span class="msg" aria-hidden="true"></span></div></div><div class="actions"><button class="btnx" onclick="hideFloatingNoticeForNow()">숨기기</button></div>`;
   document.body.appendChild(el);
+  initFloatingNoticeDrag(el);
+  restoreFloatingNoticePosition(el);
   return el;
 }
 function shouldShowFloatingNotice(){
   return !!(G.meta?.adminFloatingNoticeEnabled && (G.meta?.adminFloatingNotice||'').trim() && !window.__hideFloatingNoticeOnce);
 }
+function getFloatingNoticePositionKey(){ return 'kimhae_floating_notice_position_v2'; }
+function clampFloatingNoticePosition(x, y, el){
+  const rect=el?.getBoundingClientRect?.() || {width:320,height:48};
+  const margin=8;
+  const maxX=Math.max(margin, window.innerWidth - Math.min(rect.width||320, window.innerWidth-margin*2) - margin);
+  const maxY=Math.max(margin, window.innerHeight - Math.min(rect.height||54, window.innerHeight-margin*2) - margin);
+  return {x:Math.min(Math.max(margin, Number(x)||margin), maxX), y:Math.min(Math.max(margin, Number(y)||margin), maxY)};
+}
+function applyFloatingNoticePosition(el, pos){
+  if(!el || !pos) return;
+  const p=clampFloatingNoticePosition(pos.x,pos.y,el);
+  el.style.setProperty('left', p.x+'px', 'important');
+  el.style.setProperty('top', p.y+'px', 'important');
+  el.style.setProperty('right', 'auto', 'important');
+  el.style.setProperty('bottom', 'auto', 'important');
+  el.style.setProperty('transform', 'none', 'important');
+  el.dataset.moved='1';
+}
+function restoreFloatingNoticePosition(el){
+  try{
+    const raw=localStorage.getItem(getFloatingNoticePositionKey());
+    if(!raw) return;
+    const pos=JSON.parse(raw);
+    if(pos && Number.isFinite(Number(pos.x)) && Number.isFinite(Number(pos.y))){
+      requestAnimationFrame(()=>applyFloatingNoticePosition(el,pos));
+    }
+  }catch(e){}
+}
+function saveFloatingNoticePosition(el){
+  try{
+    const rect=el.getBoundingClientRect();
+    localStorage.setItem(getFloatingNoticePositionKey(), JSON.stringify({x:Math.round(rect.left), y:Math.round(rect.top)}));
+  }catch(e){}
+}
+function resetFloatingNoticePosition(ev){
+  try{ ev?.stopPropagation?.(); ev?.preventDefault?.(); }catch(e){}
+  const el=ensureFloatingNoticeEl();
+  try{ localStorage.removeItem(getFloatingNoticePositionKey()); }catch(e){}
+  el.style.removeProperty('left');
+  el.style.removeProperty('top');
+  el.style.removeProperty('right');
+  el.style.removeProperty('bottom');
+  el.style.removeProperty('transform');
+  delete el.dataset.moved;
+}
+function initFloatingNoticeDrag(el){
+  if(!el || el.dataset.dragReady==='1') return;
+  el.dataset.dragReady='1';
+  let dragging=false, startX=0, startY=0, baseX=0, baseY=0, pointerId=null;
+  const start=(ev)=>{
+    if(ev.target && ev.target.closest && ev.target.closest('.actions')) return;
+    if(ev.button!=null && ev.button!==0) return;
+    dragging=true;
+    pointerId=ev.pointerId;
+    const rect=el.getBoundingClientRect();
+    startX=ev.clientX; startY=ev.clientY; baseX=rect.left; baseY=rect.top;
+    try{ el.setPointerCapture(pointerId); }catch(e){}
+    el.style.transition='none';
+    ev.preventDefault();
+  };
+  const move=(ev)=>{
+    if(!dragging) return;
+    const next=clampFloatingNoticePosition(baseX+(ev.clientX-startX), baseY+(ev.clientY-startY), el);
+    el.style.setProperty('left', next.x+'px', 'important');
+    el.style.setProperty('top', next.y+'px', 'important');
+    el.style.setProperty('right', 'auto', 'important');
+    el.style.setProperty('bottom', 'auto', 'important');
+    el.style.setProperty('transform', 'none', 'important');
+    el.dataset.moved='1';
+    ev.preventDefault();
+  };
+  const end=(ev)=>{
+    if(!dragging) return;
+    dragging=false;
+    try{ el.releasePointerCapture(pointerId); }catch(e){}
+    pointerId=null;
+    saveFloatingNoticePosition(el);
+  };
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  window.addEventListener('resize', ()=>{ if(el.dataset.moved==='1') restoreFloatingNoticePosition(el); });
+}
+window.resetFloatingNoticePosition=resetFloatingNoticePosition;
 function renderFloatingNotice(){
   const el=ensureFloatingNoticeEl();
   const textWrap=el.querySelector('.text');
@@ -8727,6 +8835,7 @@ function renderFloatingNotice(){
   const show=shouldShowFloatingNotice();
   el.classList.toggle('show', show);
   el.style.display=show?'flex':'none';
+  if(show && el.dataset.moved!=='1') restoreFloatingNoticePosition(el);
   if(textWrap && marquee){
     requestAnimationFrame(()=>{
       const first=el.querySelector('.text .msg');
@@ -23916,45 +24025,38 @@ async function initRegistryTab(force){
 async function renderRegistryTab(force){
   const regTabBody=ge('regTabBody');
   if(regTabBody && !regTabBody.dataset.ready){
-    regTabBody.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">참가자 목록을 불러오는 중입니다…</div>';
+    regTabBody.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">등록 선수 명단을 불러오는 중입니다…</div>';
   }
   const year=parseInt(ge('regYearSel')?.value||2026);
 
+  // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
+  //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   const registryMembers = await loadRegistry(year);
-  const liveEntries = collectLiveParticipantEntries();
-  const memberMap = new Map();
+  const members = (registryMembers||[])
+    .map((m, idx)=>({
+      ...m,
+      __idx: idx,
+      name: cleanName(m.name||''),
+      club: normalizeClub(m.club||''),
+      region: String(m.region||'').trim(),
+      subClub: String(m.subClub||'').trim(),
+      source: 'registry'
+    }))
+    .filter(m=>m.name && m.club);
 
-  registryMembers.forEach(m=>{
-    const key = `${cleanName(m.name||'')}|${normalizeClub(m.club||'')}`;
-    if(!key.startsWith('|')) memberMap.set(key, { ...m, source:'registry' });
-  });
-  liveEntries.forEach(r=>{
-    const key = `${cleanName(r.name||'')}|${normalizeClub(r.club||r.rawClub||'')}`;
-    if(!memberMap.has(key)){
-      memberMap.set(key, {
-        name: cleanName(r.name||''),
-        club: normalizeClub(r.club||r.rawClub||''),
-        region: '',
-        subClub: '',
-        source: 'live'
-      });
-    }
-  });
-
-  const members = [...memberMap.values()];
-  const regions=[...new Set(members.map(m=>m.region).filter(Boolean))].sort();
+  const regions=[...new Set(members.map(m=>m.region).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
   const clubs=[...new Set(members.map(m=>m.club).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
-  const filterKey=year+'__'+regions.join('|')+'__'+clubs.join('|');
+  const filterKey=year+'__registry_only__'+regions.join('|')+'__'+clubs.join('|');
   const regSel=ge('regRegionSel');
   if(regSel && (force || REGISTRY_TAB_CACHE.filterKey!==filterKey)){
     const p=regSel.value;
-    regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${r}">${r}</option>`).join('');
+    regSel.innerHTML='<option value="">전체 지역</option>'+regions.map(r=>`<option value="${escAttr(r)}">${esc(r)}</option>`).join('');
     if(p) regSel.value=p;
   }
   const clubSel=ge('regClubSel');
   if(clubSel && (force || REGISTRY_TAB_CACHE.filterKey!==filterKey)){
     const p=clubSel.value;
-    clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
+    clubSel.innerHTML='<option value="">전체 클럽</option>'+clubs.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
     if(p) clubSel.value=p;
   }
   REGISTRY_TAB_CACHE.filterKey=filterKey;
@@ -23968,39 +24070,79 @@ async function renderRegistryTab(force){
     if(selRegion&&m.region!==selRegion) return false;
     if(selClub&&m.club!==selClub) return false;
     if(showSubOnly&&!m.subClub) return false;
-    if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)) return false;
+    if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)&&!(m.subClub||'').includes(keyword)&&!(m.region||'').includes(keyword)) return false;
     return true;
   });
 
   const subCount=filtered.filter(m=>m.subClub).length;
   const clubCount=[...new Set(filtered.map(m=>m.club))].length;
-  const liveCount=filtered.filter(m=>m.source==='live').length;
   const statEl=ge('regTabStat');
-  if(statEl) statEl.innerHTML=`총 <b>${filtered.length}</b>명 · <b>${clubCount}</b>클럽 · 현재 참가자 <b>${liveCount}</b>명`;
+  if(statEl) statEl.innerHTML=`${year}년 공식 등록명단 · 총 <b>${filtered.length}</b>명 · <b>${clubCount}</b>클럽 · 부클럽 <b>${subCount}</b>명`;
 
   const body=ge('regTabBody');
   if(!body) return;
 
   if(!filtered.length){
     body.dataset.ready='1';
-    body.innerHTML=`<div class="empty-state card" style="padding:24px;text-align:center"><p style="font-size:1rem;font-weight:600;margin-bottom:8px">📋 표시할 참가자 목록이 없습니다</p><p style="font-size:.82rem;color:var(--text3);line-height:1.6">현재 대회 참가자 또는 등록 명단을 찾지 못했습니다.</p></div>`;
+    body.innerHTML=`<div class="empty-state card" style="padding:24px;text-align:center"><p style="font-size:1rem;font-weight:600;margin-bottom:8px">📋 표시할 등록 선수가 없습니다</p><p style="font-size:.82rem;color:var(--text3);line-height:1.6">${year}년 공식 등록명단을 찾지 못했습니다. 관리자 명단 관리에서 업로드/추가해 주세요.</p></div>`;
     return;
   }
 
-  const rows=filtered.slice().sort((a,b)=>{
-    const an=String(a.name||'').localeCompare(String(b.name||''),'ko');
-    if(an!==0) return an;
-    return String(a.club||'').localeCompare(String(b.club||''),'ko');
+  const sortedFiltered=filtered.slice().sort((a,b)=>{
+    const cr=String(a.region||'소속 코트 미지정').localeCompare(String(b.region||'소속 코트 미지정'),'ko',{numeric:true});
+    if(cr!==0) return cr;
+    const cc=String(a.club||'소속 미상').localeCompare(String(b.club||'소속 미상'),'ko',{numeric:true});
+    if(cc!==0) return cc;
+    return String(a.name||'').localeCompare(String(b.name||''),'ko',{numeric:true});
   });
 
-  body.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${rows.map((m)=>{
-    const srcBadge = m.source==='live'
-      ? `<span class="badge bg-blue" style="font-size:.66rem">현재참가</span>`
-      : `<span class="badge bg-green" style="font-size:.66rem">등록명단</span>`;
-    const subBadge = m.subClub ? `<span class="badge" style="font-size:.66rem;background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd">${esc(m.subClub)}</span>` : '';
-    return `<div style="padding:13px 14px;border:1.5px solid var(--border);border-radius:14px;background:#fff;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;cursor:pointer" onclick="openPD('${esc(m.name)}','${esc(m.club)}')"><div style="min-width:0;flex:1"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:1rem;font-weight:900;color:var(--primary-dark)">${esc(m.name)}</div>${srcBadge}${subBadge}</div><div style="font-size:.8rem;color:var(--text2);line-height:1.65">🏷 ${esc(m.club||'소속 미상')}${m.region?`<br>🗺 ${esc(m.region)}`:''}</div></div><div><button class="btn btn-outline" style="font-size:.72rem;padding:5px 9px;min-height:32px" onclick="event.stopPropagation();openPD('${esc(m.name)}','${esc(m.club)}')">기록 보기</button></div></div>`;
-  }).join('')}</div>`;
+  const regionGroups=new Map();
+  sortedFiltered.forEach(m=>{
+    const regionKey=m.region||'소속 코트 미지정';
+    const clubKey=m.club||'소속 미상';
+    if(!regionGroups.has(regionKey)) regionGroups.set(regionKey, new Map());
+    const clubMap=regionGroups.get(regionKey);
+    if(!clubMap.has(clubKey)) clubMap.set(clubKey, []);
+    clubMap.get(clubKey).push(m);
+  });
 
+  const regionSections=[...regionGroups.entries()].map(([region, clubMap])=>{
+    const regionRows=[...clubMap.values()].flat();
+    const regionSubCount=regionRows.filter(x=>x.subClub).length;
+    const clubCards=[...clubMap.entries()].map(([club, rows])=>{
+      const subClubRows=rows.filter(x=>x.subClub).length;
+      const subBadge=subClubRows?`<span class="badge" style="font-size:.68rem;background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd">부클럽 ${subClubRows}</span>`:'';
+      return `<div class="reg-club-card" style="background:#fff;border:1.5px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)">
+        <div class="reg-club-header" style="background:linear-gradient(90deg,#091225,#0f1e3a);color:#fff;padding:11px 14px;cursor:default">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">
+            <span style="font-size:1rem;font-weight:900;letter-spacing:-.01em">🏟 ${esc(club)}</span>
+            ${subBadge}
+          </div>
+          <span style="flex:0 0 auto;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:4px 10px;font-size:.78rem;font-weight:900">${rows.length}명</span>
+        </div>
+        <div class="reg-club-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:12px;background:linear-gradient(135deg,#fff,#f8fbff)">
+          ${rows.map(m=>{
+            const sub=m.subClub?`<span class="sub-badge" style="font-size:.62rem;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 6px;font-weight:900">부 ${esc(m.subClub)}</span>`:'';
+            const adminBtns=AD?`<span style="display:inline-flex;gap:4px;margin-left:auto"><button class="btn btn-outline" style="font-size:.62rem;padding:2px 6px;min-height:24px" onclick="event.stopPropagation();quickEditRegistryMember(${year},${m.__idx})">수정</button><button class="btn btn-danger" style="font-size:.62rem;padding:2px 6px;min-height:24px" onclick="event.stopPropagation();quickDeleteRegistryMember(${year},${m.__idx})">삭제</button></span>`:'';
+            return `<div class="reg-member-chip" style="display:flex;align-items:center;gap:6px;min-height:38px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:7px 9px;font-size:.86rem;font-weight:800;cursor:pointer" onclick="openPD('${escAttr(m.name)}','${escAttr(m.club)}')"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>${sub}${adminBtns}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+    return `<section class="reg-region-section" style="background:linear-gradient(135deg,#eef4ff,#fffdf5);border:2px solid #dbe7ff;border-radius:18px;padding:12px;box-shadow:var(--shadow)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:2px 2px 0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">🎾 ${esc(region)}</span>
+          <span class="badge bg-blue" style="font-size:.72rem">${clubMap.size}클럽</span>
+          ${regionSubCount?`<span class="badge" style="font-size:.72rem;background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd">부클럽 ${regionSubCount}</span>`:''}
+        </div>
+        <span style="background:#0f1e3a;color:#fff;border-radius:999px;padding:5px 11px;font-size:.8rem;font-weight:900">${regionRows.length}명</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">${clubCards}</div>
+    </section>`;
+  }).join('');
+
+  body.innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">${regionSections}</div>`;
   body.dataset.ready='1';
 }
 
