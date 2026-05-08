@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "2026-05-07-v206-notice-mobile-drag-no-reset";
+  const APP_VERSION = "2026-05-08-v209-registry-earliest-fix";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -1518,6 +1518,78 @@ body.slider-ready .page:not(.active){
   }
 }
 
+
+/* === v208 registry multi compact: 선수등록 현황 다중 배치 + 이름 보호 === */
+#ptab-registry-content .reg-region-section{margin-bottom:0 !important;}
+#ptab-registry-content .reg-club-card{margin-bottom:0 !important;}
+#ptab-registry-content .reg-club-body{
+  display:grid !important;
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr)) !important;
+  gap:5px !important;
+  align-items:stretch !important;
+}
+#ptab-registry-content .reg-member-chip{
+  width:100% !important;
+  min-width:0 !important;
+  min-height:28px !important;
+  line-height:1.16 !important;
+  padding:3px 6px !important;
+  border-radius:9px !important;
+  overflow:hidden !important;
+}
+#ptab-registry-content .reg-member-chip > span:first-child{
+  flex:0 0 auto !important;
+  max-width:100% !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  white-space:nowrap !important;
+  word-break:keep-all !important;
+  font-weight:900 !important;
+}
+#ptab-registry-content .reg-member-chip .sub-badge{
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  max-width:48px !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+@media(max-width:680px){
+  #ptab-registry-content .card{padding:8px !important;}
+  #ptab-registry-content .reg-region-section{padding:6px !important;border-radius:14px !important;}
+  #ptab-registry-content .reg-club-header{padding:6px 9px !important;}
+  #ptab-registry-content .reg-club-body{
+    grid-template-columns:repeat(auto-fill,minmax(92px,1fr)) !important;
+    gap:4px !important;
+    padding:6px !important;
+  }
+  #ptab-registry-content .reg-member-chip{
+    min-height:27px !important;
+    padding:3px 5px !important;
+    font-size:.8rem !important;
+    gap:3px !important;
+  }
+  #ptab-registry-content .reg-member-chip .sub-badge{
+    max-width:42px !important;
+    font-size:.54rem !important;
+    padding:1px 4px !important;
+  }
+  #ptab-registry-content .reg-member-chip .btn{
+    min-height:20px !important;
+    padding:1px 4px !important;
+    font-size:.55rem !important;
+  }
+}
+@media(max-width:380px){
+  #ptab-registry-content .reg-club-body{grid-template-columns:repeat(auto-fill,minmax(88px,1fr)) !important;}
+  #ptab-registry-content .reg-member-chip{font-size:.78rem !important;}
+  #ptab-registry-content .reg-member-chip .sub-badge{max-width:36px !important;}
+}
+@media(min-width:681px){
+  #ptab-registry-content .reg-club-body{grid-template-columns:repeat(auto-fill,minmax(118px,1fr)) !important;}
+}
+
+
 </style>
 
 <!-- PWA -->
@@ -1587,7 +1659,7 @@ body.slider-ready .page:not(.active){
   
   <div class="card fade-in">
     <div class="card-title">📩 관리자에게 문의</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;flex-direction:column;gap:7px">
       <div style="font-size:.82rem;color:var(--text2);line-height:1.55">
         앱 사용 중 <b>수정(명단,클럽) 요청 / 불편 사항 / 개선 아이디어</b>가 있으면 바로 문자로 보낼 수 있어요.
       </div>
@@ -2020,7 +2092,7 @@ body.slider-ready .page:not(.active){
       <h3>📖 메뉴얼</h3>
       <button class="modal-close" onclick="cm('mManualChooser')">✕</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:7px">
       <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');mShowTab(1);om('mDirectorManual')">🏆 클럽 사용안내</button>
       <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');opShowTab(1);om('mOperatorManual')">🎾 진행자 사용안내</button>
       <button class="btn btn-outline" style="justify-content:flex-start" onclick="cm('mManualChooser');om('mFAQ')">❓ 자주 묻는 질문 (FAQ)</button>
@@ -2221,7 +2293,7 @@ body.slider-ready .page:not(.active){
   <!-- 신규 기능 안내 -->
   <div style="margin-top:16px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #d97706;border-radius:12px;padding:13px 14px">
     <div style="font-size:.82rem;font-weight:900;color:#92400e;margin-bottom:10px">✨ 편의 기능 안내</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;flex-direction:column;gap:7px">
 
       <div style="display:flex;gap:10px;align-items:flex-start">
         <div style="flex-shrink:0;font-size:1.1rem">📋</div>
@@ -4500,7 +4572,7 @@ function renderCourtInfoBody(){
       <b style="color:var(--primary-dark)">${title}</b><br>
       총 <b style="color:var(--primary)">${total}면</b> 운영 기준
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;flex-direction:column;gap:7px">
       ${groups.map(g=>`
         <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff">
           <div style="padding:10px 12px;background:var(--primary);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -8989,6 +9061,14 @@ function tournamentSortValue(t){
   const dateMs=_toMs(t.date || t.datetime || t.startAt || t.startDate || t.matchDate);
   const createdMs=_toMs(t.createdAt || t.updatedAt || t.ts);
   return Math.max(dateMs, createdMs);
+}
+
+function sortTournamentsEarliest(arr){
+  return [...(Array.isArray(arr)?arr:[])].sort((a,b)=>{
+    const diff=tournamentSortValue(a)-tournamentSortValue(b);
+    if(diff!==0) return diff;
+    return String(a?.name||'').localeCompare(String(b?.name||''),'ko');
+  });
 }
 function sortTournamentsLatest(arr){
   return [...(Array.isArray(arr)?arr:[])].sort((a,b)=>{
@@ -15643,7 +15723,7 @@ function renderSavedDrawView(entry){
   body.innerHTML = `<div id="savedDrawCaptureArea">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div>
-        <div style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
+        <div style="font-size:1rem;font-weight:900;color:var(--primary-dark)">${norm.title||'추첨 기록'}</div>
         <div style="font-size:.8rem;color:var(--text2);margin-top:4px">${norm.tournamentName||''} — ${dl(norm.division||norm.div||'')} · ${infoDate.toLocaleString('ko-KR')}</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -20732,7 +20812,7 @@ function renderAllP(){
     });
     const limited=displayRows.slice(0,20);
     container.innerHTML = limited.length
-      ? `<div style="display:flex;flex-direction:column;gap:10px">${limited.map((row,idx)=>buildCard(row, idx===0 && limited.length===1)).join('')}</div>`
+      ? `<div style="display:flex;flex-direction:column;gap:7px">${limited.map((row,idx)=>buildCard(row, idx===0 && limited.length===1)).join('')}</div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>검색 결과가 없습니다</p></div>';
     if(limited.length===1){ showP(limited[0].name, limited[0].club); }
   } else {
@@ -23020,7 +23100,7 @@ async function manageHistGuide(){
       const url = await getDownloadURL(item);
       return {name:item.name, url, ref:item};
     }));
-    ge('mHGB').innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">` +
+    ge('mHGB').innerHTML = `<div style="display:flex;flex-direction:column;gap:7px">` +
       items.map((item,i)=>`
         <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:white">
           ${item.name.match(/\.(png|jpg|jpeg|gif|webp)$/i)
@@ -24112,37 +24192,37 @@ async function renderRegistryTab(force){
     const clubCards=[...clubMap.entries()].map(([club, rows])=>{
       const subClubRows=rows.filter(x=>x.subClub).length;
       const subBadge=subClubRows?`<span class="badge" style="font-size:.68rem;background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd">부클럽 ${subClubRows}</span>`:'';
-      return `<div class="reg-club-card" style="background:#fff;border:1.5px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)">
-        <div class="reg-club-header" style="background:linear-gradient(90deg,#091225,#0f1e3a);color:#fff;padding:11px 14px;cursor:default">
+      return `<div class="reg-club-card" style="background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 1px 6px rgba(15,30,58,.08)">
+        <div class="reg-club-header" style="background:linear-gradient(90deg,#091225,#0f1e3a);color:#fff;padding:8px 12px;cursor:default">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">
-            <span style="font-size:1rem;font-weight:900;letter-spacing:-.01em">🏟 ${esc(club)}</span>
+            <span style="font-size:.96rem;font-weight:900;letter-spacing:-.01em">🏟 ${esc(club)}</span>
             ${subBadge}
           </div>
-          <span style="flex:0 0 auto;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:4px 10px;font-size:.78rem;font-weight:900">${rows.length}명</span>
+          <span style="flex:0 0 auto;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:3px 9px;font-size:.74rem;font-weight:900">${rows.length}명</span>
         </div>
-        <div class="reg-club-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:12px;background:linear-gradient(135deg,#fff,#f8fbff)">
+        <div class="reg-club-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:5px;padding:8px;background:linear-gradient(135deg,#fff,#f8fbff)">
           ${rows.map(m=>{
-            const sub=m.subClub?`<span class="sub-badge" style="font-size:.62rem;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 6px;font-weight:900">부 ${esc(m.subClub)}</span>`:'';
-            const adminBtns=AD?`<span style="display:inline-flex;gap:4px;margin-left:auto"><button class="btn btn-outline" style="font-size:.62rem;padding:2px 6px;min-height:24px" onclick="event.stopPropagation();quickEditRegistryMember(${year},${m.__idx})">수정</button><button class="btn btn-danger" style="font-size:.62rem;padding:2px 6px;min-height:24px" onclick="event.stopPropagation();quickDeleteRegistryMember(${year},${m.__idx})">삭제</button></span>`:'';
-            return `<div class="reg-member-chip" style="display:flex;align-items:center;gap:6px;min-height:38px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:7px 9px;font-size:.86rem;font-weight:800;cursor:pointer" onclick="openPD('${escAttr(m.name)}','${escAttr(m.club)}')"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</span>${sub}${adminBtns}</div>`;
+            const sub=m.subClub?`<span class="sub-badge" style="font-size:.58rem;background:#7c3aed;color:#fff;border-radius:999px;padding:1px 5px;font-weight:900;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0">부 ${esc(m.subClub)}</span>`:'';
+            const adminBtns=AD?`<span style="display:inline-flex;gap:3px;margin-left:auto;flex:0 0 auto"><button class="btn btn-outline" style="font-size:.58rem;padding:1px 5px;min-height:22px" onclick="event.stopPropagation();quickEditRegistryMember(${year},${m.__idx})">수정</button><button class="btn btn-danger" style="font-size:.58rem;padding:1px 5px;min-height:22px" onclick="event.stopPropagation();quickDeleteRegistryMember(${year},${m.__idx})">삭제</button></span>`:'';
+            return `<div class="reg-member-chip" style="display:flex;align-items:center;gap:4px;min-height:30px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:4px 6px;font-size:.82rem;font-weight:800;cursor:pointer;min-width:0" onclick="openPD('${escAttr(m.name)}','${escAttr(m.club)}')"><span style="flex:0 0 auto;min-width:max-content;overflow:visible;text-overflow:clip;white-space:nowrap">${esc(m.name)}</span>${sub}${adminBtns}</div>`;
           }).join('')}
         </div>
       </div>`;
     }).join('');
-    return `<section class="reg-region-section" style="background:linear-gradient(135deg,#eef4ff,#fffdf5);border:2px solid #dbe7ff;border-radius:18px;padding:12px;box-shadow:var(--shadow)">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:2px 2px 0">
+    return `<section class="reg-region-section" style="background:linear-gradient(135deg,#eef4ff,#fffdf5);border:2px solid #dbe7ff;border-radius:16px;padding:8px;box-shadow:0 1px 6px rgba(15,30,58,.08)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:7px;padding:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:1.05rem;font-weight:900;color:var(--primary-dark)">🎾 ${esc(region)}</span>
+          <span style="font-size:1rem;font-weight:900;color:var(--primary-dark)">🎾 ${esc(region)}</span>
           <span class="badge bg-blue" style="font-size:.72rem">${clubMap.size}클럽</span>
           ${regionSubCount?`<span class="badge" style="font-size:.72rem;background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd">부클럽 ${regionSubCount}</span>`:''}
         </div>
-        <span style="background:#0f1e3a;color:#fff;border-radius:999px;padding:5px 11px;font-size:.8rem;font-weight:900">${regionRows.length}명</span>
+        <span style="background:#0f1e3a;color:#fff;border-radius:999px;padding:4px 10px;font-size:.76rem;font-weight:900">${regionRows.length}명</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px">${clubCards}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">${clubCards}</div>
     </section>`;
   }).join('');
 
-  body.innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">${regionSections}</div>`;
+  body.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">${regionSections}</div>`;
   body.dataset.ready='1';
 }
 
