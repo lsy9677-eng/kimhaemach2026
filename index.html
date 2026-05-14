@@ -11,7 +11,7 @@
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "1.0.5-queue-wait-sms-fix";
+  const APP_VERSION = "1.0.6-home-hide-ended-tournaments";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
@@ -19940,7 +19940,8 @@ function upDash(){
   const assocCard=ge('homeAssocCard'); if(assocCard) assocCard.style.display = G.meta.showAssociationDashboard ? '' : 'none';
 
   // ── 현재 대회 섹션 ──────────────────────────────────────────
-  const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
+  const activeHomeTours = getHomeVisibleTournaments();
+  const at = activeHomeTours[0] || null;
   if(at){
     const currentTeams=(at.divisions||[]).flatMap(d=>G.teams[at.id+'_'+d]||[]);
     const currentClubSet=new Set();
@@ -20052,7 +20053,7 @@ function upDash(){
     ge('heroStatus').textContent='대회 준비중';
     ge('heroClubs').textContent='🏟 현재 참가 -';
     ge('heroTeams').textContent='👥 현재 참가 -';
-    ge('homeTournInfo').innerHTML='<p class="muted">등록된 대회가 없습니다</p>';
+    ge('homeTournInfo').innerHTML='<p class="muted">현재 접수중/진행중인 대회가 없습니다</p>';
     ge('homeDivStatus').innerHTML='';
   }
   upLog();
@@ -20581,18 +20582,35 @@ function collectLiveParticipantEntries(){
   return out;
 }
 
+function getTodayDateKey(){
+  try{
+    const d=new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }catch(e){ return ''; }
+}
+function getTournamentDateKey(t){
+  const raw=String(t?.date || t?.matchDate || t?.startDate || t?.datetime || t?.startAt || '').trim();
+  const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
+function isHomeActiveTournament(t){
+  const st=String(t?.status||'').trim();
+  if(!['open','ongoing'].includes(st)) return false;
+  const dateKey=getTournamentDateKey(t);
+  const todayKey=getTodayDateKey();
+  // 날짜가 있는 대회는 오늘 이후만 홈의 '현재 대회'로 표시한다.
+  // 과거 날짜인데 상태값만 접수중/진행중으로 남은 오래된 대회는 홈에서 숨긴다.
+  if(dateKey && todayKey && dateKey < todayKey) return false;
+  return true;
+}
 function getHomePrimaryTournament(){
   const tours = Array.isArray(G.tournaments) ? G.tournaments : [];
-  if(!tours.length) return null;
-  const active = tours.filter(t=>['open','ongoing'].includes(String(t?.status||'').trim()));
-  const base = active.length ? active : tours;
-  return sortTournamentsEarliest(base)[0] || base[0] || null;
+  return sortTournamentsEarliest(tours.filter(isHomeActiveTournament))[0] || null;
 }
 
 function getHomeVisibleTournaments(){
   const tours = Array.isArray(G.tournaments) ? G.tournaments : [];
-  const filtered = tours.filter(t=>['open','ongoing'].includes(String(t?.status||'').trim()));
-  return sortTournamentsEarliest(filtered.length ? filtered : tours);
+  return sortTournamentsEarliest(tours.filter(isHomeActiveTournament));
 }
 
 function getPlayerRecordPhoneCandidates(name, playerObj, histClub=''){
