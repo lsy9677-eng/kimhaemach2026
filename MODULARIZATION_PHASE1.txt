@@ -1,0 +1,15 @@
+김해시테니스협회 앱 모듈화 1단계
+
+원칙: 기능/데이터 로직 변경 없이 구조만 분리.
+
+변경:
+- index.html 내부 4개 <style> 블록 -> assets/css/app.css 로 통합
+- index.html 내부 대형 <script type="module"> -> assets/js/app.js 로 이동
+- 기존 비모듈 보조 스크립트, Firebase 설정, 화면 HTML, 데이터 처리 함수 내용은 그대로 유지
+
+다음 단계 후보:
+- players.js (선수/2026 명단)
+- clubs.js (클럽/경기이사 로그인)
+- registrations.js (팀등록)
+
+주의: 다음 단계에서도 함수 이름/데이터 구조를 먼저 유지한 상태로 한 모듈씩 분리.
