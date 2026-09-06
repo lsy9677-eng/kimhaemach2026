@@ -331,9 +331,6 @@ function formatPhoneLoose(raw=''){
 }
 
 const PERSONAL_MATCH_PHONE_KEY='kimhae_personal_match_phone_v1';
-function normalizePhoneDigits(raw=''){
-  return String(raw||'').replace(/[^0-9]/g,'');
-}
 function getPersonalMatchPhone(){
   try{return normalizePhoneDigits(localStorage.getItem(PERSONAL_MATCH_PHONE_KEY)||'');}catch(e){return '';}
 }
@@ -734,6 +731,7 @@ function etAddCustomDiv(){
 // 조 알파벳 레이블: 0→A조, 1→B조 ...
 function grpLabel(gi){ return `${Number(gi)+1}조`; }
 
+import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -2493,22 +2491,6 @@ function cacheTournamentBundleFromMemory(tid){
   };
   saveTournamentBundleCache(tid,payload);
 }
-// 동명이인 구분: "이름__클럽" 키 사용
-function pKey(name,club){ return (name&&club)?name+'__'+club:(name||''); }
-// "하모니A"→"하모니", "남산B"→"남산", "UP A"→"UP" (뒤 A/B/C 제거)
-function baseClub(club){
-  if(!club) return '';
-  // 팀 구분자: 끝에 공백+A~D (UP A, 포티올 A, 어메이징 A)
-  let m=club.match(/^(.+?)\s+([A-D])$/);
-  if(m && m[1].trim().length>=2) return m[1].trim();
-  // 팀 구분자: 끝에 바로 A~D 붙은 경우 (하모니A, 능동B, 남산A)
-  // 단, 클럽명 자체가 대문자로 끝나는 경우 제외 (LTC, T-ONE 등)
-  // → 앞부분에 한글이 포함된 경우만 적용
-  m=club.match(/^(.+?)([A-D])$/);
-  if(m && /[가-힣]/.test(m[1]) && m[1].trim().length>=2) return m[1].trim();
-  return club;
-}
-function pKeyParse(key){ const i=(key||'').lastIndexOf('__'); return i>0?{name:key.slice(0,i),club:key.slice(i+2)}:{name:key,club:''}; }
 async function stP(k){try{const pk=pKeyParse(k);const pureName=cleanName(pk.name||k);await setDoc(doc(db,'players',k.replace(/[\\/\\.#\\$\\[\\]]/g,'_')),{...G.players[k],key:k,name:pureName,club:pk.club||''});}catch(e){}}
 async function fbLog(t,i='📌'){ return; }
 
@@ -16592,22 +16574,6 @@ async function regP(name,club,tid,div,rank,_tname,_date){
   await stP(k);
 }
 
-// ── 선수명 정규화/조회 유틸 (Firebase + HIST_DATA 일관 처리) ──
-function normName(s){ return (s||'').replace(/\s+/g,'').trim(); }
-// 이름에서 전화번호/괄호 정보 제거: "강민지(010-2574-4391)" → "강민지"
-function cleanName(s){
-  if(!s) return '';
-  // 전화번호 패턴 제거: (010-...) 또는 (01x-...)
-  return s.replace(/\s*\(0\d{1,2}[-\d]+\)/g,'').trim();
-}
-// ✅ 화면표시용: "이름__클럽" 키가 들어와도 이름/클럽 분리
-function splitKeyNameClub(raw){
-  const pk = pKeyParse(raw||'');
-  const name = cleanName(pk.name||raw||'');
-  const club = (pk.club||'').trim();
-  return { name, club };
-}
-
 // ✅ 선수기록 이력용: "2024년43회 김해시장기" 형태로 표시
 function formatTournamentTitle(tname, dateStr){
   const year = (dateStr||'').toString().substring(0,4);
@@ -17185,15 +17151,6 @@ function matchesPlayerRecordFilters(name, club, summary){
   }
   if(minCount>0 && Number(summary.totalCount||0) < minCount) return false;
   return true;
-}
-function formatRecentLabel(lastDate){
-  if(!lastDate) return '-';
-  const d=new Date(lastDate);
-  if(Number.isNaN(d.getTime())) return lastDate;
-  const yy=d.getFullYear();
-  const mm=String(d.getMonth()+1).padStart(2,'0');
-  const dd=String(d.getDate()).padStart(2,'0');
-  return `${yy}.${mm}.${dd}`;
 }
 function filterP(){PF.club='';PF.div='';PF.recent='';PF.count='';PF.search=ge('psInput')?.value||'';renderAllP();}
 async function showP(name,club){
@@ -20605,23 +20562,6 @@ async function getRegistryYears(){
     if(!years.includes(REG_YEAR)) years.push(REG_YEAR);
     return years.sort();
   }catch(e){ return [REG_YEAR]; }
-}
-
-// 클럽명 정규화 (2026 명단 기준)
-const CLUB_NORMALIZE_MAP={
-  'ltc':'LTC','LtC':'LTC','Ltc':'LTC',
-  't-one':'T-ONE','t-One':'T-ONE','T-One':'T-ONE','tOne':'T-ONE','tone':'T-ONE','T-one':'T-ONE',
-  'up테니스':'UP테니스','UP 테니스':'UP테니스','up 테니스':'UP테니스','Up테니스':'UP테니스','up':'UP테니스',
-  'udt':'UDT','Udt':'UDT',
-  '김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어',
-};
-function normalizeClub(club){
-  if(!club) return '';
-  const t=club.trim().replace(/\s+/g,' ');
-  if(CLUB_NORMALIZE_MAP[t]) return CLUB_NORMALIZE_MAP[t];
-  const lo=t.toLowerCase();
-  for(const [k,v] of Object.entries(CLUB_NORMALIZE_MAP)){ if(k.toLowerCase()===lo) return v; }
-  return t;
 }
 
 // 탭 전환
