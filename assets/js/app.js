@@ -732,6 +732,7 @@ function etAddCustomDiv(){
 function grpLabel(gi){ return `${Number(gi)+1}조`; }
 
 import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
+import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -6353,76 +6354,10 @@ async function syncRegistryMembersToPlayers(rows){
   }
 }
 function parseMemberRegistry2026Rows(rows){
-  const out=[];
-  // 헤더행 키워드 매핑
-  const HEADER_WORDS=/이름|성명|클럽|소속|지역|구분|회원명|선수명/;
-
-  // ── 엑셀(배열 배열) 형식일 때 헤더로 컬럼 위치 자동 감지 ──────────
-  let nameCol=-1, clubCol=-1, phoneCol=-1;
-  let dataStartIdx=0;
-
-  if(rows.length && Array.isArray(rows[0])){
-    // 첫 행이 헤더인지 확인
-    const firstRow = rows[0].map(c=>(c??'').toString().trim());
-    const isHeader = firstRow.some(c=>HEADER_WORDS.test(c));
-    if(isHeader){
-      firstRow.forEach((c,i)=>{
-        if(/회원명|선수명|이름|성명/.test(c)) nameCol=i;
-        else if(/클럽명|클럽|소속/.test(c)) clubCol=i;
-        else if(/전화|휴대/.test(c)) phoneCol=i;
-      });
-      dataStartIdx=1; // 헤더 다음 행부터 데이터
-    }
-  }
-
-  (rows||[]).forEach((raw, rowIdx)=>{
-    if(rowIdx < dataStartIdx) return; // 헤더행 스킵
-    let name='', club='', phone='';
-
-    if(Array.isArray(raw)){
-      const cols = raw.map(c=>(c??'').toString().trim());
-      // 빈 행 스킵
-      if(cols.every(c=>!c)) return;
-
-      if(nameCol>=0 && clubCol>=0){
-        // 헤더로 컬럼 위치를 알고 있는 경우
-        name = cols[nameCol]||'';
-        club = cols[clubCol]||'';
-        phone = phoneCol>=0 ? (cols[phoneCol]||'') : '';
-      } else {
-        // 헤더 없는 경우: 기존 방식 [이름, 클럽, 전화]
-        name=(cols[0]||'').trim();
-        club=(cols[1]||'').trim();
-        phone=(cols[2]||'').trim();
-        if(/^\d+$/.test(phone)) phone='';
-      }
-
-    }else if(raw && typeof raw==='object'){
-      const vals=Object.values(raw||{});
-      name=(raw.name ?? raw.이름 ?? raw.회원명 ?? raw.선수명 ?? vals[0] ?? '').toString().trim();
-      club=(raw.club ?? raw.클럽 ?? raw.클럽명 ?? raw.소속 ?? vals[1] ?? '').toString().trim();
-      phone=(raw.phone ?? raw.전화번호 ?? raw.휴대폰 ?? vals[2] ?? '').toString().trim();
-    }else{
-      let line=(raw||'').toString().trim();
-      if(!line) return;
-      let parts=line.split(/\t|,|;/).map(x=>x.trim()).filter(Boolean);
-      if(parts.length<2) parts=line.split(/\s{2,}/).map(x=>x.trim()).filter(Boolean);
-      if(parts.length<2) parts=line.split(/\s+/).map(x=>x.trim()).filter(Boolean);
-      name=parts[0]||''; club=parts[1]||''; phone=parts[2]||'';
-      if(/^\d+$/.test(phone)) phone='';
-    }
-
-    if(!name || !club) return;
-    // 헤더행 혼입 방지
-    if(HEADER_WORDS.test(name) || HEADER_WORDS.test(club)) return;
-    club=_m26Club(club);
-    if(!name || !club) return;
-    const key=_m26Name(name)+'__'+_m26Club(club);
-    out.push({key,name:name.replace(/\s+/g,' ').trim(),club,phone});
+  return normalizeRegistryRows(rows,{
+    normalizeClub:_m26Club,
+    normalizeName:_m26Name
   });
-  const map=new Map();
-  out.forEach(r=>map.set(r.key,r));
-  return [...map.values()];
 }
 async function applyMemberRegistry2026(rows, mode){
   const incoming=parseMemberRegistry2026Rows(rows);
@@ -20531,17 +20466,15 @@ function _isRegistryClean(members, version, year){
 async function loadRegistry(year){
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
   try{
-    const snap=await getDoc(doc(db,'memberRegistries',String(year)));
-    if(snap.exists()){
-      const data = snap.data();
-      const members = data.members||[];
-      const version = data.version||'';
-      if(!_isRegistryClean(members, version, year)){
+    const loaded=await loadRegistryDocument({db,doc,getDoc,year});
+    if(loaded.exists){
+      if(!_isRegistryClean(loaded.members, loaded.version, year)){
         console.warn(`⚠️ memberRegistries/${year} 버전 불일치 - 그대로 사용`);
       }
-      G_REGISTRY[year]=members;
+      G_REGISTRY[year]=loaded.members;
+    }else{
+      G_REGISTRY[year]=[];
     }
-    else { G_REGISTRY[year]=[]; }
     REGISTRY_YEARS_LOADED.push(year);
   }catch(e){
     G_REGISTRY[year]=[];
@@ -20551,8 +20484,9 @@ async function loadRegistry(year){
 }
 async function saveRegistry(year){
   const members=G_REGISTRY[year]||[];
-  await setDoc(doc(db,'memberRegistries',String(year)),{
-    members, version: _registryVersion(year), updatedAt:serverTimestamp()
+  await saveRegistryDocument({
+    db,doc,setDoc,serverTimestamp,year,members,
+    version:_registryVersion(year)
   });
 }
 async function getRegistryYears(){
@@ -20942,26 +20876,25 @@ async function importRegistryFromFile(input){
   const file=input?.files?.[0]; if(!file) return;
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   await ensureXLSX();
-  const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]];
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
   const rawRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-  if(!rawRows.length){ toast('데이터가 없습니다','error'); return; }
-  const hdr=rawRows[0].map(c=>(c??'').toString().trim());
-  let nameCol=-1,clubCol=-1,regionCol=-1,subCol=-1;
-  hdr.forEach((h,i)=>{ if(/회원명|선수명|이름|성명/.test(h)) nameCol=i; else if(/주클럽|등록클럽|클럽/.test(h)) clubCol=i; else if(/지역/.test(h)) regionCol=i; else if(/부클럽|중복/.test(h)) subCol=i; });
-  if(nameCol<0||clubCol<0){ toast('회원명/클럽 컬럼을 찾지 못했습니다','error'); return; }
-  const newRows=[]; rawRows.slice(1).forEach(row=>{ const name=(row[nameCol]??'').toString().trim(); const club=(row[clubCol]??'').toString().trim(); if(!name||!club) return; newRows.push({name,club,region:regionCol>=0?(row[regionCol]??'').toString().trim():'',subClub:subCol>=0?(row[subCol]??'').toString().trim():''}); });
-  if(!newRows.length){ toast('유효한 데이터가 없습니다','error'); return; }
-  if(!confirm(`${year}년 명단을 ${newRows.length}명으로 교체하시겠습니까?`)) return;
+  const parsed=parseOfficialRegistryExcelRows(rawRows);
+  if(!parsed.ok){ toast(parsed.error,'error'); input.value=''; return; }
+  const newRows=parsed.rows;
+  if(!confirm(`${year}년 명단을 ${newRows.length}명으로 교체하시겠습니까?`)){ input.value=''; return; }
   G_REGISTRY[year]=newRows; sl(true);
   try{
     await saveRegistry(year);
     try{ await renderRegistryMgr(); }catch(uiErr){ console.warn('renderRegistryMgr failed after importRegistryFromFile', uiErr); }
     try{ await renderRegistryTab(); }catch(uiErr){ console.warn('renderRegistryTab failed after importRegistryFromFile', uiErr); }
     toast(`${newRows.length}명 업로드 완료`,'success');
-  } catch(e){
+  }catch(e){
     toast('저장 실패: '+e.message,'error');
   }
-  sl(false); input.value='';
+  sl(false);
+  input.value='';
 }
 async function exportRegistryExcel(){ const year=parseInt(ge('regYearSel')?.value||2026); const members=await loadRegistry(year); await ensureXLSX(); const wsData=[['지역구분','주클럽','회원명','부클럽'],...members.map(m=>[m.region||'',m.club||'',m.name||'',m.subClub||''])]; const wb2=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet(wsData),`${year}년 등록명단`); XLSX.writeFile(wb2,`김해테니스_등록선수_${year}_${new Date().toISOString().substring(0,10)}.xlsx`); }
 function exportRegistryExcelMgr(){ exportRegistryExcel(); }
