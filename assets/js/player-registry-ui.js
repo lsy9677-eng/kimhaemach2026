@@ -5,6 +5,29 @@
  * 데이터 저장/수정은 하지 않고 HTML 생성만 담당한다.
  */
 
+
+function splitSubClubs(raw){
+  return [...new Set(
+    String(raw||'').split(',').map(s=>String(s||'').trim()).filter(Boolean)
+  )];
+}
+
+function buildPrimarySubBadges(member, escapeHtml, {compact=false}={}){
+  const mainClub=String(member?.club||'').trim();
+  const subClubs=splitSubClubs(member?.subClub)
+    .filter(c=>c && c!==mainClub);
+
+  // 단일 클럽 회원은 기존 화면 유지: 배지를 추가하지 않는다.
+  if(!subClubs.length) return '';
+
+  const fs=compact?'.56rem':'.64rem';
+  const pad=compact?'1px 5px':'2px 7px';
+  return `<span class="primary-sub-club-badges" style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0">
+    ${mainClub?`<span class="badge" style="font-size:${fs};padding:${pad};background:#dcfce7;color:#166534;border:1px solid #86efac;white-space:nowrap">주 ${escapeHtml(mainClub)}</span>`:''}
+    <span class="badge" style="font-size:${fs};padding:${pad};background:#f3e8ff;color:#7e22ce;border:1px solid #d8b4fe;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">부 ${subClubs.map(escapeHtml).join(', ')}</span>
+  </span>`;
+}
+
 export function buildPlayerRecordCard({
   row,
   highlight=false,
@@ -17,9 +40,7 @@ export function buildPlayerRecordCard({
   const tag = row?.isReg
     ? '<span class="badge bg-green" style="font-size:.68rem">등록선수</span>'
     : '<span class="badge bg-gray" style="font-size:.68rem">현재참가/기록</span>';
-  const subTag=row?.subClub
-    ? `<span class="badge bg-blue" style="font-size:.68rem">${escapeHtml(row.subClub)}</span>`
-    : '';
+  const subTag=buildPrimarySubBadges(row,escapeHtml);
   const bestRank=summary.bestRank?`${summary.bestRank}위`:'기록없음';
   const phone=summary.displayPhone||'전화번호 없음';
 
@@ -54,7 +75,12 @@ export function buildRegistryManagerTable({
   }
 
   const rows=members.map((m,idx)=>`<tr style="border-bottom:1px solid var(--border)">
-    <td style="padding:5px 8px"><input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${escapeHtml(m.name||'')}" id="rmgr_n_${idx}"></td>
+    <td style="padding:5px 8px">
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+        <input class="form-input" style="padding:3px 6px;font-size:.78rem;width:70px" value="${escapeHtml(m.name||'')}" id="rmgr_n_${idx}">
+        ${buildPrimarySubBadges(m,escapeHtml,{compact:true})}
+      </div>
+    </td>
     <td style="padding:5px 8px">
       <select class="form-select" style="padding:3px 6px;font-size:.78rem" id="rmgr_c_${idx}">
         ${(clubs||[]).map(c=>`<option ${c===m.club?'selected':''}>${escapeHtml(c)}</option>`).join('')}
@@ -116,9 +142,7 @@ export function buildRegistryRegionSections({
         : '';
 
       const chips=rows.map(m=>{
-        const sub=m.subClub
-          ? `<span class="sub-badge" style="font-size:.58rem;background:#7c3aed;color:#fff;border-radius:999px;padding:1px 5px;font-weight:900;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0">부 ${escapeHtml(m.subClub)}</span>`
-          : '';
+        const sub=buildPrimarySubBadges(m,escapeHtml,{compact:true});
         const adminBtns=admin
           ? `<span style="display:inline-flex;gap:3px;margin-left:auto;flex:0 0 auto"><button class="btn btn-outline" style="font-size:.58rem;padding:1px 5px;min-height:22px" onclick="event.stopPropagation();quickEditRegistryMember(${year},${m.__idx})">수정</button><button class="btn btn-danger" style="font-size:.58rem;padding:1px 5px;min-height:22px" onclick="event.stopPropagation();quickDeleteRegistryMember(${year},${m.__idx})">삭제</button></span>`
           : '';
