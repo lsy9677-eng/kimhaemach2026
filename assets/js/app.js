@@ -17551,6 +17551,43 @@ function openRoster(tid,div){
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
 
+
+function openAdvancedDataTools(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  cm('mAdminSettings');
+  om('mAdvancedDataTools');
+}
+
+function advancedDataRecalc(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  if(!confirm('선수 승/패 통계를 현재 저장된 경기결과 기준으로 다시 계산할까요?')) return;
+  if(!confirm('재계산을 진행합니다. 계속하시겠습니까?')) return;
+  cm('mAdvancedDataTools');
+  recalcAllPlayerStats();
+}
+
+function advancedOpenHistoryExcel(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  cm('mAdvancedDataTools');
+  om('mHistExcel');
+}
+
+function advancedOpenSelectiveClear(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  if(!confirm('선택한 대회의 팀·경기·선수 이력이 삭제될 수 있습니다.\n먼저 백업했는지 확인해 주세요.\n\n계속하시겠습니까?')) return;
+  if(!confirm('삭제 도구를 여시겠습니까?\n실제 삭제 전에도 대상 대회를 다시 확인하세요.')) return;
+  cm('mAdvancedDataTools');
+  openSelectiveClearModal();
+}
+
+function advancedCleanupHistories(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  if(!confirm('개인기록 중복/삭제대회 데이터를 정리합니다.\n먼저 JSON 백업을 권장합니다.\n\n계속하시겠습니까?')) return;
+  if(!confirm('개인기록 정리를 실행하시겠습니까?')) return;
+  cm('mAdvancedDataTools');
+  cleanupPlayerHistories();
+}
+
 let CLUB_MGR_MEMBERS_CACHE=[];
 
 async function openClubMgr(){
@@ -21975,7 +22012,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
