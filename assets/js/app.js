@@ -734,7 +734,7 @@ function grpLabel(gi){ return `${Number(gi)+1}조`; }
 import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
-import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions}from'./clubs.js';
+import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -17552,7 +17552,52 @@ function openRoster(tid,div){
 }
 
 function openClubMgr(){renderCL();om('mClubs');}
-function renderCL(){ge('clubList').innerHTML=G.clubs.map((c,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-weight:500">${c}</span><button class="btn btn-danger" style="padding:3px 8px;font-size:.7rem" onclick="delClub(${i})">삭제</button></div>`).join('');}
+function renderCL(){
+  const list=ge('clubList');
+  if(!list) return;
+  const clubs=(G.clubs||[]);
+  if(!clubs.length){
+    list.innerHTML='<div style="padding:12px;text-align:center;color:var(--text3)">등록된 클럽이 없습니다</div>';
+    return;
+  }
+  list.innerHTML=clubs.map((c,i)=>{
+    const phone=getClubContact(G.meta,c);
+    const region=getClubDefaultRegion(G.meta,c);
+    return `<div class="club-mgr-row" style="display:grid;grid-template-columns:minmax(90px,.8fr) minmax(145px,1.1fr) minmax(120px,1fr) auto;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:800;color:var(--primary-dark);white-space:nowrap">${esc(c)}</span>
+      <input class="form-input" data-club-phone="${escAttr(c)}" value="${escAttr(phone)}" placeholder="경기이사 전화번호" inputmode="tel" style="font-size:.78rem;padding:5px 7px">
+      <input class="form-input" data-club-region="${escAttr(c)}" value="${escAttr(region)}" placeholder="기본 소속코트" style="font-size:.78rem;padding:5px 7px">
+      <button class="btn btn-danger" style="padding:4px 8px;font-size:.7rem;white-space:nowrap" onclick="delClub(${i})">삭제</button>
+    </div>`;
+  }).join('');
+}
+async function saveClubManagerDetails(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const phoneInputs=[...document.querySelectorAll('#clubList [data-club-phone]')];
+  const regionInputs=[...document.querySelectorAll('#clubList [data-club-region]')];
+
+  phoneInputs.forEach(input=>{
+    const club=(input.dataset.clubPhone||'').trim();
+    const phone=(input.value||'').trim();
+    if(club) saveClubContact(G.meta,club,phone,{setPasswordIfMissing:true});
+  });
+  regionInputs.forEach(input=>{
+    const club=(input.dataset.clubRegion||'').trim();
+    const region=normalizeRegionLabel(input.value||'');
+    if(club) setClubDefaultRegion(G.meta,club,region);
+  });
+
+  sl(true);
+  try{
+    await saveMeta();
+    sl(false);
+    toast('클럽 연락처·기본 소속코트 저장 완료되었습니다.','success');
+    renderCL();
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+  }
+}
 async function addClub(){const v=ge('newClubInput').value.trim();if(!v){toast('클럽명 입력','error');return;}if(G.clubs.includes(v)){toast('이미 있는 클럽','error');return;}G.clubs.push(v);await saveMeta();renderCL();popSel();popCF();ge('newClubInput').value='';toast(v+' 추가됨','success');}
 async function delClub(i){if(!confirm('삭제?'))return;G.clubs.splice(i,1);await saveMeta();renderCL();popSel();}
 function normalizeThirdPlaceMode(mode, teamCount){
@@ -20778,7 +20823,7 @@ async function quickEditRegistryMember(year, idx){
   const suggestedRegion=currentRegion || getClubDefaultRegion(G.meta,newClub);
   const newRegionRaw=prompt(`소속 코트/지역 수정\n현재: ${currentRegion||'미배정'}\n\n클럽 기본값이 있으면 자동 제안됩니다.`, suggestedRegion);
   if(newRegionRaw===null) return;
-  const newRegion=String(newRegionRaw||'').trim();
+  const newRegion=normalizeRegionLabel(newRegionRaw);
 
   if(newName===oldName && newClub===normalizeClub(oldClub) && newRegion===currentRegion){
     toast('변경된 내용이 없습니다','info');
@@ -21809,7 +21854,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,

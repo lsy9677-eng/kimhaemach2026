@@ -161,7 +161,7 @@ export function getClubDefaultRegion(meta, club){
 export function setClubDefaultRegion(meta, club, region){
   if(!club) return '';
   const map=ensureClubDefaultRegions(meta);
-  const value=String(region||'').trim();
+  const value=normalizeRegionLabel(region);
   if(value) map[club]=value;
   else delete map[club];
   return value;
@@ -184,4 +184,12 @@ export function applyClubDefaultRegions(meta, members, {onlyMissing=true}={}){
     return {...member,region};
   });
   return {members:next,changed};
+}
+
+
+export function normalizeRegionLabel(region){
+  const raw=String(region||'').trim();
+  if(!raw) return '';
+  // 3.중부 / 3 중부 / 3-중부 / 3) 중부 / 3:중부 -> 중부
+  return raw.replace(/^\s*\d+\s*[\.\-\)\:]?\s*/,'').trim();
 }
