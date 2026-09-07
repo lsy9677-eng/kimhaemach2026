@@ -169,3 +169,76 @@ export function buildNoCourtAssignedHtml(){
     <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조 코트 배정은 표시용입니다. 실제 코트 현황판은 경기 코트 배정 후 자동 반영됩니다.</div>
   </div>`;
 }
+
+
+export function buildSharedWaitingCardHtml({
+  key='',
+  matchId='',
+  headline='경기 대기',
+  detail='공용 대기',
+  metaHtml='',
+  priority=0,
+  theme={},
+  elapsedBadgeHtml='',
+  manual=false,
+  canManage=false,
+  targetCourt='',
+  escapeHtml=(x)=>String(x||''),
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const k=escapeAttr(key);
+  const id=escapeAttr(matchId);
+  const tc=escapeAttr(targetCourt);
+  const smsType=targetCourt?'court_changed':'queue_registered';
+  const bg=theme?.bg||'#fff';
+  const bd=theme?.bd||'var(--border)';
+  const fg=theme?.fg||'var(--primary-dark)';
+
+  return `<div class="court-wait-card" draggable="${canManage?'true':'false'}" ondragstart="onCourtCardDragStart(event,'${k}','${id}')" ondragend="onCourtCardDragEnd(event)" style="padding:8px 10px;border-radius:10px;background:${bg};border:2px solid ${bd}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:.78rem;font-weight:900;color:${fg};line-height:1.35;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeHtml(headline)}</div>
+        <div style="font-size:.72rem;color:${fg};margin-top:3px">${escapeHtml(detail)}</div>
+        ${metaHtml||''}
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
+          ${canManage?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${k}','${id}','${smsType}','${tc}',${Number(priority||0)})">📨 문자</button>`:''}
+          <button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="showCourtMovePicker('${k}','${id}')">코트 선택</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+        <span class="court-wait-priority">${Number(priority||0)}</span>
+        ${elapsedBadgeHtml||''}
+        ${manual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}
+      </div>
+    </div>
+  </div>`;
+}
+
+export function buildSharedWaitingSectionHtml({
+  key='',
+  total=0,
+  visibleCount=0,
+  hiddenCount=0,
+  expanded=false,
+  defaultVisibleCount=10,
+  cardsHtml='',
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const k=escapeAttr(key);
+  const hasItems=Number(visibleCount||0)>0;
+  const showToggle=Number(total||0)>Number(defaultVisibleCount||10);
+
+  return `<div class="court-drop-zone" ondragover="onCourtDropOver(event)" ondragleave="onCourtDropLeave(event)" ondrop="onCourtDrop(event,'${k}','')" style="margin-bottom:12px;padding:12px 14px;border:1px solid #f6d28b;border-radius:14px;background:#fff8e8">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:.84rem;font-weight:900;color:#9a6400">⏳ 공용대기 ${Number(total||0)}경기</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <div style="font-size:.7rem;color:#9a6400">위 카드가 우선순위 1번</div>
+        ${showToggle?`<button class="btn btn-outline" type="button" style="font-size:.68rem;padding:4px 9px;min-height:28px;border-color:#e8b353;color:#9a6400;background:#fff7df" onclick="toggleCourtBoardSharedExpanded('${k}')">${expanded?`접기 (${Number(total||0)})`:`더보기 +${Number(hiddenCount||0)}`}</button>`:''}
+      </div>
+    </div>
+    ${hasItems
+      ? `<div class="shared-wait-stack">${cardsHtml||''}</div>${Number(hiddenCount||0)>0?`<div style="margin-top:8px;font-size:.74rem;color:#9a6400;font-weight:700">아래 더보기로 나머지 ${Number(hiddenCount||0)}경기 확인</div>`:''}`
+      : `<div style="padding:10px 12px;border:1px dashed #f6d28b;border-radius:10px;background:#fff;font-size:.78rem;color:#9a6400">여기로 카드를 옮기면 공용 대기 상태로 유지됩니다.</div>`}
+    <div class="court-drop-hint">카드를 각 코트로 드래그하거나, 코트 선택 버튼으로 수동 배정할 수 있습니다. 코트에서 다시 이 영역으로 드래그하거나 공용 대기를 선택하면 복귀합니다.</div>
+  </div>`;
+}

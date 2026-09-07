@@ -727,7 +727,7 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
-import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml}from'./court-status-ui.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1814,17 +1814,50 @@ function renderCourtStatusBoard(key, div){
   const sharedWaitingHiddenCount=Math.max(0, sharedWaiting.length-sharedWaitingVisible.length);
   const waitingCount=processedItems.reduce((sum,item)=>sum+((item.__visibleWaiting||[]).length),0);
   const emptyCount=processedItems.filter(x=>x.status==='empty').length;
-  const sharedWaitingHtml = `<div class="court-drop-zone" ondragover="onCourtDropOver(event)" ondragleave="onCourtDropLeave(event)" ondrop="onCourtDrop(event,'${key}','')" style="margin-bottom:12px;padding:12px 14px;border:1px solid #f6d28b;border-radius:14px;background:#fff8e8">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <div style="font-size:.84rem;font-weight:900;color:#9a6400">⏳ 공용대기 ${sharedWaiting.length}경기</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <div style="font-size:.7rem;color:#9a6400">위 카드가 우선순위 1번</div>
-          ${sharedWaiting.length>sharedWaitingDefaultVisibleCount?`<button class="btn btn-outline" type="button" style="font-size:.68rem;padding:4px 9px;min-height:28px;border-color:#e8b353;color:#9a6400;background:#fff7df" onclick="toggleCourtBoardSharedExpanded('${key}')">${sharedWaitingExpanded?`접기 (${sharedWaiting.length})`:`더보기 +${sharedWaitingHiddenCount}`}</button>`:''}
-        </div>
-      </div>
-      ${sharedWaitingVisible.length?`<div class="shared-wait-stack">${sharedWaitingVisible.map((w,idx)=>{ const wi=describeCourtBoardMatch(key,w); const priority=idx+1; const headline=((wi.title&&wi.title!=='TBD vs TBD')?wi.title:((wi.rawTitle&&wi.rawTitle!=='TBD vs TBD')?wi.rawTitle:(wi.autoTitle||'경기 대기'))); const targetCourt=String(w.__sharedCourtLabel||'').trim(); const detailParts=[wi.label, targetCourt?`${targetCourt} 배정예정`:'공용 대기']; const isManual=!!w.manualSharedHold || !!String(w.manualCourtTarget||'').trim(); const assignedElapsed = buildElapsedMetaLine(w.courtAssignedAt||'', 'wait_placed'); const metaEntries=[]; if(assignedElapsed.clock) metaEntries.push({...assignedElapsed, prefix:'대기배치'}); return `<div class="court-wait-card" draggable="${canManageBracket()?'true':'false'}" ondragstart="onCourtCardDragStart(event,'${key}','${String(w.id)}')" ondragend="onCourtCardDragEnd(event)" style="padding:8px 10px;border-radius:10px;background:${getCourtBoardPhaseColor(wi,w).bg};border:2px solid ${getCourtBoardPhaseColor(wi,w).bd}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="min-width:0;flex:1"><div style="font-size:.78rem;font-weight:900;color:${getCourtBoardPhaseColor(wi,w).fg};line-height:1.35;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(headline)}</div><div style="font-size:.72rem;color:${getCourtBoardPhaseColor(wi,w).fg};margin-top:3px">${esc(detailParts.join(' · '))}</div>${renderElapsedMetaBlocks(metaEntries, getCourtBoardPhaseColor(wi,w).fg)}<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${canManageBracket()?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${key}','${String(w.id)}','${targetCourt?'court_changed':'queue_registered'}','${targetCourt}',${priority})">📨 문자</button>`:''}<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="showCourtMovePicker('${key}','${String(w.id)}')">코트 선택</button></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="court-wait-priority">${priority}</span>${assignedElapsed.badge?`<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${assignedElapsed.badge.bg};color:${assignedElapsed.badge.color};border:1px solid ${assignedElapsed.badge.bd}">${assignedElapsed.badge.text}</span>`:''}${isManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}</div></div></div>`; }).join('')}</div>${sharedWaitingHiddenCount?`<div style="margin-top:8px;font-size:.74rem;color:#9a6400;font-weight:700">아래 더보기로 나머지 ${sharedWaitingHiddenCount}경기 확인</div>`:''}`:`<div style="padding:10px 12px;border:1px dashed #f6d28b;border-radius:10px;background:#fff;font-size:.78rem;color:#9a6400">여기로 카드를 옮기면 공용 대기 상태로 유지됩니다.</div>`}
-      <div class="court-drop-hint">카드를 각 코트로 드래그하거나, 코트 선택 버튼으로 수동 배정할 수 있습니다. 코트에서 다시 이 영역으로 드래그하거나 공용 대기를 선택하면 복귀합니다.</div>
-    </div>`;
+  const sharedWaitingCardsHtml=sharedWaitingVisible.map((w,idx)=>{
+    const wi=describeCourtBoardMatch(key,w);
+    const priority=idx+1;
+    const headline=((wi.title&&wi.title!=='TBD vs TBD')
+      ? wi.title
+      : ((wi.rawTitle&&wi.rawTitle!=='TBD vs TBD') ? wi.rawTitle : (wi.autoTitle||'경기 대기')));
+    const targetCourt=String(w.__sharedCourtLabel||'').trim();
+    const detailParts=[wi.label,targetCourt?`${targetCourt} 배정예정`:'공용 대기'];
+    const isManual=!!w.manualSharedHold || !!String(w.manualCourtTarget||'').trim();
+    const assignedElapsed=buildElapsedMetaLine(w.courtAssignedAt||'','wait_placed');
+    const metaEntries=[];
+    if(assignedElapsed.clock) metaEntries.push({...assignedElapsed,prefix:'대기배치'});
+    const theme=getCourtBoardPhaseColor(wi,w);
+    const elapsedBadgeHtml=assignedElapsed.badge
+      ? `<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${assignedElapsed.badge.bg};color:${assignedElapsed.badge.color};border:1px solid ${assignedElapsed.badge.bd}">${assignedElapsed.badge.text}</span>`
+      : '';
+
+    return buildSharedWaitingCardHtml({
+      key,
+      matchId:String(w.id),
+      headline,
+      detail:detailParts.join(' · '),
+      metaHtml:renderElapsedMetaBlocks(metaEntries,theme.fg),
+      priority,
+      theme,
+      elapsedBadgeHtml,
+      manual:isManual,
+      canManage:canManageBracket(),
+      targetCourt,
+      escapeHtml:esc,
+      escapeAttr:escAttr
+    });
+  }).join('');
+
+  const sharedWaitingHtml=buildSharedWaitingSectionHtml({
+    key,
+    total:sharedWaiting.length,
+    visibleCount:sharedWaitingVisible.length,
+    hiddenCount:sharedWaitingHiddenCount,
+    expanded:sharedWaitingExpanded,
+    defaultVisibleCount:sharedWaitingDefaultVisibleCount,
+    cardsHtml:sharedWaitingCardsHtml,
+    escapeAttr:escAttr
+  });
   const cards=hasCourts ? processedItems.map(item=>{
     const info=item.current ? describeCourtBoardMatch(key,item.current) : null;
     const assignedGroups=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? getAutoAssignedGroupsForCourt(key, item.court) : [];
