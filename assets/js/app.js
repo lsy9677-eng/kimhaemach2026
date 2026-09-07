@@ -727,6 +727,7 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1677,6 +1678,25 @@ window.moveCourtQueueCard = moveCourtQueueCard;
 window.showCourtMovePicker = showCourtMovePicker;
 window.closeCourtMovePicker = closeCourtMovePicker;
 window.applyCourtMovePicker = applyCourtMovePicker;
+
+
+
+function renderCourtWaitingBadge(match){
+  return buildCourtWaitingBadgeHtml(match,{escapeHtml:esc});
+}
+
+function renderCourtCardShell(args){
+  return buildCourtCardShellHtml(args);
+}
+
+function renderCourtStatusSummary(counts){
+  return buildCourtStatusSummaryHtml({
+    total:counts?.total||0,
+    live:counts?.live||0,
+    waiting:counts?.waiting||0,
+    empty:counts?.empty||0
+  });
+}
 
 
 function getCourtBoardVisibleWaiting(item){
