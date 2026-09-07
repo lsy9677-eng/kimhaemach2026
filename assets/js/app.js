@@ -7188,15 +7188,15 @@ async function delTeam(key,idx){
   if(isIndividual){
     if(!AD && !verifyIndividualEditPin(team,'삭제')) return;
   }else{
-    if(!(AD || REG)){
-      toast('경기이사 로그인 후 삭제할 수 있습니다','error');
+    const deleteCheck=canDeleteRegistration({
+      isAdmin:AD,
+      isDirector:REG,
+      teamClub:baseClub(team.club||''),
+      directorClub:baseClub(REG_CLUB||'')
+    });
+    if(!deleteCheck.ok){
+      toast(deleteCheck.error==='삭제 권한이 없습니다'?'경기이사 로그인 후 내 클럽 팀만 삭제할 수 있습니다':deleteCheck.error,'error');
       return;
-    }
-    if(!AD && REG){
-      const _t=(G.teams[key]||[])[idx];
-      if(!_t||baseClub(_t.club||'')!==baseClub(REG_CLUB||'')){
-        toast('내 클럽 팀만 삭제할 수 있습니다','error'); return;
-      }
     }
     if(!AD && isRegDeadlinePassed()){
       toast(`등록 기한이 만료되어 삭제할 수 없습니다.\n${regDeadlineLabel()}`,'error');
@@ -7275,13 +7275,15 @@ function openETeam(key,idx){
   window.__IND_TEAM_EDIT_VERIFIED = false;
 
   if(!isIndividual){
-    const canManage = AD || REG;
-    if(!canManage){
-      toast('경기이사 로그인 후 수정할 수 있습니다','error');
+    const editAccess=canDeleteRegistration({
+      isAdmin:AD,
+      isDirector:REG,
+      teamClub:baseClub(team.club||''),
+      directorClub:baseClub(REG_CLUB||'')
+    });
+    if(!editAccess.ok){
+      toast(AD||REG?'내 클럽 팀만 수정할 수 있습니다':'경기이사 로그인 후 수정할 수 있습니다','error');
       return;
-    }
-    if(!AD && REG && baseClub(team.club||'')!==baseClub(REG_CLUB||'')){
-      toast('내 클럽 팀만 수정할 수 있습니다','error'); return;
     }
   }else{
     if(!AD && !verifyIndividualEditPin(team,'수정')) return;
@@ -7451,8 +7453,14 @@ async function saveETeam(){
     return;
   }
 
-  if(!(AD || REG)){
-    toast('경기이사 로그인 후 수정할 수 있습니다','error');
+  const saveEditAccess=canDeleteRegistration({
+    isAdmin:AD,
+    isDirector:REG,
+    teamClub:baseClub(team.club||''),
+    directorClub:baseClub(REG_CLUB||'')
+  });
+  if(!saveEditAccess.ok){
+    toast(AD||REG?'내 클럽 팀만 수정할 수 있습니다':'경기이사 로그인 후 수정할 수 있습니다','error');
     return;
   }
   if(!AD && isRegDeadlinePassed()){
@@ -7475,18 +7483,12 @@ async function saveETeam(){
     }
   }
 
-  if(np.length < 1){
-    toast('선수를 1명 이상 입력해주세요','error');
-    return;
-  }
-  if(np.length > totalSlots){
-    toast(`최대 ${totalSlots}명까지 등록할 수 있습니다`,'error');
-    return;
-  }
-
-  const uniq = new Set(np);
-  if(uniq.size !== np.length){
-    toast('이름 중복','error');
+  const editCheck=validateTeamEdit({
+    players:np,
+    maxPlayers:totalSlots
+  });
+  if(!editCheck.ok){
+    toast(editCheck.error,'error');
     return;
   }
 
