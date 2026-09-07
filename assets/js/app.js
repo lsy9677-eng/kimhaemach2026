@@ -725,7 +725,7 @@ import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,b
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
-import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount}from'./courts.js';
+import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1078,11 +1078,11 @@ function getDrawAllowedCourts(key){
 }
 function getBracketAllowedCourts(key){
   const {tid,div}=_k2td(key);
-  const fromTournament=getDivisionConfiguredCourts(tid, div);
-  if(fromTournament.length) return fromTournament;
-  const fromDraw=getDrawAllowedCourts(key);
-  const all=getTournamentCourtList(tid, true);
-  return fromDraw.length ? fromDraw : all;
+  return resolveAllowedCourts({
+    divisionCourts:getDivisionConfiguredCourts(tid,div),
+    drawCourts:getDrawAllowedCourts(key),
+    tournamentCourts:getTournamentCourtList(tid,true)
+  });
 }
 function renderDrawAllowedCourtSelector(key, selectedCourts=[]){
   const selected=(selectedCourts||[]).map(String).filter(Boolean);
@@ -1143,19 +1143,11 @@ function getMatchMemoByObj(m){
   try{ return String(m?.memo || '').trim(); }catch(e){ return ''; }
 }
 function getCourtShareMap(key){
-  const out={};
   try{
-    const groups=(G.draws?.[key]?.groups)||[];
-    groups.forEach((grp,gi)=>{
-      (Array.isArray(grp?.courts)?grp.courts:[]).forEach(c=>{
-        const cc=String(c||'').trim();
-        if(!cc) return;
-        if(!out[cc]) out[cc]=[];
-        out[cc].push(gi);
-      });
-    });
-  }catch(e){}
-  return out;
+    return buildCourtShareMap((G.draws?.[key]?.groups)||[]);
+  }catch(e){
+    return {};
+  }
 }
 function getGroupCourtShareBadges(key, gi){
   try{
@@ -1165,8 +1157,9 @@ function getGroupCourtShareBadges(key, gi){
     const map=getCourtShareMap(key);
     return courts.map(c=>{
       const count=Array.isArray(map[c]) ? map[c].length : 0;
-      if(count>=3) return `<span class="badge" style="font-size:.74rem;padding:4px 9px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">🚨 ${c} ${count}조배정</span>`;
-      if(count===2) return `<span class="badge" style="font-size:.74rem;padding:4px 9px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74">⚠️ ${c} 2조배정</span>`;
+      const level=getCourtShareLevel(count);
+      if(level==='danger') return `<span class="badge" style="font-size:.74rem;padding:4px 9px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">🚨 ${c} ${count}조배정</span>`;
+      if(level==='warning') return `<span class="badge" style="font-size:.74rem;padding:4px 9px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74">⚠️ ${c} 2조배정</span>`;
       return '';
     }).filter(Boolean).join(' ');
   }catch(e){ return ''; }

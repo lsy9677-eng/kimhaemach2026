@@ -37,3 +37,61 @@ export function uniqueCourtList(list){
 export function getCourtGroupCount(groups){
   return normalizeCourtGroups(groups).reduce((sum,g)=>sum+g.count,0);
 }
+
+
+export function resolveAllowedCourts({
+  divisionCourts=[],
+  drawCourts=[],
+  tournamentCourts=[]
+}){
+  const div=uniqueCourtList(divisionCourts);
+  if(div.length) return div;
+
+  const draw=uniqueCourtList(drawCourts);
+  if(draw.length) return draw;
+
+  return uniqueCourtList(tournamentCourts);
+}
+
+export function buildCourtShareMap(groups){
+  const out={};
+  (Array.isArray(groups)?groups:[]).forEach((grp,gi)=>{
+    (Array.isArray(grp?.courts)?grp.courts:[]).forEach(c=>{
+      const cc=String(c||'').trim();
+      if(!cc) return;
+      if(!out[cc]) out[cc]=[];
+      out[cc].push(gi);
+    });
+  });
+  return out;
+}
+
+export function getCourtShareLevel(count){
+  const n=Number(count||0);
+  if(n>=3) return 'danger';
+  if(n===2) return 'warning';
+  if(n===1) return 'normal';
+  return 'none';
+}
+
+export function getCourtShareSummary(groups){
+  const map=buildCourtShareMap(groups);
+  const rows=Object.entries(map).map(([court,groupIndexes])=>({
+    court,
+    groupIndexes:[...groupIndexes],
+    count:groupIndexes.length,
+    level:getCourtShareLevel(groupIndexes.length)
+  }));
+
+  rows.sort((a,b)=>{
+    if(b.count!==a.count) return b.count-a.count;
+    return a.court.localeCompare(b.court,'ko',{numeric:true});
+  });
+
+  return {
+    rows,
+    shared:rows.filter(x=>x.count>=2),
+    overloaded:rows.filter(x=>x.count>=3),
+    totalCourts:rows.length
+  };
+}
