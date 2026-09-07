@@ -20616,37 +20616,56 @@ async function openRegistryMgr(){
   const cs=ge('rmgr_club'); if(cs) cs.innerHTML=G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
   // 일괄 변경용 클럽 셀렉트 채우기
   const bc=ge('rmgr_bulk_club'); if(bc) bc.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
-  const dc=ge('rmgr_default_club');
-  if(dc){
-    dc.innerHTML='<option value="">-- 클럽 선택 --</option>'+G.clubs.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
-    dc.onchange=()=>syncDefaultRegionEditor();
-  }
-  syncDefaultRegionEditor();
   await renderRegistryMgr(); om('mRegistryMgr');
 }
 
-function syncDefaultRegionEditor(){
-  const club=(ge('rmgr_default_club')?.value||'').trim();
-  const input=ge('rmgr_default_region');
-  if(input) input.value=club?getClubDefaultRegion(G.meta,club):'';
+function renderClubDefaultRegionManager(){
+  const wrap=ge('clubDefaultRegionList');
+  if(!wrap) return;
+  const clubs=(G.clubs||[]).slice().sort((a,b)=>a.localeCompare(b,'ko'));
+  if(!clubs.length){
+    wrap.innerHTML='<div style="padding:10px;color:var(--text3);font-size:.78rem">등록된 클럽이 없습니다.</div>';
+    return;
+  }
+  wrap.innerHTML=clubs.map((club,i)=>{
+    const region=getClubDefaultRegion(G.meta,club);
+    const phone=getClubContact(G.meta,club);
+    return `<div style="display:grid;grid-template-columns:minmax(100px,1.1fr) minmax(120px,1fr) minmax(130px,1fr);gap:6px;align-items:center;padding:7px 8px;border:1px solid var(--border);border-radius:9px;background:#fff">
+      <div style="font-size:.82rem;font-weight:800;color:var(--primary-dark)">${esc(club)}</div>
+      <div style="font-size:.72rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(phone||'경기이사 연락처 미등록')}</div>
+      <input class="form-input" id="club_default_region_${i}" data-club="${escAttr(club)}" value="${escAttr(region)}" placeholder="예) 국제 / 장유 / 동부" style="font-size:.78rem;padding:5px 7px">
+    </div>`;
+  }).join('');
 }
 
-async function saveClubDefaultRegionSetting(){
+async function saveAllClubDefaultRegions(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const club=(ge('rmgr_default_club')?.value||'').trim();
-  const region=(ge('rmgr_default_region')?.value||'').trim();
-  if(!club){ toast('클럽을 선택하세요','info'); return; }
-  if(!region){ toast('기본 소속 코트/지역을 입력하세요','info'); return; }
-  setClubDefaultRegion(G.meta,club,region);
+  const inputs=[...(document.querySelectorAll('#clubDefaultRegionList [data-club]')||[])];
+  if(!inputs.length){ toast('저장할 클럽이 없습니다','info'); return; }
+
+  inputs.forEach(input=>{
+    const club=(input.dataset.club||'').trim();
+    const region=(input.value||'').trim();
+    if(club) setClubDefaultRegion(G.meta,club,region);
+  });
+
   sl(true);
   try{
     await saveMeta();
     sl(false);
-    toast(`${club} 기본 소속 코트를 "${region}"으로 저장했습니다`,'success');
+    toast('클럽별 기본 소속코트 저장 완료되었습니다.','success');
+    renderClubDefaultRegionManager();
   }catch(e){
     sl(false);
     toast('저장 실패: '+e.message,'error');
   }
+}
+
+function syncDefaultRegionEditor(){
+  renderClubDefaultRegionManager();
+}
+async function saveClubDefaultRegionSetting(){
+  return saveAllClubDefaultRegions();
 }
 
 async function applyDefaultRegionsToUnassigned(){
@@ -21805,7 +21824,7 @@ Object.assign(window,{ closeStickyAlert, goToStickyAlertMatch, toggleModalFullsc
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
+  registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
   toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
