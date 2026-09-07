@@ -54,17 +54,6 @@ const DEFAULT_COURT_GROUPS = [
 ];
 const DEFAULT_COURT_LIST = DEFAULT_COURT_GROUPS.flatMap(g=>g.courts);
 let _customCourtGroupList = []; // [{name,count}]
-function normalizeCourtGroups(raw){
-  return (Array.isArray(raw)?raw:[]).map(g=>{
-    const name=String(g?.name||g?.title||'').trim();
-    const count=Math.max(1, parseInt(g?.count||g?.courts?.length||0)||0);
-    if(!name || !count) return null;
-    return {name, count};
-  }).filter(Boolean);
-}
-function expandCourtGroups(groups){
-  return normalizeCourtGroups(groups).map(g=>({title:g.name,courts:Array.from({length:g.count},(_,i)=>`${g.name}${i+1}`)}));
-}
 function getTournamentCourtGroups(tid, fallback=true){
   try{
     const t=(G.tournaments||[]).find(x=>x.id===tid);
@@ -75,8 +64,7 @@ function getTournamentCourtGroups(tid, fallback=true){
 }
 function getTournamentCourtList(tid, fallback=true){
   const groups=getTournamentCourtGroups(tid, fallback);
-  const list=expandCourtGroups(groups).flatMap(g=>g.courts||[]).map(String).filter(Boolean);
-  return [...new Set(list)];
+  return uniqueCourtList(buildCourtList(groups));
 }
 function getDraftCourtGroups(mode='create'){
   const raw = mode==='edit' ? (window._etCourtGroupList||[]) : _customCourtGroupList;
@@ -95,7 +83,7 @@ function getCourtGroupsForTournamentOrKey(input, fallback=true){
 }
 function getAllKnownCourts(tid=''){
   const list=[...DEFAULT_COURT_LIST, ...getTournamentCourtList(tid,true)];
-  return [...new Set(list.map(String).filter(Boolean))];
+  return uniqueCourtList(list);
 }
 function renderCourtGroupManager(mode='create'){
   const list=mode==='edit' ? (window._etCourtGroupList||[]) : _customCourtGroupList;
@@ -737,6 +725,7 @@ import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,b
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
+import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount}from'./courts.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1264,7 +1253,7 @@ function toggleCourtAccordion(id, btn){
 window.toggleCourtAccordion = toggleCourtAccordion;
 
 function getTotalCourtCount(){
-  return DEFAULT_COURT_GROUPS.reduce((sum,g)=>sum + ((g.courts||[]).length), 0);
+  return getCourtGroupCount(DEFAULT_COURT_GROUPS);
 }
 function renderCourtInfoBody(){
   const body=ge('mCourtInfoBody');
