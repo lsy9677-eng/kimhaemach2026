@@ -734,6 +734,7 @@ function grpLabel(gi){ return `${Number(gi)+1}조`; }
 import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
+import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone}from'./clubs.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -3714,29 +3715,21 @@ function onRegLoginClubChange(){
   const club = ge('regClubLogin')?.value||'';
   const hint = ge('regLoginHint');
   if(!hint) return;
-  if(!club){ hint.textContent=''; return; }
-  const storedPw = (G.meta.clubPasswords||{})[club]||'';
-  if(storedPw){
-    hint.textContent='✅ 클럽 전용 비밀번호로 로그인하세요.';
-    hint.style.color='var(--success)';
-  } else {
-    hint.textContent=`공용 비밀번호(${G.meta.regPw||'202601'})로 로그인하세요.`;
-    hint.style.color='#e67e22';
-  }
+  const info=getClubLoginHint(G.meta,club);
+  hint.textContent=info.text;
+  if(info.color) hint.style.color=info.color;
 }
 
 let FORCE_PW_CLUB='';
 Object.defineProperty(window,'FORCE_PW_CLUB',{get:()=>FORCE_PW_CLUB,set:(v)=>{FORCE_PW_CLUB=v;}});
 function getRegSessionVersion(){
-  return Number(G?.meta?.regSessionVersion||1);
+  return getDirectorSessionVersion(G.meta);
 }
 function isClubPasswordCustom(club){
-  return !!((G.meta.clubPasswordCustom||{})[club]);
+  return isClubPasswordCustomValue(G.meta,club);
 }
 function getClubTempPassword(club){
-  const contacts=G.meta.clubContacts||{};
-  if(contacts[club]) return String(contacts[club]).replace(/[^0-9]/g,'').slice(-4);
-  return G.meta.regPw||'';
+  return getClubTemporaryPassword(G.meta,club);
 }
 function openForceClubPwModal(club){
   FORCE_PW_CLUB=club;
@@ -3789,9 +3782,7 @@ function doRegLogin(){
   if(!club){ toast('클럽을 선택해주세요','error'); return; }
   if(!pw)  { toast('비밀번호를 입력해주세요','error'); return; }
 
-  const storedPw = (G.meta.clubPasswords||{})[club] || '';
-  const fallback = G.meta.regPw || '202601';
-  const valid    = storedPw || fallback;
+  const valid = getClubLoginPassword(G.meta,club);
 
   if(pw === valid){
     _completeRegLogin(club);
@@ -3851,15 +3842,8 @@ let CHANGE_PW_CLUB = '';
 Object.defineProperty(window,'CHANGE_PW_CLUB',{get:()=>CHANGE_PW_CLUB,set:(v)=>{CHANGE_PW_CLUB=v;}});
 
 function shouldPromptPwChange(club){
-  // isCustom=false면 아직 전용 비번 미설정
-  const isCustom = !!(G.meta.clubPasswordCustom||{})[club];
-  if(isCustom) return false;
-  // localStorage로 "이미 건너뜀" 체크 (기기별)
-  const skipped = localStorage.getItem('pw_skip_'+club);
-  const skipTime = skipped ? Number(skipped) : 0;
-  // 건너뛴 후 3일 이내면 다시 안 뜸
-  if(Date.now() - skipTime < 3*24*60*60*1000) return false;
-  return true;
+  const skipped = Number(localStorage.getItem('pw_skip_'+club)||0);
+  return shouldPromptClubPasswordChange(G.meta,club,skipped,Date.now());
 }
 
 function openChangePwIfNeeded(club){
@@ -3950,7 +3934,7 @@ async function saveFirstLoginPhone(){
     if(msg){ msg.textContent='올바른 전화번호를 입력해주세요 (9자리 이상)'; msg.style.color='var(--danger)'; }
     return;
   }
-  const last4 = phone.replace(/[^0-9]/g,'').slice(-4);
+  const last4 = derivePasswordFromPhone(phone);
   sl(true);
   try{
     if(!G.meta.clubContacts) G.meta.clubContacts={};
@@ -3991,8 +3975,7 @@ function applyRegLoginUI(){
 function isDirectorSessionValid(){
   try{
     const localVer = Number(localStorage.getItem('reg_session_version')||'1');
-    const remoteVer = Number(G?.meta?.regSessionVersion||1);
-    return localVer === remoteVer;
+    return isDirectorSessionVersionValid(G.meta,localVer);
   }catch(e){
     return true;
   }
