@@ -193,3 +193,34 @@ export function normalizeRegionLabel(region){
   // 3.중부 / 3 중부 / 3-중부 / 3) 중부 / 3:중부 -> 중부
   return raw.replace(/^\s*\d+\s*[\.\-\)\:]?\s*/,'').trim();
 }
+
+
+export function inferClubRegionFromMembers(members, club, normalizeClubFn){
+  const counts=new Map();
+  const target=(normalizeClubFn?normalizeClubFn(club):club)||'';
+  for(const m of (members||[])){
+    const mc=(normalizeClubFn?normalizeClubFn(m?.club||''):(m?.club||''))||'';
+    if(mc!==target) continue;
+    const r=normalizeRegionLabel(m?.region||'');
+    if(!r) continue;
+    counts.set(r,(counts.get(r)||0)+1);
+  }
+  if(!counts.size) return {region:'',count:0,total:0,ratio:0};
+  const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0],'ko'));
+  const [region,count]=sorted[0];
+  const total=[...counts.values()].reduce((a,b)=>a+b,0);
+  return {region,count,total,ratio:total?count/total:0};
+}
+
+export function buildClubRegionOptions(members, defaultRegions={}){
+  const set=new Set();
+  Object.values(defaultRegions||{}).forEach(v=>{
+    const r=normalizeRegionLabel(v);
+    if(r) set.add(r);
+  });
+  (members||[]).forEach(m=>{
+    const r=normalizeRegionLabel(m?.region||'');
+    if(r) set.add(r);
+  });
+  return [...set].sort((a,b)=>a.localeCompare(b,'ko'));
+}

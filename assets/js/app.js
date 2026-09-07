@@ -734,7 +734,7 @@ function grpLabel(gi){ return `${Number(gi)+1}조`; }
 import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
-import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel}from'./clubs.js';
+import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -17551,26 +17551,138 @@ function openRoster(tid,div){
   ge('mRosterB').innerHTML=html;om('mRoster');
 }
 
-function openClubMgr(){renderCL();om('mClubs');}
+let CLUB_MGR_MEMBERS_CACHE=[];
+
+async function openClubMgr(){
+  try{
+    CLUB_MGR_MEMBERS_CACHE=await loadRegistry(2026);
+  }catch(e){
+    CLUB_MGR_MEMBERS_CACHE=[];
+  }
+  populateClubMgrRegionFilter();
+  renderCL();
+  om('mClubs');
+}
+
+function getClubMgrResolvedRegion(club){
+  const saved=getClubDefaultRegion(G.meta,club);
+  if(saved) return {region:normalizeRegionLabel(saved),source:'saved',count:0,total:0};
+  const inferred=inferClubRegionFromMembers(CLUB_MGR_MEMBERS_CACHE,club,normalizeClub);
+  return {
+    region:normalizeRegionLabel(inferred.region||''),
+    source:inferred.region?'registry':'none',
+    count:inferred.count||0,
+    total:inferred.total||0
+  };
+}
+
+function populateClubMgrRegionFilter(){
+  const sel=ge('clubMgrRegionFilter');
+  if(!sel) return;
+  const current=sel.value||'';
+  const regions=buildClubRegionOptions(CLUB_MGR_MEMBERS_CACHE,G.meta.clubDefaultRegions||{});
+  sel.innerHTML='<option value="">전체 구장/지역</option>'+regions.map(r=>`<option value="${escAttr(r)}">${esc(r)}</option>`).join('');
+  if(regions.includes(current)) sel.value=current;
+}
+
 function renderCL(){
   const list=ge('clubList');
   if(!list) return;
-  const clubs=(G.clubs||[]);
-  if(!clubs.length){
-    list.innerHTML='<div style="padding:12px;text-align:center;color:var(--text3)">등록된 클럽이 없습니다</div>';
+
+  const q=(ge('clubMgrSearch')?.value||'').trim().toLowerCase();
+  const filter=normalizeRegionLabel(ge('clubMgrRegionFilter')?.value||'');
+  const sortMode=ge('clubMgrSort')?.value||'region';
+
+  let rows=(G.clubs||[]).map((club,i)=>{
+    const info=getClubMgrResolvedRegion(club);
+    return {
+      club,
+      originalIndex:i,
+      phone:getClubContact(G.meta,club),
+      saved:getClubDefaultRegion(G.meta,club),
+      region:info.region||'',
+      source:info.source,
+      count:info.count||0,
+      total:info.total||0
+    };
+  });
+
+  if(q) rows=rows.filter(r=>r.club.toLowerCase().includes(q));
+  if(filter) rows=rows.filter(r=>normalizeRegionLabel(r.region)===filter);
+
+  rows.sort((a,b)=>{
+    if(sortMode==='club') return a.club.localeCompare(b.club,'ko');
+    if(sortMode==='unassigned'){
+      const au=a.region?1:0, bu=b.region?1:0;
+      if(au!==bu) return au-bu;
+      return a.club.localeCompare(b.club,'ko');
+    }
+    const ar=a.region||'zzzz', br=b.region||'zzzz';
+    return ar.localeCompare(br,'ko') || a.club.localeCompare(b.club,'ko');
+  });
+
+  const assigned=rows.filter(r=>r.region).length;
+  const inferred=rows.filter(r=>r.source==='registry').length;
+  const unassigned=rows.length-assigned;
+  const sum=ge('clubMgrSummary');
+  if(sum) sum.textContent=`표시 ${rows.length}클럽 · 기본코트 ${assigned} · 명단기준 ${inferred} · 미지정 ${unassigned}`;
+
+  if(!rows.length){
+    list.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3)">조건에 맞는 클럽이 없습니다</div>';
     return;
   }
-  list.innerHTML=clubs.map((c,i)=>{
-    const phone=getClubContact(G.meta,c);
-    const region=getClubDefaultRegion(G.meta,c);
-    return `<div class="club-mgr-row" style="display:grid;grid-template-columns:minmax(90px,.8fr) minmax(145px,1.1fr) minmax(120px,1fr) auto;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-weight:800;color:var(--primary-dark);white-space:nowrap">${esc(c)}</span>
-      <input class="form-input" data-club-phone="${escAttr(c)}" value="${escAttr(phone)}" placeholder="경기이사 전화번호" inputmode="tel" style="font-size:.78rem;padding:5px 7px">
-      <input class="form-input" data-club-region="${escAttr(c)}" value="${escAttr(region)}" placeholder="기본 소속코트" style="font-size:.78rem;padding:5px 7px">
-      <button class="btn btn-danger" style="padding:4px 8px;font-size:.7rem;white-space:nowrap" onclick="delClub(${i})">삭제</button>
+
+  list.innerHTML=rows.map(r=>{
+    const sourceBadge=r.source==='saved'
+      ? '<span style="font-size:.58rem;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:999px;padding:1px 5px;font-weight:800">저장값</span>'
+      : r.source==='registry'
+        ? `<span style="font-size:.58rem;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;border-radius:999px;padding:1px 5px;font-weight:800">명단기준${r.total?` ${r.count}/${r.total}`:''}</span>`
+        : '<span style="font-size:.58rem;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:999px;padding:1px 5px;font-weight:800">미지정</span>';
+
+    return `<div class="club-mgr-row" style="display:grid;grid-template-columns:28px minmax(95px,.85fr) minmax(145px,1.05fr) minmax(130px,1fr) 70px;gap:7px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" class="club-mgr-check" data-club-check="${escAttr(r.club)}">
+      <div style="min-width:0">
+        <div style="font-weight:900;color:var(--primary-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.club)}</div>
+        <div style="margin-top:3px">${sourceBadge}</div>
+      </div>
+      <input class="form-input" data-club-phone="${escAttr(r.club)}" value="${escAttr(r.phone)}" placeholder="경기이사 전화번호" inputmode="tel" style="font-size:.78rem;padding:5px 7px">
+      <input class="form-input" data-club-region="${escAttr(r.club)}" value="${escAttr(r.region)}" placeholder="기본 소속코트" style="font-size:.78rem;padding:5px 7px">
+      <button class="btn btn-danger" style="padding:4px 8px;font-size:.7rem;white-space:nowrap" onclick="delClub(${r.originalIndex})">삭제</button>
     </div>`;
   }).join('');
 }
+
+function toggleClubMgrSelectAll(checked){
+  document.querySelectorAll('#clubList .club-mgr-check').forEach(el=>el.checked=!!checked);
+}
+
+function applyBulkClubRegion(){
+  const region=normalizeRegionLabel(ge('clubMgrBulkRegion')?.value||'');
+  if(!region){toast('일괄 적용할 코트/지역을 입력하세요','info');return;}
+  const checked=[...document.querySelectorAll('#clubList .club-mgr-check:checked')];
+  if(!checked.length){toast('적용할 클럽을 선택하세요','info');return;}
+
+  const targets=new Set(checked.map(c=>c.dataset.clubCheck));
+  document.querySelectorAll('#clubList [data-club-region]').forEach(input=>{
+    if(targets.has(input.dataset.clubRegion)) input.value=region;
+  });
+  toast(`${checked.length}개 클럽에 "${region}"을 적용했습니다. 저장 버튼을 눌러 확정하세요.`,'success');
+}
+
+function autoFillClubRegionsFromRegistry(){
+  let changed=0;
+  document.querySelectorAll('#clubList [data-club-region]').forEach(input=>{
+    if((input.value||'').trim()) return;
+    const club=input.dataset.clubRegion||'';
+    const inferred=inferClubRegionFromMembers(CLUB_MGR_MEMBERS_CACHE,club,normalizeClub);
+    if(inferred.region){
+      input.value=normalizeRegionLabel(inferred.region);
+      changed++;
+    }
+  });
+  toast(changed?`${changed}개 클럽을 명단 기준으로 자동 채웠습니다. 저장 버튼을 눌러 확정하세요.`:'자동 채울 클럽이 없습니다',changed?'success':'info');
+}
+
 async function saveClubManagerDetails(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   const phoneInputs=[...document.querySelectorAll('#clubList [data-club-phone]')];
@@ -17592,12 +17704,14 @@ async function saveClubManagerDetails(){
     await saveMeta();
     sl(false);
     toast('클럽 연락처·기본 소속코트 저장 완료되었습니다.','success');
+    populateClubMgrRegionFilter();
     renderCL();
   }catch(e){
     sl(false);
     toast('저장 실패: '+e.message,'error');
   }
 }
+
 async function addClub(){const v=ge('newClubInput').value.trim();if(!v){toast('클럽명 입력','error');return;}if(G.clubs.includes(v)){toast('이미 있는 클럽','error');return;}G.clubs.push(v);await saveMeta();renderCL();popSel();popCF();ge('newClubInput').value='';toast(v+' 추가됨','success');}
 async function delClub(i){if(!confirm('삭제?'))return;G.clubs.splice(i,1);await saveMeta();renderCL();popSel();}
 function normalizeThirdPlaceMode(mode, teamCount){
@@ -20717,6 +20831,13 @@ async function applyDefaultRegionsToUnassigned(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const members=await loadRegistry(year);
+
+  (G.clubs||[]).forEach(club=>{
+    if(getClubDefaultRegion(G.meta,club)) return;
+    const inferred=inferClubRegionFromMembers(members,club,normalizeClub);
+    if(inferred.region) setClubDefaultRegion(G.meta,club,inferred.region);
+  });
+
   const result=applyClubDefaultRegions(G.meta,members,{onlyMissing:true});
   if(!result.changed){
     toast('기본 소속 코트를 적용할 미배정 선수가 없습니다','info');
@@ -21854,7 +21975,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
