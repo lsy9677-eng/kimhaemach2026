@@ -726,6 +726,7 @@ import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassw
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
+import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1678,26 +1679,8 @@ window.closeCourtMovePicker = closeCourtMovePicker;
 window.applyCourtMovePicker = applyCourtMovePicker;
 
 
-function getCourtBoardDisplayLimitsForMatch(m){
-  const phase=String(m?.phase||'');
-  if(phase==='main' || phase==='playin') return {bucket:'main', limit:1};
-  return {bucket:'group', limit:Number.POSITIVE_INFINITY};
-}
 function getCourtBoardVisibleWaiting(item){
-  const waiting=[...(item?.waiting||[])];
-  const visible=[];
-  const overflow=[];
-  const counts={group:0,main:0};
-  waiting.forEach(m=>{
-    const cfg=getCourtBoardDisplayLimitsForMatch(m);
-    if((counts[cfg.bucket]||0) < cfg.limit){
-      counts[cfg.bucket]=(counts[cfg.bucket]||0)+1;
-      visible.push(m);
-    }else{
-      overflow.push(m);
-    }
-  });
-  return {visible, overflow};
+  return splitCourtWaitingByDisplayLimit(item?.waiting||[]);
 }
 function getCourtBoardSharedOverflowItems(key, items, selectedCourts, usedCourts){
   const shared=[];
