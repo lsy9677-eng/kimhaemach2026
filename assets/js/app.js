@@ -727,7 +727,7 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
-import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml}from'./court-status-ui.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1840,15 +1840,22 @@ function renderCourtStatusBoard(key, div){
     const currentMetaEntries=[];
     // 현재경기: 시합시작 시각 1개만 표시
     if(currentElapsed.clock) currentMetaEntries.push({...currentElapsed, prefix:'시합시작'});
-    const line = info
-      ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark);line-height:1.35;flex:1;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(info.title)}</div><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end">${isCurrentManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}${currentElapsed.badge?`<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${currentElapsed.badge.bg};color:${currentElapsed.badge.color};border:1px solid ${currentElapsed.badge.bd}">${currentElapsed.badge.text}</span>`:''}</div></div>${phaseChip}${renderElapsedMetaBlocks(currentMetaEntries, currentElapsed.badge?currentElapsed.badge.color:'var(--text2)')}<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${canManageBracket()?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${key}','${String(item.current?.id||'')}','match_started','${String(item.court||'')}',0)">📨 문자</button>`:''}</div>`
-      : `<div style="font-size:.84rem;font-weight:800;color:#64748b;line-height:1.45">배정된 진행 경기 없음</div>
-         <div style="font-size:.74rem;color:var(--text3);margin-top:4px">경기 코트 배정을 하면 이 코트에 표시됩니다.</div>`;
+    const currentTitleHtml = info
+      ? `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark);line-height:1.35;flex:1;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(info.title)}</div><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end">${isCurrentManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}${currentElapsed.badge?`<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${currentElapsed.badge.bg};color:${currentElapsed.badge.color};border:1px solid ${currentElapsed.badge.bd}">${currentElapsed.badge.text}</span>`:''}</div></div>`
+      : '';
+    const currentMetaHtml = info ? renderElapsedMetaBlocks(currentMetaEntries, currentElapsed.badge?currentElapsed.badge.color:'var(--text2)') : '';
+    const currentActionsHtml = info
+      ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${canManageBracket()?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${key}','${String(item.current?.id||'')}','match_started','${String(item.court||'')}',0)">📨 문자</button>`:''}</div>`
+      : '';
+    const line = buildCourtCurrentSectionHtml({
+      titleHtml:currentTitleHtml,
+      phaseHtml:phaseChip,
+      metaHtml:currentMetaHtml,
+      actionsHtml:currentActionsHtml,
+      empty:!info
+    });
     const waitingList=[...(item.__visibleWaiting||[])];
-    const waitingHtml = waitingList.length
-      ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #f2c46d">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:.76rem;font-weight:900;color:#9a6400">⏳ 코트 대기 ${waitingList.length}경기</div><div style="font-size:.68rem;color:#9a6400">맨 위 카드가 우선대기</div></div>
-          <div class="court-wait-stack">${waitingList.map((w,idx)=>{
+    const waitingCardsHtml = waitingList.length ? `${waitingList.map((w,idx)=>{
               const wi=describeCourtBoardMatch(key,w);
               const priority=idx+1;
               const isManual=!!String(w.manualCourtTarget||'').trim() || !!w.manualSharedHold;
@@ -1862,22 +1869,22 @@ function renderCourtStatusBoard(key, div){
                   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="court-wait-priority">${priority}</span>${waitElapsed.badge?`<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${waitElapsed.badge.bg};color:${waitElapsed.badge.color};border:1px solid ${waitElapsed.badge.bd}">${waitElapsed.badge.text}</span>`:''}${isManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}</div>
                 </div>
               </div>`;
-            }).join('')}</div>
-        </div>`
-      : `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(148,163,184,.35);font-size:.74rem;color:#64748b">대기중 경기 없음</div>`;
-    return `<div class="court-drop-zone" ondragover="onCourtDropOver(event)" ondragleave="onCourtDropLeave(event)" ondrop="onCourtDrop(event,'${key}','${String(item.court)}')" style="border:1.5px solid ${item.current?(currentTheme?.bd||'var(--border)'):'var(--border)'};border-radius:14px;padding:12px;background:${item.current?(currentTheme?.softBg||'#fff'):'#fff'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">🎾 ${item.court}</div>
-        ${badge}
-      </div>
-      ${line}
-      ${waitingHtml}
-      <div class="court-drop-hint">카드를 이 코트로 드래그하면 현재 경기 뒤 대기열로 들어갑니다.</div>
-    </div>`;
-  }).join('') : `<div style="padding:18px 14px;border:1px dashed #bfdbfe;border-radius:14px;background:#fff">
-      <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin-bottom:6px">아직 경기 코트 배정이 없습니다</div>
-      <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조 코트 배정은 표시용입니다. 실제 코트 현황판은 경기 코트 배정 후 자동 반영됩니다.</div>
-    </div>`;
+            }).join('')}` : '';
+    const waitingHtml = buildCourtWaitingSectionHtml({
+      count:waitingList.length,
+      cardsHtml:waitingCardsHtml
+    });
+    return buildCourtDropZoneHtml({
+      key,
+      court:String(item.court),
+      headerBadgeHtml:badge,
+      currentSectionHtml:line,
+      waitingSectionHtml:waitingHtml,
+      borderColor:item.current?(currentTheme?.bd||'var(--border)'):'var(--border)',
+      background:item.current?(currentTheme?.softBg||'#fff'):'#fff',
+      escapeAttr:escAttr
+    });
+  }).join('') : buildNoCourtAssignedHtml();
   return buildCourtBoardFrameHtml({
     key,
     divisionLabel:dl(div),

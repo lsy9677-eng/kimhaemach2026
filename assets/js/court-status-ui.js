@@ -107,3 +107,65 @@ export function buildCourtBoardFrameHtml({
     </div>
   </div>`;
 }
+
+
+export function buildCourtCurrentSectionHtml({
+  titleHtml='',
+  phaseHtml='',
+  metaHtml='',
+  actionsHtml='',
+  empty=false
+}={}){
+  if(empty){
+    return `<div style="font-size:.84rem;font-weight:800;color:#64748b;line-height:1.45">배정된 진행 경기 없음</div>
+      <div style="font-size:.74rem;color:var(--text3);margin-top:4px">경기 코트 배정을 하면 이 코트에 표시됩니다.</div>`;
+  }
+  return `${titleHtml||''}${phaseHtml||''}${metaHtml||''}${actionsHtml||''}`;
+}
+
+export function buildCourtWaitingSectionHtml({
+  count=0,
+  cardsHtml='',
+  emptyText='대기중 경기 없음'
+}={}){
+  if(!count){
+    return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(148,163,184,.35);font-size:.74rem;color:#64748b">${emptyText}</div>`;
+  }
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #f2c46d">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <div style="font-size:.76rem;font-weight:900;color:#9a6400">⏳ 코트 대기 ${count}경기</div>
+      <div style="font-size:.68rem;color:#9a6400">맨 위 카드가 우선대기</div>
+    </div>
+    <div class="court-wait-stack">${cardsHtml||''}</div>
+  </div>`;
+}
+
+export function buildCourtDropZoneHtml({
+  key='',
+  court='',
+  headerBadgeHtml='',
+  currentSectionHtml='',
+  waitingSectionHtml='',
+  borderColor='var(--border)',
+  background='#fff',
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const k=escapeAttr(key);
+  const c=escapeAttr(court);
+  return `<div class="court-drop-zone" ondragover="onCourtDropOver(event)" ondragleave="onCourtDropLeave(event)" ondrop="onCourtDrop(event,'${k}','${c}')" style="border:1.5px solid ${borderColor};border-radius:14px;padding:12px;background:${background}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">🎾 ${court}</div>
+      ${headerBadgeHtml||''}
+    </div>
+    ${currentSectionHtml||''}
+    ${waitingSectionHtml||''}
+    <div class="court-drop-hint">카드를 이 코트로 드래그하면 현재 경기 뒤 대기열로 들어갑니다.</div>
+  </div>`;
+}
+
+export function buildNoCourtAssignedHtml(){
+  return `<div style="padding:18px 14px;border:1px dashed #bfdbfe;border-radius:14px;background:#fff">
+    <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin-bottom:6px">아직 경기 코트 배정이 없습니다</div>
+    <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조 코트 배정은 표시용입니다. 실제 코트 현황판은 경기 코트 배정 후 자동 반영됩니다.</div>
+  </div>`;
+}
