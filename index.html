@@ -2793,31 +2793,6 @@ function _buildPrelimPopupHtml(ctx, mode){
   }
   ${scriptClose}` : ''}
 
-<div class="modal-overlay" id="mAdvancedDataTools" onclick="if(event.target===this)cm('mAdvancedDataTools')">
-  <div class="modal-box" style="max-width:600px">
-    <div class="modal-header">
-      <h3>🛠 고급 데이터 도구</h3>
-      <button class="modal-close" onclick="cm('mAdvancedDataTools')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:9px;padding:10px 12px;color:#9a3412;font-size:.76rem;line-height:1.6;margin-bottom:12px">
-        ⚠️ 아래 기능은 저장된 기록을 재계산하거나 삭제할 수 있습니다.<br>
-        필요한 경우에만 사용하고, <b>삭제/정리 작업 전에는 먼저 백업</b>해 주세요.
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-outline" style="padding:11px;text-align:left" onclick="advancedDataRecalc()">🔄 관리자 복구(승패 재계산)<div style="font-size:.68rem;color:var(--text3);margin-top:3px">현재 저장된 경기결과 기준으로 선수 승/패 통계를 다시 계산합니다.</div></button>
-        <button class="btn btn-outline" style="padding:11px;text-align:left" onclick="advancedOpenHistoryExcel()">📥 과거대회 엑셀 업로드<div style="font-size:.68rem;color:var(--text3);margin-top:3px">과거 대회 선수기록을 추가 등록할 때만 사용합니다.</div></button>
-        <button class="btn btn-outline" style="padding:11px;text-align:left;border-color:#f59e0b" onclick="advancedOpenSelectiveClear()">🗑️ 대회별 개별 삭제<div style="font-size:.68rem;color:#92400e;margin-top:3px">팀·경기·선수 이력을 삭제할 수 있습니다. 2단계 확인 후 진행합니다.</div></button>
-        <button class="btn btn-outline" style="padding:11px;text-align:left;border-color:#f59e0b" onclick="advancedCleanupHistories()">🧹 개인기록 정리<div style="font-size:.68rem;color:#92400e;margin-top:3px">중복/삭제대회 관련 개인기록을 정리합니다. 2단계 확인 후 진행합니다.</div></button>
-      </div>
-      <div style="margin-top:12px;padding:9px 11px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:.7rem;color:var(--text3);line-height:1.55">
-        🔒 <b>전체 리셋(대회/팀/경기/선수)</b>은 안전을 위해 이 화면에서도 제공하지 않습니다.
-      </div>
-    </div>
-    <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdvancedDataTools')">닫기</button></div>
-  </div>
-</div>
-
 </body>
 </html>`;
 }
@@ -3102,6 +3077,31 @@ function exportPrelimImage(){
   }
 })();
 </script>
+
+<div class="modal-overlay" id="mAdvancedDataTools" onclick="if(event.target===this)cm('mAdvancedDataTools')">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-header">
+      <h3>🛠 고급 데이터 도구</h3>
+      <button class="modal-close" onclick="cm('mAdvancedDataTools')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:9px;padding:10px 12px;color:#9a3412;font-size:.76rem;line-height:1.6;margin-bottom:12px">
+        ⚠️ 아래 기능은 저장된 기록을 재계산하거나 삭제할 수 있습니다.<br>
+        필요한 경우에만 사용하고, <b>삭제/정리 작업 전에는 먼저 백업</b>해 주세요.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-outline" style="padding:11px;text-align:left" onclick="advancedDataRecalc()">🔄 관리자 복구(승패 재계산)<div style="font-size:.68rem;color:var(--text3);margin-top:3px">현재 저장된 경기결과 기준으로 선수 승/패 통계를 다시 계산합니다.</div></button>
+        <button class="btn btn-outline" style="padding:11px;text-align:left" onclick="advancedOpenHistoryExcel()">📥 과거대회 엑셀 업로드<div style="font-size:.68rem;color:var(--text3);margin-top:3px">과거 대회 선수기록을 추가 등록할 때만 사용합니다.</div></button>
+        <button class="btn btn-outline" style="padding:11px;text-align:left;border-color:#f59e0b" onclick="advancedOpenSelectiveClear()">🗑️ 대회별 개별 삭제<div style="font-size:.68rem;color:#92400e;margin-top:3px">팀·경기·선수 이력을 삭제할 수 있습니다. 2단계 확인 후 진행합니다.</div></button>
+        <button class="btn btn-outline" style="padding:11px;text-align:left;border-color:#f59e0b" onclick="advancedCleanupHistories()">🧹 개인기록 정리<div style="font-size:.68rem;color:#92400e;margin-top:3px">중복/삭제대회 관련 개인기록을 정리합니다. 2단계 확인 후 진행합니다.</div></button>
+      </div>
+      <div style="margin-top:12px;padding:9px 11px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:.7rem;color:var(--text3);line-height:1.55">
+        🔒 <b>전체 리셋(대회/팀/경기/선수)</b>은 안전을 위해 이 화면에서도 제공하지 않습니다.
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mAdvancedDataTools')">닫기</button></div>
+  </div>
+</div>
 
 </body>
 </html>

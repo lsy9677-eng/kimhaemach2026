@@ -17556,8 +17556,14 @@ function openRoster(tid,div){
 
 function openAdvancedDataTools(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
-  cm('mAdminSettings');
+  const target=document.getElementById('mAdvancedDataTools');
+  if(!target){
+    toast('고급 데이터 도구 화면을 찾지 못했습니다','error');
+    console.error('mAdvancedDataTools element missing');
+    return;
+  }
   om('mAdvancedDataTools');
+  setTimeout(()=>cm('mAdminSettings'),0);
 }
 
 function advancedDataRecalc(){
