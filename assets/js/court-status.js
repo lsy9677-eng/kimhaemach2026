@@ -54,3 +54,42 @@ export function getCourtBoardStatusCounts(items){
     empty
   };
 }
+
+
+export function sortCourtWaitingByPriority(waiting){
+  return [...(waiting||[])].sort((a,b)=>{
+    const ap=Number(a?.queuePriority ?? a?.priority ?? 999999);
+    const bp=Number(b?.queuePriority ?? b?.priority ?? 999999);
+    if(ap!==bp) return ap-bp;
+    const at=String(a?.courtAssignedAt||a?.waitingFirstAt||a?.queuedAt||a?.createdAt||'');
+    const bt=String(b?.courtAssignedAt||b?.waitingFirstAt||b?.queuedAt||b?.createdAt||'');
+    return at.localeCompare(bt);
+  });
+}
+
+export function getCourtQueueDisplayState(waiting){
+  const sorted=sortCourtWaitingByPriority(waiting);
+  const split=splitCourtWaitingByDisplayLimit(sorted);
+  return {
+    sorted,
+    visible:split.visible,
+    overflow:split.overflow,
+    visibleCount:split.visible.length,
+    overflowCount:split.overflow.length
+  };
+}
+
+export function getCourtBoardItemState(item){
+  const waitingState=getCourtQueueDisplayState(item?.waiting||[]);
+  return {
+    court:String(item?.court||''),
+    hasCurrent:!!item?.current,
+    current:item?.current||null,
+    waiting:waitingState.sorted,
+    visibleWaiting:waitingState.visible,
+    overflowWaiting:waitingState.overflow,
+    waitingCount:waitingState.sorted.length,
+    overflowCount:waitingState.overflowCount,
+    isEmpty:!item?.current && waitingState.sorted.length===0
+  };
+}

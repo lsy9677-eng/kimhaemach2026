@@ -242,3 +242,46 @@ export function buildSharedWaitingSectionHtml({
     <div class="court-drop-hint">카드를 각 코트로 드래그하거나, 코트 선택 버튼으로 수동 배정할 수 있습니다. 코트에서 다시 이 영역으로 드래그하거나 공용 대기를 선택하면 복귀합니다.</div>
   </div>`;
 }
+
+
+export function buildCourtWaitingItemHtml({
+  key='',
+  matchId='',
+  title='경기 대기',
+  label='',
+  metaHtml='',
+  priority=0,
+  theme={},
+  elapsedBadgeHtml='',
+  manual=false,
+  canManage=false,
+  targetCourt='',
+  escapeHtml=(x)=>String(x||''),
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const k=escapeAttr(key);
+  const id=escapeAttr(matchId);
+  const tc=escapeAttr(targetCourt);
+  const bg=theme?.bg||'#fff';
+  const bd=theme?.bd||'var(--border)';
+  const fg=theme?.fg||'var(--primary-dark)';
+
+  return `<div class="court-wait-card" draggable="${canManage?'true':'false'}" ondragstart="onCourtCardDragStart(event,'${k}','${id}')" ondragend="onCourtCardDragEnd(event)" style="padding:8px 10px;border-radius:10px;background:${bg};border:2px solid ${bd}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:.78rem;font-weight:900;color:${fg};line-height:1.35;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeHtml(title)}</div>
+        ${label?`<div style="font-size:.72rem;color:${fg};margin-top:3px">${escapeHtml(label)}</div>`:''}
+        ${metaHtml||''}
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
+          ${canManage?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${k}','${id}','court_changed','${tc}',${Number(priority||0)})">📨 문자</button>`:''}
+          <button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="showCourtMovePicker('${k}','${id}')">코트 선택</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+        <span class="court-wait-priority">${Number(priority||0)}</span>
+        ${elapsedBadgeHtml||''}
+        ${manual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}
+      </div>
+    </div>
+  </div>`;
+}

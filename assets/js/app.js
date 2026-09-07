@@ -726,8 +726,8 @@ import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassw
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
-import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
-import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml}from'./court-status-ui.js';
+import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1700,7 +1700,7 @@ function renderCourtStatusSummary(counts){
 
 
 function getCourtBoardVisibleWaiting(item){
-  return splitCourtWaitingByDisplayLimit(item?.waiting||[]);
+  return getCourtQueueDisplayState(item?.waiting||[]);
 }
 function getCourtBoardSharedOverflowItems(key, items, selectedCourts, usedCourts){
   const shared=[];
@@ -1896,12 +1896,25 @@ function renderCourtStatusBoard(key, div){
               const metaEntries=[];
               // 대기카드: 대기시작 시각 1개만
               if(waitElapsed.clock) metaEntries.push({...waitElapsed, prefix:'대기시작'});
-              return `<div class="court-wait-card" draggable="${canManageBracket()?'true':'false'}" ondragstart="onCourtCardDragStart(event,'${key}','${String(w.id)}')" ondragend="onCourtCardDragEnd(event)" style="padding:8px 10px;border-radius:10px;background:${getCourtBoardPhaseColor(wi,w).bg};border:2px solid ${getCourtBoardPhaseColor(wi,w).bd}">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-                  <div style="min-width:0;flex:1"><div style="font-size:.78rem;font-weight:900;color:${getCourtBoardPhaseColor(wi,w).fg};line-height:1.35;word-break:keep-all;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(wi.title)}</div><div style="font-size:.72rem;color:${getCourtBoardPhaseColor(wi,w).fg};margin-top:3px">${esc([wi.label, '대기중'].filter(Boolean).join(' · '))}</div>${renderElapsedMetaBlocks(metaEntries, getCourtBoardPhaseColor(wi,w).fg)}<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${canManageBracket()?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${key}','${String(w.id)}','court_changed','${String(item.court||'')}',${priority})">📨 문자</button>`:''}<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="showCourtMovePicker('${key}','${String(w.id)}')">코트 선택</button></div></div>
-                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="court-wait-priority">${priority}</span>${waitElapsed.badge?`<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${waitElapsed.badge.bg};color:${waitElapsed.badge.color};border:1px solid ${waitElapsed.badge.bd}">${waitElapsed.badge.text}</span>`:''}${isManual?'<span class="badge bg-blue" style="font-size:.66rem;padding:3px 7px">수동</span>':''}</div>
-                </div>
-              </div>`;
+              const waitTheme=getCourtBoardPhaseColor(wi,w);
+              const waitBadgeHtml=waitElapsed.badge
+                ? `<span class="badge" style="font-size:.66rem;padding:3px 7px;background:${waitElapsed.badge.bg};color:${waitElapsed.badge.color};border:1px solid ${waitElapsed.badge.bd}">${waitElapsed.badge.text}</span>`
+                : '';
+              return buildCourtWaitingItemHtml({
+                key,
+                matchId:String(w.id),
+                title:wi.title,
+                label:[wi.label,'대기중'].filter(Boolean).join(' · '),
+                metaHtml:renderElapsedMetaBlocks(metaEntries,waitTheme.fg),
+                priority,
+                theme:waitTheme,
+                elapsedBadgeHtml:waitBadgeHtml,
+                manual:isManual,
+                canManage:canManageBracket(),
+                targetCourt:String(item.court||''),
+                escapeHtml:esc,
+                escapeAttr:escAttr
+              });
             }).join('')}` : '';
     const waitingHtml = buildCourtWaitingSectionHtml({
       count:waitingList.length,
