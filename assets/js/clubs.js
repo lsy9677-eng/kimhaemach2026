@@ -143,3 +143,45 @@ export function registerFirstLoginContact(meta, club, phone){
   meta.clubPasswordCustom[club]=false;
   return {phone:normalized,password:last4,custom:false};
 }
+
+
+export function ensureClubDefaultRegions(meta){
+  if(!meta.clubDefaultRegions || typeof meta.clubDefaultRegions!=='object'){
+    meta.clubDefaultRegions={};
+  }
+  return meta.clubDefaultRegions;
+}
+
+export function getClubDefaultRegion(meta, club){
+  if(!club) return '';
+  const map=ensureClubDefaultRegions(meta);
+  return String(map[club]||'').trim();
+}
+
+export function setClubDefaultRegion(meta, club, region){
+  if(!club) return '';
+  const map=ensureClubDefaultRegions(meta);
+  const value=String(region||'').trim();
+  if(value) map[club]=value;
+  else delete map[club];
+  return value;
+}
+
+export function applyClubDefaultRegion(meta, member){
+  if(!member || member.region) return {...member};
+  const region=getClubDefaultRegion(meta,member.club);
+  return region ? {...member,region} : {...member};
+}
+
+export function applyClubDefaultRegions(meta, members, {onlyMissing=true}={}){
+  let changed=0;
+  const next=(members||[]).map(member=>{
+    if(!member) return member;
+    if(onlyMissing && String(member.region||'').trim()) return {...member};
+    const region=getClubDefaultRegion(meta,member.club);
+    if(!region) return {...member};
+    if(String(member.region||'').trim()!==region) changed++;
+    return {...member,region};
+  });
+  return {members:next,changed};
+}

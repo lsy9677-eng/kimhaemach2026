@@ -512,6 +512,21 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
         <span id="rmgrStat" style="font-size:.82rem;color:var(--text2);flex:1"></span>
         <label class="btn btn-outline" style="font-size:.78rem">📥 엑셀 업로드<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importRegistryFromFile(this)"></label>
       </div>
+      <!-- 클럽별 기본 소속 코트/지역 -->
+      <div style="background:linear-gradient(135deg,#eefbf3,#e8f7ee);border:1px solid #86d6a1;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:.78rem;font-weight:800;color:#166534;margin-bottom:5px">🎾 클럽별 기본 소속 코트/지역</div>
+        <div style="font-size:.7rem;color:#4b6b55;line-height:1.5;margin-bottom:7px">클럽별 기본값을 저장하면 신규 선수 추가 시 자동 입력됩니다. 기존 미배정 선수도 한 번에 적용할 수 있습니다.</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select class="form-select" id="rmgr_default_club" style="font-size:.82rem;min-width:130px">
+            <option value="">-- 클럽 선택 --</option>
+          </select>
+          <span style="font-size:.82rem;color:var(--text2)">→</span>
+          <input class="form-input" id="rmgr_default_region" placeholder="예) 국제 / 장유 / 1.동부" style="font-size:.82rem;width:155px">
+          <button class="btn btn-primary" style="padding:5px 11px;font-size:.8rem;white-space:nowrap;background:#15803d" onclick="saveClubDefaultRegionSetting()">기본값 저장</button>
+          <button class="btn btn-outline" style="padding:5px 11px;font-size:.8rem;white-space:nowrap" onclick="applyDefaultRegionsToUnassigned()">미배정 자동 적용</button>
+        </div>
+      </div>
+
       <!-- 일괄 지역 변경 -->
       <div style="background:linear-gradient(135deg,#e8f4fd,#dbeafe);border:1px solid #93c5fd;border-radius:8px;padding:10px 12px;margin-bottom:10px">
         <div style="font-size:.78rem;font-weight:700;color:#1e40af;margin-bottom:6px">🗺️ 클럽별 일괄 지역 변경</div>
