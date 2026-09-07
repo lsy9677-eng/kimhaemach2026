@@ -735,7 +735,7 @@ import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyN
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
-import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
+import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -7067,20 +7067,35 @@ async function registerTeam(){
 
   sl(true);
   if(!G.teams[key])G.teams[key]=[];
-  const newTeam={
-    club:isIndividual?(individualPlayers[0]?.clubsRaw||individualPlayers[1]?.clubsRaw||''):club,
-    players:names,
-    individualPlayers:isIndividual?individualPlayers:undefined,
-    clubTokens:isIndividual?[...new Set(individualPlayers.flatMap(p=>p.clubs||[]))]:undefined,
-    doublesCount:isIndividual?1:dbl,
-    mainPlayerCount:isIndividual?2:regMainCount,
-    pairLabel:isIndividual?getIndividualDisplayLine({individualPlayers}):'',
-    entryLabel:isIndividual?getIndividualDisplayLine({individualPlayers}):'',
-    tournamentType:isIndividual?'individual_pair':'team',
-    note:isIndividual?((ge('pNote')?.value||'').trim()):'',
-    editPin:isIndividual?((ge('pEditPin')?.value||'').trim()).replace(/\D/g,''):'',
-    registeredAt:new Date().toISOString()
-  };
+  const newTeam=isIndividual
+    ? buildIndividualRegistrationPayload({
+        club:(individualPlayers[0]?.clubsRaw||individualPlayers[1]?.clubsRaw||''),
+        players:names,
+        individualPlayers,
+        editPin:((ge('pEditPin')?.value||'').trim()).replace(/\D/g,''),
+        extra:{
+          clubTokens:[...new Set(individualPlayers.flatMap(p=>p.clubs||[]))],
+          doublesCount:1,
+          mainPlayerCount:2,
+          pairLabel:getIndividualDisplayLine({individualPlayers}),
+          entryLabel:getIndividualDisplayLine({individualPlayers}),
+          tournamentType:'individual_pair',
+          note:((ge('pNote')?.value||'').trim())
+        }
+      })
+    : buildTeamRegistrationPayload({
+        club,
+        players:names,
+        doublesCount:dbl,
+        extra:{
+          mainPlayerCount:regMainCount,
+          tournamentType:'team',
+          pairLabel:'',
+          entryLabel:'',
+          note:'',
+          editPin:''
+        }
+      });
   G.teams[key].push(newTeam);
   const newIdx=G.teams[key].length-1;
 
@@ -7422,17 +7437,19 @@ async function saveETeam(){
       {name:p2Name, clubsRaw:p2Club, clubs:parseClubAliases(p2Club), phone:p2Phone, career:p2Career, receiveSms:(p2ReceiveOrderSms||p2ReceiveResultSms), receiveOrderSms:p2ReceiveOrderSms, receiveResultSms:p2ReceiveResultSms}
     ];
     const backupTeam = JSON.parse(JSON.stringify(team));
-    team.players = [p1Name,p2Name];
-    team.individualPlayers = individualPlayers;
-    team.clubTokens = [...new Set(individualPlayers.flatMap(p=>p.clubs||[]))];
-    team.club = p1Club || p2Club || '';
-    team.pairLabel = getIndividualDisplayLine({individualPlayers});
-    team.entryLabel = getIndividualDisplayLine({individualPlayers});
-    team.note = note;
-    team.editPin = editPin;
-    team.tournamentType = 'individual_pair';
-    team.doublesCount = 1;
-    team.mainPlayerCount = 2;
+    const individualEditPayload=buildIndividualEditPayload({
+      club:(p1Club||p2Club||''),
+      players:[p1Name,p2Name],
+      individualPlayers,
+      editPin,
+      note,
+      pairLabel:getIndividualDisplayLine({individualPlayers}),
+      entryLabel:getIndividualDisplayLine({individualPlayers}),
+      extra:{
+        clubTokens:[...new Set(individualPlayers.flatMap(p=>p.clubs||[]))]
+      }
+    });
+    Object.assign(team,individualEditPayload);
 
     sl(true);
     try{
@@ -7508,10 +7525,12 @@ async function saveETeam(){
   const added = np.filter(n => !oldPlayers.includes(n));
 
   const backupTeam = JSON.parse(JSON.stringify(team));
-  team.club = newClub;
-  team.players = np;
-  team.doublesCount = dbl;
-  team.mainPlayerCount = mainCount;
+  Object.assign(team,buildTeamEditPayload({
+    club:newClub,
+    players:np,
+    doublesCount:dbl,
+    mainPlayerCount:mainCount
+  }));
 
   sl(true);
   try{

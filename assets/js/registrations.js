@@ -170,3 +170,45 @@ export function canDeleteRegistration({
   if(isDirector && teamClub && directorClub && teamClub===directorClub) return {ok:true,error:''};
   return {ok:false,error:'삭제 권한이 없습니다'};
 }
+
+
+export function buildTeamEditPayload({
+  club='',
+  players=[],
+  doublesCount=0,
+  mainPlayerCount=0,
+  extra={}
+}){
+  return {
+    club:String(club||'').trim(),
+    players:Array.isArray(players)?[...players]:[],
+    doublesCount:Number(doublesCount||0),
+    mainPlayerCount:Number(mainPlayerCount||0),
+    ...extra
+  };
+}
+
+export function buildIndividualEditPayload({
+  club='',
+  players=[],
+  individualPlayers=[],
+  editPin='',
+  note='',
+  pairLabel='',
+  entryLabel='',
+  extra={}
+}){
+  return {
+    club:String(club||'').trim(),
+    players:Array.isArray(players)?[...players]:[],
+    individualPlayers:Array.isArray(individualPlayers)?individualPlayers.map(p=>({...p})):[],
+    editPin:String(editPin||''),
+    note:String(note||''),
+    pairLabel:String(pairLabel||''),
+    entryLabel:String(entryLabel||''),
+    tournamentType:'individual_pair',
+    doublesCount:1,
+    mainPlayerCount:2,
+    ...extra
+  };
+}
