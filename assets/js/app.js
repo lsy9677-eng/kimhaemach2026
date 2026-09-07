@@ -734,7 +734,7 @@ function grpLabel(gi){ return `${Number(gi)+1}조`; }
 import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyNameClub,normalizeClub,formatRecentLabel}from'./players.js';
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
-import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone}from'./clubs.js';
+import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact}from'./clubs.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -3759,10 +3759,7 @@ async function saveForcedClubPassword(){
   if(pw1===tempPw){ if(msg){msg.textContent='임시 비밀번호와 동일한 값은 사용할 수 없습니다.'; msg.style.color='var(--danger)';} return; }
   sl(true);
   try{
-    if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-    if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-    G.meta.clubPasswords[club]=pw1;
-    G.meta.clubPasswordCustom[club]=true;
+    setClubPassword(G.meta,club,pw1,{custom:true});
     await saveMeta();
     sl(false);
     cm('mForceClubPw');
@@ -3897,10 +3894,7 @@ async function saveChangePw(){
   }
   sl(true);
   try{
-    if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-    if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-    G.meta.clubPasswords[club]=pw1;
-    G.meta.clubPasswordCustom[club]=true;
+    setClubPassword(G.meta,club,pw1,{custom:true});
     await saveMeta();
     sl(false);
     localStorage.removeItem('pw_skip_'+club);
@@ -3937,12 +3931,7 @@ async function saveFirstLoginPhone(){
   const last4 = derivePasswordFromPhone(phone);
   sl(true);
   try{
-    if(!G.meta.clubContacts) G.meta.clubContacts={};
-    if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-    if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-    G.meta.clubContacts[FIRST_LOGIN_CLUB] = phone;
-    G.meta.clubPasswords[FIRST_LOGIN_CLUB] = last4;
-    G.meta.clubPasswordCustom[FIRST_LOGIN_CLUB] = false;
+    registerFirstLoginContact(G.meta,FIRST_LOGIN_CLUB,phone);
     await saveMeta();
     sl(false);
     cm('mFirstLogin');
@@ -4619,12 +4608,7 @@ async function saveRegContact(){
   if(emailRaw && !emailRaw.endsWith('@gmail.com')){
     toast('구글 계정(@gmail.com)만 등록 가능합니다','error'); return;
   }
-  if(!G.meta.clubContacts) G.meta.clubContacts={};
-  G.meta.clubContacts[club] = phone;
-  if(emailRaw){
-    if(!G.meta.clubEmails) G.meta.clubEmails={};
-    G.meta.clubEmails[club] = emailRaw;
-  }
+  saveClubDirectorContact(G.meta,club,phone,emailRaw);
   try{
     await saveMeta();
     ge('regContactSavedBadge') && (ge('regContactSavedBadge').style.display='inline');
@@ -4701,10 +4685,7 @@ async function saveClubPassword(club){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const pw = (ge('cpw_'+club)?.value||'').trim();
   if(!pw){ toast('비밀번호를 입력하세요','error'); return; }
-  if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-  if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-  G.meta.clubPasswords[club]=pw;
-  G.meta.clubPasswordCustom[club]=true;
+  setClubPassword(G.meta,club,pw,{custom:true});
   try{
     await saveMeta();
     toast(`${club} 비밀번호 저장 완료 ✅`,'success');
@@ -4713,13 +4694,9 @@ async function saveClubPassword(club){
 
 async function resetClubPassword(club){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const contacts=G.meta.clubContacts||{};
-  const tempPw = contacts[club] ? String(contacts[club]).replace(/[^0-9]/g,'').slice(-4) : (G.meta.regPw||'202601');
+  const tempPw = getClubTempPassword(club);
   if(!confirm(`${club} 클럽 비밀번호를 임시 비밀번호로 초기화하시겠습니까?\n초기화 후에는 해당 클럽이 다시 로그인할 때 전용 비밀번호를 강제로 새로 설정해야 합니다.`)) return;
-  if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-  if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-  G.meta.clubPasswords[club]=tempPw;
-  G.meta.clubPasswordCustom[club]=false;
+  resetClubPasswordToTemporary(G.meta,club);
   try{
     await saveMeta();
     renderAdminContactList();
@@ -4732,20 +4709,8 @@ async function saveContactFromAdmin(club){
   const raw = (ge('cc_'+club)?.value||'').trim();
   const phone = raw.replace(/[^0-9-]/g,'');
   if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
-  if(!G.meta.clubContacts) G.meta.clubContacts={};
-  G.meta.clubContacts[club] = phone;
-  // 전화번호 뒷 4자리를 비밀번호로 자동 설정 (기존 비밀번호 없을 때만)
-  if(phone){
-    const last4 = phone.replace(/[^0-9]/g,'').slice(-4);
-    if(last4.length===4){
-      if(!G.meta.clubPasswords) G.meta.clubPasswords={};
-      if(!G.meta.clubPasswordCustom) G.meta.clubPasswordCustom={};
-      if(!G.meta.clubPasswords[club]){
-        G.meta.clubPasswords[club]=last4;
-        G.meta.clubPasswordCustom[club]=false;
-      }
-    }
-  }
+  // 전화번호 저장 + 기존 비밀번호가 없을 때만 뒷 4자리 임시비번 자동 설정
+  saveClubContact(G.meta,club,phone,{setPasswordIfMissing:true});
   try{
     await saveMeta();
     const last4 = phone.replace(/[^0-9]/g,'').slice(-4);

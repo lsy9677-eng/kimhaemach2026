@@ -80,3 +80,66 @@ export function derivePasswordFromPhone(phone){
   const digits = String(phone || '').replace(/[^0-9]/g,'');
   return digits.slice(-4);
 }
+
+
+export function ensureClubAuthMaps(meta){
+  if(!meta.clubContacts || typeof meta.clubContacts!=='object') meta.clubContacts={};
+  if(!meta.clubEmails || typeof meta.clubEmails!=='object') meta.clubEmails={};
+  if(!meta.clubPasswords || typeof meta.clubPasswords!=='object') meta.clubPasswords={};
+  if(!meta.clubPasswordCustom || typeof meta.clubPasswordCustom!=='object') meta.clubPasswordCustom={};
+  return meta;
+}
+
+export function setClubPassword(meta, club, password, {custom=true}={}){
+  ensureClubAuthMaps(meta);
+  meta.clubPasswords[club]=String(password||'');
+  meta.clubPasswordCustom[club]=!!custom;
+  return {
+    password:meta.clubPasswords[club],
+    custom:meta.clubPasswordCustom[club]
+  };
+}
+
+export function resetClubPasswordToTemporary(meta, club){
+  ensureClubAuthMaps(meta);
+  const tempPassword=getClubTemporaryPassword(meta,club);
+  meta.clubPasswords[club]=tempPassword;
+  meta.clubPasswordCustom[club]=false;
+  return {password:tempPassword,custom:false};
+}
+
+export function saveClubContact(meta, club, phone, {
+  setPasswordIfMissing=true
+}={}){
+  ensureClubAuthMaps(meta);
+  const normalized=String(phone||'').replace(/[^0-9-]/g,'');
+  meta.clubContacts[club]=normalized;
+
+  let derived='';
+  if(normalized){
+    derived=derivePasswordFromPhone(normalized);
+    if(setPasswordIfMissing && derived.length===4 && !meta.clubPasswords[club]){
+      meta.clubPasswords[club]=derived;
+      meta.clubPasswordCustom[club]=false;
+    }
+  }
+  return {phone:normalized,derivedPassword:derived};
+}
+
+export function saveClubDirectorContact(meta, club, phone, email=''){
+  const result=saveClubContact(meta,club,phone,{setPasswordIfMissing:true});
+  ensureClubAuthMaps(meta);
+  const normalizedEmail=String(email||'').trim().toLowerCase();
+  if(normalizedEmail) meta.clubEmails[club]=normalizedEmail;
+  return {...result,email:normalizedEmail};
+}
+
+export function registerFirstLoginContact(meta, club, phone){
+  ensureClubAuthMaps(meta);
+  const normalized=String(phone||'').replace(/[^0-9-]/g,'');
+  const last4=derivePasswordFromPhone(normalized);
+  meta.clubContacts[club]=normalized;
+  meta.clubPasswords[club]=last4;
+  meta.clubPasswordCustom[club]=false;
+  return {phone:normalized,password:last4,custom:false};
+}
