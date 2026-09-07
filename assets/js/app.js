@@ -20677,27 +20677,102 @@ async function registryTabQuickAdd(){
 }
 
 // 선수 등록 현황 탭 — 인라인 빠른 수정
+// 현재 등록명단의 이름/주클럽을 함께 수정한다.
+// 과거 대회 history 안의 club 값은 당시 기록 보존을 위해 변경하지 않는다.
 async function quickEditRegistryMember(year, idx){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const members = await loadRegistry(year);
   const m = members[idx];
   if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
-  const newName = prompt(`이름 수정 (현재: ${m.name})`, m.name);
-  if(newName===null) return; // 취소
-  const trimmed = newName.trim();
-  if(!trimmed){ toast('이름을 입력하세요','error'); return; }
-  members[idx].name = trimmed;
-  // G_REGISTRY도 동기화
-  if(window.G_REGISTRY && G_REGISTRY[year]) G_REGISTRY[year] = members;
+
+  const oldName=(m.name||'').trim();
+  const oldClub=(m.club||'').trim();
+
+  const newNameRaw = prompt(`이름 수정\n현재: ${oldName}`, oldName);
+  if(newNameRaw===null) return;
+  const newName = newNameRaw.trim();
+  if(!newName){ toast('이름을 입력하세요','error'); return; }
+
+  const newClubRaw = prompt(`주 클럽 수정\n현재: ${oldClub}\n\n김해시 등록 클럽명을 정확히 입력하세요.`, oldClub);
+  if(newClubRaw===null) return;
+  const newClub = normalizeClub(newClubRaw.trim());
+  if(!newClub){ toast('주 클럽을 입력하세요','error'); return; }
+
+  if(newName===oldName && newClub===normalizeClub(oldClub)){
+    toast('변경된 내용이 없습니다','info');
+    return;
+  }
+
+  // 공식 등록명단 내 동일 이름+클럽 중복 방지
+  const duplicate = members.some((r,i)=>
+    i!==idx &&
+    normName(cleanName(r.name||''))===normName(cleanName(newName)) &&
+    normalizeClub(r.club||'')===normalizeClub(newClub)
+  );
+  if(duplicate){
+    toast('같은 이름과 클럽으로 이미 등록된 선수가 있습니다','error');
+    return;
+  }
+
+  const oldKey=pKey(oldName,oldClub);
+  const newKey=pKey(newName,newClub);
+
+  // 선수 DB에 새 키가 이미 있으면 자동 합치지 않고 차단
+  if(newKey!==oldKey && G.players[newKey]){
+    toast('변경하려는 이름+클럽의 선수 기록이 이미 존재합니다. 선수 합치기 기능을 사용하세요.','error');
+    return;
+  }
+
   sl(true);
   try{
+    // 1) 공식 등록명단 수정
+    members[idx]={...m,name:newName,club:newClub};
+    G_REGISTRY[year]=members;
     await saveRegistry(year);
-    sl(false);
-    toast(`${m.name} → ${trimmed} 수정 완료`,'success');
+
+    // 2) 현재 선수 DB도 동기화
+    //    과거 history의 h.club은 과거 소속 기록이므로 그대로 유지
+    const oldPlayer=G.players[oldKey];
+    if(oldPlayer){
+      const existingClubs=Array.isArray(oldPlayer.clubs)?oldPlayer.clubs:[];
+      const nextClubs=[
+        newClub,
+        ...existingClubs.filter(c=>c && normalizeClub(c)!==normalizeClub(oldClub) && normalizeClub(c)!==normalizeClub(newClub))
+      ];
+
+      const nextPlayer={
+        ...oldPlayer,
+        key:newKey,
+        name:newName,
+        club:newClub,
+        clubs:nextClubs
+      };
+
+      if(newKey!==oldKey){
+        await setDoc(doc(db,'players',newKey.replace(/[/.#$[\]]/g,'_')),nextPlayer);
+        await deleteDoc(doc(db,'players',oldKey.replace(/[/.#$[\]]/g,'_')));
+        delete G.players[oldKey];
+        G.players[newKey]=nextPlayer;
+      }else{
+        G.players[oldKey]=nextPlayer;
+        await stP(oldKey);
+      }
+    }
+
+    await fbLog(`등록선수 수정: ${oldName}(${oldClub}) → ${newName}(${newClub})`,'✏️');
+
     savePlayersToLocalCache();
-    renderAllP();
-    renderRegistryTab();
-  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
+    sl(false);
+    toast(`수정 완료되었습니다.\n${oldName}(${oldClub}) → ${newName}(${newClub})`,'success');
+
+    try{ renderAllP(); }catch(e){ console.warn('renderAllP after quickEditRegistryMember',e); }
+    try{ await renderRegistryTab(); }catch(e){ console.warn('renderRegistryTab after quickEditRegistryMember',e); }
+    try{ await renderRegistryMgr(); }catch(e){ /* 관리자 명단관리 모달이 닫혀있으면 무시 */ }
+  }catch(e){
+    sl(false);
+    toast('저장 실패: '+e.message,'error');
+    console.error('quickEditRegistryMember',e);
+  }
 }
 
 // 선수 등록 현황 탭 — 인라인 빠른 삭제
