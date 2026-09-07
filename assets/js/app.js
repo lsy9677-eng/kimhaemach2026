@@ -736,7 +736,7 @@ import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOffi
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
-import{buildRegistrationRosterGrid}from'./registration-ui.js';
+import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -6607,88 +6607,76 @@ function updateRegisterSlots(){
   const tid=ge('regTS')?.value||'';
   const t=G.tournaments.find(x=>x.id===tid);
   const isIndividual=isIndividualTournament(t);
-  const isTerinee=(div==='terinee'||div==='테린이');
-  const isWomen=(div==='여성부');
-  const dbl=isIndividual?1:getRegDoublesCount();
-  const mainCount=isIndividual?2:dbl*2;
+  const state=getRegistrationFormState({
+    div,
+    isIndividual,
+    doublesCount:(isIndividual?1:getRegDoublesCount())
+  });
 
-  setRegClubInputMode(isIndividual);
-  toggleIndividualSimpleFields(isIndividual);
+  setRegClubInputMode(state.isIndividual);
+  toggleIndividualSimpleFields(state.isIndividual);
 
   const sel=ge('terineeModeSel');
-  if(sel) sel.style.display=(!isIndividual && isTerinee && !isWomen)?'block':'none';
+  if(sel) sel.style.display=state.showTerineeMode?'block':'none';
 
   const s4=ge('slot4'),s5=ge('slot5');
-  if(s4) s4.style.display=(!isIndividual && dbl>=4)?'block':'none';
-  if(s5) s5.style.display=(!isIndividual && dbl>=5)?'block':'none';
+  if(s4) s4.style.display=state.showSlot4?'block':'none';
+  if(s5) s5.style.display=state.showSlot5?'block':'none';
 
-  for(let i=1;i<=5;i++){
-    const lbl=ge(`pairLabel${i}`);
-    if(!lbl) continue;
-    if(!isIndividual && isWomen && i<=3){
-      const womenLabels=['1조 🌸 개나리','2조 🌼 국화','3조 🌱 테린이 (구력 4년↓)','4조','5조'];
-      lbl.textContent=womenLabels[i-1];
-      lbl.style.display='block';
-      lbl.style.color='#7c3aed';
-    } else {
-      lbl.style.display='none';
-    }
-  }
+  state.pairLabels.forEach((info,idx)=>{
+    const lbl=ge(`pairLabel${idx+1}`);
+    if(!lbl) return;
+    lbl.textContent=info.text;
+    lbl.style.display=info.show?'block':'none';
+    if(info.color) lbl.style.color=info.color;
+  });
 
   const sn1=ge('subNum1'),sn2=ge('subNum2');
-  if(sn1) sn1.textContent=isIndividual?'':'후1';
-  if(sn2) sn2.textContent=isIndividual?'':'후2';
-  const p11=ge('p11'),p12=ge('p12');
-  if(p11) p11.placeholder='후보 1';
-  if(p12) p12.placeholder='후보 2';
+  if(sn1) sn1.textContent=state.subNum1;
+  if(sn2) sn2.textContent=state.subNum2;
 
-  const lbl=ge('regModeLabel');
-  if(lbl){
-    if(isIndividual) lbl.textContent='— 개인전 복식 2인 | 후보 없음 | 누구나 접수 가능';
-    else if(isWomen) lbl.textContent='— 3복식 고정 | 주전 6명 + 후보 최대 2명';
-    else if(isTerinee) lbl.textContent=`— ${dbl}복식 | 주전 ${mainCount}명 + 후보 최대 2명`;
-    else lbl.textContent='— 5복식 | 주전 10명 + 후보 최대 2명';
-  }
+  const p11=ge('p11'),p12=ge('p12');
+  if(p11) p11.placeholder=state.subPlaceholder1;
+  if(p12) p12.placeholder=state.subPlaceholder2;
+
+  const modeLabel=ge('regModeLabel');
+  if(modeLabel) modeLabel.textContent=state.modeLabel;
 
   const pl=ge('regPlayerLabel');
-  if(pl){
-    if(isIndividual) pl.innerHTML='참가자 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">파트너 포함 2명 입력</span>';
-    else if(isWomen) pl.innerHTML='선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 6명 (조별 2명씩) + 후보 최대 2명</span>';
-    else if(isTerinee) pl.innerHTML=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 ${mainCount}명 + 후보 최대 2명</span>`;
-    else pl.innerHTML='선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 10명 + 후보 최대 2명</span>';
-  }
+  if(pl) pl.innerHTML=state.playerLabelHtml;
 
   const clubLabel=ge('regClubLabel');
-  if(clubLabel){
-    clubLabel.innerHTML=isIndividual?'클럽명/소속<span class="req">*</span>':'클럽<span class="req">*</span>';
-  }
+  if(clubLabel) clubLabel.innerHTML=state.clubLabelHtml;
+
   const noLabel=ge('regNoLabel');
-  if(noLabel) noLabel.textContent=isIndividual?'참가 번호':'팀 번호';
+  if(noLabel) noLabel.textContent=state.numberLabel;
 
-  const womenNotice=ge('womenPairNotice');
-  if(isWomen && !isIndividual){
+  let womenNotice=ge('womenPairNotice');
+  if(state.showWomenNotice){
     if(!womenNotice){
-      const box=document.createElement('div');
-      box.id='womenPairNotice';
+      womenNotice=document.createElement('div');
+      womenNotice.id='womenPairNotice';
       const anchor=ge('regPlayerLabel')?.closest('.form-group')||ge('regPlayerLabel');
-      if(anchor) anchor.insertAdjacentElement('beforebegin', box);
+      if(anchor) anchor.insertAdjacentElement('beforebegin',womenNotice);
     }
-    ge('womenPairNotice').style.display='block';
-    ge('womenPairNotice').innerHTML=`<div style="margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1.5px solid #c084fc;border-radius:10px;font-size:.78rem;line-height:1.7"><div style="font-weight:800;color:#6b21a8;margin-bottom:5px">👩 여성부 페어 고정 조건</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;color:#4a1772"><div><span style="font-weight:700;color:#7c3aed">1조 🌸 개나리</span> — 구력 무관</div><div><span style="font-weight:700;color:#7c3aed">2조 🌼 국화</span> — 구력 무관</div><div style="grid-column:1/-1"><span style="font-weight:700;color:#7c3aed">3조 🌱 테린이</span> — 구력 <b>4년 이하</b> 페어 고정</div></div><div style="margin-top:6px;font-size:.7rem;color:#7c3aed;border-top:1px dashed #d8b4fe;padding-top:5px">💡 1~2번 → 1조, 3~4번 → 2조, 5~6번 → 3조 순서로 배정됩니다.</div></div>`;
-  } else {
-    if(womenNotice) womenNotice.style.display='none';
+    womenNotice.style.display='block';
+    womenNotice.innerHTML=getWomenPairNoticeHtml();
+  }else if(womenNotice){
+    womenNotice.style.display='none';
   }
 
-  for(let i=1;i<=12;i++){
+  state.visibleSlots.forEach((show,idx)=>{
+    const i=idx+1;
     const slot=ge('p'+i)?.closest('.pslot');
     const hint=ge('h'+i);
-    const show = isIndividual ? (i<=2) : (i<=mainCount || i===11 || i===12);
     if(slot) slot.style.display=show?'flex':'none';
     if(hint) hint.style.display=show?'block':'none';
-  }
+  });
+
   const subWrap=ge('p11')?.closest('div[style*="border-top"]');
-  if(subWrap) subWrap.style.display=isIndividual?'none':'block';
+  if(subWrap) subWrap.style.display=state.showSubWrap?'block':'none';
 }
+
 
 function buildRegisterRosterGrid(tid,div,teams,key){
   const tournament=(G.tournaments||[]).find(x=>x.id===tid);

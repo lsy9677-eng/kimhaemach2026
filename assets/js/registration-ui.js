@@ -130,3 +130,85 @@ export function buildRegistrationRosterGrid({
     </div>`;
   }).join('');
 }
+
+
+export function getRegistrationFormState({
+  div='',
+  isIndividual=false,
+  doublesCount=5
+}){
+  const isTerinee=(div==='terinee'||div==='테린이');
+  const isWomen=(div==='여성부');
+  const dbl=isIndividual?1:Number(doublesCount||5);
+  const mainCount=isIndividual?2:dbl*2;
+
+  const pairLabels=Array.from({length:5},(_,idx)=>{
+    const i=idx+1;
+    if(!isIndividual && isWomen && i<=3){
+      return {
+        show:true,
+        text:['1조 🌸 개나리','2조 🌼 국화','3조 🌱 테린이 (구력 4년↓)'][idx],
+        color:'#7c3aed'
+      };
+    }
+    return {show:false,text:'',color:''};
+  });
+
+  let modeLabel='';
+  let playerLabelHtml='';
+  if(isIndividual){
+    modeLabel='— 개인전 복식 2인 | 후보 없음 | 누구나 접수 가능';
+    playerLabelHtml='참가자 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">파트너 포함 2명 입력</span>';
+  }else if(isWomen){
+    modeLabel='— 3복식 고정 | 주전 6명 + 후보 최대 2명';
+    playerLabelHtml='선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 6명 (조별 2명씩) + 후보 최대 2명</span>';
+  }else if(isTerinee){
+    modeLabel=`— ${dbl}복식 | 주전 ${mainCount}명 + 후보 최대 2명`;
+    playerLabelHtml=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 ${mainCount}명 + 후보 최대 2명</span>`;
+  }else{
+    modeLabel='— 5복식 | 주전 10명 + 후보 최대 2명';
+    playerLabelHtml='선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 10명 + 후보 최대 2명</span>';
+  }
+
+  const visibleSlots=Array.from({length:12},(_,idx)=>{
+    const i=idx+1;
+    return isIndividual ? i<=2 : (i<=mainCount || i===11 || i===12);
+  });
+
+  return {
+    isIndividual,
+    isTerinee,
+    isWomen,
+    doublesCount:dbl,
+    mainCount,
+    showTerineeMode:(!isIndividual && isTerinee && !isWomen),
+    showSlot4:(!isIndividual && dbl>=4),
+    showSlot5:(!isIndividual && dbl>=5),
+    pairLabels,
+    subNum1:isIndividual?'':'후1',
+    subNum2:isIndividual?'':'후2',
+    subPlaceholder1:'후보 1',
+    subPlaceholder2:'후보 2',
+    modeLabel,
+    playerLabelHtml,
+    clubLabelHtml:isIndividual?'클럽명/소속<span class="req">*</span>':'클럽<span class="req">*</span>',
+    numberLabel:isIndividual?'참가 번호':'팀 번호',
+    showWomenNotice:(isWomen && !isIndividual),
+    showSubWrap:!isIndividual,
+    visibleSlots
+  };
+}
+
+export function getWomenPairNoticeHtml(){
+  return `<div style="margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border:1.5px solid #c084fc;border-radius:10px;font-size:.78rem;line-height:1.7">
+    <div style="font-weight:800;color:#6b21a8;margin-bottom:5px">👩 여성부 페어 고정 조건</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;color:#4a1772">
+      <div><span style="font-weight:700;color:#7c3aed">1조 🌸 개나리</span> — 구력 무관</div>
+      <div><span style="font-weight:700;color:#7c3aed">2조 🌼 국화</span> — 구력 무관</div>
+      <div style="grid-column:1/-1"><span style="font-weight:700;color:#7c3aed">3조 🌱 테린이</span> — 구력 <b>4년 이하</b> 페어 고정</div>
+    </div>
+    <div style="margin-top:6px;font-size:.7rem;color:#7c3aed;border-top:1px dashed #d8b4fe;padding-top:5px">
+      💡 1~2번 → 1조, 3~4번 → 2조, 5~6번 → 3조 순서로 배정됩니다.
+    </div>
+  </div>`;
+}
