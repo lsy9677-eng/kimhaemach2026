@@ -727,7 +727,7 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts}from'./court-status.js';
-import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml}from'./court-status-ui.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1794,9 +1794,7 @@ function renderCourtStatusBoard(key, div){
   const usedCourts=getUsedCourtsForKey(key);
   const st=getCourtBoardUIState(key);
   if(st.hidden){
-    return `<div style="margin:10px 0 12px;display:flex;justify-content:flex-end">
-      <button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="toggleCourtBoardHidden('${key}')">🎾 코트 현황판 열기</button>
-    </div>`;
+    return buildCourtBoardHiddenHtml({key,escapeAttr:escAttr});
   }
   const autoPool=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? (getIndividualAutoAssignmentPlan(key)?.pool||[]) : [];
   const boardCourts=(selectedCourts.length ? selectedCourts : [...new Set([...(usedCourts||[]), ...(autoPool||[])])]).map(String).filter(Boolean);
@@ -1804,7 +1802,6 @@ function renderCourtStatusBoard(key, div){
   const snapshotMap=new Map((allSnapshots||[]).map(item=>[String(item.court), item]));
   const items=boardCourts.map(court=>snapshotMap.get(String(court)) || {court:String(court),status:'empty',current:null,waiting:[],related:[]});
   const liveCount=items.filter(x=>x.status==='live').length;
-  const bodyDisplay=st.collapsed?'none':'block';
   const hasCourts=boardCourts.length>0;
   const processedItems=items.map(item=>{
     const split=getCourtBoardVisibleWaiting(item);
@@ -1881,22 +1878,19 @@ function renderCourtStatusBoard(key, div){
       <div style="font-size:.9rem;font-weight:900;color:var(--primary-dark);margin-bottom:6px">아직 경기 코트 배정이 없습니다</div>
       <div style="font-size:.78rem;color:var(--text2);line-height:1.7">조 코트 배정은 표시용입니다. 실제 코트 현황판은 경기 코트 배정 후 자동 반영됩니다.</div>
     </div>`;
-  return `<div style="margin:10px 0 12px;border:2px solid #bfdbfe;border-radius:16px;background:linear-gradient(135deg,#f8fbff,#eef6ff);overflow:hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 14px;background:rgba(255,255,255,.72);border-bottom:${st.collapsed?'none':'1px solid #dbe7ff'}">
-      <div>
-        <div style="font-size:.96rem;font-weight:900;color:var(--primary-dark)">🎾 코트 사용 현황판</div>
-        <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${dl(div)} · 사용 코트 ${processedItems.length}면 · 진행 ${liveCount} · 코트대기 ${waitingCount} · 공용대기 ${sharedWaiting.length} · 빈코트 ${emptyCount}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-outline" style="font-size:.74rem;padding:5px 10px;min-height:32px" onclick="toggleCourtBoardCollapsed('${key}')">${st.collapsed?'📂 펼치기':'📁 접기'}</button>
-        <button class="btn btn-gray" style="font-size:.74rem;padding:5px 10px;min-height:32px" onclick="toggleCourtBoardHidden('${key}')">✕ 닫기</button>
-      </div>
-    </div>
-    <div style="display:${bodyDisplay};padding:12px 14px">
-      ${sharedWaitingHtml}
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">${cards}</div>
-    </div>
-  </div>`;
+  return buildCourtBoardFrameHtml({
+    key,
+    divisionLabel:dl(div),
+    courtCount:processedItems.length,
+    liveCount,
+    waitingCount,
+    sharedWaitingCount:sharedWaiting.length,
+    emptyCount,
+    collapsed:st.collapsed,
+    sharedWaitingHtml,
+    cardsHtml:cards,
+    escapeAttr:escAttr
+  });
 }
 
 

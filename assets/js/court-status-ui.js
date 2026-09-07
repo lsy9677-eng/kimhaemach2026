@@ -69,3 +69,41 @@ export function buildCourtCardShellHtml({
     </div>
   </div>`;
 }
+
+
+export function buildCourtBoardHiddenHtml({key='',escapeAttr=(x)=>String(x||'')}={}){
+  return `<div style="margin:10px 0 12px;display:flex;justify-content:flex-end">
+    <button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="toggleCourtBoardHidden('${escapeAttr(key)}')">🎾 코트 현황판 열기</button>
+  </div>`;
+}
+
+export function buildCourtBoardFrameHtml({
+  key='',
+  divisionLabel='',
+  courtCount=0,
+  liveCount=0,
+  waitingCount=0,
+  sharedWaitingCount=0,
+  emptyCount=0,
+  collapsed=false,
+  sharedWaitingHtml='',
+  cardsHtml='',
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  return `<div style="margin:10px 0 12px;border:2px solid #bfdbfe;border-radius:16px;background:linear-gradient(135deg,#f8fbff,#eef6ff);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 14px;background:rgba(255,255,255,.72);border-bottom:${collapsed?'none':'1px solid #dbe7ff'}">
+      <div>
+        <div style="font-size:.96rem;font-weight:900;color:var(--primary-dark)">🎾 코트 사용 현황판</div>
+        <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${divisionLabel} · 사용 코트 ${courtCount}면 · 진행 ${liveCount} · 코트대기 ${waitingCount} · 공용대기 ${sharedWaitingCount} · 빈코트 ${emptyCount}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline" style="font-size:.74rem;padding:5px 10px;min-height:32px" onclick="toggleCourtBoardCollapsed('${escapeAttr(key)}')">${collapsed?'📂 펼치기':'📁 접기'}</button>
+        <button class="btn btn-gray" style="font-size:.74rem;padding:5px 10px;min-height:32px" onclick="toggleCourtBoardHidden('${escapeAttr(key)}')">✕ 닫기</button>
+      </div>
+    </div>
+    <div style="display:${collapsed?'none':'block'};padding:12px 14px">
+      ${sharedWaitingHtml||''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">${cardsHtml||''}</div>
+    </div>
+  </div>`;
+}
