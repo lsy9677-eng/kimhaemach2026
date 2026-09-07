@@ -735,6 +735,7 @@ import{normalizePhoneDigits,pKey,baseClub,pKeyParse,normName,cleanName,splitKeyN
 import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOfficialRegistryExcelRows}from'./player-registry.js';
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact}from'./clubs.js';
+import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration}from'./registrations.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -6999,9 +7000,12 @@ async function registerTeam(){
 
   const key=tid+'_'+div,ex=G.teams[key]||[];
   const maxTeams=getDivisionMaxTeams(tid,div);
-  if(maxTeams>0 && ex.length>=maxTeams){
-    toast(`이 부서는 정원(${maxTeams}${isIndividual?'조':'팀'})이 마감되었습니다`,'error'); return;
-  }
+  const capacityCheck=validateRegistrationCapacity({
+    currentCount:ex.length,
+    maxTeams,
+    isIndividual
+  });
+  if(!capacityCheck.ok){ toast(capacityCheck.error,'error'); return; }
 
   let names=[];
   let dbl=1;
@@ -7020,24 +7024,25 @@ async function registerTeam(){
     const note=(ge('pNote')?.value||'').trim();
     const editPin=((ge('pEditPin')?.value||'').trim()).replace(/\D/g,'');
     names=[p1,p2].filter(Boolean);
-    if(names.length!==2){toast('개인전은 참가자 2명을 모두 입력해야 합니다','error');return;}
-    const uniq=new Set(names); if(uniq.size!==2){toast('참가자 이름이 중복됩니다','error');return;}
     const p1receiveOrderSms=!!ge('p1receiveOrderSms')?.checked;
     const p1receiveResultSms=!!ge('p1receiveResultSms')?.checked;
     const p2receiveOrderSms=!!ge('p2receiveOrderSms')?.checked;
     const p2receiveResultSms=!!ge('p2receiveResultSms')?.checked;
-    if(!p1clubRaw || !p2clubRaw){toast('각 참가자 클럽을 입력해 주세요','error');return;}
-    if(editPin.length!==4){toast('수정/삭제 비밀번호는 숫자 4자리로 입력해 주세요','error');return;}
-    if(!p1phone || !p2phone){toast('개인전은 참가자 2명의 휴대폰 번호를 모두 입력해야 합니다','error');return;}
-    if((p1phone && p1phone.replace(/[^0-9]/g,'').length<9) || (p2phone && p2phone.replace(/[^0-9]/g,'').length<9)){toast('전화번호를 확인해 주세요','error');return;}
-    if(!(p1receiveOrderSms || p1receiveResultSms || p2receiveOrderSms || p2receiveResultSms)){toast('최소 1명은 문자 수신 대상으로 선택해 주세요','error');return;}
+    const individualCheck=validateIndividualRegistration({
+      names,
+      player1Club:p1clubRaw,
+      player2Club:p2clubRaw,
+      editPin,
+      player1Phone:p1phone,
+      player2Phone:p2phone,
+      smsFlags:[p1receiveOrderSms,p1receiveResultSms,p2receiveOrderSms,p2receiveResultSms],
+      existingTeams:ex
+    });
+    if(!individualCheck.ok){ toast(individualCheck.error,'error'); return; }
     individualPlayers=[
       {name:p1, clubsRaw:p1clubRaw, clubs:parseClubAliases(p1clubRaw), phone:p1phone, career:p1career, receiveSms:(p1receiveOrderSms||p1receiveResultSms), receiveOrderSms:p1receiveOrderSms, receiveResultSms:p1receiveResultSms},
       {name:p2, clubsRaw:p2clubRaw, clubs:parseClubAliases(p2clubRaw), phone:p2phone, career:p2career, receiveSms:(p2receiveOrderSms||p2receiveResultSms), receiveOrderSms:p2receiveOrderSms, receiveResultSms:p2receiveResultSms}
     ];
-    const pairKey=[...names].sort().join('|');
-    const dup=ex.find(tm=>(((tm.players||[]).slice().sort().join('|'))===pairKey));
-    if(dup){toast('같은 페어가 이미 접수되어 있습니다','error');return;}
   }else{
     if(!club){toast('클럽 선택','error');return;}
     dbl=getRegDoublesCount();
@@ -7046,14 +7051,16 @@ async function registerTeam(){
     regMainCount=isRegW?6:mainCount;
     const regTotal=regMainCount+2;
     for(let i=1;i<=regTotal;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
-    if(names.length<1){toast('선수를 1명 이상 입력해주세요','error');return;}
-    if(names.length>regTotal){toast(`최대 ${regTotal}명까지 등록할 수 있습니다`,'error');return;}
-    const uniq=new Set(names);if(uniq.size!==names.length){toast('이름 중복 있음','error');return;}
+    const teamCheck=validateTeamRegistration({
+      names,
+      club,
+      maxPlayers:regTotal,
+      existingTeams:ex,
+      makePlayerKey:pKey
+    });
+    if(!teamCheck.ok){ toast(teamCheck.error,'error'); return; }
     const missing2026=missingMembers2026(names, club, t);
     if(missing2026.length){showMissingMembers2026(missing2026);return;}
-    const newKeys = new Set(names.map(n=>pKey(n,club)));
-    const dup = ex.find(tm=>(tm.players||[]).some(p=>newKeys.has(pKey(p,tm.club||club))));
-    if(dup){toast('이미 등록된 선수 포함(같은 클럽 기준)','error');return;}
   }
 
   sl(true);
