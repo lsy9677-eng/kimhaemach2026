@@ -6851,12 +6851,21 @@ function renderRL(){
     }
   }
 
-  if(REG && REG_CLUB && !AD && !isIndividual && usesFixedClubList()){
+  if(REG && REG_CLUB && !AD && !isIndividual){
     setTimeout(()=>{
-      const cs=ge('regClub');
-      if(cs&&cs.value!==REG_CLUB){
-        const opt=[...cs.options].find(o=>o.value===REG_CLUB);
-        if(opt){ cs.value=REG_CLUB; onRegClubChange(); }
+      if(usesFixedClubList()){
+        const cs=ge('regClub');
+        if(cs&&cs.value!==REG_CLUB){
+          const wantBase=baseClub(normalizeClub(REG_CLUB));
+          const opt=[...cs.options].find(o=>{
+            const ov=normalizeClub(o.value||o.textContent||'');
+            return ov===normalizeClub(REG_CLUB) || baseClub(ov)===wantBase;
+          });
+          if(opt){ cs.value=opt.value; try{ onRegClubChange(); }catch(e){} }
+        }
+      }else{
+        const txt=ge('regClubText');
+        if(txt && !String(txt.value||'').trim()) txt.value=normalizeClub(REG_CLUB);
       }
     },150);
   }else if(isIndividual){
@@ -16554,13 +16563,53 @@ function getRegistryRowsForAutocomplete(year){
   }
   return (window.G_REGISTRY && Array.isArray(G_REGISTRY[year])) ? G_REGISTRY[year] : [];
 }
+
+function selectRegistrationPlayerSuggestion(num,name,club){
+  const inp=ge('p'+num);
+  if(inp) inp.value=String(name||'');
+  const hint=ge('h'+num);
+  if(hint) hint.innerHTML='';
+
+  // 개인전은 참가자별 클럽 입력 구조이므로 팀명 자동입력 대상이 아니다.
+  if(currentRegIsIndividual()) return;
+
+  // 경기이사 로그인 상태라면 로그인한 본인 클럽을 최우선으로 사용한다.
+  const suggestedClub=normalizeClub((REG && !AD && REG_CLUB) ? REG_CLUB : (club||''));
+  if(!suggestedClub) return;
+
+  if(usesFixedClubList()){
+    const sel=ge('regClub');
+    if(!sel || sel.value) return;
+
+    const wantBase=baseClub(suggestedClub);
+    const opt=[...(sel.options||[])].find(o=>{
+      const ov=normalizeClub(o.value||o.textContent||'');
+      return ov===suggestedClub || baseClub(ov)===wantBase;
+    });
+    if(opt){
+      sel.value=opt.value;
+      try{ onRegClubChange(); }catch(e){}
+    }
+    return;
+  }
+
+  // 자유 입력 방식(현재 화면의 클럽/팀명 입력란)은 비어 있을 때만 자동 채운다.
+  // 관리자가 별도 팀명을 직접 입력한 경우에는 덮어쓰지 않는다.
+  const txt=ge('regClubText');
+  if(txt && !String(txt.value||'').trim()){
+    txt.value=suggestedClub;
+    try{ txt.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
+    try{ txt.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}
+  }
+}
+
 function phint(inp,num){
   const v=(inp?.value||'').trim(), h=ge('h'+num);
   if(!h) return;
   if(!v){ h.innerHTML=''; return; }
 
   const nv = normName(v);
-  const selectedClub = normalizeClub(ge('regClub')?.value||'');
+  const selectedClub = normalizeClub(getRegClubInputValue()||'');
   const year = getRegAutocompleteYear();
   const registryRows = getRegistryRowsForAutocomplete(year);
 
@@ -16592,7 +16641,7 @@ function phint(inp,num){
   h.innerHTML = cand.slice(0,4).map(x=>{
     const clubDisp = x.club || '';
     const matchedBadge = x.matchClub && selectedClub ? `<span style="font-size:.64rem;color:#7c3aed;font-weight:700"> [현재클럽]</span>` : '';
-    return `<span onclick="ge('p${num}').value='${x.disp}';ge('h${num}').innerHTML=''"
+    return `<span onclick="selectRegistrationPlayerSuggestion(${num},'${esc(x.disp)}','${esc(clubDisp)}')"
       style="cursor:pointer;color:var(--primary);font-size:.73rem;text-decoration:underline">
       ${x.disp}${clubDisp?`(${clubDisp})`:''}${matchedBadge}
     </span>`;
@@ -21968,7 +22017,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
