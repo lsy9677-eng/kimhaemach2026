@@ -727,7 +727,8 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
-import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml}from'./court-status-ui.js';
+import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
+import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1534,24 +1535,20 @@ async function moveCourtQueueCard(key, mid, targetCourt){
   const list=G.matches[key]||[];
   const m=list.find(x=>String(x.id)===String(mid));
   if(!m || m.winner!=null) return;
-  const court=String(targetCourt||'').trim();
-  if(court){
-    const allowed=getAllowedCourtsForMatch(key,m);
-    if(allowed.length && !allowed.includes(court)){
-      toast('현재 선택한 운영 코트 안에서만 이동할 수 있습니다','error');
-      return;
-    }
-  }
-  if(court){
-    m.manualCourtTarget=court;
-    m.manualSharedHold=false;
-    m.manualCourtPinnedAt=new Date().toISOString();
-  }else{
-    m.manualCourtTarget='';
-    m.manualSharedHold=true;
-    m.manualCourtPinnedAt=new Date().toISOString();
-  }
   const nowIso = new Date().toISOString();
+  const moveCheck=validateCourtMoveTarget({
+    targetCourt,
+    allowedCourts:getAllowedCourtsForMatch(key,m)
+  });
+  if(!moveCheck.ok){
+    toast(moveCheck.error,'error');
+    return;
+  }
+  const court=moveCheck.court;
+  applyCourtMovePatch(m,buildManualCourtMoveMeta({
+    targetCourt:court,
+    nowIso
+  }));
   if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
     if(court){
       // [BUG FIX] rebuild 전에 m.courts/m.court를 즉시 설정해두어야
@@ -1570,26 +1567,12 @@ async function moveCourtQueueCard(key, mid, targetCourt){
       delete m.waitingFirstAt;
     }
   }else{
-    if(court){
-      const prevCourt=String(m.court||'').trim();
-      const isNewCourt = prevCourt!==court;
-      m.courts=[court];
-      m.court=court;
-      if(!m.courtAssignedAt || isNewCourt) m.courtAssignedAt=nowIso;
-      // [BUG FIX] 코트 대기열로 이동할 때 waitingFirstAt 기록
-      const currentOnCourt=(G.matches[key]||[]).find(x=>
-        x.winner==null && String(x.id)!==String(mid) &&
-        (Array.isArray(x.courts)?x.courts:[x.court||'']).includes(court) &&
-        String(x.courtQueueOrder||x.courtAssignedAt||'') < String(m.courtAssignedAt||nowIso)
-      );
-      if(currentOnCourt){
-        if(!m.waitingFirstAt) m.waitingFirstAt=nowIso;
-      }else{
-        delete m.waitingFirstAt;
-      }
-    }else{
-      m.courts=[]; m.court=''; delete m.courtAssignedAt; delete m.waitingFirstAt;
-    }
+    applyCourtMovePatch(m,buildTeamCourtMovePatch({
+      matches:G.matches[key]||[],
+      match:m,
+      targetCourt:court,
+      nowIso
+    }));
   }
   sl(true);
   try{
@@ -1621,9 +1604,7 @@ function getCourtMoveOptions(key, mid){
   const list=G.matches[key]||[];
   const m=list.find(x=>String(x.id)===String(mid));
   if(!m) return [];
-  const allowed=getAllowedCourtsForMatch(key,m).filter(Boolean);
-  const uniq=[...new Set(allowed)];
-  return uniq.map(c=>({value:String(c), label:`🎾 ${c}`}));
+  return buildCourtMoveOptions(getAllowedCourtsForMatch(key,m));
 }
 function showCourtMovePicker(key, mid){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 이동할 수 있습니다','info'); return; }
@@ -1638,27 +1619,15 @@ function showCourtMovePicker(key, mid){
   const overlay=document.createElement('div');
   overlay.id='courtMovePickerOverlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML=`<div style="width:min(560px,96vw);max-height:88vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.24);border:1px solid #dbe7ff;display:flex;flex-direction:column">
-      <div style="padding:16px 18px 12px;border-bottom:1px solid #e8eefc;background:linear-gradient(135deg,#fff,#f8fbff)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-          <div>
-            <div style="font-size:1rem;font-weight:900;color:var(--primary-dark)">🎾 수동 코트 이동</div>
-            <div style="font-size:.84rem;font-weight:800;color:#7a4b00;margin-top:6px;line-height:1.45">${esc(info.title||'경기')}</div>
-            <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${esc([info.label, info.detail].filter(Boolean).join(' · ') || '대기 경기')}</div>
-            <div style="font-size:.74rem;color:#1565c0;margin-top:6px">현재 위치: <b>${esc(current||'공용 대기')}</b></div>
-          </div>
-          <button class="btn btn-outline" style="padding:7px 12px;font-size:.8rem" onclick="closeCourtMovePicker()">닫기</button>
-        </div>
-      </div>
-      <div style="padding:16px 18px;overflow:auto">
-        <div style="font-size:.78rem;font-weight:900;color:var(--primary-dark);margin-bottom:8px">이동할 위치 선택</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
-          <button class="btn ${!current?'btn-primary':'btn-outline'}" style="padding:10px 12px;font-size:.84rem;justify-content:center" onclick="applyCourtMovePicker('')">↩️ 공용 대기</button>
-          ${options.map(opt=>`<button class="btn ${current===opt.value?'btn-primary':'btn-outline'}" style="padding:10px 12px;font-size:.84rem;justify-content:center" onclick="applyCourtMovePicker(${JSON.stringify(opt.value).replace(/"/g,'&quot;')})">${esc(opt.label)}</button>`).join('')}
-        </div>
-        <div style="margin-top:10px;font-size:.72rem;color:var(--text3);line-height:1.6">휴대폰에서는 카드를 드래그하지 않고 여기서 코트를 골라 이동할 수 있습니다.</div>
-      </div>
-    </div>`;
+  overlay.innerHTML=buildCourtMovePickerHtml({
+    title:info.title||'경기',
+    label:info.label||'',
+    detail:info.detail||'',
+    current,
+    options,
+    escapeHtml:esc,
+    escapeAttr:escAttr
+  });
   overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeCourtMovePicker(); });
   document.body.appendChild(overlay);
 }

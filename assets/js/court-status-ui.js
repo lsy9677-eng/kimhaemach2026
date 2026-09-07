@@ -285,3 +285,37 @@ export function buildCourtWaitingItemHtml({
     </div>
   </div>`;
 }
+
+
+export function buildCourtMovePickerHtml({
+  title='경기',
+  label='',
+  detail='',
+  current='',
+  options=[],
+  escapeHtml=(x)=>String(x||''),
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const cur=String(current||'');
+  return `<div style="width:min(560px,96vw);max-height:88vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.24);border:1px solid #dbe7ff;display:flex;flex-direction:column">
+      <div style="padding:16px 18px 12px;border-bottom:1px solid #e8eefc;background:linear-gradient(135deg,#fff,#f8fbff)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:1rem;font-weight:900;color:var(--primary-dark)">🎾 수동 코트 이동</div>
+            <div style="font-size:.84rem;font-weight:800;color:#7a4b00;margin-top:6px;line-height:1.45">${escapeHtml(title||'경기')}</div>
+            <div style="font-size:.74rem;color:var(--text2);margin-top:4px">${escapeHtml([label,detail].filter(Boolean).join(' · ')||'대기 경기')}</div>
+            <div style="font-size:.74rem;color:#1565c0;margin-top:6px">현재 위치: <b>${escapeHtml(cur||'공용 대기')}</b></div>
+          </div>
+          <button class="btn btn-outline" style="padding:7px 12px;font-size:.8rem" onclick="closeCourtMovePicker()">닫기</button>
+        </div>
+      </div>
+      <div style="padding:16px 18px;overflow:auto">
+        <div style="font-size:.78rem;font-weight:900;color:var(--primary-dark);margin-bottom:8px">이동할 위치 선택</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+          <button class="btn ${!cur?'btn-primary':'btn-outline'}" style="padding:10px 12px;font-size:.84rem;justify-content:center" onclick="applyCourtMovePicker('')">↩️ 공용 대기</button>
+          ${(options||[]).map(opt=>`<button class="btn ${cur===opt.value?'btn-primary':'btn-outline'}" style="padding:10px 12px;font-size:.84rem;justify-content:center" onclick="applyCourtMovePicker('${escapeAttr(opt.value)}')">${escapeHtml(opt.label)}</button>`).join('')}
+        </div>
+        <div style="margin-top:10px;font-size:.72rem;color:var(--text3);line-height:1.6">휴대폰에서는 카드를 드래그하지 않고 여기서 코트를 골라 이동할 수 있습니다.</div>
+      </div>
+    </div>`;
+}
