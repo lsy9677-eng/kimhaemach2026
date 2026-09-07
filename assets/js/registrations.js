@@ -112,3 +112,61 @@ export function validateTeamRegistration({
 
   return {ok:true,error:''};
 }
+
+
+export function buildTeamRegistrationPayload({
+  club='',
+  players=[],
+  doublesCount=0,
+  registeredAt,
+  extra={}
+}){
+  return {
+    club:String(club||'').trim(),
+    players:Array.isArray(players)?[...players]:[],
+    doublesCount:Number(doublesCount||0),
+    registeredAt:registeredAt || new Date().toISOString(),
+    ...extra
+  };
+}
+
+export function buildIndividualRegistrationPayload({
+  club='',
+  players=[],
+  individualPlayers=[],
+  editPin='',
+  registeredAt,
+  extra={}
+}){
+  return {
+    club:String(club||'').trim(),
+    players:Array.isArray(players)?[...players]:[],
+    individualPlayers:Array.isArray(individualPlayers)?individualPlayers.map(p=>({...p})):[],
+    editPin:String(editPin||''),
+    registeredAt:registeredAt || new Date().toISOString(),
+    ...extra
+  };
+}
+
+export function validateTeamEdit({
+  players=[],
+  maxPlayers=0
+}){
+  const clean=(players||[]).filter(Boolean);
+  if(clean.length<1) return {ok:false,error:'선수를 1명 이상 입력해주세요'};
+  const max=Number(maxPlayers||0);
+  if(max>0 && clean.length>max) return {ok:false,error:`최대 ${max}명까지 등록할 수 있습니다`};
+  if(new Set(clean).size!==clean.length) return {ok:false,error:'이름 중복 있음'};
+  return {ok:true,error:''};
+}
+
+export function canDeleteRegistration({
+  isAdmin=false,
+  isDirector=false,
+  teamClub='',
+  directorClub=''
+}){
+  if(isAdmin) return {ok:true,error:''};
+  if(isDirector && teamClub && directorClub && teamClub===directorClub) return {ok:true,error:''};
+  return {ok:false,error:'삭제 권한이 없습니다'};
+}
