@@ -730,6 +730,7 @@ import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCou
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
 import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
+import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14777,6 +14778,7 @@ async function saveM3(){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
   const m=list[idx];
+  const resultMatchSnapshot=cloneResultMatchForRollback(m);
   const indivAuth=getIndividualResultAuthState(key,m);
   const canStandardEdit=(AD||OP||canEditMatchByDirector(key,m));
   let participantWinnerAuth=null;
@@ -14927,57 +14929,53 @@ async function saveM3(){
     if(affected.size) enqueuePlayerPersist([...affected], 15000);
   };
 
+  const resultPlayerKeys=[...new Set([
+    ...((t1?.players)||[]).map(n=>getPlayerKey(n,baseClub(t1?.club||''))),
+    ...((t2?.players)||[]).map(n=>getPlayerKey(n,baseClub(t2?.club||'')))
+  ].filter(Boolean))];
+  const resultPlayerSnapshot=createPlayerStatSnapshot(G.players,resultPlayerKeys);
+
   if(hasFinalWinner) await updPS(key,m,prevW);
   else await adjustPlayerStatsForUnfinalized();
 
   const finishedCourts = hasFinalWinner ? (Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : [])) : [];
 
-  sl(true);
-  try{
-    let wroteMatches=false;
-    saveLastOrderFromPicker(key, m);
-    const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
-    const indivScoreText=isIndividualByKey(key)?(getIndividualActualScoreText(m)||`${sc1}:${sc2}`):'';
-    const alertScoreText=indivScoreText||`${sc1}:${sc2}`;
-    if(hasFinalWinner && prevW==null){
-      // 경기 종료 팝업 알림은 운영 가치가 낮아 비활성화합니다.
-      // 종료 후 새 코트 배정/대기 배정 알림만 유지합니다.
-    }
-    if(hasFinalWinner){
-      if(isIndividualByKey(key)){
-        let syncedMain=false;
-        if(m.phase==='group') syncedMain = syncIndividualMainBracketFromPrelim(key);
-        const autoChanged = isIndividualAutoCourtAssignEnabled() ? ensureIndividualAutoCourtAssignmentsForKey(key) : false;
-        if(syncedMain || autoChanged){
-          await stM(key);
-          wroteMatches=true;
-        }
-      }
-      if(!wroteMatches && m.phase!=='main'){
-        await persistSingleMatchDoc(key, m);
-        wroteMatches=true;
-      }
-      await fbLog(`결과: ${dn1} ${alertScoreText} ${dn2}`,'⚡');
-      if(m.phase==='main'){
-        await autoAdv(key,m.id);
-        wroteMatches=true;
-      }
-    }else if(isTieState){
-      if(!wroteMatches){
-        await persistSingleMatchDoc(key, m);
-        wroteMatches=true;
-      }
-      await fbLog(`실시간점수: ${dn1} ${alertScoreText} ${dn2} (동점 진행중)`,'📝');
-    }else{
-      if(!wroteMatches){
-        await persistSingleMatchDoc(key, m);
-        wroteMatches=true;
-      }
-      await fbLog(`실시간점수: ${dn1} ${alertScoreText} ${dn2}`,'📝');
-    }
-    dispatchLocalCourtNotificationAlerts(prevCourtState);
-    sl(false);cm('mM3');toast(buildResultSaveLabel(resultOutcome),'success');renderBracket();
-  }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
+  saveLastOrderFromPicker(key, m);
+  const dn1=tdn(t1,key,m.t1),dn2=tdn(t2,key,m.t2);
+  const indivScoreText=isIndividualByKey(key)?(getIndividualActualScoreText(m)||`${sc1}:${sc2}`):'';
+  const alertScoreText=indivScoreText||`${sc1}:${sc2}`;
+
+  await commitMatchResultSave({
+    match:m,
+    matchSnapshot:resultMatchSnapshot,
+    playersStore:G.players,
+    playerSnapshot:resultPlayerSnapshot,
+    setLoading:sl,
+    dispatchAlerts:dispatchLocalCourtNotificationAlerts,
+    previousNotificationState:prevCourtState,
+    closeModal:()=>cm('mM3'),
+    notify:toast,
+    successMessage:buildResultSaveLabel(resultOutcome),
+    render:renderBracket,
+    enqueuePlayerPersist,
+    failurePrefix:'저장 실패: ',
+    runPersistence:()=>runResultPersistencePlan({
+      hasFinalWinner,
+      isTieState,
+      isIndividual:isIndividualByKey(key),
+      phase:m.phase,
+      persistMatch:()=>persistSingleMatchDoc(key,m),
+      saveAllMatches:()=>stM(key),
+      syncIndividualMain:()=>m.phase==='group' ? syncIndividualMainBracketFromPrelim(key) : false,
+      ensureAutoCourtAssignments:()=>isIndividualAutoCourtAssignEnabled()
+        ? ensureIndividualAutoCourtAssignmentsForKey(key)
+        : false,
+      logFinal:()=>fbLog(`결과: ${dn1} ${alertScoreText} ${dn2}`,'⚡'),
+      logTie:()=>fbLog(`실시간점수: ${dn1} ${alertScoreText} ${dn2} (동점 진행중)`,'📝'),
+      logLive:()=>fbLog(`실시간점수: ${dn1} ${alertScoreText} ${dn2}`,'📝'),
+      autoAdvance:()=>autoAdv(key,m.id)
+    })
+  });
 }
 
 // ═══════════════════════════════════════════════════
