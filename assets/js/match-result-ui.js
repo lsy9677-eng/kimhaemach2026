@@ -198,3 +198,168 @@ export function buildResultMemoHtml({
     <textarea id="mM3Memo" class="form-input" rows="2" style="width:100%;resize:vertical;font-size:.78rem" placeholder="경기 메모">${escapeHtml(memo||'')}</textarea>
   </div>`;
 }
+
+
+export function buildMatchMemoFieldHtml({
+  memo='',
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  return `<div class="form-group" style="margin:12px 0">
+    <label class="form-label">📢 경기 공지</label>
+    <textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${escapeHtml(memo||'')}</textarea>
+  </div>`;
+}
+
+export function buildTeamResultIntroHtml({
+  useOnlineOrder=false,
+  bothSubmitted=false,
+  isOperator=false
+}={}){
+  return `<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #dbeafe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">
+    📌 오더는 각 복식에서 선수 2명을 선택한 뒤 하단의 제출 버튼으로 제출합니다. 진행자/관리자는 한 팀만 대리제출도 가능합니다.
+  </div>
+  <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">
+    💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.
+    ${useOnlineOrder && !bothSubmitted
+      ? `<span style="display:block;margin-top:4px;color:#b45309">제출 전에는 자유 수정 가능 · 제출 후에는 내 오더가 저장되며 · 양팀 제출 완료 후에는 완전 잠금됩니다.${isOperator?'<br><span style="color:#1d4ed8">경기진행자는 제출 전에도 양팀 명단은 볼 수 있지만, 제출 완료된 팀의 오더 선택은 양팀 모두 제출될 때까지 숨겨집니다.</span>':''}</span>`
+      : ''}
+  </div>`;
+}
+
+export function buildOrderSubmitStatusHtml({
+  show=false,
+  bothSubmitted=false,
+  mySubmitted=false,
+  side1Submitted=false,
+  side2Submitted=false,
+  team1='',
+  team2='',
+  statusText='',
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  if(!show) return '';
+  const border=bothSubmitted?'#16a34a':(mySubmitted?'#d4a017':'#93c5fd');
+  const bg=bothSubmitted
+    ? 'linear-gradient(135deg,#ecfdf5,#dcfce7)'
+    : (mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)');
+  const fg=bothSubmitted?'#166534':(mySubmitted?'#8a6412':'#1d4ed8');
+
+  const teamChip=(name,submitted)=>`<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${submitted?'#16a34a':'#cbd5e1'};background:${submitted?'#dcfce7':'#f8fafc'};color:${submitted?'#166534':'#475569'}">${escapeHtml(name)} · ${submitted?'✅ 제출완료':'⏳ 미제출'}</span>`;
+
+  return `<div id="mM3SubmitStatusCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${border};background:${bg}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="font-size:.82rem;line-height:1.6;color:var(--text2)">
+        <div style="font-size:.9rem;font-weight:900;color:${fg}">${bothSubmitted?'🔒 제출 완료 상태':(mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div>
+        <div style="margin-top:4px">${escapeHtml(statusText)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          ${teamChip(team1,side1Submitted)}
+          ${teamChip(team2,side2Submitted)}
+          ${bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}
+        </div>
+      </div>
+      <div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${fg};color:#fff">${bothSubmitted?'수정 불가':(mySubmitted?'상대 제출 대기':'작성 가능')}</div>
+    </div>
+  </div>`;
+}
+
+export function buildPhotoAssistHtml({
+  show=false,
+  team1='',
+  team2='',
+  side1Editable=false,
+  side2Editable=false,
+  side1Saved=false,
+  side2Saved=false,
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  if(!show) return '';
+  const sideCard=(side,name,editable,saved)=>`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff">
+    <div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${escapeHtml(name)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${editable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(${side},'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(${side},'upload')">🖼️ 사진불러오기</button>`:''}
+    </div>
+    <div id="orderPhotoStatus${side}" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${saved?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div>
+  </div>`;
+
+  return `<div id="mM3PhotoAssistCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)">
+    <div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${sideCard(1,team1,side1Editable,side1Saved)}
+      ${sideCard(2,team2,side2Editable,side2Saved)}
+    </div>
+  </div>`;
+}
+
+export function buildIndividualResultBodyHtml({
+  divisionLabel='',
+  divisionClass='',
+  roundLabel='',
+  roundTheme={},
+  phase='',
+  groupIndex=null,
+  groupCourts=[],
+  matchId='',
+  matchCourts=[],
+  memo='',
+  sideLabel1='1번',
+  sideLabel2='2번',
+  players1=[],
+  players2=[],
+  score1='',
+  score2='',
+  scoreButtons1Html='',
+  scoreButtons2Html='',
+  key='',
+  escapeHtml=(x)=>String(x||''),
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const p1=Array.isArray(players1)?players1:[];
+  const p2=Array.isArray(players2)?players2:[];
+  const k=escapeAttr(key);
+  const mid=escapeAttr(matchId);
+  const hasGroup=phase==='group' && groupIndex!=null;
+
+  return `<div style="margin-bottom:10px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#eef4ff);border:1.5px solid #bfdbfe;font-size:.8rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 개인전은 오더 제출이 없습니다. 점수만 입력하면 됩니다.</div>
+  <div class="m3card" style="border:1.5px solid var(--border);box-shadow:none">
+    <div class="m3hdr ${divisionClass}" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+      <span class="m3badge">${escapeHtml(divisionLabel)}</span>
+      <span class="m3badge" style="background:${roundTheme?.chipBg||'#f8fafc'};color:${roundTheme?.chipFg||'var(--text)'};border:1px solid ${roundTheme?.bd||'var(--border)'}">${escapeHtml(roundLabel)}</span>
+    </div>
+    <div class="m3body" style="padding:12px 12px 14px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        ${hasGroup?`<button type="button" onclick="openGroupCourtModal('${k}',${Number(groupIndex)})" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 조코트 ${groupCourts.length?groupCourts.map(escapeHtml).join('/'):'미배정'}</button>`:''}
+        <button type="button" onclick="openMatchCourtModal('${k}','${mid}')" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 경기코트 ${matchCourts.length?matchCourts.map(escapeHtml).join('/'):'미배정'}</button>
+      </div>
+      ${buildMatchMemoFieldHtml({memo,escapeHtml})}
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px">
+        <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
+          <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${escapeHtml(sideLabel1)}</div>
+          <div id="rp1_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p1))}"></div>
+          <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p1.length?p1.map(escapeHtml).join(' / '):'선수 정보 없음'}</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:900;color:var(--text3)">VS</div>
+        <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
+          <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${escapeHtml(sideLabel2)}</div>
+          <div id="rp2_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p2))}"></div>
+          <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p2.length?p2.map(escapeHtml).join(' / '):'선수 정보 없음'}</div>
+        </div>
+      </div>
+      <div style="padding:12px;border-radius:12px;background:#fff;border:1.5px solid var(--border)">
+        <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${escapeHtml(roundLabel)}</div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
+          <div>
+            <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${escapeHtml(sideLabel1)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scoreButtons1Html}</div>
+            <input type="hidden" id="rs1_0" value="${escapeAttr(score1)}">
+          </div>
+          <div style="font-size:1.3rem;font-weight:900;color:var(--text3);text-align:center">:</div>
+          <div>
+            <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${escapeHtml(sideLabel2)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scoreButtons2Html}</div>
+            <input type="hidden" id="rs2_0" value="${escapeAttr(score2)}">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}

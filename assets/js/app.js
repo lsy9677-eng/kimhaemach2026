@@ -731,7 +731,7 @@ import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,bui
 import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
-import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml}from'./match-result-ui.js';
+import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml}from'./match-result-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14457,46 +14457,30 @@ function openM3(key,mid){
     const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
     const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
     const matchCourts=Array.isArray(m.courts)?m.courts:(m.court?[m.court]:[]);
-    html=`<div style="margin-bottom:10px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#eef4ff);border:1.5px solid #bfdbfe;font-size:.8rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 개인전은 오더 제출이 없습니다. 점수만 입력하면 됩니다.</div>
-    <div class="m3card" style="border:1.5px solid var(--border);box-shadow:none">
-      <div class="m3hdr ${divisionHeaderClass(div)}" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
-        <span class="m3badge">${dl(div)}</span>
-        <span class="m3badge" style="background:${getRoundVisualTheme(roundLabel, m.phase||'').chipBg};color:${getRoundVisualTheme(roundLabel, m.phase||'').chipFg};border:1px solid ${getRoundVisualTheme(roundLabel, m.phase||'').bd}">${roundLabel}</span>
-      </div>
-      <div class="m3body" style="padding:12px 12px 14px">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px">${m.phase==='group'&&m.group!=null?`<button type="button" onclick="openGroupCourtModal('${key}',${Number(m.group)})" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 조코트 ${grpCourts.length?grpCourts.join('/'): '미배정'}</button>`:''}<button type="button" onclick="openMatchCourtModal('${key}','${m.id}')" style="padding:5px 12px;font-size:.78rem;white-space:nowrap;background:#fff;color:var(--primary-dark);border:1.5px solid var(--border);border-radius:999px;font-weight:800">🎾 경기코트 ${matchCourts.length?matchCourts.join('/'): '미배정'}</button></div>
-        <div class="form-group" style="margin-bottom:12px"><label class="form-label">📢 경기 공지</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>
-        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px">
-          <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
-            <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${sideLabel1}</div>
-            <div id="rp1_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p1v))}"></div>
-            <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p1v.length?p1v.join(' / '):'선수 정보 없음'}</div>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:900;color:var(--text3)">VS</div>
-          <div style="padding:10px;border-radius:12px;border:1.5px solid var(--border);background:#fff">
-            <div style="font-size:.74rem;font-weight:800;color:var(--primary);margin-bottom:6px">${sideLabel2}</div>
-            <div id="rp2_0" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(p2v))}"></div>
-            <div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.92rem;color:var(--text);font-weight:900;line-height:1.5;text-align:center">${p2v.length?p2v.join(' / '):'선수 정보 없음'}</div>
-          </div>
-        </div>
-        <div style="padding:12px;border-radius:12px;background:#fff;border:1.5px solid var(--border)">
-          <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark);margin-bottom:10px">${roundLabel}</div>
-          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
-            <div>
-              <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${sideLabel1}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs1_0', s1v===''?null:Number(s1v))}</div>
-              <input type="hidden" id="rs1_0" value="${s1v}">
-            </div>
-            <div style="font-size:1.3rem;font-weight:900;color:var(--text3);text-align:center">:</div>
-            <div>
-              <div style="font-size:.78rem;font-weight:800;color:var(--text2);margin-bottom:6px;text-align:center">${sideLabel2}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs2_0', s2v===''?null:Number(s2v))}</div>
-              <input type="hidden" id="rs2_0" value="${s2v}">
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
+    const roundTheme=getRoundVisualTheme(roundLabel,m.phase||'');
+    html=buildIndividualResultBodyHtml({
+      divisionLabel:dl(div),
+      divisionClass:divisionHeaderClass(div),
+      roundLabel,
+      roundTheme,
+      phase:m.phase||'',
+      groupIndex:m.group,
+      groupCourts:grpCourts,
+      matchId:m.id,
+      matchCourts,
+      memo:existingMatchMemo||'',
+      sideLabel1,
+      sideLabel2,
+      players1:p1v,
+      players2:p2v,
+      score1:s1v,
+      score2:s2v,
+      scoreButtons1Html:scBtns('rs1_0',s1v===''?null:Number(s1v)),
+      scoreButtons2Html:scBtns('rs2_0',s2v===''?null:Number(s2v)),
+      key,
+      escapeHtml:esc,
+      escapeAttr:escAttr
+    });
     ge('mM3B').innerHTML=html;
     om('mM3');
     refreshAllOrderChipAvailability();
@@ -14513,13 +14497,43 @@ function openM3(key,mid){
     else if(mySide) statusText='📝 아직 제출 전입니다. 지금은 자유롭게 수정할 수 있고, 제출하면 내 클럽 오더가 저장됩니다.';
     else statusText='📝 관리자만 전체 오더를 확인할 수 있습니다.';
   }
-  html=`<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:14px;padding:14px 16px;background:var(--primary);color:white;border-radius:var(--radius-lg)" class="${divisionHeaderClass(div)}"><div style="font-weight:800;font-size:1.08rem;line-height:1.35">${dn1}</div><div style="font-size:1.25rem;font-weight:900;opacity:.9">VS</div><div style="font-weight:800;font-size:1.08rem;text-align:right;line-height:1.35">${dn2}</div></div>
-  ${isIndividualMode?`<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 개인전은 오더 제출이 없습니다. 팀(페어)이 이미 확정되어 있으므로 점수만 입력하면 됩니다.</div>`:`<div style="margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid #dbeafe;background:linear-gradient(135deg,#f8fbff,#eef6ff);font-size:.78rem;font-weight:800;color:#1d4ed8;line-height:1.6">📌 오더는 각 복식에서 선수 2명을 선택한 뒤 하단의 제출 버튼으로 제출합니다. 진행자/관리자는 한 팀만 대리제출도 가능합니다.</div>`}
-  <div style="font-size:.9rem;color:var(--text2);margin-bottom:12px;padding:10px 12px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-weight:700">💡 선수 2명 클릭 선택 후 스코어 버튼으로 입력 (동점 불가) · 점수를 아직 안 넣어도 페어만 먼저 저장할 수 있습니다.${useOrderHere && !st.bothSubmitted?`
-  <span style="display:block;margin-top:4px;color:#b45309">제출 전에는 자유 수정 가능 · 제출 후에는 내 오더가 저장되며 · 양팀 제출 완료 후에는 완전 잠금됩니다.${isOperator?'<br><span style="color:#1d4ed8">경기진행자는 제출 전에도 양팀 명단은 볼 수 있지만, 제출 완료된 팀의 오더 선택은 양팀 모두 제출될 때까지 숨겨집니다.</span>':''}</span>`:''}</div>
-  ${(useOrderHere?`<div id="mM3SubmitStatusCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:2px solid ${st.bothSubmitted?'#16a34a':(st.mySubmitted?'#d4a017':'#93c5fd')};background:${st.bothSubmitted?'linear-gradient(135deg,#ecfdf5,#dcfce7)':(st.mySubmitted?'linear-gradient(135deg,#fff7dd,#ffefb0)':'linear-gradient(135deg,#eff6ff,#f8fbff)')}"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="font-size:.82rem;line-height:1.6;color:var(--text2)"><div style="font-size:.9rem;font-weight:900;color:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')}">${st.bothSubmitted?'🔒 제출 완료 상태':(st.mySubmitted?'📤 내팀 제출 완료':'✍️ 제출 전 상태')}</div><div style="margin-top:4px">${statusText}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#dcfce7':'#f8fafc'};color:${st.s1?'#166534':'#475569'}">${dn1} · ${st.s1?'✅ 제출완료':'⏳ 미제출'}</span><span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#dcfce7':'#f8fafc'};color:${st.s2?'#166534':'#475569'}">${dn2} · ${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>${st.bothSubmitted?'<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;font-size:.74rem;font-weight:800;border:1.5px solid #16a34a;background:#bbf7d0;color:#166534">🔓 양팀 공개됨</span>':''}</div></div><div style="padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:${st.bothSubmitted?'#166534':(st.mySubmitted?'#8a6412':'#1d4ed8')};color:#fff">${st.bothSubmitted?'수정 불가':(st.mySubmitted?'상대 제출 대기':'작성 가능')}</div></div></div>`:'')}
-  ${((side1PhotoEditable||side2PhotoEditable||side1PhotoViewable||side2PhotoViewable||_orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2))?`<div id="mM3PhotoAssistCard" style="margin-bottom:12px;padding:12px 13px;border-radius:14px;border:1.5px solid #bfdbfe;background:linear-gradient(135deg,#f8fbff,#eef4ff)"><div style="font-size:.84rem;font-weight:900;color:#1d4ed8;margin-bottom:8px">📷 사진으로 오더 보조입력</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn1}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side1PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(1,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus1" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,1)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}${`<div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff"><div style="font-size:.8rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">${dn2}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${side2PhotoEditable?`<button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'camera')">📷 사진찍기</button><button type="button" class="btn btn-outline" style="font-size:.74rem;padding:6px 10px" onclick="triggerOrderPhoto(2,'upload')">🖼️ 사진불러오기</button>`:''}</div><div id="orderPhotoStatus2" style="font-size:.74rem;color:var(--text2);margin-top:7px;line-height:1.45">${_orderPhotoGetSaved(m,2)?'사진 저장됨 · OCR 보조입력 완료':'대기중'}</div></div>`}</div></div>`:'')}`;
-  html+=`<div class="form-group" style="margin:12px 0"><label class="form-label">📢 경기 공지</label><textarea class="form-textarea" id="mM3MatchMemo" placeholder="예: 2번 코트 대기 / 5분 뒤 입장 / 운영 메모 등">${existingMatchMemo||''}</textarea></div>`;
+  const photoAssistVisible=!!(
+    side1PhotoEditable||side2PhotoEditable||
+    side1PhotoViewable||side2PhotoViewable||
+    _orderPhotoGetSaved(m,1)||_orderPhotoGetSaved(m,2)
+  );
+
+  html=`${resultTeamsHeaderHtml}
+  ${buildTeamResultIntroHtml({
+    useOnlineOrder:useOrderHere,
+    bothSubmitted:st.bothSubmitted,
+    isOperator
+  })}
+  ${buildOrderSubmitStatusHtml({
+    show:useOrderHere,
+    bothSubmitted:st.bothSubmitted,
+    mySubmitted:st.mySubmitted,
+    side1Submitted:st.s1,
+    side2Submitted:st.s2,
+    team1:dn1,
+    team2:dn2,
+    statusText,
+    escapeHtml:esc
+  })}
+  ${buildPhotoAssistHtml({
+    show:photoAssistVisible,
+    team1:dn1,
+    team2:dn2,
+    side1Editable:side1PhotoEditable,
+    side2Editable:side2PhotoEditable,
+    side1Saved:!!_orderPhotoGetSaved(m,1),
+    side2Saved:!!_orderPhotoGetSaved(m,2),
+    escapeHtml:esc
+  })}
+  ${buildMatchMemoFieldHtml({
+    memo:existingMatchMemo||'',
+    escapeHtml:esc
+  })}`;
   for(let r=0;r<dbl;r++){
     const rb=exRb[r]||{};
     const submitted1=getSubmittedPlayersForSide(key,m,1,r);
