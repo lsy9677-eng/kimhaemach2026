@@ -731,6 +731,7 @@ import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,bui
 import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
+import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml}from'./match-result-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14356,15 +14357,15 @@ function openM3(key,mid){
 
   // ── 제목 동적 설정 ──
   const titleEl=ge('mM3T');
-  if(isIndividualMode){
-    titleEl.textContent=`⚡ ${dl(div)} · ${dn1} vs ${dn2} — 결과입력`;
-  } else if(useOrderHere){
-    if(st.bothSubmitted) titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더/기록확인입력`;
-    else if(st.mySubmitted) titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더/기록확인입력`;
-    else titleEl.textContent=`📝 ${dl(div)} · ${dn1} vs ${dn2} — 오더 입력·제출`;
-  } else {
-    titleEl.textContent=`⚡ ${dl(div)} · ${dn1} vs ${dn2}`;
-  }
+  titleEl.textContent=buildResultModalTitle({
+    divisionLabel:dl(div),
+    team1:dn1,
+    team2:dn2,
+    isIndividual:isIndividualMode,
+    useOnlineOrder:useOrderHere,
+    bothSubmitted:st.bothSubmitted,
+    mySubmitted:st.mySubmitted
+  });
 
   // ── footer 버튼 상태 제어 ──
   const btnSave=ge('mM3SaveBtn');
@@ -14377,78 +14378,61 @@ function openM3(key,mid){
   const operatorSubmitBtns=ensureM3OperatorSubmitButtons();
   const btnOpSubmitHome=operatorSubmitBtns.homeBtn;
   const btnOpSubmitAway=operatorSubmitBtns.awayBtn;
-  if(btnSave){ btnSave.style.display=''; btnSave.textContent='💾 임시저장'; btnSave.disabled=false; btnSave.title='현재 선택한 명단과 페어를 임시저장합니다'; }
-  if(btnUnlock){ btnUnlock.style.display=''; btnUnlock.textContent='🔓 초기화'; btnUnlock.disabled=true; btnUnlock.title='오더 제출 상태와 제출 내용을 초기화합니다'; }
-  if(btnSubmit) btnSubmit.style.display='none';
-  if(btnSaveResult){ btnSaveResult.style.display=''; btnSaveResult.textContent='💾 결과저장'; btnSaveResult.disabled=false; btnSaveResult.title='현재 경기 결과를 저장합니다'; }
-  if(btnSubmitHome) btnSubmitHome.style.display='none';
-  if(btnSubmitAway) btnSubmitAway.style.display='none';
-  if(btnOpSubmitHome) btnOpSubmitHome.style.display='none';
-  if(btnOpSubmitAway) btnOpSubmitAway.style.display='none';
 
-  if(btnSubmitHome){ btnSubmitHome.disabled=false; }
-  if(btnSubmitAway){ btnSubmitAway.disabled=false; }
-  if(btnOpSubmitHome){ btnOpSubmitHome.disabled=false; }
-  if(btnOpSubmitAway){ btnOpSubmitAway.disabled=false; }
+  const footerState=getResultFooterButtonState({
+    isIndividual:isIndividualMode,
+    useOnlineOrder:useOrderHere,
+    isAdmin:!!AD,
+    isOperator:!!isOperator,
+    mySide,
+    bothSubmitted:st.bothSubmitted,
+    mySubmitted:st.mySubmitted,
+    side1Submitted:st.s1,
+    side2Submitted:st.s2
+  });
 
-  if(isIndividualMode){
-    if(btnSave){ btnSave.style.display='none'; }
-    if(btnUnlock){ btnUnlock.style.display='none'; }
-    if(btnSubmit){ btnSubmit.style.display='none'; }
-    if(btnSubmitHome){ btnSubmitHome.style.display='none'; }
-    if(btnSubmitAway){ btnSubmitAway.style.display='none'; }
-    if(btnOpSubmitHome){ btnOpSubmitHome.style.display='none'; }
-    if(btnOpSubmitAway){ btnOpSubmitAway.style.display='none'; }
-    if(btnSaveResult){ btnSaveResult.style.display=''; btnSaveResult.textContent='💾 결과저장'; btnSaveResult.disabled=false; }
-  } else if(useOrderHere){
-    if(AD){
-      if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent=st.bothSubmitted?'📤 관리자 재제출(양팀)':'📤 관리자 제출(양팀)'; }
-      if(btnSubmitHome){ btnSubmitHome.style.display=''; btnSubmitHome.textContent=`📤 ${dn1}만 제출`; btnSubmitHome.title='홈팀 오더만 제출 또는 재제출'; }
-      if(btnSubmitAway){ btnSubmitAway.style.display=''; btnSubmitAway.textContent=`📤 ${dn2}만 제출`; btnSubmitAway.title='원정팀 오더만 제출 또는 재제출'; }
-      if(btnUnlock){ btnUnlock.disabled=false; btnUnlock.title='오더 제출 상태와 제출 내용을 초기화하고 대진표 명단을 원래대로 돌립니다'; }
-    } else if(isOperator){
-      if(btnUnlock){ btnUnlock.disabled=false; btnUnlock.title='진행자도 오더 제출 상태와 제출 내용을 초기화할 수 있습니다'; }
-      if(!st.bothSubmitted){
-        const missingHome = !st.s1;
-        const missingAway = !st.s2;
-        if(missingHome && btnOpSubmitHome){
-          btnOpSubmitHome.style.display='';
-          btnOpSubmitHome.textContent=`📤 ${dn1}만 대리제출`;
-          btnOpSubmitHome.title='홈팀 오더만 대신 제출합니다';
-        }
-        if(missingAway && btnOpSubmitAway){
-          btnOpSubmitAway.style.display='';
-          btnOpSubmitAway.textContent=`📤 ${dn2}만 대리제출`;
-          btnOpSubmitAway.title='원정팀 오더만 대신 제출합니다';
-        }
-        if((missingHome && missingAway) && btnSubmit){
-          btnSubmit.style.display='';
-          btnSubmit.textContent='📤 양팀 모두 대리제출';
-          btnSubmit.title='양팀을 한 번에 대신 제출합니다';
-        }
-      }
-    } else if(mySide){
-      if(btnUnlock){ btnUnlock.disabled=true; btnUnlock.title='초기화는 관리자 또는 진행자만 가능합니다'; }
-      if(st.bothSubmitted){
-        if(btnSave){ btnSave.disabled=true; btnSave.title='양팀 제출 완료 후에는 임시저장할 수 없습니다'; }
-      } else if(st.mySubmitted){
-        if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent='📤 오더 수정제출'; btnSubmit.title='상대 제출 전까지 다시 제출할 수 있습니다'; }
-      } else {
-        if(btnSubmit){ btnSubmit.style.display=''; btnSubmit.textContent='📤 오더 제출'; btnSubmit.title='제출 후 내 오더가 저장됩니다'; }
-      }
-    } else {
-      if(btnSave){ btnSave.disabled=true; btnSave.title='관리자/진행자/해당 클럽 경기이사만 임시저장할 수 있습니다'; }
-      if(btnSaveResult){ btnSaveResult.disabled=true; btnSaveResult.title='관리자/진행자/해당 클럽 경기이사만 결과저장할 수 있습니다'; }
-      if(btnUnlock){ btnUnlock.disabled=true; btnUnlock.title='초기화는 관리자 또는 진행자만 가능합니다'; }
-    }
-  } else {
-    if(btnUnlock){ btnUnlock.disabled=!(AD||isOperator); }
+  const applyBtnState=(btn,s)=>{
+    if(!btn||!s) return;
+    btn.style.display=s.show?'':'none';
+    btn.disabled=!!s.disabled;
+    if(s.text) btn.textContent=s.text;
+    if(s.title) btn.title=s.title;
+  };
+
+  applyBtnState(btnSave,footerState.save);
+  applyBtnState(btnUnlock,footerState.unlock);
+  applyBtnState(btnSubmit,footerState.submit);
+  applyBtnState(btnSaveResult,footerState.saveResult);
+  applyBtnState(btnSubmitHome,footerState.submitHome);
+  applyBtnState(btnSubmitAway,footerState.submitAway);
+  applyBtnState(btnOpSubmitHome,footerState.opSubmitHome);
+  applyBtnState(btnOpSubmitAway,footerState.opSubmitAway);
+
+  if(btnSubmitHome && footerState.submitHome.show){
+    btnSubmitHome.textContent=`📤 ${dn1}만 제출`;
+    btnSubmitHome.title='홈팀 오더만 제출 또는 재제출';
+  }
+  if(btnSubmitAway && footerState.submitAway.show){
+    btnSubmitAway.textContent=`📤 ${dn2}만 제출`;
+    btnSubmitAway.title='원정팀 오더만 제출 또는 재제출';
+  }
+  if(btnOpSubmitHome && footerState.opSubmitHome.show){
+    btnOpSubmitHome.textContent=`📤 ${dn1}만 대리제출`;
+    btnOpSubmitHome.title='홈팀 오더만 대신 제출합니다';
+  }
+  if(btnOpSubmitAway && footerState.opSubmitAway.show){
+    btnOpSubmitAway.textContent=`📤 ${dn2}만 대리제출`;
+    btnOpSubmitAway.title='원정팀 오더만 대신 제출합니다';
   }
 
   const p1=t1.players||[],p2=t2.players||[];
   const exRb=Array.isArray(m.rubbers)?m.rubbers:[];
   const existingMatchMemo=getMatchMemoByObj(m);
-  const scBtns=(id,cur)=>[0,1,2,3,4,5,6].map(n=>`<button type="button" onclick="setRbSc('${id}',${n})" style="width:32px;height:32px;border-radius:6px;border:1.5px solid ${cur===n?'var(--primary)':'var(--border)'};background:${cur===n?'var(--primary)':'white'};color:${cur===n?'white':'var(--text)'};font-weight:700;font-size:.85rem;cursor:pointer;transition:.15s" id="${id}_btn${n}">${n}</button>`).join('');
+  const scBtns=(id,cur)=>buildScoreButtonsHtml({
+    inputId:id,
+    current:cur,
+    escapeAttr:escAttr
+  });
   let html='';
 
   if(isIndividualMode){
