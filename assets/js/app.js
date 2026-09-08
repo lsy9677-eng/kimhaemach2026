@@ -731,7 +731,7 @@ import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,bui
 import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
-import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml}from'./match-result-ui.js';
+import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml}from'./match-result-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14425,6 +14425,14 @@ function openM3(key,mid){
     btnOpSubmitAway.title='원정팀 오더만 대신 제출합니다';
   }
 
+  const resultTeamsHeaderHtml=buildResultTeamsHeaderHtml({
+    team1:dn1,
+    team2:dn2,
+    club1:baseClub(t1?.club||''),
+    club2:baseClub(t2?.club||''),
+    isIndividual:isIndividualMode,
+    escapeHtml:esc
+  });
   const p1=t1.players||[],p2=t2.players||[];
   const exRb=Array.isArray(m.rubbers)?m.rubbers:[];
   const existingMatchMemo=getMatchMemoByObj(m);
@@ -14433,6 +14441,9 @@ function openM3(key,mid){
     current:cur,
     escapeAttr:escAttr
   });
+  const buildResultRubberCard=(args)=>buildRubberResultCardHtml(args);
+  const buildResultSection=(args)=>buildResultSectionHtml(args);
+  const buildResultMemo=(memo)=>buildResultMemoHtml({memo,escapeHtml:esc});
   let html='';
 
   if(isIndividualMode){

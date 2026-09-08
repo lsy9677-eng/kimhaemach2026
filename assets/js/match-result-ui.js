@@ -118,3 +118,83 @@ export function buildScoreButtonsHtml({
     return `<button type="button" onclick="setRbSc('${id}',${n})" style="width:32px;height:32px;border-radius:6px;border:1.5px solid ${selected?'var(--primary)':'var(--border)'};background:${selected?'var(--primary)':'white'};color:${selected?'white':'var(--text)'};font-weight:700;font-size:.85rem;cursor:pointer;transition:.15s" id="${id}_btn${n}">${n}</button>`;
   }).join('');
 }
+
+
+export function buildResultTeamsHeaderHtml({
+  team1='',
+  team2='',
+  club1='',
+  club2='',
+  isIndividual=false,
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:12px">
+    <div style="min-width:0;padding:10px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px">
+      <div style="font-size:.72rem;color:#1d4ed8;font-weight:700">${isIndividual?'참가자 A':'홈팀'}</div>
+      <div style="font-size:.96rem;font-weight:900;color:#1e3a8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(team1||'TBD')}</div>
+      ${club1?`<div style="font-size:.68rem;color:#64748b;margin-top:2px">${escapeHtml(club1)}</div>`:''}
+    </div>
+    <div style="font-size:.76rem;font-weight:900;color:var(--text3)">VS</div>
+    <div style="min-width:0;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;text-align:right">
+      <div style="font-size:.72rem;color:#c2410c;font-weight:700">${isIndividual?'참가자 B':'원정팀'}</div>
+      <div style="font-size:.96rem;font-weight:900;color:#9a3412;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(team2||'TBD')}</div>
+      ${club2?`<div style="font-size:.68rem;color:#64748b;margin-top:2px">${escapeHtml(club2)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+export function buildRubberResultCardHtml({
+  rubberNo=1,
+  pair1Html='',
+  pair2Html='',
+  score1Html='',
+  score2Html='',
+  noteHtml='',
+  locked=false
+}={}){
+  return `<div class="match-result-rubber-card" style="border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px 12px;margin-bottom:8px;opacity:${locked?'.72':'1'}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="font-size:.8rem;font-weight:900;color:var(--primary-dark)">${Number(rubberNo||1)}복식</div>
+      ${locked?'<span class="badge bg-gray" style="font-size:.62rem">잠금</span>':''}
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center">
+      <div>${pair1Html||''}</div>
+      <div style="font-size:.72rem;color:var(--text3);font-weight:800">VS</div>
+      <div>${pair2Html||''}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">
+      <div>${score1Html||''}</div>
+      <div>${score2Html||''}</div>
+    </div>
+    ${noteHtml?`<div style="margin-top:7px">${noteHtml}</div>`:''}
+  </div>`;
+}
+
+export function buildResultSectionHtml({
+  heading='',
+  description='',
+  bodyHtml='',
+  tone='default'
+}={}){
+  const tones={
+    default:{bg:'#fff',bd:'var(--border)',fg:'var(--primary-dark)'},
+    info:{bg:'#eff6ff',bd:'#bfdbfe',fg:'#1d4ed8'},
+    warning:{bg:'#fff7ed',bd:'#fed7aa',fg:'#9a3412'}
+  };
+  const t=tones[tone]||tones.default;
+  return `<section style="margin-bottom:12px;padding:11px 12px;background:${t.bg};border:1px solid ${t.bd};border-radius:12px">
+    ${heading?`<div style="font-size:.82rem;font-weight:900;color:${t.fg};margin-bottom:${description?'3px':'8px'}">${heading}</div>`:''}
+    ${description?`<div style="font-size:.7rem;color:var(--text3);line-height:1.5;margin-bottom:8px">${description}</div>`:''}
+    ${bodyHtml||''}
+  </section>`;
+}
+
+export function buildResultMemoHtml({
+  memo='',
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  return `<div style="margin-top:10px">
+    <div style="font-size:.74rem;font-weight:800;color:var(--primary-dark);margin-bottom:5px">메모</div>
+    <textarea id="mM3Memo" class="form-input" rows="2" style="width:100%;resize:vertical;font-size:.78rem" placeholder="경기 메모">${escapeHtml(memo||'')}</textarea>
+  </div>`;
+}
