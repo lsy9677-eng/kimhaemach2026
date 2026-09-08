@@ -363,3 +363,85 @@ export function buildIndividualResultBodyHtml({
     </div>
   </div>`;
 }
+
+
+export function buildOrderSideBoxHtml({
+  teamName='',
+  isIndividual=false,
+  submitted=false,
+  showSide=true,
+  operatorHiddenSubmitted=false,
+  blankOrder=false,
+  pickerHtml='',
+  hiddenHtml='',
+  fixedPairHtml='',
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  const fg=submitted?'#166534':'var(--primary)';
+  const bd=submitted?'#16a34a':'#cbd5e1';
+  const bg=submitted?'#f0fdf4':'#fff';
+  let body='';
+  if(showSide){
+    body=isIndividual?fixedPairHtml:pickerHtml;
+    if(operatorHiddenSubmitted){
+      body+='<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>';
+    }else if(blankOrder){
+      body+='<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>';
+    }
+  }else{
+    body='<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>'+(hiddenHtml||'');
+  }
+  return `<div style="padding:8px;border-radius:12px;border:1.5px solid ${bd};background:${bg}">
+    <div style="font-size:.72rem;font-weight:800;color:${fg};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
+      <span>${isIndividual?`${escapeHtml(teamName)} 페어`:`${escapeHtml(teamName)} (2명 선택 또는 공오더)`}</span>
+      ${isIndividual?'':`<span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${submitted?'#dcfce7':'#f8fafc'};border:1px solid ${bd};color:${submitted?'#166534':'#475569'}">${submitted?'✅ 제출완료':'⏳ 미제출'}</span>`}
+    </div>${body}</div>`;
+}
+
+export function buildTeamRubberCardHtml({
+  rubberNo=1,
+  defaultSlotLabel='',
+  winnerLabel='',
+  side1BoxHtml='',
+  side2BoxHtml='',
+  team1='',
+  team2='',
+  scoreButtons1Html='',
+  scoreButtons2Html='',
+  score1='',
+  score2='',
+  escapeHtml=(x)=>String(x||''),
+  escapeAttr=(x)=>String(x||'')
+}={}){
+  const idx=Math.max(0,Number(rubberNo||1)-1);
+  return `<div class="rb-blk"><div class="rb-bhdr"><span>${Number(rubberNo||1)}복식 <small style="opacity:.75">(기본: ${escapeHtml(defaultSlotLabel||'')})</small></span>${winnerLabel?`<span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:.7rem">${escapeHtml(winnerLabel)} ✓</span>`:''}</div>
+  <div class="rb-bbdy">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">${side1BoxHtml||''}${side2BoxHtml||''}</div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
+      <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px;text-align:center">${escapeHtml(team1)}</div><div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scoreButtons1Html||''}</div><input type="hidden" id="rs1_${idx}" value="${escapeAttr(score1)}"></div>
+      <div style="font-size:1.3rem;font-weight:900;color:var(--text3);text-align:center">:</div>
+      <div><div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px;text-align:center">${escapeHtml(team2)}</div><div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scoreButtons2Html||''}</div><input type="hidden" id="rs2_${idx}" value="${escapeAttr(score2)}"></div>
+    </div>
+  </div></div>`;
+}
+
+export function buildQuickActionPanelHtml({
+  doublesCount=0,
+  team1='',
+  team2='',
+  isAdmin=false,
+  isOperator=false,
+  mySide=0,
+  escapeHtml=(x)=>String(x||'')
+}={}){
+  const dbl=Number(doublesCount||0);
+  const elevated=!!(isAdmin||isOperator);
+  const myName=mySide===2?team2:team1;
+  const inputs=elevated
+    ? `<button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(1,${dbl})">${escapeHtml(team1)} 선수 입력</button><button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(2,${dbl})">${escapeHtml(team2)} 선수 입력</button>`
+    : (mySide?`<button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(${Number(mySide)},${dbl})">${escapeHtml(myName)} 선수 입력</button>`:'');
+  const reorder=elevated
+    ? `<button type="button" onclick="openReorderPopup(${dbl},1)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">🔀 ${escapeHtml(team1)} 순서 변경</button><button type="button" onclick="openReorderPopup(${dbl},2)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">🔀 ${escapeHtml(team2)} 순서 변경</button>`
+    : (mySide?`<button type="button" onclick="openReorderPopup(${dbl},${Number(mySide)})" style="padding:9px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.82rem;font-weight:900;cursor:pointer">🔀 복식 순서 변경</button>`:'');
+  return `<div style="font-size:.84rem;font-weight:900;color:#c2410c;margin-bottom:8px">✍️ 선수 입력 · 순서 변경</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${inputs}</div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:${elevated?'stretch':'flex-end'}">${reorder}</div>`;
+}

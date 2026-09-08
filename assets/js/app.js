@@ -731,7 +731,7 @@ import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,bui
 import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
-import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml}from'./match-result-ui.js';
+import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14559,26 +14559,45 @@ function openM3(key,mid){
     const pickerHtml=(arr,selArr,cid,editable)=>`<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"><div class="m3-picked"></div>${editable?`<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`:''}</div>`;
     const hiddenHtml=(selArr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"></div>`;
     const fixedPairHtml=(arr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(arr||[]))}"></div><div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.82rem;color:var(--text);font-weight:800;line-height:1.6">${(arr||[]).length?arr.join(' / '):'선수 정보 없음'}</div>`;
-    html+=`<div class="rb-blk"><div class="rb-bhdr"><span>${r+1}복식 <small style="opacity:.75">(기본: ${defSlotLabels[r]})</small></span>${rb.winner!=null?`<span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:8px;font-size:.7rem">${rb.winner===0?dn1:dn2} ✓</span>`:''}</div>
-    <div class="rb-bbdy">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s1?'#16a34a':'#cbd5e1'};background:${st.s1?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s1?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${isIndividualMode?`${dn1} 페어`:`${dn1} (2명 선택 또는 공오더)`}</span>${isIndividualMode?'':`<span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s1?'#dcfce7':'#f8fafc'};border:1px solid ${st.s1?'#16a34a':'#cbd5e1'};color:${st.s1?'#166534':'#475569'}">${st.s1?'✅ 제출완료':'⏳ 미제출'}</span>`}</div>${showSide1?`${isIndividualMode?fixedPairHtml(p1,`rp1_${r}`):pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)}${(isOperator && !st.bothSubmitted && st.s1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow1.blankOrder||rb.blankOrder1)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp1_${r}`)}`}</div>
-        <div style="padding:8px;border-radius:12px;border:1.5px solid ${st.s2?'#16a34a':'#cbd5e1'};background:${st.s2?'#f0fdf4':'#fff'}"><div style="font-size:.72rem;font-weight:800;color:${st.s2?'#166534':'var(--primary)'};margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap"><span>${isIndividualMode?`${dn2} 페어`:`${dn2} (2명 선택 또는 공오더)`}</span>${isIndividualMode?'':`<span style="padding:2px 8px;border-radius:999px;font-size:.68rem;background:${st.s2?'#dcfce7':'#f8fafc'};border:1px solid ${st.s2?'#16a34a':'#cbd5e1'};color:${st.s2?'#166534':'#475569'}">${st.s2?'✅ 제출완료':'⏳ 미제출'}</span>`}</div>${showSide2?`${isIndividualMode?fixedPairHtml(p2,`rp2_${r}`):pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)}${(isOperator && !st.bothSubmitted && st.s2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#475569;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px">🔒 이미 제출된 팀 — 오더 배치는 양팀 제출 후 공개</div>':((submittedRow2.blankOrder||rb.blankOrder2)?'<div style="margin-top:6px;font-size:.74rem;font-weight:800;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:6px 8px">🚫 공오더 제출</div>':'')}`:`<div style="padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3);font-weight:700">🔒 상대 클럽 제출 후 자동 공개</div>${hiddenHtml([],`rp2_${r}`)}`}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">
-        <div>
-          <div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px;text-align:center">${dn1}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs1_'+r, sv1===''?null:Number(sv1))}</div>
-          <input type="hidden" id="rs1_${r}" value="${sv1}">
-        </div>
-        <div style="font-size:1.3rem;font-weight:900;color:var(--text3);text-align:center">:</div>
-        <div>
-          <div style="font-size:.68rem;font-weight:700;color:var(--primary);margin-bottom:5px;text-align:center">${dn2}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scBtns('rs2_'+r, sv2===''?null:Number(sv2))}</div>
-          <input type="hidden" id="rs2_${r}" value="${sv2}">
-        </div>
-      </div>
-    </div></div>`;
+    const side1BoxHtml=buildOrderSideBoxHtml({
+      teamName:dn1,
+      isIndividual:isIndividualMode,
+      submitted:st.s1,
+      showSide:showSide1,
+      operatorHiddenSubmitted:(isOperator && !st.bothSubmitted && st.s1),
+      blankOrder:!!(submittedRow1.blankOrder||rb.blankOrder1),
+      pickerHtml:(isIndividualMode?fixedPairHtml(p1,`rp1_${r}`):pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)),
+      hiddenHtml:hiddenHtml([],`rp1_${r}`),
+      fixedPairHtml:fixedPairHtml(p1,`rp1_${r}`),
+      escapeHtml:esc
+    });
+    const side2BoxHtml=buildOrderSideBoxHtml({
+      teamName:dn2,
+      isIndividual:isIndividualMode,
+      submitted:st.s2,
+      showSide:showSide2,
+      operatorHiddenSubmitted:(isOperator && !st.bothSubmitted && st.s2),
+      blankOrder:!!(submittedRow2.blankOrder||rb.blankOrder2),
+      pickerHtml:(isIndividualMode?fixedPairHtml(p2,`rp2_${r}`):pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)),
+      hiddenHtml:hiddenHtml([],`rp2_${r}`),
+      fixedPairHtml:fixedPairHtml(p2,`rp2_${r}`),
+      escapeHtml:esc
+    });
+    html+=buildTeamRubberCardHtml({
+      rubberNo:r+1,
+      defaultSlotLabel:defSlotLabels[r],
+      winnerLabel:(rb.winner!=null?(rb.winner===0?dn1:dn2):''),
+      side1BoxHtml,
+      side2BoxHtml,
+      team1:dn1,
+      team2:dn2,
+      scoreButtons1Html:scBtns('rs1_'+r,sv1===''?null:Number(sv1)),
+      scoreButtons2Html:scBtns('rs2_'+r,sv2===''?null:Number(sv2)),
+      score1:sv1,
+      score2:sv2,
+      escapeHtml:esc,
+      escapeAttr:escAttr
+    });
   }
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
@@ -14591,24 +14610,15 @@ function openM3(key,mid){
       const quickActionWrap=document.createElement('div');
       quickActionWrap.id='mM3QuickActionWrap';
       quickActionWrap.style.cssText='margin:0 0 12px;padding:12px 13px;border-radius:14px;border:1.5px solid #fed7aa;background:linear-gradient(135deg,#fffaf0,#fff7ed)';
-      quickActionWrap.innerHTML=`
-        <div style="font-size:.84rem;font-weight:900;color:#c2410c;margin-bottom:8px">✍️ 선수 입력 · 순서 변경</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          ${(AD||OP) ? `
-            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(1,${dbl})">${dn1} 선수 입력</button>
-            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(2,${dbl})">${dn2} 선수 입력</button>
-          ` : (mySide ? `
-            <button type="button" class="btn btn-outline" style="flex:1 1 0;font-size:.82rem;padding:9px 12px;min-width:0" onclick="openTapOrderModal(${mySide},${dbl})">${mySide===2?dn2:dn1} 선수 입력</button>
-          ` : ``)}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:${(AD||OP)?'stretch':'flex-end'}">
-          ${(AD||OP) ? `
-            <button type="button" onclick="openReorderPopup(${dbl},1)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 ${dn1} 순서 변경</button>
-            <button type="button" onclick="openReorderPopup(${dbl},2)" style="flex:1 1 0;padding:9px 12px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.8rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 ${dn2} 순서 변경</button>
-          ` : (mySide ? `
-            <button type="button" onclick="openReorderPopup(${dbl},${mySide})" style="padding:9px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#f57c00,#ef6c00);color:white;font-size:.82rem;font-weight:900;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(245,124,0,.35)">🔀 복식 순서 변경</button>
-          ` : ``)}
-        </div>`;
+      quickActionWrap.innerHTML=buildQuickActionPanelHtml({
+        doublesCount:dbl,
+        team1:dn1,
+        team2:dn2,
+        isAdmin:!!AD,
+        isOperator:!!OP,
+        mySide,
+        escapeHtml:esc
+      });
       const submitStatusCard=ge('mM3SubmitStatusCard');
       const photoAssistCard=ge('mM3PhotoAssistCard');
       if(submitStatusCard){
