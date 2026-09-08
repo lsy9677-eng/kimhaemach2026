@@ -732,6 +732,7 @@ import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolveWinnerTeamIndex,buildResultSaveLabel}from'./match-results.js';
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
 import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
+import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -16032,10 +16033,9 @@ function confirmSubmitOrderForSide(side){
   const teamName=teamObj?tdn(teamObj,key,side===1?m.t1:m.t2):(side===1?'홈팀':'원정팀');
   const payload=collectSideOrderFromModal(key,mid,side);
   if(!payload){ toast('오더 정보를 읽을 수 없습니다','error'); return; }
-  const blankOrders=[];
-  (payload.rubbers||[]).forEach((rb,idx)=>{ const len=(rb?.players||[]).length; if(len===0 || rb?.blankOrder) blankOrders.push(idx+1); });
+  const blankOrders=getBlankRubberNumbers([payload]);
   if(blankOrders.length){
-    const label=[...new Set(blankOrders)].sort((a,b)=>a-b).map(n=>`${n}복식`).join(', ');
+    const label=getBlankRubberLabel(blankOrders);
     if(!confirm(`${teamName}의 ${label}에 선수 이름이 입력되지 않았습니다.
 해당 조 공오더 제출 하시겠습니까?`)) return;
   }
@@ -16071,16 +16071,9 @@ function confirmSubmitOrder(){
     if(payload) payloads.push({side:payload.mySide,base:payload.myBase,rubbers:payload.rubbers});
   }
 
-  const blankOrders=[];
-  payloads.forEach(payload=>{
-    (payload.rubbers||[]).forEach((rb,idx)=>{
-      const len=(rb?.players||[]).length;
-      if(len===0 || rb?.blankOrder) blankOrders.push(idx+1);
-    });
-  });
-  const uniqBlankOrders=[...new Set(blankOrders)].sort((a,b)=>a-b);
+  const uniqBlankOrders=getBlankRubberNumbers(payloads);
   if(uniqBlankOrders.length){
-    const label=uniqBlankOrders.map(n=>`${n}복식`).join(', ');
+    const label=getBlankRubberLabel(uniqBlankOrders);
     if(!confirm(`${label}에 선수 이름이 입력되지 않았습니다.
 해당 조 공오더 제출 하시겠습니까?`)) return;
   }
@@ -16163,31 +16156,18 @@ async function submitOnlineOrder(sideOnly=null){
     payloads.push({side:payload.mySide,base:payload.myBase,rubbers:payload.rubbers,club:REG_CLUB||payload.myBase});
   }
 
-  for(const payload of payloads){
-    for(let r=0;r<payload.rubbers.length;r++){
-      const len=(payload.rubbers[r]?.players||[]).length;
-      const isBlank=!!payload.rubbers[r]?.blankOrder;
-      if(!((isBlank && len===0) || len===2)){
-        toast(`${r+1}복식은 ${AD?'양팀 모두 ':''}선수 2명을 선택하거나 비워서 공오더로 제출해야 합니다`,'error');
-        return;
-      }
-      payload.rubbers[r].blankOrder = (!!payload.rubbers[r].blankOrder || len===0);
-    }
+  const validation=validateOrderRubbers(payloads,{admin:!!AD});
+  if(!validation.ok){
+    toast(validation.message,'error');
+    return;
   }
 
+  const normalizedPayloads=normalizeOrderPayloadsForSave(payloads);
   const nowIso=new Date().toISOString();
-  payloads.forEach(payload=>{
-    m.orderSubmissions[payload.base]={
-      club:payload.club||payload.base,
-      side:payload.side,
-      submittedAt:nowIso,
-      rubbers:payload.rubbers
-    };
+  applyOrderSubmissions(m,normalizedPayloads,{
+    nowIso,
+    submittedBy:AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사'))
   });
-  // legacy fields 유지
-  m.orderSubmitted=true;
-  m.orderSubmittedAt=nowIso;
-  m.orderSubmittedBy=AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사'));
   syncRevealedOrderIntoMatchRubbers(key,m);
   sl(true);
   try{
@@ -16197,22 +16177,19 @@ async function submitOnlineOrder(sideOnly=null){
     const st2=getOnlineOrderState(key,m);
     const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
     const submittedTeamName = submittedOneSide ? ((sideOnly===1?getMatchTeamObjects(key,m).t1:getMatchTeamObjects(key,m).t2)?.club || (sideOnly===1?st.c1:st.c2) || '선택 팀') : '';
-    toast(
-      st2.bothSubmitted
-        ? '양팀 제출 완료 — 오더가 자동 공개되었고 이제 수정할 수 없습니다 ✅'
-        : submittedOneSide
-          ? `${submittedTeamName} 한팀 제출 완료 — 상대팀 제출 시 자동 공개됩니다 ✅`
-          : (OP?'미제출 팀 대리제출 완료 — 상대/나머지 팀 제출 시 자동 공개됩니다 ✅':'내 클럽 오더 제출 완료 — 상대 제출 시 자동 공개됩니다 ✅')
-    ,'success');
+    toast(buildSubmitSuccessMessage({
+      bothSubmitted:st2.bothSubmitted,
+      submittedOneSide,
+      submittedTeamName,
+      operator:!!OP
+    }),'success');
     cm('mM3');
     renderBracket();
   }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
 }
 
 function resetMatchOrderSelections(match){
-  match.rubbers=[];
-  match.winner=null;
-  match.orderResultResetAt=new Date().toISOString();
+  return resetMatchOrderResultState(match,{nowIso:new Date().toISOString()});
 }
 
 async function rollbackSingleMatchPlayerStats(key,m){
@@ -16239,12 +16216,7 @@ async function unlockOnlineOrder(key,mid){
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const target=list[idx];
   const hadWinner=target.winner!=null;
-  target.orderSubmitted=false;
-  target.orderSubmittedAt='';
-  target.orderSubmittedBy='';
-  target.orderSubmissions={};
-  target.orderRevealed=false;
-  target.orderRevealedAt='';
+  clearOnlineOrderSubmissionState(target);
   sl(true);
   try{
     if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
@@ -16269,9 +16241,7 @@ async function unlockOnlineOrder(key,mid){
     if(G.draws[key]) await stD(key);
     sl(false);
     cm('mM3');
-    toast(target.phase==='group'
-      ? '초기화 완료 ✅ 예선 결과가 초기화되어 본선 대진과 현황도 함께 초기화되었습니다'
-      : '초기화 완료 ✅ 오더와 경기 결과가 함께 초기화되어 원래 상태로 돌아갔습니다','success');
+    toast(buildUnlockSuccessMessage({phase:target.phase}),'success');
     renderBracket();
     renderAllP();
     if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
