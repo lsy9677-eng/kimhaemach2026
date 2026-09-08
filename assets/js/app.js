@@ -772,6 +772,27 @@ const TOURNAMENT_BUNDLE_MEM={};
 let DRAW_HISTORY_LOADED=false;
 let CURRENT_LIVE_TID=null;
 let _realtimeRegsUnsub=null,_realtimeMatchesUnsub=null,_realtimeDrawsUnsub=null;
+let _tournamentsUnsub=null;
+let _firebaseInitPromise=null;
+let _firebaseInitDone=false;
+const _snapshotErrStamp=new Map();
+function logSnapshotError(scope, err){
+  const now=Date.now();
+  const key=String(scope||'snapshot');
+  const prev=Number(_snapshotErrStamp.get(key)||0);
+  if(now-prev<15000) return;
+  _snapshotErrStamp.set(key,now);
+  const code=String(err?.code||'');
+  const msg=String(err?.message||err||'');
+  if(code==='unavailable' || /network|transport|webchannel|offline/i.test(msg)){
+    console.warn(`[Firestore] ${key} 연결 일시 중단 — SDK 자동 재연결 대기`, code||msg);
+  }else{
+    console.error(`[Firestore] ${key} listener error`, err);
+  }
+}
+function stopTournamentListSync(){
+  if(_tournamentsUnsub){ try{_tournamentsUnsub();}catch(e){} _tournamentsUnsub=null; }
+}
 let _viewerBracketPoller=null;
 let _viewerBracketPollTid='';
 const VIEWER_BRACKET_POLL_MS=20000;
@@ -1000,14 +1021,14 @@ function startRealtimeTournamentSync(tid){
     saveTournamentBundleCache(tid,{...(getTournamentBundleCache(tid)||{}), regs:bundle.regs, matches:bundle.matches, draws:bundle.draws});
     applyTournamentBundle(tid, getTournamentBundleCache(tid)||bundle);
     onDU();
-  }, e=>console.error('regs snap err', e));
+  }, e=>logSnapshotError('registrations',e));
   _realtimeDrawsUnsub = onSnapshot(query(collection(db,'draws'), where(documentId(), '>=', tid + '_'), where(documentId(), '<=', tid + '_\uf8ff')), s=>{
     const bundle=getTournamentBundleCache(tid)||{};
     const next={...(bundle||{}), draws:s.docs.map(d=>({id:d.id,...(d.data()||{})}))};
     saveTournamentBundleCache(tid, next);
     applyTournamentBundle(tid, next);
     onDU();
-  }, e=>console.error('draws snap err', e));
+  }, e=>logSnapshotError('draws',e));
   _realtimeMatchesUnsub = onSnapshot(query(collection(db,'matches'), where('tournamentId','==',tid)), s=>{
     const prevMatchMap=buildMatchAlertStateMap(G.matches||{});
     const prevCourtMap=buildCourtNotificationStateMap(G.matches||{});
@@ -1018,7 +1039,7 @@ function startRealtimeTournamentSync(tid){
     try{ processOnlineOrderAlerts(prevMatchMap, G.matches||{}); }catch(err){ console.warn('order alert process failed', err); }
     try{ processCourtSmsAlerts(prevCourtMap, buildCourtNotificationStateMap(G.matches||{})); }catch(err){ console.warn('court sms alert process failed', err); }
     onDU();
-  }, e=>console.error('matches snap err', e));
+  }, e=>logSnapshotError('matches',e));
 }
 async function syncTournamentDataForPage(page, tid, force=false){
   const targetTid=String(tid || getSelectedTournamentIdForPage(page) || getRealtimeTargetTournamentId() || '').trim();
@@ -2100,13 +2121,17 @@ let GUIDE_FILES_EDIT = [];   // [{name,type,dataUrl}]
 
 
 async function initFB(){
-  sl(true);
-  try{
+  if(_firebaseInitDone) return true;
+  if(_firebaseInitPromise) return _firebaseInitPromise;
+  _firebaseInitPromise=(async()=>{
+    sl(true);
+    try{
     await loadMeta();
     await loadRegistry(2026);
 
-    // 대회 목록만 실시간 유지
-    onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async s=>{
+    // 대회 목록은 앱 전체에서 단 하나의 listener만 유지
+    stopTournamentListSync();
+    _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async s=>{
       G.tournaments=s.docs.map(d=>({id:d.id,...d.data()}));
       try{
         const activeTid = getRealtimeTargetTournamentId() || null;
@@ -2115,7 +2140,7 @@ async function initFB(){
         console.warn('initial tournament sync failed', syncErr);
       }
       onDU();
-    },e=>console.error(e));
+    },e=>logSnapshotError('tournaments',e));
 
     // 선수기록은 로컬 캐시 우선
     loadPlayersFromLocalCache();
@@ -2129,8 +2154,29 @@ async function initFB(){
     if(!window.__directorSessionPoller){
       window.__directorSessionPoller=setInterval(()=>{ try{ pollDirectorSessionVersion(); }catch(e){} }, 20000);
     }
-  }catch(e){sl(false);toast('연결 실패: '+e.message,'error');}
+      _firebaseInitDone=true;
+      return true;
+    }catch(e){
+      sl(false);
+      _firebaseInitDone=false;
+      stopTournamentListSync();
+      stopRealtimeTournamentSync();
+      toast('연결 실패: '+e.message,'error');
+      throw e;
+    }finally{
+      _firebaseInitPromise=null;
+    }
+  })();
+  return _firebaseInitPromise;
 }
+if(!window.__kimhaeFirestoreCleanupBound){
+  window.__kimhaeFirestoreCleanupBound=true;
+  window.addEventListener('pagehide',()=>{
+    try{ stopTournamentListSync(); }catch(e){}
+    try{ stopRealtimeTournamentSync(); }catch(e){}
+  },{capture:false});
+}
+
 async function loadMeta(){
   // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
   const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','어메이징':'아테','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
