@@ -728,6 +728,7 @@ import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHt
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
+import{cloneMatchForRollback,commitCourtMove}from'./court-service.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -1535,6 +1536,7 @@ async function moveCourtQueueCard(key, mid, targetCourt){
   const list=G.matches[key]||[];
   const m=list.find(x=>String(x.id)===String(mid));
   if(!m || m.winner!=null) return;
+  const rollbackSnapshot=cloneMatchForRollback(m);
   const nowIso = new Date().toISOString();
   const moveCheck=validateCourtMoveTarget({
     targetCourt,
@@ -1574,17 +1576,19 @@ async function moveCourtQueueCard(key, mid, targetCourt){
       nowIso
     }));
   }
-  sl(true);
-  try{
-    await persistSingleMatchDoc(key, m);
-    sl(false);
-    dispatchLocalCourtNotificationAlerts(prevCourtState);
-    toast(court ? `수동 배정 완료 ✅ → ${court}` : '공용 대기로 이동 완료 ✅','success');
-    renderBracket();
-  }catch(e){
-    sl(false);
-    toast('이동 저장 실패: '+e.message,'error');
-  }
+  await commitCourtMove({
+    key,
+    match:m,
+    snapshot:rollbackSnapshot,
+    persistMatch:persistSingleMatchDoc,
+    setLoading:sl,
+    dispatchAlerts:dispatchLocalCourtNotificationAlerts,
+    previousNotificationState:prevCourtState,
+    render:renderBracket,
+    notify:toast,
+    successMessage:(court ? `수동 배정 완료 ✅ → ${court}` : '공용 대기로 이동 완료 ✅'),
+    failurePrefix:'이동 저장 실패: '
+  });
 }
 async function onCourtDrop(ev, key, targetCourt){
   ev.preventDefault();
@@ -16565,6 +16569,7 @@ function getRegistryRowsForAutocomplete(year){
 }
 
 function selectRegistrationPlayerSuggestion(num,name,club){
+  // club 인자는 phint에서 공식 등록명단의 주클럽만 전달한다.
   const inp=ge('p'+num);
   if(inp) inp.value=String(name||'');
   const hint=ge('h'+num);
@@ -16603,6 +16608,15 @@ function selectRegistrationPlayerSuggestion(num,name,club){
   }
 }
 
+
+function isSameRegistrationClub(a,b){
+  const aa=normalizeClub(a||'');
+  const bb=normalizeClub(b||'');
+  if(!aa || !bb) return false;
+  if(aa===bb) return true;
+  return baseClub(aa)===baseClub(bb);
+}
+
 function phint(inp,num){
   const v=(inp?.value||'').trim(), h=ge('h'+num);
   if(!h) return;
@@ -16618,16 +16632,31 @@ function phint(inp,num){
   const cand = registryRows.map(r=>{
     const disp = cleanName(r.name||'');
     const mainClub = normalizeClub(r.club||'');
-    const subClubs = String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean);
-    const clubs = [...new Set([mainClub, ...subClubs].filter(Boolean))];
-    const matchClub = !!(selectedClub && clubs.includes(selectedClub));
-    const displayClub = matchClub ? selectedClub : (mainClub || clubs[0] || '');
-    return { disp, club:displayClub, clubs, matchClub };
+    const subClubs = [...new Set(
+      String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean)
+    )].filter(c=>c && !isSameRegistrationClub(c,mainClub));
+
+    const mainMatch = !!(selectedClub && mainClub && isSameRegistrationClub(selectedClub,mainClub));
+    const subMatch = !!(selectedClub && !mainMatch && subClubs.some(c=>isSameRegistrationClub(selectedClub,c)));
+
+    // 자동완성에 표시/선택되는 소속은 언제나 공식 등록명단의 '주클럽'을 기준으로 한다.
+    // 부클럽이 현재 팀과 일치하더라도 주클럽을 부클럽으로 바꾸어 표시하지 않는다.
+    return {
+      disp,
+      club:mainClub,
+      mainClub,
+      subClubs,
+      mainMatch,
+      subMatch,
+      matchClub:(mainMatch||subMatch)
+    };
   }).filter(x=> x.disp && normName(x.disp).includes(nv)).sort((a,b)=>{
-    if(!!b.matchClub !== !!a.matchClub) return Number(b.matchClub)-Number(a.matchClub);
+    // 현재 팀의 주클럽 회원을 최우선, 그 다음 부클럽 일치, 그 다음 이름순
+    if(!!b.mainMatch !== !!a.mainMatch) return Number(b.mainMatch)-Number(a.mainMatch);
+    if(!!b.subMatch !== !!a.subMatch) return Number(b.subMatch)-Number(a.subMatch);
     return a.disp.localeCompare(b.disp,'ko');
   }).filter(x=>{
-    const dedupeKey = `${normName(x.disp)}|${x.club||''}`;
+    const dedupeKey = `${normName(x.disp)}|${x.mainClub||''}`;
     if(seen.has(dedupeKey)) return false;
     seen.add(dedupeKey);
     return true;
@@ -16639,11 +16668,18 @@ function phint(inp,num){
   }
 
   h.innerHTML = cand.slice(0,4).map(x=>{
-    const clubDisp = x.club || '';
-    const matchedBadge = x.matchClub && selectedClub ? `<span style="font-size:.64rem;color:#7c3aed;font-weight:700"> [현재클럽]</span>` : '';
+    const clubDisp = x.mainClub || x.club || '';
+    const badge = x.mainMatch
+      ? `<span style="font-size:.64rem;color:#166534;font-weight:800"> [주클럽]</span>`
+      : (x.subMatch
+          ? `<span style="font-size:.64rem;color:#7c3aed;font-weight:800"> [부클럽]</span>`
+          : '');
+    const subText = x.subClubs?.length
+      ? `<span style="font-size:.62rem;color:var(--text3);text-decoration:none"> · 부 ${x.subClubs.map(esc).join(', ')}</span>`
+      : '';
     return `<span onclick="selectRegistrationPlayerSuggestion(${num},'${esc(x.disp)}','${esc(clubDisp)}')"
       style="cursor:pointer;color:var(--primary);font-size:.73rem;text-decoration:underline">
-      ${x.disp}${clubDisp?`(${clubDisp})`:''}${matchedBadge}
+      ${x.disp}${clubDisp?`(${clubDisp})`:''}${badge}${subText}
     </span>`;
   }).join(' ');
 }
