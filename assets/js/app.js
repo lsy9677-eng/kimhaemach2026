@@ -733,7 +733,7 @@ import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolve
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
 import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
-import{cloneOrderState,commitOrderSubmission,commitOrderReset}from'./order-service.js';
+import{cloneOrderState,commitOrderSubmission,commitOrderReset,createOrderResetPlayerSnapshot,snapshotBooleanMapEntry}from'./order-service.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -16274,6 +16274,18 @@ async function unlockOnlineOrder(key,mid){
   const orderResetMatchListSnapshot=cloneOrderState(list);
   const orderResetDrawSnapshot=G.draws[key] ? cloneOrderState(G.draws[key]) : null;
   const hadWinner=target.winner!=null;
+  const resetPlayerKeys=hadWinner ? (()=>{
+    const teams=G.teams[key]||[];
+    const wt=teams[target.winner];
+    const lt=teams[target.winner===target.t1?target.t2:target.t1];
+    return [...new Set([
+      ...((wt?.players)||[]).map(n=>getPlayerKey(n,baseClub(wt?.club||''))),
+      ...((lt?.players)||[]).map(n=>getPlayerKey(n,baseClub(lt?.club||'')))
+    ].filter(Boolean))];
+  })() : [];
+  const orderResetPlayerSnapshot=createOrderResetPlayerSnapshot(G.players,resetPlayerKeys);
+  const orderResetPrelimToggleSnapshot=snapshotBooleanMapEntry(window.BRACKET_PRELIM_TOGGLE,key);
+
   clearOnlineOrderSubmissionState(target);
   if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
   resetMatchOrderSelections(target);
@@ -16300,6 +16312,12 @@ async function unlockOnlineOrder(key,mid){
     drawsStore:G.draws,
     drawKey:key,
     drawSnapshot:orderResetDrawSnapshot,
+    playersStore:G.players,
+    playerSnapshot:orderResetPlayerSnapshot,
+    persistRestoredPlayers:(keys)=>Promise.all((keys||[]).map(k=>stP(k))),
+    prelimToggleStore:window.BRACKET_PRELIM_TOGGLE,
+    prelimToggleKey:key,
+    prelimToggleSnapshot:orderResetPrelimToggleSnapshot,
     saveMatches:()=>stM(key),
     saveDraw:()=>stD(key),
     hasDraw:!!G.draws[key],

@@ -74,6 +74,12 @@ export async function commitOrderReset({
   drawsStore=null,
   drawKey='',
   drawSnapshot=null,
+  playersStore=null,
+  playerSnapshot=null,
+  persistRestoredPlayers=null,
+  prelimToggleStore=null,
+  prelimToggleKey='',
+  prelimToggleSnapshot=null,
   saveMatches,
   saveDraw,
   hasDraw=false,
@@ -107,6 +113,7 @@ export async function commitOrderReset({
     return {ok:true,error:null};
   }catch(error){
     restoreArrayInPlace(matchList,matchListSnapshot);
+
     if(drawsStore && drawKey){
       if(drawSnapshot==null){
         try{ delete drawsStore[drawKey]; }catch(e){}
@@ -114,12 +121,65 @@ export async function commitOrderReset({
         drawsStore[drawKey]=cloneOrderState(drawSnapshot);
       }
     }
+
+    const restoredPlayerKeys=restoreOrderResetPlayerSnapshot(playersStore,playerSnapshot);
+    if(restoredPlayerKeys.length && typeof persistRestoredPlayers==='function'){
+      try{ await persistRestoredPlayers(restoredPlayerKeys); }catch(recoveryError){
+        console.error('[order-reset] player stat recovery persist failed',recoveryError);
+      }
+    }
+
+    if(prelimToggleStore && prelimToggleKey){
+      restoreBooleanMapEntry(prelimToggleStore,prelimToggleKey,prelimToggleSnapshot);
+    }
+
     if(typeof setLoading==='function') setLoading(false);
     if(typeof notify==='function') notify(failurePrefix+(error?.message||String(error)),'error');
     if(typeof render==='function') render();
     if(typeof renderPlayers==='function') renderPlayers();
     if(typeof updateClubHome==='function') updateClubHome();
 
-    return {ok:false,error};
+    return {ok:false,error,restoredPlayerKeys};
+  }
+}
+
+
+export function createOrderResetPlayerSnapshot(playersStore,keys){
+  const out={};
+  [...new Set((keys||[]).filter(Boolean))].forEach(k=>{
+    const p=playersStore?.[k];
+    if(!p) return;
+    out[k]={
+      wins:Number(p.wins||0),
+      losses:Number(p.losses||0)
+    };
+  });
+  return out;
+}
+
+export function restoreOrderResetPlayerSnapshot(playersStore,snapshot){
+  const restored=[];
+  Object.entries(snapshot||{}).forEach(([k,v])=>{
+    const p=playersStore?.[k];
+    if(!p) return;
+    p.wins=Number(v.wins||0);
+    p.losses=Number(v.losses||0);
+    restored.push(k);
+  });
+  return restored;
+}
+
+export function snapshotBooleanMapEntry(store,key){
+  if(!store || !Object.prototype.hasOwnProperty.call(store,key)){
+    return {exists:false,value:undefined};
+  }
+  return {exists:true,value:!!store[key]};
+}
+
+export function restoreBooleanMapEntry(store,key,snapshot){
+  if(!store || !snapshot) return;
+  if(snapshot.exists) store[key]=!!snapshot.value;
+  else{
+    try{ delete store[key]; }catch(e){}
   }
 }
