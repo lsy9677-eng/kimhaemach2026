@@ -735,6 +735,7 @@ import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,bu
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
 import{cloneOrderState,commitOrderSubmission,commitOrderReset,createOrderResetPlayerSnapshot,snapshotBooleanMapEntry}from'./order-service.js';
 import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPlayer,setTapGhost,backspaceTapSlot,resetTapSlots,buildReorderSlots,toggleReorderPick,applyReorderPlan,getGhostScorePlan}from'./order-picker-ops.js';
+import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -21435,31 +21436,9 @@ function openTapOrderModal(side,dbl){
 function renderTapOrderModal(){
   const st=__tapOrderState||{}; const dbl=st.dbl||0;
   const summary=ge('tapOrderSummary'), current=ge('tapOrderCurrent'), list=ge('tapOrderPlayerList');
-  if(summary){
-    summary.innerHTML=Array.from({length:dbl},(_,r)=>{
-      const arr=st.slots?.[r]||[];
-      const active=r===st.cursor;
-      const label=(arr[0]==='__GHOST__') ? '공오더' : (arr.length ? arr.join(' / ') : '<span style="color:var(--text3);font-weight:600">미선택</span>');
-      return `<div onclick="tapOrderFocus(${r})" style="cursor:pointer;padding:10px 12px;border-radius:12px;border:${active?'2px solid #2563eb':'1px solid var(--border)'};background:${active?'#eff6ff':'#fff'}"><div style="font-size:.76rem;font-weight:900;color:${active?'#1d4ed8':'var(--text2)'};margin-bottom:4px">${r+1}복식</div><div style="font-size:.86rem;font-weight:800;line-height:1.6;color:${arr[0]==='__GHOST__'?'#9a3412':'var(--primary-dark)'}">${label}</div></div>`;
-    }).join('');
-  }
-  if(current){
-    const arr=st.slots?.[st.cursor]||[];
-    current.textContent=(arr[0]==='__GHOST__')
-      ? `현재 ${Math.min((st.cursor||0)+1,dbl)}복식 · 공오더 선택됨`
-      : `현재 ${Math.min((st.cursor||0)+1,dbl)}복식 · ${arr.length}/2명 선택`;
-  }
-  if(list){
-    const used=getTapUsedPlayers(st.slots||[]);
-    const current=(st.slots?.[st.cursor]||[]);
-    const ghostActive=current[0]==='__GHOST__';
-    const ghostBtn=`<button type="button" onclick="tapOrderGhost()" style="padding:10px 14px;border-radius:12px;border:1.5px dashed #d97706;background:${ghostActive?'#d97706':'#fff7ed'};color:${ghostActive?'#fff':'#9a3412'};font-size:.9rem;font-weight:900;cursor:pointer;margin-right:6px">⚠️ 공오더</button>`;
-    list.innerHTML=ghostBtn + (st.players||[]).map(p=>{
-      const inCurrent=current.includes(p);
-      const usedElse=used.includes(p) && !inCurrent;
-      return `<button type="button" onclick="tapOrderPick('${esc(p)}')" ${usedElse?'disabled':''} style="padding:10px 14px;border-radius:999px;border:1.5px solid ${inCurrent?'#2563eb':(usedElse?'#d1d5db':'var(--border)')};background:${inCurrent?'#dbeafe':(usedElse?'#f3f4f6':'#fff')};color:${inCurrent?'#1d4ed8':(usedElse?'#9ca3af':'var(--text)')};font-size:.92rem;font-weight:800;cursor:${usedElse?'not-allowed':'pointer'}">${p}</button>`;
-    }).join('');
-  }
+  if(summary){ summary.innerHTML=buildTapOrderSummaryHtml({slots:st.slots||[],cursor:st.cursor||0,escapeHtml:esc}); }
+  if(current){ current.textContent=buildTapOrderCurrentText({cursor:st.cursor||0,doublesCount:dbl,pair:st.slots?.[st.cursor]||[]}); }
+  if(list){ list.innerHTML=buildTapOrderPlayerListHtml({players:st.players||[],currentPair:st.slots?.[st.cursor]||[],usedPlayers:getTapUsedPlayers(st.slots||[]),escapeHtml:esc,escapeAttr:esc}); }
 }
 function tapOrderFocus(idx){ __tapOrderState.cursor=idx; renderTapOrderModal(); }
 function tapOrderPick(player){
@@ -21996,28 +21975,7 @@ function openReorderPopup(dbl, side = 0) {
   overlay = document.createElement('div');
   overlay.id = 'reorderOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.3);overflow:hidden">
-      <div style="background:var(--primary);color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-weight:800;font-size:.95rem">🔀 ${teamLabel ? teamLabel+' ' : ''}복식 순서 변경</span>
-        <button onclick="closeReorderPopup()" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
-      </div>
-      <div style="padding:14px 16px">
-        <div style="font-size:.78rem;color:var(--text2);margin-bottom:12px;line-height:1.6;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid var(--border)">
-          👆 아래 카드를 <b>새 순서대로 탭</b>하세요.<br>탭한 순서대로 1복식 → 2복식 → … 에 배치됩니다.${teamLabel ? `<br><span style="font-weight:800;color:var(--primary)">${teamLabel}</span> 선수만 순서가 변경됩니다.` : ''}
-        </div>
-        <div id="reorderCards" style="display:flex;flex-direction:column;gap:8px"></div>
-        <div id="reorderPreview" style="margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:10px;font-size:.78rem;display:none">
-          <div style="font-weight:800;color:#166534;margin-bottom:6px">✅ 확정 순서</div>
-          <div id="reorderPreviewList"></div>
-        </div>
-      </div>
-      <div style="padding:10px 16px 16px;display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="reorderReset()" style="padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;font-size:.84rem;cursor:pointer;font-weight:700">↺ 초기화</button>
-        <button onclick="closeReorderPopup()" style="padding:8px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;font-size:.84rem;cursor:pointer;font-weight:700">취소</button>
-        <button id="reorderApplyBtn" onclick="applyReorder()" style="padding:8px 18px;border-radius:8px;border:none;background:var(--primary);color:white;font-size:.84rem;cursor:pointer;font-weight:800" disabled>적용</button>
-      </div>
-    </div>`;
+  overlay.innerHTML=buildReorderOverlayHtml({teamLabel,escapeHtml:esc});
   document.body.appendChild(overlay);
   renderReorderCards();
 }
@@ -22026,24 +21984,7 @@ function renderReorderCards() {
   const { slots, picked, side } = _reorderState;
   const container = ge('reorderCards');
   if (!container) return;
-  container.innerHTML = slots.map((slot, idx) => {
-    const seq = picked.indexOf(idx); // 이미 탭한 순서 (0-based), -1이면 미선택
-    const isPicked = seq >= 0;
-    const p1str = slot.p1.length ? slot.p1.join(' / ') : '(미선택)';
-    const p2str = slot.p2.length ? slot.p2.join(' / ') : '(미선택)';
-    const line = side===1 ? p1str : side===2 ? p2str : `${p1str} · ${p2str}`;
-    return `<div onclick="reorderTap(${idx})"
-      style="cursor:pointer;padding:10px 14px;border-radius:12px;border:2px solid ${isPicked?'var(--primary)':'var(--border)'};background:${isPicked?'linear-gradient(135deg,#eef2ff,#dce8fb)':'#fff'};display:flex;align-items:center;gap:12px;transition:.15s;user-select:none;-webkit-tap-highlight-color:transparent">
-      <div style="width:32px;height:32px;border-radius:50%;background:${isPicked?'var(--primary)':'var(--border)'};color:${isPicked?'white':'var(--text2)'};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.9rem;flex-shrink:0">
-        ${isPicked ? seq+1 : ''}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:800;font-size:.82rem;color:var(--primary-dark);margin-bottom:2px">기존 ${slot.label}</div>
-        <div style="font-size:.74rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${line}</div>
-      </div>
-      ${isPicked?`<div style="font-size:.7rem;font-weight:800;color:var(--primary);white-space:nowrap">→ ${seq+1}복식</div>`:''}
-    </div>`;
-  }).join('');
+  container.innerHTML=buildReorderCardsHtml({slots,picked,side,escapeHtml:esc});
 }
 
 function reorderTap(idx) {
@@ -22056,16 +21997,7 @@ function reorderTap(idx) {
   const applyBtn = ge('reorderApplyBtn');
   if (picked.length === slots.length) {
     preview.style.display = 'block';
-    previewList.innerHTML = picked.map((origIdx, newR) => {
-      const slot = slots[origIdx];
-      const line = _reorderState.side===1 ? (slot.p1.join('/')||'미선택') : _reorderState.side===2 ? (slot.p2.join('/')||'미선택') : `${slot.p1.join('/')||'미선택'} · ${slot.p2.join('/')||'미선택'}`;
-      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.78rem">
-        <span style="font-weight:800;color:var(--primary);min-width:40px">${newR+1}복식</span>
-        <span style="color:var(--text3)">←</span>
-        <span>기존 ${slot.label}</span>
-        <span style="color:var(--text2);font-size:.72rem">(${line})</span>
-      </div>`;
-    }).join('');
+    previewList.innerHTML=buildReorderPreviewHtml({slots,picked,side:_reorderState.side,escapeHtml:esc});
     applyBtn.disabled = false;
     applyBtn.style.background = 'var(--primary)';
   } else {
