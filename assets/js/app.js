@@ -733,6 +733,7 @@ import{analyzeRubberScore,getRubberScoreErrorMessage,getTeamMatchOutcome,resolve
 import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistencePlan,commitMatchResultSave}from'./match-result-service.js';
 import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
+import{cloneOrderState,commitOrderSubmission,commitOrderReset}from'./order-service.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -16163,6 +16164,7 @@ async function submitOnlineOrder(sideOnly=null){
   const key=CM_key, mid=CM_id; if(!key||!mid) return;
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const m=list[idx];
+  const orderSubmitSnapshot=cloneOrderState(m);
   if(!G.meta.onlineOrderEnabled){ toast('온라인 오더 제출 기능이 비활성화되어 있습니다','info'); return; }
   if(!(AD || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 제출할 수 있습니다','error'); return; }
   const st=getOnlineOrderState(key,m);
@@ -16215,23 +16217,31 @@ async function submitOnlineOrder(sideOnly=null){
     submittedBy:AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사'))
   });
   syncRevealedOrderIntoMatchRubbers(key,m);
-  sl(true);
-  try{
-    await persistSingleMatchDoc(key, m);
-    saveLastOrderFromPicker(key, m);
-    sl(false);
-    const st2=getOnlineOrderState(key,m);
-    const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
-    const submittedTeamName = submittedOneSide ? ((sideOnly===1?getMatchTeamObjects(key,m).t1:getMatchTeamObjects(key,m).t2)?.club || (sideOnly===1?st.c1:st.c2) || '선택 팀') : '';
-    toast(buildSubmitSuccessMessage({
-      bothSubmitted:st2.bothSubmitted,
-      submittedOneSide,
-      submittedTeamName,
-      operator:!!OP
-    }),'success');
-    cm('mM3');
-    renderBracket();
-  }catch(e){ sl(false); toast('저장 실패: '+e.message,'error'); }
+  await commitOrderSubmission({
+    key,
+    match:m,
+    matchSnapshot:orderSubmitSnapshot,
+    persistMatch:persistSingleMatchDoc,
+    setLoading:sl,
+    afterPersist:async()=>{ saveLastOrderFromPicker(key,m); },
+    getSuccessMessage:()=>{
+      const st2=getOnlineOrderState(key,m);
+      const submittedOneSide = AD && (sideOnly===1 || sideOnly===2);
+      const submittedTeamName = submittedOneSide
+        ? ((sideOnly===1?getMatchTeamObjects(key,m).t1:getMatchTeamObjects(key,m).t2)?.club || (sideOnly===1?st.c1:st.c2) || '선택 팀')
+        : '';
+      return buildSubmitSuccessMessage({
+        bothSubmitted:st2.bothSubmitted,
+        submittedOneSide,
+        submittedTeamName,
+        operator:!!OP
+      });
+    },
+    closeModal:()=>cm('mM3'),
+    notify:toast,
+    render:renderBracket,
+    failurePrefix:'저장 실패: '
+  });
 }
 
 function resetMatchOrderSelections(match){
@@ -16261,37 +16271,47 @@ async function unlockOnlineOrder(key,mid){
   if(!(AD||OP)){ toast('관리자 또는 진행자만 해제할 수 있습니다','error'); return; }
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const target=list[idx];
+  const orderResetMatchListSnapshot=cloneOrderState(list);
+  const orderResetDrawSnapshot=G.draws[key] ? cloneOrderState(G.draws[key]) : null;
   const hadWinner=target.winner!=null;
   clearOnlineOrderSubmissionState(target);
-  sl(true);
-  try{
-    if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
-    resetMatchOrderSelections(target);
+  if(hadWinner) await rollbackSingleMatchPlayerStats(key,target);
+  resetMatchOrderSelections(target);
 
-    if(target.phase==='group'){
-      const curDraw=G.draws[key]||{};
-      const nonMainMatches=(G.matches[key]||[]).filter(m=>m.phase!=='main');
-      G.matches[key]=nonMainMatches;
-      if(G.draws[key]){
-        delete curDraw.mainPlan;
-        delete curDraw.mainAudit;
-        delete curDraw.mainUpdatedAt;
-        G.draws[key]=curDraw;
-      }
-      if(window.BRACKET_PRELIM_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE,key)){
-        window.BRACKET_PRELIM_TOGGLE[key]=false;
-      }
+  if(target.phase==='group'){
+    const curDraw=G.draws[key]||{};
+    const nonMainMatches=(G.matches[key]||[]).filter(m=>m.phase!=='main');
+    G.matches[key]=nonMainMatches;
+    if(G.draws[key]){
+      delete curDraw.mainPlan;
+      delete curDraw.mainAudit;
+      delete curDraw.mainUpdatedAt;
+      G.draws[key]=curDraw;
     }
+    if(window.BRACKET_PRELIM_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE,key)){
+      window.BRACKET_PRELIM_TOGGLE[key]=false;
+    }
+  }
 
-    await stM(key);
-    if(G.draws[key]) await stD(key);
-    sl(false);
-    cm('mM3');
-    toast(buildUnlockSuccessMessage({phase:target.phase}),'success');
-    renderBracket();
-    renderAllP();
-    if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
-  }catch(e){ sl(false); toast('해제 실패: '+e.message,'error'); }
+  const resetTargetPhase=target.phase;
+  await commitOrderReset({
+    matchList:G.matches[key],
+    matchListSnapshot:orderResetMatchListSnapshot,
+    drawsStore:G.draws,
+    drawKey:key,
+    drawSnapshot:orderResetDrawSnapshot,
+    saveMatches:()=>stM(key),
+    saveDraw:()=>stD(key),
+    hasDraw:!!G.draws[key],
+    setLoading:sl,
+    afterSuccess:()=>cm('mM3'),
+    notify:toast,
+    successMessage:buildUnlockSuccessMessage({phase:resetTargetPhase}),
+    render:renderBracket,
+    renderPlayers:renderAllP,
+    updateClubHome:()=>{ if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard(); },
+    failurePrefix:'해제 실패: '
+  });
 }
 
 // 필터 버튼 UI 업데이트
