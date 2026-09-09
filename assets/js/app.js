@@ -734,6 +734,7 @@ import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistence
 import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
 import{cloneOrderState,commitOrderSubmission,commitOrderReset,createOrderResetPlayerSnapshot,snapshotBooleanMapEntry}from'./order-service.js';
+import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPlayer,setTapGhost,backspaceTapSlot,resetTapSlots,buildReorderSlots,toggleReorderPick,applyReorderPlan,getGhostScorePlan}from'./order-picker-ops.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -14742,19 +14743,19 @@ function syncGhostScoreFromPickers(cid){
   if(!(r>=0)) return;
   const sel1=getPickerSelected('rp1_'+r);
   const sel2=getPickerSelected('rp2_'+r);
-  const ghost1=sel1[0]==='__GHOST__';
-  const ghost2=sel2[0]==='__GHOST__';
   const in1=ge('rs1_'+r), in2=ge('rs2_'+r);
   if(!in1||!in2) return;
-  if(ghost1 && !ghost2){ setRbSc('rs1_'+r,0); setRbSc('rs2_'+r,6); }
-  else if(!ghost1 && ghost2){ setRbSc('rs1_'+r,6); setRbSc('rs2_'+r,0); }
-  else if(ghost1 && ghost2){ in1.value=''; in2.value=''; for(let n=0;n<=6;n++){ const b1=ge('rs1_'+r+'_btn'+n), b2=ge('rs2_'+r+'_btn'+n); if(b1){b1.style.background='white';b1.style.color='var(--text)';b1.style.borderColor='var(--border)';} if(b2){b2.style.background='white';b2.style.color='var(--text)';b2.style.borderColor='var(--border)';} } }
-  else {
-    const prev=(Array.isArray(m.rubbers)?m.rubbers:[r]||[])[r]||{};
-    const prevGhost1=!!prev.blankOrder1, prevGhost2=!!prev.blankOrder2;
-    if((prevGhost1||prevGhost2) || String(in1.value)==='0'&&String(in2.value)==='6' || String(in1.value)==='6'&&String(in2.value)==='0'){
-      in1.value=''; in2.value='';
-      for(let n=0;n<=6;n++){ const b1=ge('rs1_'+r+'_btn'+n), b2=ge('rs2_'+r+'_btn'+n); if(b1){b1.style.background='white';b1.style.color='var(--text)';b1.style.borderColor='var(--border)';} if(b2){b2.style.background='white';b2.style.color='var(--text)';b2.style.borderColor='var(--border)';} }
+  const prev=(Array.isArray(m.rubbers)?m.rubbers:[])[r]||{};
+  const plan=getGhostScorePlan(sel1,sel2,prev,in1.value,in2.value);
+  if(plan.action==='set'){
+    setRbSc('rs1_'+r,plan.score1);
+    setRbSc('rs2_'+r,plan.score2);
+  }else if(plan.action==='clear'){
+    in1.value=''; in2.value='';
+    for(let n=0;n<=6;n++){
+      const b1=ge('rs1_'+r+'_btn'+n), b2=ge('rs2_'+r+'_btn'+n);
+      if(b1){b1.style.background='white';b1.style.color='var(--text)';b1.style.borderColor='var(--border)';}
+      if(b2){b2.style.background='white';b2.style.color='var(--text)';b2.style.borderColor='var(--border)';}
     }
   }
 }
@@ -21424,9 +21425,7 @@ function openTapOrderModal(side,dbl){
   const slots=[];
   for(let r=0;r<dbl;r++) slots.push(getPickerSelected(`rp${side}_${r}`).slice(0,2));
   const players=getPickerPlayers(`rp${side}_0`)||[];
-  let cursor=0;
-  while(cursor<dbl && slots[cursor].length>=2) cursor++;
-  if(cursor>=dbl) cursor=dbl-1;
+  const cursor=findNextTapCursor(slots,0);
   __tapOrderState={side,dbl,slots,players,cursor:Math.max(0,cursor)};
   const title=ge('mTapOrderTitle');
   title && (title.textContent=`선수 입력 · ${side===1?'홈팀':'원정팀'}`);
@@ -21451,7 +21450,7 @@ function renderTapOrderModal(){
       : `현재 ${Math.min((st.cursor||0)+1,dbl)}복식 · ${arr.length}/2명 선택`;
   }
   if(list){
-    const used=_tapOrderUsedPlayers((st.slots||[]).map(arr=>Array.isArray(arr)?arr.filter(v=>v!=='__GHOST__'):[]));
+    const used=getTapUsedPlayers(st.slots||[]);
     const current=(st.slots?.[st.cursor]||[]);
     const ghostActive=current[0]==='__GHOST__';
     const ghostBtn=`<button type="button" onclick="tapOrderGhost()" style="padding:10px 14px;border-radius:12px;border:1.5px dashed #d97706;background:${ghostActive?'#d97706':'#fff7ed'};color:${ghostActive?'#fff':'#9a3412'};font-size:.9rem;font-weight:900;cursor:pointer;margin-right:6px">⚠️ 공오더</button>`;
@@ -21465,59 +21464,42 @@ function renderTapOrderModal(){
 function tapOrderFocus(idx){ __tapOrderState.cursor=idx; renderTapOrderModal(); }
 function tapOrderPick(player){
   const st=__tapOrderState; if(!st||!st.players) return;
-  const idx=st.cursor||0; let arr=st.slots[idx]||[];
-  if(arr[0]==='__GHOST__') arr=[];
-  if(arr.includes(player)) st.slots[idx]=arr.filter(x=>x!==player);
-  else if(arr.length<2) st.slots[idx]=[...arr,player];
-  if((st.slots[idx]||[]).length>=2){
-    let next=idx+1; while(next<st.dbl && ((st.slots[next]||[]).length>=2 || (st.slots[next]||[])[0]==='__GHOST__')) next++;
-    if(next<st.dbl) st.cursor=next;
-  }
+  const next=toggleTapPlayer(st.slots||[],st.cursor||0,player);
+  st.slots=next.slots;
+  st.cursor=next.cursor;
   renderTapOrderModal();
 }
 function tapOrderBack(){
   const st=__tapOrderState; if(!st) return;
-  let idx=st.cursor;
-  if((st.slots[idx]||[]).length){ st.slots[idx].pop(); renderTapOrderModal(); return; }
-  idx=Math.max(0,idx-1); st.cursor=idx; if((st.slots[idx]||[]).length) st.slots[idx].pop(); renderTapOrderModal();
+  const next=backspaceTapSlot(st.slots||[],st.cursor||0);
+  st.slots=next.slots;
+  st.cursor=next.cursor;
+  renderTapOrderModal();
 }
 function tapOrderClear(){
   const st=__tapOrderState; if(!st) return;
-  let idx = st.cursor || 0;
-  if((st.slots[idx]||[]).length){
-    st.slots[idx].pop();
-    renderTapOrderModal();
-    return;
-  }
-  while(idx>0){
-    idx -= 1;
-    if((st.slots[idx]||[]).length){
-      st.cursor = idx;
-      st.slots[idx].pop();
-      renderTapOrderModal();
-      return;
-    }
-  }
+  const next=backspaceTapSlot(st.slots||[],st.cursor||0);
+  st.slots=next.slots;
+  st.cursor=next.cursor;
   renderTapOrderModal();
 }
 function tapOrderReset(){
   const st=__tapOrderState; if(!st) return;
-  st.slots = Array.from({length:st.dbl||0},()=>[]);
-  st.cursor = 0;
+  st.slots=resetTapSlots(st.dbl||0);
+  st.cursor=0;
   renderTapOrderModal();
 }
 function tapOrderGhost(){
   const st=__tapOrderState; if(!st) return;
-  const idx=st.cursor||0;
-  st.slots[idx]=['__GHOST__'];
-  let next=idx+1; while(next<st.dbl && (((st.slots[next]||[]).length>=2) || (st.slots[next]||[])[0]==='__GHOST__')) next++;
-  if(next<st.dbl) st.cursor=next;
+  const next=setTapGhost(st.slots||[],st.cursor||0);
+  st.slots=next.slots;
+  st.cursor=next.cursor;
   renderTapOrderModal();
 }
 function applyTapOrderSelections(){
   const st=__tapOrderState; if(!st) return;
   for(let r=0;r<(st.dbl||0);r++){
-    const arr=(st.slots[r]||[])[0]==='__GHOST__' ? ['__GHOST__'] : (st.slots[r]||[]).slice(0,2);
+    const arr=normalizePair(st.slots[r]||[]);
     setPickerSelected(`rp${st.side}_${r}`, arr);
     renderPlayerDropdown(`rp${st.side}_${r}`);
   }
@@ -21999,12 +21981,12 @@ function openReorderPopup(dbl, side = 0) {
     }
   }
   // 현재 picker에서 각 복식의 선수 스냅샷
-  const slots = [];
-  for (let r = 0; r < dbl; r++) {
-    const p1 = (AD||OP || side===1) ? getPickerSelected(`rp1_${r}`) : [];
-    const p2 = (AD||OP || side===2) ? getPickerSelected(`rp2_${r}`) : [];
-    slots.push({ r, p1, p2, label: `${r+1}복식` });
+  const side1Slots=[],side2Slots=[];
+  for(let r=0;r<dbl;r++){
+    side1Slots.push((AD||OP || side===1) ? getPickerSelected(`rp1_${r}`) : []);
+    side2Slots.push((AD||OP || side===2) ? getPickerSelected(`rp2_${r}`) : []);
   }
+  const slots=buildReorderSlots(side1Slots,side2Slots,dbl);
   const teamLabel = side===1 ? ((ctx.dn1)||'홈팀') : side===2 ? ((ctx.dn2)||'원정팀') : '';
   _reorderState = { dbl, slots, picked: [], side, teamLabel };
 
@@ -22066,13 +22048,7 @@ function renderReorderCards() {
 
 function reorderTap(idx) {
   const { picked, slots } = _reorderState;
-  const existing = picked.indexOf(idx);
-  if (existing >= 0) {
-    // 이미 탭한 것 → 제거 (취소)
-    picked.splice(existing, 1);
-  } else if (picked.length < slots.length) {
-    picked.push(idx);
-  }
+  _reorderState.picked=toggleReorderPick(picked,idx,slots.length);
   renderReorderCards();
   // 프리뷰 업데이트
   const preview = ge('reorderPreview');
@@ -22108,17 +22084,17 @@ function reorderReset() {
 function applyReorder() {
   const { slots, picked, dbl, side } = _reorderState;
   if (picked.length !== slots.length) return;
-  // 현재 picker 값 스냅샷
-  const snap1 = [], snap2 = [];
-  for (let r = 0; r < dbl; r++) {
+  const snap1=[],snap2=[];
+  for(let r=0;r<dbl;r++){
     snap1.push(getPickerSelected(`rp1_${r}`));
     snap2.push(getPickerSelected(`rp2_${r}`));
   }
-  // 새 순서로 picker에 적용
-  picked.forEach((origIdx, newR) => {
-    if (!side || side === 1) setPickerSelected(`rp1_${newR}`, snap1[origIdx]);
-    if (!side || side === 2) setPickerSelected(`rp2_${newR}`, snap2[origIdx]);
-  });
+  const plan=applyReorderPlan(snap1,snap2,picked,side);
+  if(!plan.ok) return;
+  for(let r=0;r<dbl;r++){
+    if(!side || side===1) setPickerSelected(`rp1_${r}`,plan.side1[r]||[]);
+    if(!side || side===2) setPickerSelected(`rp2_${r}`,plan.side2[r]||[]);
+  }
   // UI 갱신
   for (let r = 0; r < dbl; r++) {
     if (!side || side === 1) renderPlayerDropdown(`rp1_${r}`);
