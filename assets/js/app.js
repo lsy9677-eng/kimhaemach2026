@@ -3854,30 +3854,41 @@ function getCurrentRoleCapabilities(){
 }
 function _ensureRoleCheckModal(){
   let m=ge('mRoleCheck58');if(m)return m;
-  m=document.createElement('div');m.id='mRoleCheck58';m.className='modal';
-  m.innerHTML=`<div class="modal-box" style="max-width:520px"><div class="modal-head"><b>🔎 로그인 권한 확인</b><button class="modal-close" onclick="cm('mRoleCheck58')">×</button></div><div id="roleCheck58Body" style="padding:14px"></div></div>`;
+  m=document.createElement('div');m.id='mRoleCheck58';
+  m.style.cssText='display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.48);align-items:center;justify-content:center;padding:16px';
+  m.innerHTML=`<div style="width:min(520px,96vw);max-height:86vh;overflow:auto;background:var(--panel,#fff);color:var(--text,#111);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.28)"><div style="display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid var(--line,#ddd)"><b>🔎 로그인 권한 확인</b><button type="button" class="btn btn-outline" onclick="closeRolePermissionCheck()">닫기</button></div><div id="roleCheck58Body" style="padding:14px"></div></div>`;
+  m.addEventListener('click',e=>{if(e.target===m)closeRolePermissionCheck();});
   document.body.appendChild(m);return m;
 }
-function openRolePermissionCheck(){
-  const m=_ensureRoleCheckModal(),body=ge('roleCheck58Body'),info=getCurrentClubRoleInfo(),c=getCurrentRoleCapabilities();
-  const row=(ok,title,desc)=>`<div style="display:flex;gap:9px;padding:9px 4px;border-bottom:1px solid var(--line)"><b style="min-width:24px">${ok?'✅':'⛔'}</b><div><b>${title}</b><div style="font-size:.72rem;color:var(--text3);margin-top:2px">${desc}</div></div></div>`;
-  body.innerHTML=`<div style="padding:10px 12px;border-radius:10px;background:var(--panel2);margin-bottom:10px"><b>${esc(info.club?info.club+' · ':'')}${info.label}</b><div style="font-size:.72rem;color:var(--text3);margin-top:3px">현재 로그인 기준으로 실제 사용 가능 범위를 확인합니다. 데이터는 변경하지 않습니다.</div></div>
-  ${row(c.view,'경기 조회','대회·대진·경기 현황 조회')}
-  ${row(c.onlineOrder,'온라인 오더','자기 클럽 경기의 온라인 오더 제출')}
-  ${row(c.resultEntry,'경기결과 입력','자기 클럽 경기의 결과 입력')}
-  ${row(c.teamRegistration,'팀 등록/수정','팀 등록과 등록정보 수정')}
-  ${row(c.rosterManagement,'선수·출전명단 관리','선수 및 출전명단 관리')}
-  ${row(c.passwordAdmin,'전체 클럽 비밀번호 관리','클럽 공용/경기이사 비밀번호 확인·수정·임시발급')}
-  <div style="font-size:.7rem;color:var(--text3);padding-top:10px">※ 클럽회원/경기이사의 오더·결과 입력은 자기 클럽이 참가한 경기에만 허용됩니다.</div>`;
-  om('mRoleCheck58');
+function closeRolePermissionCheck(){
+  const m=ge('mRoleCheck58');if(m)m.style.display='none';
 }
+function openRolePermissionCheck(){
+  try{
+    const m=_ensureRoleCheckModal(),body=ge('roleCheck58Body'),info=getCurrentClubRoleInfo(),c=getCurrentRoleCapabilities();
+    const row=(ok,title,desc)=>`<div style="display:flex;gap:9px;padding:9px 4px;border-bottom:1px solid var(--line,#ddd)"><b style="min-width:24px">${ok?'✅':'⛔'}</b><div><b>${title}</b><div style="font-size:.72rem;color:var(--text3,#667);margin-top:2px">${desc}</div></div></div>`;
+    body.innerHTML=`<div style="padding:10px 12px;border-radius:10px;background:var(--panel2,#f5f7fa);margin-bottom:10px"><b>${esc(info.club?info.club+' · ':'')}${info.label}</b><div style="font-size:.72rem;color:var(--text3,#667);margin-top:3px">현재 로그인 기준으로 실제 사용 가능 범위를 확인합니다. 데이터는 변경하지 않습니다.</div></div>
+    ${row(c.view,'경기 조회','대회·대진·경기 현황 조회')}
+    ${row(c.onlineOrder,'온라인 오더','자기 클럽 경기의 온라인 오더 제출')}
+    ${row(c.resultEntry,'경기결과 입력','자기 클럽 경기의 결과 입력')}
+    ${row(c.teamRegistration,'팀 등록/수정','팀 등록과 등록정보 수정')}
+    ${row(c.rosterManagement,'선수·출전명단 관리','선수 및 출전명단 관리')}
+    ${row(c.passwordAdmin,'전체 클럽 비밀번호 관리','클럽 공용/경기이사 비밀번호 확인·수정·임시발급')}
+    <div style="font-size:.7rem;color:var(--text3,#667);padding-top:10px">※ 클럽회원/경기이사의 오더·결과 입력은 자기 클럽이 참가한 경기에만 허용됩니다.</div>`;
+    m.style.display='flex';
+  }catch(e){
+    console.error('[권한확인]',e);
+    alert('권한 확인 화면을 여는 중 오류가 발생했습니다: '+(e?.message||e));
+  }
+}
+
 function ensureRoleCheckButton(){
   if(ge('roleCheck58Btn'))return;
   const host=ge('regLoginBadge')?.parentElement || ge('regToggleBtn')?.parentElement;
   if(!host)return;
   const b=document.createElement('button');b.id='roleCheck58Btn';b.type='button';b.className='btn btn-outline';
   b.style.cssText='font-size:.72rem;padding:5px 8px;margin-left:4px';b.textContent='🔎 권한확인';
-  b.onclick=openRolePermissionCheck;host.appendChild(b);
+  b.onclick=()=>window.openRolePermissionCheck();host.appendChild(b);
 }
 
 function runPhase57SafetyCheck(){
@@ -22630,7 +22641,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
