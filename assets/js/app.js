@@ -8416,7 +8416,7 @@ function renderMatchProgressSummary(key){
         <b style="font-size:.95rem;color:#1d4ed8">${st.disp1??st.sc1}:${st.disp2??st.sc2}</b>
         <span style="font-size:.88rem;font-weight:${rightWin?900:600}">${n2}${rightWin?' 🏆':''}</span>
         <div style="display:flex;gap:5px;margin-left:auto">
-          <button class="btn btn-outline" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();toggleCompactMatchDetail('${detailId}')">상세보기</button>
+          <button class="btn btn-outline" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();openSimpleMatchDetail('${key}','${mid}')">상세보기</button>
           ${canEdit?`<button class="btn btn-gray" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();openMatchOperations('${key}','${mid}')">✏️ 결과수정</button>`:''}
         </div>
       </div>
@@ -9868,25 +9868,63 @@ function matchStatusFilterBar(){
 
 
 function openMatchDetailReadOnly(key,mid){
-  const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
-  if(!m){toast('경기를 찾을 수 없습니다','error');return;}
-  const prev=window.__MATCH_READ_ONLY_VIEW;
-  window.__MATCH_READ_ONLY_VIEW=true;
-  try{
-    openM3(key,mid);
-    setTimeout(()=>{
-      const modal=ge('mM3');
-      if(!modal)return;
-      modal.querySelectorAll('button').forEach(btn=>{
-        const txt=String(btn.textContent||'').trim();
-        if(/저장|제출|결과입력|결과수정|오더 입력|오더·결과|초기화|코트배정/.test(txt) && !/닫기|상세/.test(txt)){
-          btn.style.display='none';
-        }
-      });
-    },0);
-  } finally{ window.__MATCH_READ_ONLY_VIEW=prev; }
+  return openSimpleMatchDetail(key,mid);
 }
 
+function openSimpleMatchDetail(key,mid){
+  const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
+  if(!m){toast('경기를 찾을 수 없습니다','error');return;}
+  const {t1,t2}=getMatchTeamObjects(key,m);
+  const teams=G.teams[key]||[];
+  const dn1=t1?tdn(t1,key,m.t1):(m.source1Label||'TBD');
+  const dn2=t2?tdn(t2,key,m.t2):(m.source2Label||'TBD');
+  const st=getMatchResultState(key,m);
+  const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
+  const rows=rubbers.length?rubbers.map((rb,i)=>{
+    const p1=Array.isArray(rb?.players1)?rb.players1.filter(Boolean).join('/'):'';
+    const p2=Array.isArray(rb?.players2)?rb.players2.filter(Boolean).join('/'):'';
+    const a=rb?.score1??rb?.s1, b=rb?.score2??rb?.s2;
+    const hasScore=a!==undefined&&a!==null&&b!==undefined&&b!==null;
+    const w1=hasScore&&Number(a)>Number(b), w2=hasScore&&Number(b)>Number(a);
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);align-items:center;gap:6px;padding:8px 9px;border-top:1px solid #e5e7eb;background:${i%2?'#f8fafc':'#fff'}">
+      <div style="font-size:.82rem;font-weight:${w1?800:600};color:${w1?'#15803d':'#475569'};overflow:hidden;text-overflow:ellipsis">${p1||'-'}</div>
+      <div style="text-align:center;font-size:.86rem;font-weight:900;color:${w1?'#15803d':w2?'#dc2626':'#334155'}">${hasScore?`${a}:${b}`:'-:-'}</div>
+      <div style="text-align:right;font-size:.82rem;font-weight:${w2?800:600};color:${w2?'#15803d':'#475569'};overflow:hidden;text-overflow:ellipsis">${p2||'-'}</div>
+    </div>`;
+  }).join(''):`<div style="padding:18px;text-align:center;color:#64748b;font-size:.82rem">상세 선수 기록이 아직 입력되지 않았습니다.</div>`;
+
+  let ov=ge('mSimpleMatchDetail');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='mSimpleMatchDetail';
+    ov.className='modal-overlay';
+    ov.style.cssText='z-index:9999;align-items:flex-start;padding:6vh 12px 20px;overflow:auto';
+    ov.innerHTML=`<div style="width:min(620px,100%);margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 18px 60px rgba(15,23,42,.25);overflow:hidden">
+      <div id="mSimpleMatchDetailHead"></div>
+      <div id="mSimpleMatchDetailBody"></div>
+    </div>`;
+    document.body.appendChild(ov);
+  }
+  const roundLabel=m.phase==='main'?(mainMatchRoundLabel(m)||'본선'):(m.phase==='group'?`예선 ${(Number(m.group)||0)+1}조`:'경기');
+  ge('mSimpleMatchDetailHead').innerHTML=`<div style="background:#10264b;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px">
+    <b style="font-size:.95rem">🔎 ${roundLabel} · 경기 상세</b>
+    <button onclick="cm('mSimpleMatchDetail')" style="margin-left:auto;border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:999px;width:30px;height:30px;font-size:1rem;cursor:pointer">✕</button>
+  </div>`;
+  ge('mSimpleMatchDetailBody').innerHTML=`<div style="padding:13px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);align-items:center;gap:8px;padding:8px 5px 13px">
+      <div style="text-align:center;font-size:.95rem;font-weight:900">${m.winner===m.t1?'🏆 ':''}${dn1}</div>
+      <div style="text-align:center;font-size:1.35rem;font-weight:950;color:#0f2b55">${st.done?`${st.disp1??st.sc1}:${st.disp2??st.sc2}`:'vs'}</div>
+      <div style="text-align:center;font-size:.95rem;font-weight:900">${dn2}${m.winner===m.t2?' 🏆':''}</div>
+    </div>
+    <div style="border:1px solid #dbe3ef;border-radius:11px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);gap:6px;padding:7px 9px;background:#eef3f9;color:#475569;font-size:.7rem;font-weight:800">
+        <span>${dn1}</span><span style="text-align:center">점수</span><span style="text-align:right">${dn2}</span>
+      </div>${rows}
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-outline" onclick="cm('mSimpleMatchDetail')">닫기</button></div>
+  </div>`;
+  ov.classList.add('open');
+}
 function openMatchOperations(key,mid){
   const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
   if(!m){toast('경기를 찾을 수 없습니다','error');return;}
@@ -10079,7 +10117,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           <span style="font-size:.88rem;font-weight:${wn2?900:600};color:${wn2?'#166534':'var(--text2)'}">${dn2}${wn2?' 🏆':''}</span>
         </div>
         <div style="display:flex;gap:5px;align-items:center;margin-left:auto">
-          <button id="${detailId}_btn" class="btn btn-outline" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();toggleCompactMatchDetail('${detailId}')">상세보기</button>
+          <button id="${detailId}_btn" class="btn btn-outline" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openSimpleMatchDetail('${key}','${m.id}')">상세보기</button>
           ${resultBtn}
         </div>
       </div>
@@ -22720,7 +22758,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
   openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
   updateMainManualSeeds,
-  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchDetailReadOnly,setMatchStatusFilter});
+  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
