@@ -1667,7 +1667,7 @@ function showCourtMovePicker(key, mid){
     escapeHtml:esc,
     escapeAttr:escAttr
   });
-  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeCourtMovePicker(); });
+  // 배경 클릭 닫기 비활성화
   document.body.appendChild(overlay);
 }
 async function applyCourtMovePicker(targetCourt){
@@ -2994,7 +2994,7 @@ function openIndivFilterPicker(key){
         </div>
       </div>
     </div>`;
-  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeIndivFilterPicker(); });
+  // 배경 클릭 닫기 비활성화
   document.body.appendChild(overlay);
   renderIndivFilterPicker();
 }
@@ -3857,7 +3857,7 @@ function _ensureRoleCheckModal(){
   m=document.createElement('div');m.id='mRoleCheck58';
   m.style.cssText='display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.48);align-items:center;justify-content:center;padding:16px';
   m.innerHTML=`<div style="width:min(520px,96vw);max-height:86vh;overflow:auto;background:var(--panel,#fff);color:var(--text,#111);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.28)"><div style="display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid var(--line,#ddd)"><b>🔎 로그인 권한 확인</b><button type="button" class="btn btn-outline" onclick="closeRolePermissionCheck()">닫기</button></div><div id="roleCheck58Body" style="padding:14px"></div></div>`;
-  m.addEventListener('click',e=>{if(e.target===m)closeRolePermissionCheck();});
+  // 배경 클릭 닫기 비활성화 — 닫기 버튼으로만 종료
   document.body.appendChild(m);return m;
 }
 function closeRolePermissionCheck(){
@@ -9269,7 +9269,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
 
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=shownMainTotal>0&&shownMainDone===shownMainTotal;
   const hasMainBracket = mMs.length>0;
-  const prelimCollapsed = getPrelimCollapsedState(key, hasMainBracket, s4);
+  const prelimCollapsed = isIndividualByKey(key) ? getPrelimCollapsedState(key, hasMainBracket, s4) : false;
   const mainCollapsed = getMainCollapsedState(key);
   const prelimToggleId = _prelimToggleId(key);
   const mainToggleId = _mainToggleId(key);
@@ -9370,7 +9370,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   html += renderCourtStatusBoard(key, div, visibleGroupIndexes);
 
   // 예선 접기 버튼: 본선 여부와 무관하게 항상 표시 (개인전/단체전 공통)
-  if(showPrelimSection){
+  if(showPrelimSection && isIndivKey){
     const prelimBtnLabel = prelimCollapsed ? '📂 예선내용 펼치기' : '📁 예선내용 접기';
     html += `<div class="prelim-sticky-toggle-wrap"><button class="prelim-sticky-toggle-btn" onclick="togglePrelimSection('${key}')">${prelimBtnLabel}</button></div>`;
   }
@@ -9641,66 +9641,36 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       });
     }
 
-    html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황</div>`;
+    html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">· 결과는 한 줄, 상세는 필요할 때만</span></div>`;
     rounds.forEach((r,rIdx)=>{
       const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
-      if(!rms.length) return;
+      if(!rms.length)return;
       const lbl=r===rounds[rounds.length-1]?'결승':rIdx===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-1-rIdx)*2}강`;
       const roundTheme=getRoundVisualTheme(lbl,'main');
-      const activeMatches=[];
-      const doneMatches=[];
-      const byeMatches=[];
+      const doneCnt=rms.filter(m=>m.bye||getMatchResultState(key,m).done).length;
+      html+=`<div style="margin:9px 0 10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 3px;border-bottom:2px solid ${roundTheme.bd};margin-bottom:7px">
+          <b style="font-size:.88rem;color:${roundTheme.fg}">🏆 ${lbl}</b>
+          <span style="font-size:.72rem;color:var(--text3)">완료 ${doneCnt}/${rms.length}</span>
+        </div>`;
       rms.forEach(m=>{
-        if(m.bye) byeMatches.push(m);
-        else {
-          const st=getMatchResultState(key,m);
-          if(st.done) doneMatches.push(m);
-          else activeMatches.push(m);
+        if(m.bye){
+          const bt=m.winner!==null?teams[m.winner]:null;
+          const byeLabel=String(m.source1Label||'').trim();
+          const byeText=bt?tdn(bt,key,m.winner):(byeLabel||'TBD');
+          html+=`<div style="padding:8px 11px;margin-bottom:6px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;font-size:.8rem;color:var(--text2)">🎫 ${byeText} · 부전승</div>`;
+          return;
         }
+        const mt1=m.t1!==null?teams[m.t1]:null,mt2=m.t2!==null?teams[m.t2]:null;
+        if(!mt1&&!mt2){
+          html+=`<div style="padding:8px 11px;margin-bottom:6px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3)">🎲 추첨 전 대기 중</div>`;
+          return;
+        }
+        const dn1=mt1?tdn(mt1,key,m.t1):(m.source1Label||'TBD');
+        const dn2=mt2?tdn(mt2,key,m.t2):(m.source2Label||'TBD');
+        const st=getMatchResultState(key,m);
+        html+=mCard(m,key,dn1,dn2,st.done,st.sc1,st.sc2,lbl);
       });
-      const roundDone = activeMatches.length===0;
-      const roundCollapsed = isMainStatusRoundCollapsed(key, r, roundDone);
-      const doneCollapsed = isMainStatusDoneMatchCollapsed(key, r, true);
-      const headerBadges = `<div style="display:flex;gap:5px;flex-wrap:wrap">        <span class="badge" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${lbl}</span>        <span class="badge" style="background:#ecfccb;color:#166534">완료 ${doneMatches.length + byeMatches.length}</span>        ${activeMatches.length?`<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행·대기 ${activeMatches.length}</span>`:''}      </div>`;
-      html+=`<div style="margin:10px 0 8px;border:1.5px solid ${roundTheme.bd};border-radius:14px;background:${roundCollapsed?'#fff':'linear-gradient(135deg,#fff, '+roundTheme.softBg+')'};overflow:hidden">        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 12px;background:${roundCollapsed?'#f8fafc':roundTheme.softBg};border-bottom:${roundCollapsed?'none':'1px solid '+roundTheme.bd}">          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0">            <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px;font-weight:800;border-color:${roundTheme.bd};color:${roundTheme.fg};background:#fff" onclick="toggleMainStatusRound('${key}',${r})">${roundCollapsed?'📂':'📁'}</button>            <div style="font-size:.88rem;font-weight:900;color:${roundTheme.fg}">${lbl}</div>            ${headerBadges}          </div>          <div style="font-size:.74rem;font-weight:800;color:${roundDone?'#166534':'#9a6400'}">${roundDone?'자동 접힘':'진행중 라운드'}</div>        </div>`;
-      if(!roundCollapsed){
-        html+=`<div style="padding:10px 12px">`;
-        if(activeMatches.length){
-          activeMatches.forEach(m=>{
-            const mt1=m.t1!==null?teams[m.t1]:null,mt2=m.t2!==null?teams[m.t2]:null;
-            if(!mt1&&!mt2){
-              html+=`<div style="padding:8px 14px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-size:.78rem;color:var(--text3);margin-bottom:6px">🎲 추첨 전 대기 중</div>`;
-              return;
-            }
-            const dn1=mt1?tdn(mt1,key,m.t1):'TBD';
-            const dn2=mt2?tdn(mt2,key,m.t2):'TBD';
-            const st=getMatchResultState(key,m);
-            html+=mCard(m,key,dn1,dn2,st.done,st.sc1,st.sc2,'본선');
-          });
-        }else{
-          html+=`<div style="padding:9px 12px;border:1px dashed #86efac;border-radius:10px;background:#f0fdf4;font-size:.8rem;font-weight:800;color:#166534;margin-bottom:6px">✅ 이 라운드 경기가 모두 끝나 자동으로 접힙니다.</div>`;
-        }
-        if(doneMatches.length || byeMatches.length){
-          html+=`<div style="margin-top:8px;border-top:1px dashed ${roundTheme.bd};padding-top:8px">            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:${doneCollapsed?'0':'8px'}">              <div style="font-size:.78rem;font-weight:900;color:#1e3a8a">🏁 완료 경기 ${doneMatches.length + byeMatches.length}</div>              <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="toggleMainStatusDoneMatches('${key}',${r})">${doneCollapsed?'📂 완료 경기 펼치기':'📁 완료 경기 접기'}</button>            </div>`;
-          if(!doneCollapsed){
-            doneMatches.forEach(m=>{
-              const mt1=m.t1!==null?teams[m.t1]:null,mt2=m.t2!==null?teams[m.t2]:null;
-              const dn1=mt1?tdn(mt1,key,m.t1):'TBD';
-              const dn2=mt2?tdn(mt2,key,m.t2):'TBD';
-              const st=getMatchResultState(key,m);
-              html+=mCard(m,key,dn1,dn2,st.done,st.sc1,st.sc2,'본선');
-            });
-            byeMatches.forEach(m=>{
-              const bt=m.winner!==null?teams[m.winner]:null;
-              const byeLabel=String(m.source1Label||'').trim();
-              const byeText=bt?tdn(bt,key,m.winner):(byeLabel||'TBD');
-              html+=`<div style="padding:8px 14px;background:var(--panel2);border-radius:var(--radius);border:1px solid var(--border);font-size:.8rem;color:var(--text3);margin-bottom:6px">🎫 부전승: ${byeText}${byeLabel?` <span style="color:var(--text2)">(${byeLabel} 자리)</span>`:''}</div>`;
-            });
-          }
-          html+=`</div>`;
-        }
-        html+=`</div>`;
-      }
       html+=`</div>`;
     });
 
@@ -9885,6 +9855,15 @@ function toggleIndividualGroupMatches(key,gi){
   }catch(e){}
 }
 
+
+function toggleCompactMatchDetail(id){
+  const el=ge(id);if(!el)return;
+  const open=el.style.display==='none'||!el.style.display;
+  el.style.display=open?'block':'none';
+  const btn=ge(id+'_btn');
+  if(btn)btn.textContent=open?'상세닫기':'상세보기';
+}
+
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
   const rbs=m.rubbers||[];
@@ -10036,7 +10015,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
       ? (_ost2.bothSubmitted ? '📝 오더/기록확인입력' : (_ost2.mySubmitted ? '📝 오더/기록확인입력' : '📝 오더 입력·제출'))
       : '⚡ 결과입력';
   const _btnStyle = done ? 'btn-gray' : (useOrderHere ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
-  const btn=(AD||canDirEdit)?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
+  const btn=(AD||OP||canEditMatchByClubMember(key,m))?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
   const memoBtn=canManageBracket()?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border-color:${matchMemo?'#f6d365':'var(--border)'}" onclick="openMatchMemoModal('${key}','${m.id}')">📢 공지(경기)${matchMemo?' 수정':' 입력'}</button>`:'';
   const orderBadge=useOrderHere?getOnlineOrderStatusBadgeHTML(key,m):'';
   const orderTeamStatus=useOrderHere?getOnlineOrderTeamStatusHTML(key,m):'';
@@ -10047,6 +10026,32 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   const _tm2x=_tms2[m.t2]??_tms2.find(t=>t.id===m.t2||t.name===m.t2);
   const _isMyCM=MY_CLUB_FILTER&&_bc2&&((_tm1x&&baseClub(_tm1x.club||'')===_bc2)||(_tm2x&&baseClub(_tm2x.club||'')===_bc2));
   const _isOtherM=MY_CLUB_FILTER&&_bc2&&!_isMyCM;
+  
+  if(done){
+    const detailId='compactDetail_'+String(key+'_'+m.id).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const resultBtn=(AD||OP||canEditMatchByClubMember(key,m))
+      ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openM3('${key}','${m.id}')">✏️ 결과</button>`:'';
+    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="margin-bottom:7px;border:1.5px solid #bbf7d0;background:#f7fff9">
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:44px;flex-wrap:wrap">
+        <span style="font-size:.72rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 8px">${label||'경기'}</span>
+        <div style="display:flex;align-items:center;gap:7px;flex:1;min-width:190px">
+          <span style="font-size:.88rem;font-weight:${wn1?900:600};color:${wn1?'#166534':'var(--text2)'}">${wn1?'🏆 ':''}${dn1}</span>
+          <b style="font-size:1.05rem;color:#0f1e3a;white-space:nowrap">${sc1}:${sc2}</b>
+          <span style="font-size:.88rem;font-weight:${wn2?900:600};color:${wn2?'#166534':'var(--text2)'}">${dn2}${wn2?' 🏆':''}</span>
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;margin-left:auto">
+          <button id="${detailId}_btn" class="btn btn-outline" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();toggleCompactMatchDetail('${detailId}')">상세보기</button>
+          ${resultBtn}
+        </div>
+      </div>
+      <div id="${detailId}" style="display:none;padding:0 11px 10px">
+        ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}
+        ${orderTeamStatus}
+        <div class="rb-rows">${rbH}</div>
+      </div>
+    </div>`;
+  }
+
   const teamCardStyleBase=`${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15);':''}${_isOtherM?'opacity:0.35;':''}`;
   const teamWinTint=done&&wn1?'background:linear-gradient(135deg,#f7fff9,#eefbf3);border-color:#86efac;':done&&wn2?'background:linear-gradient(135deg,#fff7f7,#fef2f2);border-color:#fecaca;':'';
   return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${grpCourtShareBadge} ${matchMemoBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${memoBtn} ${btn}</div></div>
@@ -18848,7 +18853,7 @@ function toast(msg,type='info'){
 
 
 window.addEventListener('scroll',()=>ge('stBtn').classList.toggle('show',window.scrollY>300));
-document.querySelectorAll('.modal-overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+// 모달 배경 클릭 자동닫기 비활성화 — 각 모달의 닫기/취소 버튼만 사용
 
 
 // ═══════════════════════════════════════════════════════
@@ -19361,7 +19366,7 @@ function ensureGuideModal(){
       </div>
     </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 
 function buildGuideHTML(title, text, url, assets){
@@ -19487,7 +19492,7 @@ function ensureMatchCourtModal(){
     </div>
   </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 
 function openMatchCourtModal(key,mid){
@@ -19867,7 +19872,7 @@ function ensureMatchMemoModal(){
       </div>
     </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 function openMatchMemoModal(key,mid){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 경기 공지 입력 가능','info'); return; }
@@ -20058,7 +20063,7 @@ function ensureGroupSmsModal(){
       </div>
     </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 function openGroupSmsModal(key, gi){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 문자 발송 가능','info'); return; }
@@ -20163,7 +20168,7 @@ function ensureGroupMemoModal(){
       </div>
     </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 function openGroupMemoModal(key,gi){
   if(!canManageBracket()){ toast('관리자 또는 경기진행자만 조 공지 입력 가능','info'); return; }
@@ -20334,7 +20339,7 @@ function ensureHistGuideModal(){
       </div>
     </div>`;
   document.body.appendChild(wrap);
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.classList.remove('open'); });
+  // 배경 클릭 닫기 비활성화
 }
 
 // ── 홈 탭 등록선수 버튼 카운트 업데이트 ──────────────────────
@@ -22657,7 +22662,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
   openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
   updateMainManualSeeds,
-  toggleIndividualGroupMatches});
+  toggleIndividualGroupMatches,toggleCompactMatchDetail});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
