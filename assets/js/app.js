@@ -4152,6 +4152,7 @@ function refreshRegDeadlineUI(){ /* 시합별로 이동 - 사용 안 함 */ }
 async function clearRegDeadline(){ /* 시합별로 이동 - etRegDl 해제 버튼으로 처리 */ }
 
 function openAdminSettings(){
+  setTimeout(ensurePendingDetailCenterButton,0);
   if(!AD){toast('관리자 로그인 필요','info');return;}
   // 입력 초기화
   ['aspCur','aspNew','aspNew2'].forEach(id=>{const el=ge(id);if(el)el.value='';});
@@ -21933,6 +21934,71 @@ function triggerOrderPhoto(side, source){
 }
 
 
+
+// ═══════════════════════════════════════════════════
+// Phase 50 · 현장 간편결과 사후 상세기록 정리 센터
+// ═══════════════════════════════════════════════════
+function _pendingDetailHasPlayers(m){
+  return !!(Array.isArray(m?.rubbers)&&m.rubbers.some(rb=>
+    (Array.isArray(rb?.players1)&&rb.players1.filter(Boolean).length)||
+    (Array.isArray(rb?.players2)&&rb.players2.filter(Boolean).length)
+  ));
+}
+function getPendingSimpleResultMatches(){
+  const rows=[];
+  Object.entries(G.matches||{}).forEach(([key,list])=>{
+    (Array.isArray(list)?list:[]).forEach(m=>{
+      if(!m?.simpleResult?.confirmed) return;
+      if(_pendingDetailHasPlayers(m)) return;
+      const teams=G.teams[key]||[],t1=teams[m.t1],t2=teams[m.t2];
+      const photo1=!!_orderPhotoGetSaved(m,1),photo2=!!_orderPhotoGetSaved(m,2);
+      rows.push({key,m,team1:t1?tdn(t1,key,m.t1):'팀1',team2:t2?tdn(t2,key,m.t2):'팀2',photo1,photo2,hasPhoto:photo1||photo2});
+    });
+  });
+  return rows;
+}
+function _ensurePendingDetailModal(){
+  let modal=ge('mPendingDetailCenter');if(modal)return modal;
+  modal=document.createElement('div');modal.id='mPendingDetailCenter';modal.className='modal';
+  modal.innerHTML=`<div class="modal-content" style="max-width:760px"><div class="modal-header"><b>📋 상세기록 미정리 경기</b><button type="button" class="btn btn-gray" onclick="cm('mPendingDetailCenter')">닫기</button></div><div id="pendingDetailCenterBody" style="padding:12px"></div></div>`;
+  document.body.appendChild(modal);return modal;
+}
+function openPendingDetailCenter(){
+  if(!(AD||OP)){toast('관리자 또는 경기진행자만 사용할 수 있습니다','error');return;}
+  _ensurePendingDetailModal();
+  const rows=getPendingSimpleResultMatches(),withPhoto=rows.filter(x=>x.hasPhoto).length,withoutPhoto=rows.length-withPhoto;
+  const body=ge('pendingDetailCenterBody');if(!body)return;
+  if(!rows.length){body.innerHTML=`<div style="padding:28px;text-align:center;font-weight:900;color:#166534">✅ 상세기록 미정리 경기가 없습니다.</div>`;om('mPendingDetailCenter');return;}
+  body.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px">
+    <div style="padding:10px;border-radius:10px;background:#fff7ed;text-align:center"><b>${rows.length}</b><div style="font-size:.7rem">미정리</div></div>
+    <div style="padding:10px;border-radius:10px;background:#eff6ff;text-align:center"><b>${withPhoto}</b><div style="font-size:.7rem">📷 사진 있음</div></div>
+    <div style="padding:10px;border-radius:10px;background:#f8fafc;text-align:center"><b>${withoutPhoto}</b><div style="font-size:.7rem">사진 없음</div></div>
+  </div>`+rows.map((x,i)=>{
+    const r=x.m.simpleResult||{},result=r.winnerOnly?'승리팀만 확정':`${r.score1}:${r.score2}`;
+    const winner=x.m.winner===x.m.t1?x.team1:(x.m.winner===x.m.t2?x.team2:'');
+    return `<div style="padding:10px;margin-bottom:8px;border:1px solid #e2e8f0;border-radius:11px;background:white">
+      <div style="font-size:.72rem;color:#64748b;font-weight:800">${esc(x.key)} · ${x.m.phase==='main'?'본선':'예선'}</div>
+      <div style="font-weight:900;margin:4px 0">${esc(x.team1)} vs ${esc(x.team2)}</div>
+      <div style="font-size:.74rem;margin-bottom:7px">공식결과: <b>${esc(result)}</b>${winner?` · 🏆 ${esc(winner)}`:''} · ${x.hasPhoto?'📷 오더지 있음':'사진 없음'}</div>
+      <button type="button" class="btn btn-primary" style="width:100%;font-size:.74rem" onclick="openPendingDetailMatch(${i})">상세기록 보완하기</button>
+    </div>`;
+  }).join('');
+  window.__pendingDetailRows=rows;om('mPendingDetailCenter');
+}
+function openPendingDetailMatch(index){
+  const x=(window.__pendingDetailRows||[])[Number(index)];if(!x)return;
+  cm('mPendingDetailCenter');openM3(x.key,x.m.id||x.m._id);
+  setTimeout(()=>{const w=ge('simpleResultDetailWrap');if(w)w.style.display='block';},60);
+}
+function ensurePendingDetailCenterButton(){
+  if(!(AD||OP))return;
+  const host=ge('adminSettingsBody')||ge('adminSettings')||document.querySelector('#mAdminSettings .modal-content');
+  if(!host||ge('btnPendingDetailCenter'))return;
+  const box=document.createElement('div');box.id='btnPendingDetailCenter';box.style.cssText='margin:12px 0;padding:10px;border:1px solid #fed7aa;border-radius:11px;background:#fff7ed';
+  box.innerHTML=`<button type="button" class="btn btn-primary" style="width:100%" onclick="openPendingDetailCenter()">📋 상세기록 미정리 경기 정리</button>`;
+  host.appendChild(box);
+}
+
 // showPage 수정 - players는 누구나 접근
 
 // ═══════════════════════════════════════════════════
@@ -22138,7 +22204,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
