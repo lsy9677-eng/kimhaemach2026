@@ -3350,7 +3350,7 @@ function getBracketTreeCourtStatusChip(key,m){
     if(idx>=0){
       return {text:`⏳ ${court} 대기${idx+1}번`, kind:'wait'};
     }
-    return null;
+    return {text:`🎾 ${court} 배정`, kind:'assigned'};
   }catch(e){
     return null;
   }
@@ -9293,7 +9293,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const s1=teams.length>0, s2=!!draw, s3=gMs.length>0&&gDone===gMs.length, s4=shownMainTotal>0&&shownMainDone===shownMainTotal;
   const hasMainBracket = mMs.length>0;
   const prelimCollapsed = isIndividualByKey(key) ? getPrelimCollapsedState(key, hasMainBracket, s4) : false;
-  const mainCollapsed = getMainCollapsedState(key);
+  const mainCollapsed = isIndividualByKey(key) ? getMainCollapsedState(key) : false;
   const prelimToggleId = _prelimToggleId(key);
   const mainToggleId = _mainToggleId(key);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
@@ -9626,7 +9626,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     html+=`<div class="sec-title" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <span id="mainStageTitle_${tid}_${div}">🏆 본선 토너먼트 대진표</span>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 가지형 대진표 펼치기':'📁 가지형 대진표 접기'}</button>
+        ${isIndividualByKey(key)?`<button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 가지형 대진표 펼치기':'📁 가지형 대진표 접기'}</button>`:''}
         ${canManageBracket()?`<div style="display:flex;gap:6px">
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">✏️ 수동수정</button>
@@ -10579,8 +10579,14 @@ function renderBracketTree(key,mMs,teams){
       const useOrderHere = isOnlineOrderMode(G.meta);
       const opLabel = done ? '✏️ 결과수정' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
       const viewLabel = done ? '🔎 상세' : '🔎 경기';
+      const assignedCourts=getMatchCourtsForStatusBoard(key,m)||[];
+      const courtLabel=assignedCourts.length?`🎾 ${assignedCourts.join('/')}`:'🎾 코트';
+      const courtAction=canManageBracket()
+        ? `<button class="btn btn-outline" style="padding:3px 5px;font-size:.58rem;min-height:23px" onclick="event.stopPropagation();openMatchCourtModal('${key}','${m.id}')">${courtLabel}</button>`
+        : (assignedCourts.length?`<span style="display:inline-flex;align-items:center;padding:3px 5px;font-size:.58rem;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569">${courtLabel}</span>`:'');
       const actionHtml = hasTeams
         ? `<div style="display:flex;gap:4px;padding:4px 5px;background:#f8fafc;border-top:1px solid #e5eaf3">
+            ${courtAction}
             <button class="btn btn-outline" style="flex:1;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openM3('${key}','${m.id}')">${viewLabel}</button>
             ${canOperate?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="flex:1.35;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">${opLabel}</button>`:''}
           </div>`
