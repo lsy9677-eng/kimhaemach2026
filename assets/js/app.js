@@ -10443,7 +10443,7 @@ function getMatchResultState(key,m){
   if(m.bye) return {done:true,started:true,sc1:1,sc2:0,disp1:1,disp2:0,winner:m.winner,totalRubbers:1};
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
-  const simpleResult=normalizeSimpleResult(m.simpleResult,totalRubbers);
+  const simpleResult=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
   if(simpleResult && m.simpleResult?.confirmed){const winner=simpleResult.winnerSide===1?m.t1:m.t2;return {done:true,started:true,sc1:simpleResult.score1,sc2:simpleResult.score2,disp1:simpleResult.score1,disp2:simpleResult.score2,winner,totalRubbers,simpleResult:true};}
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
   const indivMode=isIndividualByKey(key);
@@ -14658,7 +14658,7 @@ function openM3(key,mid){
     });
   }
   const simpleModeHere=isSimpleResultMode(G.meta) && !isIndividualMode;
-  if(simpleModeHere){const savedSimple=normalizeSimpleResult(m.simpleResult,dbl);html=`${buildSimpleResultPanelHtml({team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl),saved:savedSimple,escapeHtml:esc})}<div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
+  if(simpleModeHere){const savedSimple=normalizeSimpleResult(m.simpleResult,dbl,m.phase);html=`${buildSimpleResultPanelHtml({team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl,m.phase),saved:savedSimple,escapeHtml:esc})}<div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
   if(body && !simpleModeHere){
@@ -14708,12 +14708,12 @@ async function saveSimpleMatchResult(score1,score2){
   if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
   if(!(AD||OP||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
-  const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
-  const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
+  const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers,m.phase);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
+  const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers,m.phase);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
   if(!confirm(`${dn1} ${normalized.score1} : ${normalized.score2} ${dn2}\n\n이 결과로 경기 완료 처리하시겠습니까?\n선수 상세 오더는 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
-  m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'));m.winner=winner;
+  m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
   // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
   sl(true);
   try{await persistSingleMatchDoc(key,m);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
@@ -14995,8 +14995,8 @@ async function saveM3(){
   }
 
   const calculatedWinner=resolveWinnerTeamIndex({team1Index:m.t1,team2Index:m.t2,outcome:resultOutcome});
-  const existingSimple=normalizeSimpleResult(m.simpleResult,totalRubbers);
-  if(isSimpleResultMode(G.meta)&&existingSimple&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers);if(calculatedWinner!==officialWinner){toast(`현장 확정 결과(${existingSimple.score1}:${existingSimple.score2})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
+  const existingSimple=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
+  if(isSimpleResultMode(G.meta)&&existingSimple&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers,m.phase);if(calculatedWinner!==officialWinner){toast(`현장 확정 결과(${existingSimple.score1}:${existingSimple.score2})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
   m.rubbers=newRb;
   if(isOnlineOrderMode(G.meta) && orderState.bothSubmitted) syncRevealedOrderIntoMatchRubbers(key,m);
   m.winner=calculatedWinner;
