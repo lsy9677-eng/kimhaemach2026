@@ -5253,15 +5253,7 @@ function _copyFallback(text){
   }
 }
 
-async function copyTextSafe(text){
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  }catch(_e){}
-  return _copyFallback(text);
-}
+async 
 
 function sendSmsSelected(){
   const body = _checkBodyAndGet(); if(!body) return;
