@@ -4643,10 +4643,6 @@ function onRegClubChange(){
   const badge = ge('regContactSavedBadge');
   if(lbl) lbl.textContent = club;
   if(inp) inp.value = saved;
-  // 저장된 구글 이메일 불러오기
-  const emailInp = ge('regContactEmail');
-  const savedEmail = (G.meta.clubEmails||{})[club]||'';
-  if(emailInp) emailInp.value = savedEmail;
   if(badge) badge.style.display = saved ? 'inline' : 'none';
   if(row) row.style.display = 'block';
 }
@@ -4660,22 +4656,16 @@ async function saveRegContact(){
   const club = (ge('regClub')?.value||'').trim();
   const raw = (ge('regContactPhone')?.value||'').trim();
   const phone = raw.replace(/[^0-9-]/g,'');
-  const emailRaw = (ge('regContactEmail')?.value||'').trim().toLowerCase();
   if(!club){ toast('클럽을 먼저 선택하세요','error'); return; }
   if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
-  // 이메일 형식 검사 (입력한 경우만)
-  if(emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)){
-    toast('이메일 형식을 확인해주세요','error'); return;
-  }
-  if(emailRaw && !emailRaw.endsWith('@gmail.com')){
-    toast('구글 계정(@gmail.com)만 등록 가능합니다','error'); return;
-  }
-  saveClubDirectorContact(G.meta,club,phone,emailRaw);
+  // Play 스토어 정식 등록 이후 팀 등록 화면에서는 전화번호만 저장한다.
+  // 과거 clubEmails 데이터는 관리자 호환성을 위해 그대로 보존한다.
+  const savedEmail=(G.meta.clubEmails||{})[club]||'';
+  saveClubDirectorContact(G.meta,club,phone,savedEmail);
   try{
     await saveMeta();
     ge('regContactSavedBadge') && (ge('regContactSavedBadge').style.display='inline');
-    const emailMsg = emailRaw ? ' + 구글 이메일' : '';
-    toast(`${club} 경기이사 번호${emailMsg} 저장 완료 ✅`,'success');
+    toast(`${club} 경기이사 번호 저장 완료 ✅`,'success');
     renderAdminContactList();
   renderAdminDirectorEmailSection();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
