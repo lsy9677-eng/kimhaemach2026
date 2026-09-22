@@ -9866,6 +9866,27 @@ function matchStatusFilterBar(){
   return `<div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 10px">${b('all','전체')}${b('waiting','대기')}${b('playing','진행중')}${b('done','완료')}</div>`;
 }
 
+
+function openMatchDetailReadOnly(key,mid){
+  const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
+  if(!m){toast('경기를 찾을 수 없습니다','error');return;}
+  const prev=window.__MATCH_READ_ONLY_VIEW;
+  window.__MATCH_READ_ONLY_VIEW=true;
+  try{
+    openM3(key,mid);
+    setTimeout(()=>{
+      const modal=ge('mM3');
+      if(!modal)return;
+      modal.querySelectorAll('button').forEach(btn=>{
+        const txt=String(btn.textContent||'').trim();
+        if(/저장|제출|결과입력|결과수정|오더 입력|오더·결과|초기화|코트배정/.test(txt) && !/닫기|상세/.test(txt)){
+          btn.style.display='none';
+        }
+      });
+    },0);
+  } finally{ window.__MATCH_READ_ONLY_VIEW=prev; }
+}
+
 function openMatchOperations(key,mid){
   const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
   if(!m){toast('경기를 찾을 수 없습니다','error');return;}
@@ -10587,7 +10608,7 @@ function renderBracketTree(key,mMs,teams){
       const actionHtml = hasTeams
         ? `<div style="display:flex;gap:4px;padding:4px 5px;background:#f8fafc;border-top:1px solid #e5eaf3">
             ${courtAction}
-            <button class="btn btn-outline" style="flex:1;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openM3('${key}','${m.id}')">${viewLabel}</button>
+            <button class="btn btn-outline" style="flex:1;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openMatchDetailReadOnly('${key}','${m.id}')">${viewLabel}</button>
             ${canOperate?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="flex:1.35;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">${opLabel}</button>`:''}
           </div>`
         : `<div style="padding:5px;text-align:center;background:#f8fafc;border-top:1px solid #e5eaf3;font-size:.60rem;color:#94a3b8">상대팀 확정 대기</div>`;
@@ -14834,7 +14855,8 @@ function ensureM3AdminSubmitButtons(){
 function openM3(key,mid){
   const m=(G.matches[key]||[]).find(m=>m.id===mid);if(!m)return;
   const indivAuth=getIndividualResultAuthState(key,m);
-  if(!(AD||canEditMatchByDirector(key,m)||indivAuth.allowed||isPublicResultEntryEnabled())){
+  const readOnlyView=!!window.__MATCH_READ_ONLY_VIEW;
+  if(!readOnlyView && !(AD||canEditMatchByDirector(key,m)||indivAuth.allowed||isPublicResultEntryEnabled())){
     toast(isIndividualByKey(key)?'개인전은 참가자 비밀번호 또는 운영 권한이 있을 때만 결과 입력할 수 있습니다':'해당 경기 참가팀 로그인 또는 운영 권한이 필요합니다','error');
     return;
   }
@@ -22698,7 +22720,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
   openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
   updateMainManualSeeds,
-  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,setMatchStatusFilter});
+  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchDetailReadOnly,setMatchStatusFilter});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
