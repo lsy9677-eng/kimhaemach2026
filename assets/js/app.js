@@ -5253,7 +5253,6 @@ function _copyFallback(text){
   }
 }
 
-async 
 
 function sendSmsSelected(){
   const body = _checkBodyAndGet(); if(!body) return;
