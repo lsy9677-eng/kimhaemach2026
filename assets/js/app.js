@@ -2405,6 +2405,7 @@ async function stD(k){
   await fbSet('draws',k,payload);
   markFbWriteCache('draws', k, payload);
   try{ cacheTournamentBundleFromMemory(_k2td(k).tid); }catch(e){}
+  scheduleTournamentAutoRestorePoint(k,'대진표/추첨 변경');
 } // draws는 기존처럼 tid_div 문서 유지
 
 async function stT(key){
@@ -2464,6 +2465,7 @@ async function stT(key){
   if(!G._regIdsByKey) G._regIdsByKey={};
   G._regIdsByKey[key]=[...curIds];
   try{ cacheTournamentBundleFromMemory(tid); }catch(e){}
+  scheduleTournamentAutoRestorePoint(key,'팀등록/명단 변경');
 }
 
 async function stM(key){
@@ -2527,6 +2529,7 @@ async function persistSingleMatchDoc(key, matchObj){
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=ids;
   try{ cacheTournamentBundleFromMemory(tid); }catch(e){}
+  scheduleTournamentAutoRestorePoint(key,'경기 결과 변경');
 }
 const __PLAYER_WRITE_QUEUE = new Set();
 let __PLAYER_WRITE_TIMER = null;
@@ -4349,6 +4352,7 @@ async function clearRegDeadline(){ /* 시합별로 이동 - etRegDl 해제 버�
 function openAdminSettings(){
   setTimeout(hideLegacyTeamRegistrationPasswordUI,0);
   setTimeout(ensurePendingDetailCenterButton,0);
+  setTimeout(ensureAutoRestoreCenterButton,0);
   if(!AD){toast('관리자 로그인 필요','info');return;}
   // 입력 초기화
   ['aspCur','aspNew','aspNew2'].forEach(id=>{const el=ge(id);if(el)el.value='';});
@@ -18962,6 +18966,199 @@ window.addEventListener('scroll',()=>ge('stBtn').classList.toggle('show',window.
 // 모달 배경 클릭 자동닫기 비활성화 — 각 모달의 닫기/취소 버튼만 사용
 
 
+
+// ═══════════════════════════════════════════════════════
+//  자동 복구점 — 현재 대회 운영 데이터 안전망
+// ═══════════════════════════════════════════════════════
+const AUTO_RESTORE_MIN_MS=5*60*1000;
+const AUTO_RESTORE_KEEP_MS=7*24*60*60*1000;
+const AUTO_RESTORE_MAX_PER_TOURNAMENT=80;
+let __autoRestoreTimer=null;
+let __autoRestoreBusy=false;
+let __autoRestoreSuppressed=false;
+const __autoRestorePending=new Map();
+
+function _restorePointTournament(tid){
+  return (G.tournaments||[]).find(t=>String(t.id)===String(tid))||null;
+}
+function _restorePointKeys(tid){
+  const t=_restorePointTournament(tid);
+  const divs=(t?.divisions||[]).map(String);
+  const fromMemory=[...new Set([
+    ...Object.keys(G.teams||{}),...Object.keys(G.draws||{}),...Object.keys(G.matches||{})
+  ].filter(k=>_k2td(k).tid===tid).map(k=>_k2td(k).div))];
+  return [...new Set([...divs,...fromMemory])].map(div=>({div,key:`${tid}_${div}`}));
+}
+function _restorePointClone(v){
+  try{return JSON.parse(JSON.stringify(v??null));}catch(e){return null;}
+}
+async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저장',force=false}={}){
+  tid=String(tid||'').trim();
+  if(!tid||__autoRestoreSuppressed||__autoRestoreBusy)return null;
+  const t=_restorePointTournament(tid);
+  if(!t)return null;
+  const lastKey=`kimhae_restore_last_${tid}`;
+  const now=Date.now();
+  const last=Number(localStorage.getItem(lastKey)||0);
+  if(type==='auto'&&!force&&now-last<AUTO_RESTORE_MIN_MS)return null;
+  __autoRestoreBusy=true;
+  try{
+    const rp=await addDoc(collection(db,'restorePoints'),{
+      tournamentId:tid,
+      tournamentName:t.name||t.title||tid,
+      type,
+      reason:String(reason||'').slice(0,160),
+      createdAt:new Date().toISOString(),
+      createdAtMs:now,
+      createdBy:AD?'관리자':OP?'진행자':REG?'경기이사':'시스템',
+      version:1
+    });
+    const parts=_restorePointKeys(tid);
+    for(const {div,key} of parts){
+      await setDoc(doc(db,'restorePoints',rp.id,'parts',encodeURIComponent(div)),{
+        division:div,
+        teams:_restorePointClone(G.teams[key]||[]),
+        draw:_restorePointClone(G.draws[key]||{}),
+        matches:_restorePointClone(G.matches[key]||[]),
+        savedAt:new Date().toISOString()
+      });
+    }
+    localStorage.setItem(lastKey,String(now));
+    if(type==='auto') cleanupOldTournamentRestorePoints(tid).catch(()=>{});
+    return rp.id;
+  }catch(e){
+    console.warn('restore point create failed',e);
+    return null;
+  }finally{__autoRestoreBusy=false;}
+}
+function scheduleTournamentAutoRestorePoint(key,reason='운영 데이터 변경'){
+  if(__autoRestoreSuppressed)return;
+  const {tid}=_k2td(String(key||''));
+  if(!tid)return;
+  __autoRestorePending.set(tid,reason);
+  clearTimeout(__autoRestoreTimer);
+  __autoRestoreTimer=setTimeout(async()=>{
+    const jobs=[...__autoRestorePending.entries()];__autoRestorePending.clear();
+    for(const [id,why] of jobs) await createTournamentRestorePoint(id,{type:'auto',reason:why});
+  },8000);
+}
+async function _deleteRestorePointDoc(id){
+  const ps=await getDocs(collection(db,'restorePoints',id,'parts'));
+  let batch=writeBatch(db),n=0;
+  for(const d of ps.docs){
+    batch.delete(d.ref); n++;
+    if(n>=400){await batch.commit();batch=writeBatch(db);n=0;}
+  }
+  batch.delete(doc(db,'restorePoints',id));n++;
+  if(n)await batch.commit();
+}
+async function cleanupOldTournamentRestorePoints(tid){
+  try{
+    const qs=await getDocs(query(collection(db,'restorePoints'),where('tournamentId','==',tid)));
+    const autos=qs.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.type==='auto')
+      .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
+    const cutoff=Date.now()-AUTO_RESTORE_KEEP_MS;
+    const doomed=autos.filter((x,i)=>Number(x.createdAtMs||0)<cutoff||i>=AUTO_RESTORE_MAX_PER_TOURNAMENT);
+    for(const x of doomed)await _deleteRestorePointDoc(x.id);
+  }catch(e){console.warn('restore point cleanup failed',e);}
+}
+async function _replaceCollectionForRestore(col,tid,div,rows){
+  const qs=await getDocs(query(collection(db,col),where('tournamentId','==',tid),where('division','==',div)));
+  const ops=[];
+  qs.docs.forEach(d=>ops.push({kind:'delete',ref:d.ref}));
+  (rows||[]).forEach(row=>{
+    const copy={...row}; const id=copy._id||((col==='matches')?_mid():_rid()); delete copy._id;
+    copy.tournamentId=tid;copy.division=div;copy.updatedAt=new Date().toISOString();
+    ops.push({kind:'set',ref:doc(db,col,id),data:copy});
+  });
+  for(let i=0;i<ops.length;i+=400){
+    const b=writeBatch(db);
+    ops.slice(i,i+400).forEach(op=>op.kind==='delete'?b.delete(op.ref):b.set(op.ref,op.data,{merge:false}));
+    await b.commit();
+  }
+}
+async function restoreTournamentRestorePoint(id){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const snap=await getDoc(doc(db,'restorePoints',id));
+  if(!snap.exists()){toast('복구점을 찾을 수 없습니다','error');return;}
+  const meta=snap.data(),tid=meta.tournamentId;
+  if(!confirm(`${meta.tournamentName||tid}\n${new Date(meta.createdAt).toLocaleString()}\n\n이 복구점으로 되돌리시겠습니까?\n현재 상태는 먼저 안전 복구점으로 저장됩니다.`))return;
+  sl(true);
+  try{
+    await createTournamentRestorePoint(tid,{type:'safety',reason:'복원 직전 안전 복구점',force:true});
+    __autoRestoreSuppressed=true;
+    const ps=await getDocs(collection(db,'restorePoints',id,'parts'));
+    for(const d of ps.docs){
+      const part=d.data(),div=String(part.division||'');if(!div)continue;
+      const key=`${tid}_${div}`;
+      await _replaceCollectionForRestore('registrations',tid,div,part.teams||[]);
+      await _replaceCollectionForRestore('matches',tid,div,part.matches||[]);
+      await setDoc(doc(db,'draws',key),part.draw||{},{merge:false});
+      G.teams[key]=_restorePointClone(part.teams||[]);
+      G.matches[key]=_restorePointClone(part.matches||[]);
+      G.draws[key]=_restorePointClone(part.draw||{});
+      if(G._regIdsByKey)G._regIdsByKey[key]=(G.teams[key]||[]).map(x=>x._id).filter(Boolean);
+      if(G._matchIdsByKey)G._matchIdsByKey[key]=(G.matches[key]||[]).map(x=>x._id).filter(Boolean);
+    }
+    Object.keys(__FB_WRITE_CACHE.draws).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.draws[k]});
+    Object.keys(__FB_WRITE_CACHE.teams).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.teams[k]});
+    Object.keys(__FB_WRITE_CACHE.matches).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.matches[k]});
+    toast('복구 완료 ✅','success');
+    await fbLog(`대회 자동복구점 복원: ${meta.tournamentName||tid}`,'🛟');
+    closeAutoRestoreCenter();
+    if(getCurrentPageName()==='bracket')renderBracket();
+  }catch(e){
+    console.error(e);toast('복구 실패: '+e.message,'error');
+  }finally{__autoRestoreSuppressed=false;sl(false);}
+}
+function closeAutoRestoreCenter(){const x=ge('mAutoRestoreCenter');if(x)x.classList.remove('open');}
+async function openAutoRestoreCenter(){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  let ov=ge('mAutoRestoreCenter');
+  if(!ov){
+    ov=document.createElement('div');ov.id='mAutoRestoreCenter';ov.className='modal-overlay';
+    ov.style.cssText='z-index:10020;align-items:flex-start;padding:5vh 12px 20px;overflow:auto';
+    ov.innerHTML=`<div style="width:min(760px,100%);margin:auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px #0003">
+      <div style="background:#10264b;color:#fff;padding:13px 15px;display:flex;align-items:center"><b>🛟 자동 복구센터</b><button onclick="closeAutoRestoreCenter()" style="margin-left:auto;border:0;background:#ffffff22;color:#fff;border-radius:50%;width:30px;height:30px">✕</button></div>
+      <div id="autoRestoreBody" style="padding:14px"></div></div>`;
+    document.body.appendChild(ov);
+  }
+  ov.classList.add('open');
+  const tid=String(ge('brTS')?.value||pickDefaultTournamentId()||'');
+  const body=ge('autoRestoreBody');
+  if(!tid){body.innerHTML='<div>대회를 먼저 선택해 주세요.</div>';return;}
+  body.innerHTML='<div style="padding:20px;text-align:center">복구점 불러오는 중...</div>';
+  try{
+    const qs=await getDocs(query(collection(db,'restorePoints'),where('tournamentId','==',tid)));
+    const arr=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
+    const t=_restorePointTournament(tid);
+    const rows=arr.length?arr.map(x=>{
+      const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':'수동';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
+        <span style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
+        <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reason||'-'}</div></div>
+        <button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
+      </div>`;
+    }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
+    body.innerHTML=`<div style="font-size:.82rem;font-weight:900">${t?.name||t?.title||tid}</div>
+      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">운영 데이터 변경 후 약 5분 간격으로 자동 저장 · 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" onclick="manualTournamentRestorePoint('${tid}')">💾 지금 복구점 저장</button><button class="btn btn-outline" onclick="cleanupOldTournamentRestorePoints('${tid}').then(openAutoRestoreCenter)">🧹 오래된 자동 복구점 정리</button></div>${rows}`;
+  }catch(e){body.innerHTML=`<div style="color:#b91c1c">복구점 조회 실패: ${e.message}</div>`;}
+}
+async function manualTournamentRestorePoint(tid){
+  sl(true);const id=await createTournamentRestorePoint(tid,{type:'manual',reason:'관리자 수동 복구점',force:true});sl(false);
+  toast(id?'복구점 저장 완료 💾':'복구점 저장 실패',id?'success':'error');if(id)openAutoRestoreCenter();
+}
+function ensureAutoRestoreCenterButton(){
+  if(ge('autoRestoreCenterBtn'))return;
+  const host=ge('adminSettingsBody')||ge('adminSettings')||document.querySelector('#mAdminSettings .modal-content');
+  if(!host)return;
+  const wrap=document.createElement('div');wrap.style.cssText='margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1';
+  wrap.innerHTML=`<button id="autoRestoreCenterBtn" class="btn btn-primary" style="width:100%" onclick="openAutoRestoreCenter()">🛟 자동 복구센터</button>
+    <div style="font-size:.68rem;color:#64748b;margin-top:5px">시합 운영 중 자동 복구점을 저장하고 원하는 시점으로 되돌릴 수 있습니다.</div>`;
+  host.appendChild(wrap);
+}
+
 // ═══════════════════════════════════════════════════════
 //  백업 / 복구 / 내보내기
 // ═══════════════════════════════════════════════════════
@@ -22734,7 +22931,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
