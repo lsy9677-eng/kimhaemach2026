@@ -15400,8 +15400,12 @@ async function saveM3(){
   ].filter(Boolean))];
   const resultPlayerSnapshot=createPlayerStatSnapshot(G.players,resultPlayerKeys);
 
-  if(hasFinalWinner) await updPS(key,m,prevW);m.detailStatsApplied=true;
-  else await adjustPlayerStatsForUnfinalized();
+  if(hasFinalWinner){
+    await updPS(key,m,prevW);
+    m.detailStatsApplied=true;
+  }else{
+    await adjustPlayerStatsForUnfinalized();
+  }
 
   const finishedCourts = hasFinalWinner ? (Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : [])) : [];
 
