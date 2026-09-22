@@ -763,13 +763,17 @@ if(FIRESTORE_WRITE_TRACE){
 let AD=false;
 let OP=false; // 경기진행자 로그인 상태
 let REG=false; // 팀등록 로그인 상태
-let REG_CLUB='';   // 로그인한 경기이사 클럽명
+let REG_CLUB='';   // 현재 로그인한 클럽명(일반회원/경기이사 공통)
+let CLUB_MEMBER=false;
+let CLUB_LOGIN_ROLE='director';
+Object.defineProperty(window,'CLUB_MEMBER',{get:()=>CLUB_MEMBER,set:(v)=>{CLUB_MEMBER=!!v;}});
+
 // window에 노출 - HTML onclick에서 접근 가능하게
 Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}});
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},regDeadlineDt:'',matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},regDeadlineDt:'',matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
 const PLAYER_CACHE_TTL=1000*60*60*12;
 const TOURNAMENT_BUNDLE_CACHE_KEY='OAI_TOURNAMENT_BUNDLE_CACHE_V3';
@@ -2192,7 +2196,7 @@ async function loadMeta(){
       const d=s.data();
       // memberRegistry2026은 meta/config에서 제외 → memberRegistries/2026 에서만 관리
       const {memberRegistry2026:_mr, ...dClean}=d;
-      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
+      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
       if(Array.isArray(d.clubs)){
         G.clubs=d.clubs.map(x=>String(x||'').trim()).filter(Boolean);
       }
@@ -2203,6 +2207,10 @@ async function loadMeta(){
       if(!G.meta.clubEmails||typeof G.meta.clubEmails!=='object')G.meta.clubEmails={};
       if(!G.meta.clubPasswords||typeof G.meta.clubPasswords!=='object')G.meta.clubPasswords={};
       if(!G.meta.clubPasswordCustom||typeof G.meta.clubPasswordCustom!=='object')G.meta.clubPasswordCustom={};
+      if(!G.meta.directorPasswords||typeof G.meta.directorPasswords!=='object')G.meta.directorPasswords={};
+      if(!G.meta.directorPasswordCustom||typeof G.meta.directorPasswordCustom!=='object')G.meta.directorPasswordCustom={};
+      if(!G.meta.clubPasswordAudit||typeof G.meta.clubPasswordAudit!=='object')G.meta.clubPasswordAudit={};
+      if(!G.meta.directorPasswordAudit||typeof G.meta.directorPasswordAudit!=='object')G.meta.directorPasswordAudit={};
       if(!G.meta.clubDefaultRegions||typeof G.meta.clubDefaultRegions!=='object')G.meta.clubDefaultRegions={};
       if(!G.meta.regDeadlineDt) G.meta.regDeadlineDt='';
       if(typeof G.meta.adminFloatingNotice!=='string') G.meta.adminFloatingNotice='';
@@ -2221,9 +2229,9 @@ async function loadMeta(){
       if(!G.meta.indivLockEnabled) G.meta.indivLockEnabled=false;
       if(!G.meta.indivLockStart) G.meta.indivLockStart='';
       if(!G.meta.indivLockEnd) G.meta.indivLockEnd='';
-      markFbWriteCache('meta','config',{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),clubContacts:(G.meta.clubContacts||{}),clubEmails:(G.meta.clubEmails||{}),clubPasswords:(G.meta.clubPasswords||{}),clubPasswordCustom:(G.meta.clubPasswordCustom||{}),clubDefaultRegions:(G.meta.clubDefaultRegions||{}),regDeadlineDt:(G.meta.regDeadlineDt||''),adminFloatingNotice:(G.meta.adminFloatingNotice||''),adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,onlineOrderEnabled:!!G.meta.onlineOrderEnabled,operatorPw:(G.meta.operatorPw||'2026court'),individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,usePlayerRegistry:!!G.meta.usePlayerRegistry,showAssociationDashboard:!!G.meta.showAssociationDashboard,useFixedClubs:!!G.meta.useFixedClubs,allowPublicTeamRegistration:!!G.meta.allowPublicTeamRegistration,allowPublicResultEntry:!!G.meta.allowPublicResultEntry,appTitle:(G.meta.appTitle||'시합관리 시스템'),regSessionVersion:Number(G.meta.regSessionVersion||1),drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),indivLockEnabled:!!G.meta.indivLockEnabled,indivLockStart:(G.meta.indivLockStart||''),indivLockEnd:(G.meta.indivLockEnd||'')});
+      markFbWriteCache('meta','config',{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),clubContacts:(G.meta.clubContacts||{}),clubEmails:(G.meta.clubEmails||{}),clubPasswords:(G.meta.clubPasswords||{}),clubPasswordCustom:(G.meta.clubPasswordCustom||{}),directorPasswords:(G.meta.directorPasswords||{}),directorPasswordCustom:(G.meta.directorPasswordCustom||{}),clubPasswordAudit:(G.meta.clubPasswordAudit||{}),directorPasswordAudit:(G.meta.directorPasswordAudit||{}),clubDefaultRegions:(G.meta.clubDefaultRegions||{}),regDeadlineDt:(G.meta.regDeadlineDt||''),adminFloatingNotice:(G.meta.adminFloatingNotice||''),adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,onlineOrderEnabled:!!G.meta.onlineOrderEnabled,operatorPw:(G.meta.operatorPw||'2026court'),individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,usePlayerRegistry:!!G.meta.usePlayerRegistry,showAssociationDashboard:!!G.meta.showAssociationDashboard,useFixedClubs:!!G.meta.useFixedClubs,allowPublicTeamRegistration:!!G.meta.allowPublicTeamRegistration,allowPublicResultEntry:!!G.meta.allowPublicResultEntry,appTitle:(G.meta.appTitle||'시합관리 시스템'),regSessionVersion:Number(G.meta.regSessionVersion||1),drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),indivLockEnabled:!!G.meta.indivLockEnabled,indivLockStart:(G.meta.indivLockStart||''),indivLockEnd:(G.meta.indivLockEnd||'')});
     }else{
-      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'});
+      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'});
     }
   }catch(e){}
 
@@ -2588,7 +2596,8 @@ function onDU(){
     }
   }
   applyRegLoginUI();
-  if(REG && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
+  if(!REG && localStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=localStorage.getItem('reg_club')||'';}
+  if((REG||CLUB_MEMBER) && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
 
   try{ upDash(); }catch(e){ console.warn('onDU upDash failed', e); }
   const p=document.querySelector('.nav-tab.active')?.dataset.page;
@@ -3439,6 +3448,7 @@ function applyOperatorUI(){
       localStorage.removeItem('reg');
       localStorage.removeItem('reg_club');
       localStorage.removeItem('reg_session_version');
+    localStorage.removeItem('club_member');
     }catch(e){}
     const regBtn=ge('regToggleBtn');
     if(regBtn){ regBtn.textContent='🏆 클럽 로그인'; regBtn.style.background='var(--success)'; }
@@ -3743,10 +3753,55 @@ function doLogin(){
 
 
 // ── 팀등록 로그인 함수들 ──────────────────────
+
+function getDirectorPassword(club){
+  const d=String((G.meta.directorPasswords||{})[club]||'').trim();
+  return d || getClubLoginPassword(G.meta,club);
+}
+function _passwordAudit(kind,club,actor){
+  const key=kind==='director'?'directorPasswordAudit':'clubPasswordAudit';
+  if(!G.meta[key]||typeof G.meta[key]!=='object')G.meta[key]={};
+  G.meta[key][club]={changedAt:new Date().toISOString(),changedBy:String(actor||'관리자')};
+}
+function _ensureClubLoginRoleUI(){
+  const modal=ge('mRegLogin'),pw=ge('regPwInput');if(!modal||!pw)return;
+  let box=ge('clubLoginRoleBox');
+  if(!box){
+    box=document.createElement('div');box.id='clubLoginRoleBox';
+    box.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0 12px';
+    box.innerHTML=`<button type="button" id="clubMemberLoginModeBtn" class="btn btn-outline" onclick="setClubLoginRole('member')">👥 클럽 회원</button><button type="button" id="clubDirectorLoginModeBtn" class="btn btn-primary" onclick="setClubLoginRole('director')">🏆 경기이사</button>`;
+    const fg=pw.closest('.form-group')||pw.parentElement;fg?.parentElement?.insertBefore(box,fg);
+  }
+  setClubLoginRole(CLUB_LOGIN_ROLE||'director');
+}
+function setClubLoginRole(role){
+  CLUB_LOGIN_ROLE=role==='member'?'member':'director';
+  const mb=ge('clubMemberLoginModeBtn'),db=ge('clubDirectorLoginModeBtn'),hint=ge('regLoginHint');
+  if(mb)mb.className='btn '+(CLUB_LOGIN_ROLE==='member'?'btn-primary':'btn-outline');
+  if(db)db.className='btn '+(CLUB_LOGIN_ROLE==='director'?'btn-primary':'btn-outline');
+  if(hint)hint.textContent=CLUB_LOGIN_ROLE==='member'
+    ?'클럽 공용 비밀번호 · 내 클럽 경기조회와 온라인 오더용'
+    :'경기이사 비밀번호 · 팀등록/명단관리 등 클럽 관리용';
+}
+function canSubmitOnlineOrderByClub(key,m){
+  if(AD||OP)return true;
+  if(!(REG_CLUB&&m))return false;
+  const teams=G.teams[key]||[],t1=teams[m.t1],t2=teams[m.t2],bc=baseClub(REG_CLUB)||REG_CLUB;
+  return [t1,t2].some(t=>t&&((baseClub(t.club||'')||t.club)===bc));
+}
+function canEditMatchByClubMember(key,m){
+  if(AD||OP||canEditMatchByDirector(key,m))return true;
+  if(!(CLUB_MEMBER&&REG_CLUB&&m))return false;
+  const teams=G.teams[key]||[],t1=teams[m.t1],t2=teams[m.t2],bc=baseClub(REG_CLUB)||REG_CLUB;
+  return [t1,t2].some(t=>t&&((baseClub(t.club||'')||t.club)===bc));
+}
+
+
 function toggleReg(){ closeLoginMenu();
-  if(REG && !AD){
+  if((REG||CLUB_MEMBER) && !AD){
     // 로그아웃
     REG=false;
+    CLUB_MEMBER=false;
     REG_CLUB='';
     localStorage.removeItem('reg');
     localStorage.removeItem('reg_club');
@@ -3760,12 +3815,13 @@ function toggleReg(){ closeLoginMenu();
     updateMyClubUI(); // 내 클럽 카드/버튼 숨김
     const _rp=document.querySelector('.nav-tab.active')?.dataset?.page;
     if(_rp==='register'){renderRegisterDivisionOverview();renderRL();}
-    toast('경기이사 로그아웃','info');
+    toast('클럽 로그아웃','info');
   } else if(AD) {
     // 관리자는 이미 팀등록 가능
     toast('관리자는 팀 등록이 가능합니다','info');
   } else {
     om('mRegLogin');
+    _ensureClubLoginRoleUI();
     // 클럽 선택 드롭다운 채우기
     const _rclSel=ge('regClubLogin');
     if(_rclSel){
@@ -3839,23 +3895,27 @@ async function saveForcedClubPassword(){
 }
 
 function doRegLogin(){
-  const pw   = (ge('regPwInput')?.value||'').trim();
-  const club = (ge('regClubLogin')?.value||'').trim();
-  if(!club){ toast('클럽을 선택해주세요','error'); return; }
-  if(!pw)  { toast('비밀번호를 입력해주세요','error'); return; }
-
-  const valid = getClubLoginPassword(G.meta,club);
-
-  if(pw === valid){
-    _completeRegLogin(club);
-  } else {
-    toast('비밀번호가 틀렸습니다', 'error');
-    ge('regPwInput')?.select();
-  }
+  const pw=(ge('regPwInput')?.value||'').trim(),club=(ge('regClubLogin')?.value||'').trim();
+  if(!club){toast('클럽을 선택해주세요','error');return;}
+  if(!pw){toast('비밀번호를 입력해주세요','error');return;}
+  const role=CLUB_LOGIN_ROLE==='member'?'member':'director';
+  const valid=role==='member'?getClubLoginPassword(G.meta,club):getDirectorPassword(club);
+  if(pw!==valid){toast('비밀번호가 틀렸습니다','error');ge('regPwInput')?.select();return;}
+  if(role==='member')_completeClubMemberLogin(club);else _completeRegLogin(club);
+}
+function _completeClubMemberLogin(club){
+  REG=false;CLUB_MEMBER=true;REG_CLUB=club;
+  localStorage.removeItem('reg');localStorage.setItem('club_member','1');localStorage.setItem('reg_club',club);
+  const toggleBtn=ge('regToggleBtn');if(toggleBtn){toggleBtn.textContent='🏆 클럽 로그아웃';toggleBtn.style.background='#388e3c';}
+  const badge=ge('regLoginBadge');if(badge){badge.textContent=`${club} 회원`;badge.style.cssText='display:inline-flex;align-items:center;background:#2563eb;color:#fff;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;margin-right:4px';}
+  cm('mRegLogin');applyRegLoginUI();refreshRoleUI();updateMyClubUI();showPage('home');upDash();
+  toast(`${club} 클럽 회원 로그인 ✅`,'success');
 }
 
 function _completeRegLogin(club){
   REG=true;
+  CLUB_MEMBER=false;
+  localStorage.removeItem('club_member');
   REG_CLUB=club;
   localStorage.setItem('reg','1');
   localStorage.setItem('reg_club', club);
@@ -3952,20 +4012,23 @@ async function saveChangePw(){
     return;
   }
   // 현재 비번과 동일한지 체크
-  const curPw = (G.meta.clubPasswords||{})[club]||'';
+  const curPw = getDirectorPassword(club);
   if(pw1===curPw){
     if(msg){msg.textContent='현재 비밀번호와 동일합니다. 다른 비밀번호를 입력해 주세요.'; msg.style.color='var(--danger)';}
     return;
   }
   sl(true);
   try{
-    setClubPassword(G.meta,club,pw1,{custom:true});
+    if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+    if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+    G.meta.directorPasswords[club]=pw1;G.meta.directorPasswordCustom[club]=true;
+    _passwordAudit('director',club,'경기이사');
     await saveMeta();
     sl(false);
     localStorage.removeItem('pw_skip_'+club);
     CHANGE_PW_CLUB='';
     cm('mChangePw');
-    toast(`비밀번호 변경 완료 ✅ 다음 로그인부터 새 비밀번호를 사용하세요.`,'success');
+    toast(`경기이사 비밀번호 변경 완료 ✅`,'success');
     try{ renderAdminContactList(); }catch(e){}
   }catch(e){
     sl(false);
@@ -4072,17 +4135,7 @@ window.pollDirectorSessionVersion = pollDirectorSessionVersion;
 window.isDirectorSessionValid = isDirectorSessionValid;
 
 async function saveRegPw(){
-  if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const nw = (ge('newRegPwInput')?.value||'').trim();
-  if(!nw){ toast('새 비밀번호를 입력하세요','error'); return; }
-  if(nw.length < 4){ toast('4자 이상 입력하세요','error'); return; }
-  G.meta.regPw = nw;
-  try{
-    await saveMeta();
-    if(ge('newRegPwInput')) ge('newRegPwInput').value='';
-    ge('currentRegPwDisplay') && (ge('currentRegPwDisplay').textContent='●●●●');
-    toast('팀등록 비밀번호 저장 완료 ✅','success');
-  }catch(e){ toast('저장 실패: '+e.message,'error'); }
+  toast('팀등록 별도 비밀번호는 사용하지 않습니다. 경기이사 비밀번호로 통합되었습니다.','info');
 }
 
 async function forceDirectorReLoginAll(){
@@ -4712,6 +4765,8 @@ function renderAdminContactList(){
   if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
   const passwords = G.meta.clubPasswords||{};
   const customMap = G.meta.clubPasswordCustom||{};
+  const directorPasswords=G.meta.directorPasswords||{};
+  const clubAudit=G.meta.clubPasswordAudit||{},directorAudit=G.meta.directorPasswordAudit||{};
   const notChanged = sorted.filter(c=>!customMap[c]);
   const summary = notChanged.length
     ? `<div style="margin-bottom:12px;padding:10px 12px;background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1.5px solid #fca5a5;border-radius:10px;font-size:.82rem;color:#991b1b">
@@ -4745,6 +4800,13 @@ function renderAdminContactList(){
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap;color:#1565c0" onclick="saveClubPassword('${club}')">🔑저장</button>
         <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetClubPassword('${club}')">초기화</button>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🏆 경기이사</span>
+        <input class="form-input" value="${directorPasswords[club]||pw}" placeholder="경기이사 비밀번호" id="dpw_${club}" maxlength="20" style="flex:1;min-width:100px;font-size:.8rem;padding:4px 8px" type="text">
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveDirectorPasswordAdmin('${club}')">💾저장</button>
+        <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetDirectorPasswordAdmin('${club}')">초기화</button>
+      </div>
+      <div style="font-size:.66rem;color:var(--text3);padding-left:71px;margin-top:2px">회원: ${clubAudit[club]?.changedAt?new Date(clubAudit[club].changedAt).toLocaleDateString()+' · '+esc(clubAudit[club].changedBy||''):'기록 없음'} / 경기이사: ${directorAudit[club]?.changedAt?new Date(directorAudit[club].changedAt).toLocaleDateString()+' · '+esc(directorAudit[club].changedBy||''):'기존 비번 호환중'}</div>
       ${email?`<div style="font-size:.72rem;color:#1a73e8;padding-left:2px">📧 ${email}</div>`:''}
     </div>`;
   }).join('');
@@ -4755,6 +4817,7 @@ async function saveClubPassword(club){
   const pw = (ge('cpw_'+club)?.value||'').trim();
   if(!pw){ toast('비밀번호를 입력하세요','error'); return; }
   setClubPassword(G.meta,club,pw,{custom:true});
+  _passwordAudit('club',club,'관리자');
   try{
     await saveMeta();
     toast(`${club} 비밀번호 저장 완료 ✅`,'success');
@@ -4766,11 +4829,32 @@ async function resetClubPassword(club){
   const tempPw = getClubTempPassword(club);
   if(!confirm(`${club} 클럽 비밀번호를 임시 비밀번호로 초기화하시겠습니까?\n초기화 후에는 해당 클럽이 다시 로그인할 때 전용 비밀번호를 강제로 새로 설정해야 합니다.`)) return;
   resetClubPasswordToTemporary(G.meta,club);
+  _passwordAudit('club',club,'관리자 초기화');
   try{
     await saveMeta();
     renderAdminContactList();
     toast(`${club} 비밀번호 초기화 완료 ✅ (임시 비밀번호로 복귀)`,'success');
   }catch(e){ toast('초기화 실패: '+e.message,'error'); }
+}
+
+
+async function saveDirectorPasswordAdmin(club){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const pw=(ge('dpw_'+club)?.value||'').trim();
+  if(!pw||pw.length<6){toast('경기이사 비밀번호는 6자리 이상 입력하세요','error');return;}
+  if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+  if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+  G.meta.directorPasswords[club]=pw;G.meta.directorPasswordCustom[club]=true;_passwordAudit('director',club,'관리자');
+  try{await saveMeta();renderAdminContactList();toast(`${club} 경기이사 비밀번호 저장 완료 ✅`,'success');}catch(e){toast('저장 실패: '+e.message,'error');}
+}
+async function resetDirectorPasswordAdmin(club){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const fallback=getClubLoginPassword(G.meta,club);
+  if(!confirm(`${club} 경기이사 비밀번호를 현재 클럽 공용 비밀번호로 초기화할까요?\n초기화 후 경기이사가 로그인하여 새 비밀번호로 변경할 수 있습니다.`))return;
+  if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+  if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+  G.meta.directorPasswords[club]=fallback;G.meta.directorPasswordCustom[club]=false;_passwordAudit('director',club,'관리자 초기화');
+  try{await saveMeta();renderAdminContactList();toast(`${club} 경기이사 비밀번호 초기화 완료 ✅`,'success');}catch(e){toast('초기화 실패: '+e.message,'error');}
 }
 
 async function saveContactFromAdmin(club){
@@ -14828,7 +14912,7 @@ async function saveMainWinnerOnly(side){
   if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
   if(m.phase!=='main'){toast('승리팀만 확정 기능은 본선에서만 사용할 수 있습니다','info');return;}
-  if(!(AD||OP||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
+  if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const winner=Number(side)===1?m.t1:Number(side)===2?m.t2:null;if(winner==null)return;
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2',winnerName=Number(side)===1?dn1:dn2;
   if(!confirm(`${winnerName} 승리로 확정하시겠습니까?\n\n스코어 없이 바로 다음 라운드로 진출합니다.\n스코어와 선수 상세기록은 나중에 보완할 수 있습니다.`))return;
@@ -14842,7 +14926,7 @@ async function saveSimpleMatchResult(score1,score2){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
-  if(!(AD||OP||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
+  if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers,m.phase);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
   const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers,m.phase);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
@@ -15011,11 +15095,11 @@ async function saveM3(){
   const m=list[idx];
   const resultMatchSnapshot=cloneResultMatchForRollback(m);
   const indivAuth=getIndividualResultAuthState(key,m);
-  const canStandardEdit=(AD||OP||canEditMatchByDirector(key,m));
+  const canStandardEdit=isIndividualByKey(key)?(AD||OP||canEditMatchByDirector(key,m)):canEditMatchByClubMember(key,m);
   let participantWinnerAuth=null;
   if(isIndividualByKey(key) && !canStandardEdit){
     if(!indivAuth.allowed){toast('참가자 등록 비밀번호가 설정되지 않아 결과를 저장할 수 없습니다','error');return;}
-  }else if(!canStandardEdit){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 저장할 수 있습니다','error');return;}
+  }else if(!canStandardEdit){toast('해당 경기 참가 클럽 로그인 후 저장할 수 있습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m); if(!t1 && !t2) return;
   const [tid,div]=key.split('_');
   const tObj=G.tournaments.find(t=>t.id===tid);
@@ -15930,7 +16014,7 @@ function getMatchBaseClubs(key,m){
 
 function getDirectorMatchSide(key,m){
   if(AD) return 0;
-  if(!(REG&&REG_CLUB&&m)) return 0;
+  if(!((REG||CLUB_MEMBER)&&REG_CLUB&&m)) return 0;
   const myBase=baseClub(REG_CLUB)||REG_CLUB;
   const {c1,c2}=getMatchBaseClubs(key,m);
   if(c1===myBase) return 1;
@@ -16143,8 +16227,8 @@ async function submitSavedOrderFromCard(tid,div,mid){
   const m=list.find(x=>x.id===mid);
   if(!m){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
   if(!isOnlineOrderMode(G.meta)){ toast('현재 경기 운영 방식은 현장 수기 · 결과만 입력입니다','info'); return; }
-  if(!(REG && REG_CLUB) && !AD && !OP){ toast('클럽 로그인 후 사용해 주세요','info'); return; }
-  if(!(AD || OP || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽만 제출할 수 있습니다','error'); return; }
+  if(!((REG||CLUB_MEMBER) && REG_CLUB) && !AD && !OP){ toast('클럽 로그인 후 사용해 주세요','info'); return; }
+  if(!canSubmitOnlineOrderByClub(key,m)){ toast('해당 경기 참가 클럽만 제출할 수 있습니다','error'); return; }
   const info=getMySavedOrderDraftInfo(key,m,REG_CLUB||'');
   if(!info.hasDraft){ toast('먼저 오더쓰기에서 임시저장해 주세요','info'); return; }
   if(info.submitted){ toast('이미 제출완료 상태입니다','info'); return; }
@@ -16333,7 +16417,7 @@ async function submitOnlineOrder(sideOnly=null){
   const m=list[idx];
   const orderSubmitSnapshot=cloneOrderState(m);
   if(!isOnlineOrderMode(G.meta)){ toast('현재 경기 운영 방식은 현장 수기 · 결과만 입력입니다','info'); return; }
-  if(!(AD || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 제출할 수 있습니다','error'); return; }
+  if(!canSubmitOnlineOrderByClub(key,m)){ toast('해당 경기 참가 클럽만 오더를 제출할 수 있습니다','error'); return; }
   const st=getOnlineOrderState(key,m);
   if(st.bothSubmitted && !AD){ toast('양쪽 오더가 이미 공개되었습니다. 오더 수정은 관리자 초기화 후 가능합니다','info'); return; }
   if(!m.orderSubmissions||typeof m.orderSubmissions!=='object') m.orderSubmissions={};
@@ -22333,7 +22417,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
