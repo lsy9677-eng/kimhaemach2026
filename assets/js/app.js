@@ -735,6 +735,8 @@ import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,bu
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
 import{cloneOrderState,commitOrderSubmission,commitOrderReset,createOrderResetPlayerSnapshot,snapshotBooleanMapEntry}from'./order-service.js';
 import{MATCH_OPERATION_MODE_ONLINE,MATCH_OPERATION_MODE_SIMPLE,normalizeMatchOperationMode,isOnlineOrderMode,isSimpleResultMode,applyMatchOperationMode,getMatchOperationModeLabel}from'./match-operation-mode.js';
+import{getSimpleResultOptions,normalizeSimpleResult,getSimpleResultWinnerTeam,buildSimpleResultRecord}from'./simple-result-ops.js';
+import{buildSimpleResultPanelHtml}from'./simple-result-ui.js';
 import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPlayer,setTapGhost,backspaceTapSlot,resetTapSlots,buildReorderSlots,toggleReorderPick,applyReorderPlan,getGhostScorePlan}from'./order-picker-ops.js';
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
@@ -10441,6 +10443,8 @@ function getMatchResultState(key,m){
   if(m.bye) return {done:true,started:true,sc1:1,sc2:0,disp1:1,disp2:0,winner:m.winner,totalRubbers:1};
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
+  const simpleResult=normalizeSimpleResult(m.simpleResult,totalRubbers);
+  if(simpleResult && m.simpleResult?.confirmed){const winner=simpleResult.winnerSide===1?m.t1:m.t2;return {done:true,started:true,sc1:simpleResult.score1,sc2:simpleResult.score2,disp1:simpleResult.score1,disp2:simpleResult.score2,winner,totalRubbers,simpleResult:true};}
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
   const indivMode=isIndividualByKey(key);
   let sc1=0, sc2=0, started=false;
@@ -14399,7 +14403,7 @@ function openM3(key,mid){
   const st=getOnlineOrderState(key,m);
   const mySide=st.mySide;
   const isIndividualMode=isIndividualByKey(key);
-  const useOrderHere=!!G.meta.onlineOrderEnabled && !isIndividualMode;
+  const useOrderHere=isOnlineOrderMode(G.meta) && !isIndividualMode;
   window._m3Ctx = { key, mid, dbl, mySide, dn1, dn2, isStaff: !!(AD||OP), online: useOrderHere, individual: isIndividualMode };
   const revealBoth=AD||st.bothSubmitted||!useOrderHere;
   const myLocked=useOrderHere && !AD && !OP && st.bothSubmitted;
@@ -14653,9 +14657,11 @@ function openM3(key,mid){
       escapeAttr:escAttr
     });
   }
+  const simpleModeHere=isSimpleResultMode(G.meta) && !isIndividualMode;
+  if(simpleModeHere){const savedSimple=normalizeSimpleResult(m.simpleResult,dbl);html=`${buildSimpleResultPanelHtml({team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl),saved:savedSimple,escapeHtml:esc})}<div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
-  if(body){
+  if(body && !simpleModeHere){
     const topInfo = document.createElement('div');
     topInfo.style.cssText = 'margin-bottom:12px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--border);background:linear-gradient(135deg,#f8fbff,#eef4ff)';
     topInfo.innerHTML = ``;
@@ -14693,9 +14699,26 @@ function openM3(key,mid){
   },0);
   om('mM3');
   refreshAllOrderChipAvailability();
-  requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
+  if(!simpleModeHere) requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
 }
 
+function toggleSimpleResultDetail(){const wrap=ge('simpleResultDetailWrap');if(!wrap)return;wrap.style.display=wrap.style.display==='none'?'block':'none';}
+async function saveSimpleMatchResult(score1,score2){
+  const key=CM_key,mid=CM_id;if(!key||!mid)return;
+  if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
+  const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
+  if(!(AD||OP||canEditMatchByDirector(key,m))){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
+  const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
+  const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
+  const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
+  if(!confirm(`${dn1} ${normalized.score1} : ${normalized.score2} ${dn2}\n\n이 결과로 경기 완료 처리하시겠습니까?\n선수 상세 오더는 나중에 보완할 수 있습니다.`))return;
+  const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
+  m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'));m.winner=winner;
+  // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
+  sl(true);
+  try{await persistSingleMatchDoc(key,m);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
+  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);toast('결과 저장 실패: '+e.message,'error');}
+}
 
 function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 // 스코어 버튼 클릭 핸들러
@@ -14971,13 +14994,12 @@ async function saveM3(){
     participantWinnerAuth={authSide, scoreText};
   }
 
+  const calculatedWinner=resolveWinnerTeamIndex({team1Index:m.t1,team2Index:m.t2,outcome:resultOutcome});
+  const existingSimple=normalizeSimpleResult(m.simpleResult,totalRubbers);
+  if(isSimpleResultMode(G.meta)&&existingSimple&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers);if(calculatedWinner!==officialWinner){toast(`현장 확정 결과(${existingSimple.score1}:${existingSimple.score2})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
   m.rubbers=newRb;
-  if(G.meta.onlineOrderEnabled && orderState.bothSubmitted) syncRevealedOrderIntoMatchRubbers(key,m);
-  m.winner=resolveWinnerTeamIndex({
-    team1Index:m.t1,
-    team2Index:m.t2,
-    outcome:resultOutcome
-  });
+  if(isOnlineOrderMode(G.meta) && orderState.bothSubmitted) syncRevealedOrderIntoMatchRubbers(key,m);
+  m.winner=calculatedWinner;
 
   const adjustPlayerStatsForUnfinalized = async () => {
     if(prevW==null) return;
@@ -22065,7 +22087,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
