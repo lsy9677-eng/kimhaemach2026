@@ -8511,9 +8511,17 @@ function renderMatchProgressSummary(key){
     const s = groups[gi];
     const remain = Math.max(0, s.total - s.done);
     const liveCls = s.playing > 0 ? ' live-card' : '';
-    const pendingInGrp = useOrder ? s.matches.filter(m=>!m.bye&&!isDone(m)) : [];
+    const pendingInGrp = s.matches.filter(m=>!m.bye&&!isDone(m));
     const doneInGrp = s.matches.filter(m=>isDone(m) && !m.bye);
     const groupTheme = getRoundVisualTheme('예선', 'group');
+    const grpMemo=getGroupMemo(key,gi);
+    const grpCourts=getGroupDisplayCourts(key,gi);
+    const courtText=grpCourts.length?`코트: ${grpCourts.join(' · ')}`:'코트: 미배정';
+    const groupOps=canManageBracket()?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+      <button class="btn btn-outline" style="padding:4px 8px;font-size:.68rem" onclick="openGroupMemoModal('${key}',${gi})">📢 공지${grpMemo?' 수정':' 입력'}</button>
+      <button class="btn btn-outline" style="padding:4px 8px;font-size:.68rem" onclick="openGroupSmsModal('${key}',${gi})">📨 문자</button>
+      <button class="btn btn-outline" style="padding:4px 8px;font-size:.68rem" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>
+    </div>`:'';
     return `<div class="card${liveCls}" style="padding:10px 12px;background:${groupTheme.softBg};border:1.5px solid ${groupTheme.bd};margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <div style="font-weight:900;color:${groupTheme.fg}"><span class="main-status-round" style="background:${groupTheme.chipBg};color:${groupTheme.chipFg};border:1px solid ${groupTheme.bd};margin-right:6px">🎾 예선</span>${grpLabel(gi)} 현황</div>
@@ -8524,6 +8532,11 @@ function renderMatchProgressSummary(key){
           <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${remain}</span>
         </div>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <span style="font-size:.68rem;font-weight:700;color:var(--text3);background:#fff;border:1px solid var(--border);padding:3px 7px;border-radius:999px">🎾 ${courtText}</span>
+        ${groupOps}
+      </div>
+      ${grpMemo?renderNoticeTicker(grpMemo,'📢 공지(조)'):''}
       ${standingsHtml(gi, s.matches)}
       ${pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:800;color:#334155;margin-bottom:4px">⚡ 경기 운영</div><div style="display:flex;flex-direction:column;gap:4px">${buildOrderChips(pendingInGrp)}</div>`:''}
       ${doneInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#1e3a8a;margin-bottom:4px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:4px">${doneInGrp.map(resultLine).join('')}</div>`:''}
@@ -8561,6 +8574,7 @@ function renderMatchProgressSummary(key){
   return `<div class="card main-status-board" style="margin-top:12px;background:linear-gradient(135deg,#f9fbff,#eef4ff);border:1.5px solid #d7e3ff">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div class="main-status-top-title" style="font-weight:900;color:var(--primary-dark);font-size:.98rem">📊 경기 진행 현황 <span style="font-size:.7rem;font-weight:600;color:var(--text3)">· 여기서 오더·결과·상세조회까지 처리</span></div>
+      ${!isIndividualByKey(key)&&G.draws[key]?.groups?.length?`<button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;margin-left:auto" onclick="openLatestSavedDraw('${tid}','${div}','prelim')">📋 예선 추첨표 보기</button>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${groupTotal+main.total}경기</span>
         <span class="badge" style="background:${getRoundVisualTheme('예선','group').chipBg};color:${getRoundVisualTheme('예선','group').chipFg};border:1px solid ${getRoundVisualTheme('예선','group').bd}">예선 ${groupTotal}경기</span>
@@ -9406,7 +9420,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     return html;
   }
 
-  if(draw.groups?.length && showPrelimSection){
+  if(draw.groups?.length && showPrelimSection && isIndividualByKey(key)){
     html+=`<div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
       <span>${isIndividualByKey(key)?'📋 예선 경기표':'📋 예선 조별 대진표'}</span>
     </div>`;
@@ -9654,7 +9668,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       });
     }
 
-    html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">· 결과는 한 줄, 상세는 필요할 때만</span></div>`;
+    html+=`<div class="sec-title" style="margin-top:14px">🏆 본선 대진 흐름 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">· 전체 진출 흐름 확인용</span></div>`;
     html+=matchStatusFilterBar();
     rounds.forEach((r,rIdx)=>{
       const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
