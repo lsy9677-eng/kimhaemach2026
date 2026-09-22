@@ -11112,6 +11112,7 @@ function openDraw(tid,div){
   ge('confirmDrawBtn').textContent='🎲 추첨 시작';
   ge('confirmDrawBtn').onclick=startDraw;
   ge('confirmDrawBtn').disabled=teams.length<2;
+  _ensureManualPrelimButton();
   om('mDraw');
 }
 
@@ -12953,6 +12954,45 @@ function buildIndivRedrawPreviewData(groupData, gs){
   return {totalAdv, spec, matchSlots, playInMatches};
 }
 
+
+// Phase 52 · 예선/본선 현장 완전수동 추첨
+function _manualDrawSelectHtml(id, teams, key){
+  return `<select class="form-input manual-draw-select" id="${id}" style="min-height:38px;font-size:.78rem"><option value="">— 팀 선택 —</option>${teams.map((tm,i)=>`<option value="${i}">#${i+1} ${esc(tdn(tm,key,i))}</option>`).join('')}</select>`;
+}
+function _ensureManualPrelimButton(){
+  const footer=ge('mDraw')?.querySelector('.modal-footer'); if(!footer||ge('manualPrelimDrawBtn'))return;
+  const b=document.createElement('button'); b.type='button'; b.id='manualPrelimDrawBtn'; b.className='btn btn-outline'; b.textContent='✋ 현장 수동 추첨'; b.onclick=openManualPrelimDraw;
+  footer.insertBefore(b,ge('confirmDrawBtn'));
+}
+function _ensureManualPrelimModal(){
+  let m=ge('mManualPrelimDraw'); if(m)return m;
+  m=document.createElement('div');m.id='mManualPrelimDraw';m.className='modal';
+  m.innerHTML=`<div class="modal-content" style="max-width:820px"><div class="modal-header"><b>✋ 예선 현장 완전수동 추첨</b><button class="btn btn-gray" onclick="cm('mManualPrelimDraw')">닫기</button></div><div id="manualPrelimBody" style="padding:12px"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mManualPrelimDraw')">취소</button><button class="btn btn-primary" onclick="saveManualPrelimDraw()">✅ 수동 예선 확정</button></div></div>`;
+  document.body.appendChild(m);return m;
+}
+function openManualPrelimDraw(){
+  if(!canManageBracket()){toast('예선 추첨 권한이 없습니다','error');return;}
+  if(!DW?.key||!Array.isArray(DW.teams)||DW.teams.length<2){toast('등록팀이 부족합니다','error');return;}
+  const sizes=Array.isArray(DW.cfg?.grpSizes)?DW.cfg.grpSizes:[];
+  if(!sizes.length||sizes.reduce((a,b)=>a+Number(b||0),0)!==DW.teams.length){toast('먼저 예선 조 구성(조 수/팀 수)을 선택해 주세요','info');return;}
+  _ensureManualPrelimModal();
+  ge('manualPrelimBody').innerHTML=`<div style="padding:10px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 그대로 입력합니다.</b><br>같은 클럽·시드·기존 대진 여부를 앱이 제한하지 않습니다.</div>${sizes.map((sz,gi)=>`<div style="margin-bottom:12px;padding:10px;border:1px solid #e2e8f0;border-radius:10px"><b>${grpLabel(gi)}조</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;margin-top:7px">${Array.from({length:Number(sz)},(_,si)=>`<div><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">${si+1}번 자리</div>${_manualDrawSelectHtml(`mp_${gi}_${si}`,DW.teams,DW.key)}</div>`).join('')}</div></div>`).join('')}`;
+  cm('mDraw');om('mManualPrelimDraw');
+}
+async function saveManualPrelimDraw(){
+  const sizes=DW.cfg?.grpSizes||[], groups=[], used=[];
+  for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===''){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
+  if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
+  if(used.length!==DW.teams.length){toast('모든 팀을 한 번씩 배치해야 합니다','error');return;}
+  if(!confirm('현장 수동 추첨 결과를 예선 대진으로 확정할까요?'))return;
+  const key=DW.key,advance=Number(DW.cfg?.advance||2),now=new Date(),allowedCourts=getDrawAllowedCourtsFromModal();
+  await resetMatchRecords(key);
+  const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
+  G.draws[key]={...(G.draws[key]||{}),groups,shuffled:used.slice(),advance,groupDrawAudit:audit,allowedCourts,manualDraw:true,manualConfirmedAt:now.toISOString()};
+  const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=ms;
+  sl(true);try{await stD(key);await stM(key);await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
+}
+
 async function startDraw(){
   if(DW.isRunning)return;
   if(!DW.key||DW.teams.length<2){toast('최소 2팀 필요','error');return;}
@@ -13855,6 +13895,7 @@ function openMainDraw(tid,div){
     btn.onclick = ()=>openDrawHistory(MD.tid, MD.div, 'main');
     footer.insertBefore(btn, ge('mainDrawBtn'));
   }
+  _ensureManualMainButton();
   om('mMain');
 }
 
@@ -13922,6 +13963,45 @@ async function runMainExternalDrawAnimation(plan,audit={}){
   if(progress) progress.style.width='100%';
   try{ spawnConfetti(ge('mainStageContent')); }catch(e){}
   await sleep(420);
+}
+
+
+function _ensureManualMainButton(){
+  const footer=ge('mMain')?.querySelector('.modal-footer');if(!footer||ge('manualMainDrawBtn'))return;
+  const b=document.createElement('button');b.type='button';b.id='manualMainDrawBtn';b.className='btn btn-outline';b.textContent='✋ 현장 수동 추첨';b.onclick=openManualMainDraw;footer.insertBefore(b,ge('mainDrawBtn'));
+}
+function _ensureManualMainModal(){
+  let m=ge('mManualMainDraw');if(m)return m;
+  m=document.createElement('div');m.id='mManualMainDraw';m.className='modal';
+  m.innerHTML=`<div class="modal-content" style="max-width:900px"><div class="modal-header"><b>✋ 본선 현장 완전수동 추첨</b><button class="btn btn-gray" onclick="cm('mManualMainDraw')">닫기</button></div><div id="manualMainBody" style="padding:12px"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mManualMainDraw')">취소</button><button class="btn btn-primary" onclick="saveManualMainDraw()">✅ 수동 본선 확정</button></div></div>`;document.body.appendChild(m);return m;
+}
+function _manualMainSize(count){let n=2;while(n<count)n*=2;return n;}
+function _manualMainFixedByePositions(entries,n){
+  try{const p=buildSeededMainSlots(entries,n,1,MD.tid,MD.div),slots=p?.matchSlots||[],out=[];for(let i=0;i<n;i++){const ms=slots[Math.floor(i/2)]||{},e=i%2===0?ms.t1:ms.t2;if(!e||e.placeholder)out.push(i);}if(out.length===n-entries.length)return out;}catch(e){}
+  const need=n-entries.length,out=[];for(let i=0;i<need;i++)out.push(Math.floor((i+.5)*n/need)%n);return [...new Set(out)].slice(0,need);
+}
+function openManualMainDraw(){
+  if(!canManageBracket()){toast('본선 추첨 권한이 없습니다','error');return;}
+  if(!MD?.advT?.length){toast('본선 진출팀 정보가 없습니다','error');return;}
+  _ensureManualMainModal();window.__manualMainN=_manualMainSize(MD.advT.length);window.__manualMainByeMode='fixed';renderManualMainSlots();cm('mMain');om('mManualMainDraw');
+}
+function setManualMainByeMode(mode){window.__manualMainByeMode=mode==='manual'?'manual':'fixed';renderManualMainSlots();}
+function renderManualMainSlots(){
+  const body=ge('manualMainBody');if(!body||!MD?.advT)return;const entries=MD.advT,n=window.__manualMainN||_manualMainSize(entries.length),bye=n-entries.length,mode=window.__manualMainByeMode||'fixed',fixed=new Set(_manualMainFixedByePositions(entries,n));
+  const opts=()=>`<option value="">— 팀 선택 —</option>${entries.map((a,i)=>`<option value="${i}">${esc(a.nm||('진출팀 '+(i+1)))}</option>`).join('')}${mode==='manual'?'<option value="BYE">BYE</option>':''}`;
+  body.innerHTML=`<div style="padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 결과를 그대로 입력합니다.</b><br>예선 재대결·1위끼리 대결도 제한하지 않습니다. ${bye?`현재 ${n}강 · BYE ${bye}자리`:''}</div>${bye?`<div style="display:flex;gap:7px;margin-bottom:12px"><button class="btn ${mode==='fixed'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('fixed')">BYE 자리 미리 고정</button><button class="btn ${mode==='manual'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('manual')">BYE까지 완전수동</button></div>`:''}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${Array.from({length:n},(_,i)=>{const isBye=bye&&mode==='fixed'&&fixed.has(i);return `<div style="padding:8px;border:1px solid #e2e8f0;border-radius:9px;background:${isBye?'#f8fafc':'white'}"><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">대진 ${Math.floor(i/2)+1} · ${i%2===0?'위':'아래'} 자리</div>${isBye?'<div style="padding:9px;font-weight:900;text-align:center;color:#64748b">BYE (고정)</div>':`<select class="form-input" id="mm_${i}" style="min-height:38px;font-size:.78rem">${opts()}</select>`}</div>`}).join('')}</div>`;
+}
+async function saveManualMainDraw(){
+  const entries=MD.advT,n=window.__manualMainN||_manualMainSize(entries.length),bye=n-entries.length,mode=window.__manualMainByeMode||'fixed',fixed=new Set(_manualMainFixedByePositions(entries,n)),positions=[],used=[],byeSeen=[];
+  for(let i=0;i<n;i++){if(bye&&mode==='fixed'&&fixed.has(i)){positions.push(null);byeSeen.push(i);continue;}const v=ge(`mm_${i}`)?.value;if(v===''){toast(`${i+1}번 자리를 선택하세요`,'error');return;}if(v==='BYE'){positions.push(null);byeSeen.push(i);}else{positions.push(entries[Number(v)]);used.push(Number(v));}}
+  if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
+  if(used.length!==entries.length){toast('모든 본선 진출팀을 한 번씩 배치해야 합니다','error');return;}
+  if(byeSeen.length!==bye){toast(`BYE는 정확히 ${bye}자리여야 합니다`,'error');return;}
+  if(!confirm(`현장 수동 추첨 결과를 ${n}강 본선 대진으로 확정할까요?`))return;
+  const matchSlots=[];for(let i=0;i<n;i+=2){const a=positions[i],b=positions[i+1];matchSlots.push({t1:a||null,t2:b||null,bye:!!((a&&!b)||(!a&&b)),source1Label:a?.nm||'BYE',source2Label:b?.nm||'BYE'});}
+  const plan={n,matchSlots,playInMatches:[],manual:true,byeMode:mode},mainMatches=buildMainMatches(matchSlots,n,[]),prev=Array.isArray(G.matches[MD.key])?G.matches[MD.key]:[],nonMain=prev.filter(m=>m.phase!=='main'&&m.phase!=='playin');
+  G.matches[MD.key]=[...nonMain,...mainMatches];const audit={mode:'manual_full',modeLabel:'현장 완전수동',byeMode:mode,confirmedAt:new Date().toISOString()};G.draws[MD.key]={...(G.draws[MD.key]||{}),mainPlan:getMainDrawPlanStorageValue(plan,false),mainAudit:audit,mainUpdatedAt:audit.confirmedAt};
+  sl(true);try{await stD(MD.key);await stM(MD.key);await fbLog(`본선 현장 완전수동 추첨 확정: ${dl(MD.div)} / ${n}강 / BYE ${bye} / ${mode==='fixed'?'BYE 고정':'BYE 수동'}`,'✋');sl(false);cm('mManualMainDraw');toast('수동 본선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
 async function startMainDraw(){
@@ -22226,7 +22306,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,openManualPrelimDraw,saveManualPrelimDraw,openManualMainDraw,setManualMainByeMode,saveManualMainDraw,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
