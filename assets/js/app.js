@@ -15094,6 +15094,7 @@ async function saveM3(){
       autoAdvance:()=>autoAdv(key,m.id)
     })
   });
+    refreshPendingDetailCenterAfterSave();
 }
 
 // ═══════════════════════════════════════════════════
@@ -21939,10 +21940,18 @@ function triggerOrderPhoto(side, source){
 // Phase 50 · 현장 간편결과 사후 상세기록 정리 센터
 // ═══════════════════════════════════════════════════
 function _pendingDetailHasPlayers(m){
-  return !!(Array.isArray(m?.rubbers)&&m.rubbers.some(rb=>
-    (Array.isArray(rb?.players1)&&rb.players1.filter(Boolean).length)||
-    (Array.isArray(rb?.players2)&&rb.players2.filter(Boolean).length)
+  const rubbers=Array.isArray(m?.rubbers)?m.rubbers:[];
+  if(!rubbers.length)return false;
+  const played=rubbers.filter(rb=>rb&&(
+    (Number(rb.s1)||0)>0||(Number(rb.s2)||0)>0||
+    (Array.isArray(rb.players1)&&rb.players1.filter(Boolean).length)||
+    (Array.isArray(rb.players2)&&rb.players2.filter(Boolean).length)
   ));
+  if(!played.length)return false;
+  return played.every(rb=>
+    Array.isArray(rb.players1)&&rb.players1.filter(Boolean).length>=2&&
+    Array.isArray(rb.players2)&&rb.players2.filter(Boolean).length>=2
+  );
 }
 function getPendingSimpleResultMatches(){
   const rows=[];
@@ -21980,15 +21989,28 @@ function openPendingDetailCenter(){
       <div style="font-size:.72rem;color:#64748b;font-weight:800">${esc(x.key)} · ${x.m.phase==='main'?'본선':'예선'}</div>
       <div style="font-weight:900;margin:4px 0">${esc(x.team1)} vs ${esc(x.team2)}</div>
       <div style="font-size:.74rem;margin-bottom:7px">공식결과: <b>${esc(result)}</b>${winner?` · 🏆 ${esc(winner)}`:''} · ${x.hasPhoto?'📷 오더지 있음':'사진 없음'}</div>
+      ${x.hasPhoto?`<div style="display:flex;gap:6px;margin-bottom:7px">${x.photo1?`<button type="button" class="btn btn-gray" style="flex:1;font-size:.7rem" onclick="openPendingDetailPhoto(${i},1)">📷 ${esc(x.team1)} 오더지</button>`:''}${x.photo2?`<button type="button" class="btn btn-gray" style="flex:1;font-size:.7rem" onclick="openPendingDetailPhoto(${i},2)">📷 ${esc(x.team2)} 오더지</button>`:''}</div>`:''}
       <button type="button" class="btn btn-primary" style="width:100%;font-size:.74rem" onclick="openPendingDetailMatch(${i})">상세기록 보완하기</button>
     </div>`;
   }).join('');
   window.__pendingDetailRows=rows;om('mPendingDetailCenter');
 }
+function openPendingDetailPhoto(index,side){
+  const x=(window.__pendingDetailRows||[])[Number(index)];if(!x)return;
+  const saved=_orderPhotoGetSaved(x.m,Number(side));if(!saved){toast('저장된 오더지 사진이 없습니다','info');return;}
+  const url=saved.dataUrl||saved.downloadURL||'';if(!url){toast('사진 주소를 찾을 수 없습니다','error');return;}
+  window.open(url,'_blank','noopener,noreferrer');
+}
 function openPendingDetailMatch(index){
   const x=(window.__pendingDetailRows||[])[Number(index)];if(!x)return;
+  window.__returnPendingDetailCenter=true;
   cm('mPendingDetailCenter');openM3(x.key,x.m.id||x.m._id);
   setTimeout(()=>{const w=ge('simpleResultDetailWrap');if(w)w.style.display='block';},60);
+}
+function refreshPendingDetailCenterAfterSave(){
+  if(!window.__returnPendingDetailCenter)return;
+  window.__returnPendingDetailCenter=false;
+  setTimeout(()=>openPendingDetailCenter(),80);
 }
 function ensurePendingDetailCenterButton(){
   if(!(AD||OP))return;
@@ -22204,7 +22226,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
