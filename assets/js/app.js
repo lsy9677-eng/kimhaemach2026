@@ -8554,20 +8554,16 @@ function renderMatchProgressSummary(key){
   const mainTheme = getRoundVisualTheme(mainRoundLabel||'본선', 'main');
   const mainHtml = main.total ? `<div class="card main-status-card${main.playing>0?' live-card':''}" style="padding:12px 14px;background:${mainTheme.softBg};border:1.5px solid ${mainTheme.bd};margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <div class="main-status-title" style="font-weight:900;color:${mainTheme.fg}">본선 현황 ${mainRoundLabel?`<span class="main-status-round" style="background:${mainTheme.chipBg};color:${mainTheme.chipFg};border:1px solid ${mainTheme.bd}">${mainRoundLabel}</span>`:''}</div>
+        <div class="main-status-title" style="font-weight:900;color:${mainTheme.fg}">🏆 본선 진행 요약 ${mainRoundLabel?`<span class="main-status-round" style="background:${mainTheme.chipBg};color:${mainTheme.chipFg};border:1px solid ${mainTheme.bd}">${mainRoundLabel}</span>`:''}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           <span class="badge" style="background:#ede9fe;color:#6d28d9">전체 ${main.total}</span>
           <span class="badge" style="background:#ecfccb;color:#3f6212">완료 ${main.done}</span>
           ${main.playing > 0 ? `<span class="badge live-blink" style="background:#fff3cd;color:#9a6400;border:1px solid #f5a623">진행 ${main.playing}</span>` : ''}
           <span class="badge" style="background:#f3f4f6;color:#374151">잔여 ${mainRemain}</span>
-          ${main.matches.length===0&&estimatedMainTotal>0?`<span class="badge" style="background:#eef2ff;color:#4338ca">예상 경기수 반영</span>`:''}
         </div>
       </div>
-      ${mainPending.length?`<div class="main-status-section-title" style="margin-top:8px;font-size:.84rem;font-weight:800;color:#334155;margin-bottom:6px">⚡ 경기 운영</div><div style="display:flex;flex-direction:column;gap:6px">${buildOrderChips(mainPending)}</div>`:''}
-      ${doneInMain.length?`<div class="main-status-section-title" style="margin-top:10px;font-size:.84rem;font-weight:800;color:#1e3a8a;margin-bottom:6px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:6px">${doneInMain.map(resultLine).join('')}</div>`:''}
-      ${main.matches.length===0&&estimatedMainTotal>0?`<div style="margin-top:8px;font-size:.82rem;color:var(--text2);line-height:1.65">예선 조 추첨 기준으로 본선 예상 경기수를 미리 포함했습니다. 본선 추첨 전이라 결과는 아직 없습니다.</div>`:''}
+      <div style="margin-top:8px;font-size:.72rem;color:var(--text3)">본선 오더·결과입력·수정은 아래 <b>가지형 본선 대진표</b>의 각 경기에서 바로 처리합니다.</div>
     </div>` : '';
-
   const orderBadgeHtml = useOrder && orderTotal>0 ? `
     <span class="badge" style="background:${orderSubmitted===orderTotal?'#dcfce7':'#fef3c7'};color:${orderSubmitted===orderTotal?'#166534':'#92400e'};border:1px solid ${orderSubmitted===orderTotal?'#86efac':'#fde68a'}">📋 오더 ${orderSubmitted}/${orderTotal} 제출</span>` : '';
 
@@ -9585,7 +9581,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
           const grpCount=draw.groups?.length||0;
           const specLabel=spec.playInMatches>0?`${spec.mainSize}강+진출전${spec.playInMatches}경기`:`${pv.n}강`;
           html+=`<div class="sec-title" id="mainPreviewTitle_${tid}_${div}" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-            <span>🏆 본선 토너먼트 대진표</span>
+            <span>🏆 본선 토너먼트 대진표 <small style="font-size:.68rem;color:var(--text3);font-weight:600">· 경기 직접 운영</small></span>
             <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${specLabel}</span>
           </div>`;
           const isFixedPreview=((draw.mainMode||'fixed')==='fixed');
@@ -9668,39 +9664,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       });
     }
 
-    html+=`<div class="sec-title" style="margin-top:14px">🏆 본선 대진 흐름 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">· 전체 진출 흐름 확인용</span></div>`;
-    html+=matchStatusFilterBar();
-    rounds.forEach((r,rIdx)=>{
-      const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
-      if(!rms.length)return;
-      const lbl=r===rounds[rounds.length-1]?'결승':rIdx===totalR-2&&totalR>2?'준결승':`${Math.pow(2,totalR-1-rIdx)*2}강`;
-      const roundTheme=getRoundVisualTheme(lbl,'main');
-      const doneCnt=rms.filter(m=>m.bye||getMatchResultState(key,m).done).length;
-      html+=`<div style="margin:9px 0 10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 3px;border-bottom:2px solid ${roundTheme.bd};margin-bottom:7px">
-          <b style="font-size:.88rem;color:${roundTheme.fg}">🏆 ${lbl}</b>
-          <span style="font-size:.72rem;color:var(--text3)">완료 ${doneCnt}/${rms.length}</span>
-        </div>`;
-      rms.forEach(m=>{
-        if(m.bye){
-          const bt=m.winner!==null?teams[m.winner]:null;
-          const byeLabel=String(m.source1Label||'').trim();
-          const byeText=bt?tdn(bt,key,m.winner):(byeLabel||'TBD');
-          html+=`<div style="padding:8px 11px;margin-bottom:6px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;font-size:.8rem;color:var(--text2)">🎫 ${byeText} · 부전승</div>`;
-          return;
-        }
-        const mt1=m.t1!==null?teams[m.t1]:null,mt2=m.t2!==null?teams[m.t2]:null;
-        if(!mt1&&!mt2){
-          html+=`<div style="padding:8px 11px;margin-bottom:6px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;font-size:.78rem;color:var(--text3)">🎲 추첨 전 대기 중</div>`;
-          return;
-        }
-        const dn1=mt1?tdn(mt1,key,m.t1):(m.source1Label||'TBD');
-        const dn2=mt2?tdn(mt2,key,m.t2):(m.source2Label||'TBD');
-        const st=getMatchResultState(key,m);
-        html+=mCard(m,key,dn1,dn2,st.done,st.sc1,st.sc2,lbl);
-      });
-      html+=`</div>`;
-    });
+    html+=`<div style="margin:10px 0 4px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px dashed #cbd5e1;font-size:.72rem;color:var(--text3)">💡 본선 경기는 위 가지형 대진표의 각 경기에서 오더·결과입력·상세조회·결과수정을 바로 할 수 있습니다.</div>`;
 
     const bronzeMode=getThirdPlaceModeByKey(key);
     const bronzeMatch=(bronzeMode==='match') ? ensureBronzeMatchForKey(key,false) : getBronzeMatch(key);
@@ -10450,10 +10414,10 @@ function renderBracketTree(key,mMs,teams){
   if(!totalR) return '';
 
   // ── 상수 ───────────────────────────────────────────────
-  const CARD_H  = 72;
-  const CARD_W  = 168;
+  const CARD_H  = 98;
+  const CARD_W  = 184;
   const COL_GAP = 48;
-  const ROW_GAP = 14;   // 같은 라운드 카드 간 세로 간격
+  const ROW_GAP = 16;   // 같은 라운드 카드 간 세로 간격
   const TITLE_H = 28;
   const COL_W   = CARD_W + COL_GAP;
 
@@ -10610,6 +10574,17 @@ function renderBracketTree(key,mMs,teams){
       const slot1Op  = wn2 ? '.45' : '1';
       const slot2Op  = wn1 ? '.45' : '1';
       const courtChip = getBracketTreeCourtStatusChip(key,m);
+      const canOperate = AD||OP||canEditMatchByClubMember(key,m);
+      const hasTeams = m.t1!==null && m.t2!==null;
+      const useOrderHere = isOnlineOrderMode(G.meta);
+      const opLabel = done ? '✏️ 결과수정' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
+      const viewLabel = done ? '🔎 상세' : '🔎 경기';
+      const actionHtml = hasTeams
+        ? `<div style="display:flex;gap:4px;padding:4px 5px;background:#f8fafc;border-top:1px solid #e5eaf3">
+            <button class="btn btn-outline" style="flex:1;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openM3('${key}','${m.id}')">${viewLabel}</button>
+            ${canOperate?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="flex:1.35;padding:3px 4px;font-size:.60rem;min-height:23px" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">${opLabel}</button>`:''}
+          </div>`
+        : `<div style="padding:5px;text-align:center;background:#f8fafc;border-top:1px solid #e5eaf3;font-size:.60rem;color:#94a3b8">상대팀 확정 대기</div>`;
       const chipHtml = courtChip ? `<div style="position:absolute;left:6px;right:6px;top:6px;display:flex;justify-content:flex-start;pointer-events:none;z-index:2"><span class="${courtChip.kind==='live'?'live-blink':''}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:.62rem;font-weight:900;line-height:1;background:${courtChip.kind==='live'?'#dcfce7':'#fff7ed'};color:${courtChip.kind==='live'?'#166534':'#9a3412'};border:1px solid ${courtChip.kind==='live'?'#86efac':'#fdba74'};box-shadow:0 2px 6px rgba(15,30,58,.12)">${courtChip.text}</span></div>` : '';
 
       cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-left:4px solid ${borderClr};border-radius:7px;overflow:hidden;background:${roundTheme.cardAltBg};box-shadow:${shadowClr}">
@@ -10622,6 +10597,7 @@ function renderBracketTree(key,mMs,teams){
           <span style="font-size:.78rem;font-weight:${slot2Fw};color:${slot2Clr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${wn2?'🏆 ':''}${dn2}</span>
           ${sc2!==null?`<span style="font-family:'Oswald',sans-serif;font-weight:800;font-size:.9rem;color:${wn2?'#0c3880':'#94a3b8'};min-width:22px;text-align:right;flex-shrink:0">${sc2}</span>`:''}
         </div>
+        ${actionHtml}
       </div>`;
     });
   });
