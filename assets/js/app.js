@@ -8392,41 +8392,54 @@ function renderMatchProgressSummary(key){
     return `${Math.pow(2, totalRounds-round)}강`;
   }
   function resultLine(m){
-  const st=getMatchResultState(key,m);
-  if(!st.done || m.bye) return '';
-  const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
-  const s1=Number((st.disp1??st.sc1)||0), s2=Number((st.disp2??st.sc2)||0);
-  const leftWin = s1 > s2;
-  const rightWin = s2 > s1;
-  const roundLabel = m.phase==='main' ? mainMatchRoundLabel(m) : '예선';
-  const roundTheme = getRoundVisualTheme(roundLabel, m.phase||'');
-  const roundChip = `<span class="ms-round-chip" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>`;
-
-  return `<div class="main-status-row" onclick="goBracketMatch('${tid}','${div}','${m.id||m._id||''}')" style="cursor:pointer;padding:7px 10px;border-radius:10px;background:${roundTheme.softBg};border:1.5px solid ${roundTheme.bd};display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    ${roundChip}
-    <span class="ms-chip" style="font-size:.78rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 9px">결과</span>
-    <span class="ms-name" style="font-size:.9rem;font-weight:${leftWin?900:500};color:${leftWin?'var(--text)':'var(--text2)'}">${n1}</span>
-    <span class="ms-score" style="font-size:.92rem;font-weight:900;color:#1d4ed8">${st.disp1??st.sc1}:${st.disp2??st.sc2}</span>
-    <span style="font-size:.86rem;color:var(--text2)">vs <span class="ms-name" style="font-weight:${rightWin?900:500};color:${rightWin?'var(--text)':'var(--text2)'}">${n2}</span></span>
-    <span class="ms-move" style="margin-left:auto;font-size:.78rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
-  </div>`;
+    const st=getMatchResultState(key,m);
+    if(!st.done || m.bye) return '';
+    const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
+    const s1=Number((st.disp1??st.sc1)||0), s2=Number((st.disp2??st.sc2)||0);
+    const leftWin=s1>s2,rightWin=s2>s1;
+    const roundLabel=m.phase==='main'?mainMatchRoundLabel(m):'예선';
+    const roundTheme=getRoundVisualTheme(roundLabel,m.phase||'');
+    const mid=m.id||m._id||'';
+    const canEdit=AD||OP||canEditMatchByClubMember(key,m);
+    const detailId='statusDetail_'+String(key+'_'+mid).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const rbs=Array.isArray(m.rubbers)?m.rubbers:[];
+    const detail=rbs.length?rbs.map(rb=>{
+      const p1=Array.isArray(rb?.players1)?rb.players1.filter(Boolean).join('/'):'-';
+      const p2=Array.isArray(rb?.players2)?rb.players2.filter(Boolean).join('/'):'-';
+      const a=rb?.score1??rb?.s1,b=rb?.score2??rb?.s2;
+      return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;padding:5px 7px;border-top:1px solid #e5e7eb;font-size:.72rem"><span>${p1||'-'}</span><b>${a??'-'}:${b??'-'}</b><span style="text-align:right">${p2||'-'}</span></div>`;
+    }).join(''):`<div style="padding:7px;font-size:.72rem;color:var(--text3)">상세 선수기록이 아직 입력되지 않았습니다.</div>`;
+    return `<div style="border:1.5px solid ${roundTheme.bd};border-radius:10px;background:${roundTheme.softBg};overflow:hidden">
+      <div class="main-status-row" style="padding:7px 9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <span class="ms-round-chip" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>
+        <span style="font-size:.88rem;font-weight:${leftWin?900:600}">${leftWin?'🏆 ':''}${n1}</span>
+        <b style="font-size:.95rem;color:#1d4ed8">${st.disp1??st.sc1}:${st.disp2??st.sc2}</b>
+        <span style="font-size:.88rem;font-weight:${rightWin?900:600}">${n2}${rightWin?' 🏆':''}</span>
+        <div style="display:flex;gap:5px;margin-left:auto">
+          <button class="btn btn-outline" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();toggleCompactMatchDetail('${detailId}')">상세보기</button>
+          ${canEdit?`<button class="btn btn-gray" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();openMatchOperations('${key}','${mid}')">✏️ 결과수정</button>`:''}
+        </div>
+      </div>
+      <div id="${detailId}" style="display:none;background:#fff;padding:3px 7px 7px">${detail}</div>
+    </div>`;
   }
   function buildOrderChips(matchList){
-    if(!useOrder||!matchList.length) return '';
+    if(!matchList.length)return '';
     return matchList.map(m=>{
-      const st=getOnlineOrderState(key,m);
-      const n1=matchName(m.t1,m), n2=matchName(m.t2,m);
-      const mid=m.id||m._id||'';
-      const chip=(name,done)=>`<span class="ms-chip" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:.78rem;font-weight:900;background:${done?'#dcfce7':'#fee2e2'};color:${done?'#166534':'#991b1b'};border:1px solid ${done?'#86efac':'#fca5a5'}">${name} ${done?'✅':'⏳'}</span>`;
-      const label = st.bothSubmitted?'🔓 양팀완료':(!st.s1&&!st.s2?'⏳ 미제출':'📝 제출중');
-      const roundLabel = m.phase==='main' ? mainMatchRoundLabel(m) : '예선';
-      const roundTheme = getRoundVisualTheme(roundLabel, m.phase||'');
-      const roundChip = `<span class="ms-round-chip" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>`;
-      return `<div class="main-status-row" onclick="goBracketMatch('${tid}','${div}','${mid}')" style="cursor:pointer;padding:9px 11px;border-radius:12px;background:${st.bothSubmitted?roundTheme.softBg:'#fffbeb'};border:1.5px solid ${st.bothSubmitted?roundTheme.bd:'#fde68a'};display:flex;align-items:center;gap:8px;flex-wrap:wrap;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
-        ${roundChip}
-        <span style="font-size:.84rem;font-weight:800;color:var(--text2);white-space:nowrap">${label}</span>
-        <div style="display:flex;gap:5px;flex-wrap:wrap">${chip(n1,st.s1)}${chip(n2,st.s2)}</div>
-        <span class="ms-move" style="margin-left:auto;font-size:.78rem;color:var(--text3);white-space:nowrap">👆 경기로 이동</span>
+      const n1=matchName(m.t1,m),n2=matchName(m.t2,m),mid=m.id||m._id||'';
+      const st=getMatchResultState(key,m);
+      const ost=useOrder?getOnlineOrderState(key,m):null;
+      const roundLabel=m.phase==='main'?mainMatchRoundLabel(m):'예선';
+      const th=getRoundVisualTheme(roundLabel,m.phase||'');
+      const canEdit=AD||OP||canEditMatchByClubMember(key,m);
+      const status=st.started?`진행중 ${st.disp1??st.sc1}:${st.disp2??st.sc2}`:'대기';
+      const opText=useOrder?'📝 오더·결과':'⚡ 결과입력';
+      return `<div class="main-status-row" style="padding:8px 9px;border-radius:10px;background:${th.softBg};border:1.5px solid ${th.bd};display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <span class="ms-round-chip" style="background:${th.chipBg};color:${th.chipFg};border:1px solid ${th.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>
+        <span style="font-size:.72rem;font-weight:800;color:${st.started?'#b45309':'#64748b'}">${status}</span>
+        <b style="font-size:.84rem">${n1}</b><span style="font-size:.72rem;color:var(--text3)">vs</span><b style="font-size:.84rem">${n2}</b>
+        ${useOrder&&ost?`<span style="font-size:.68rem;color:${ost.bothSubmitted?'#166534':'#92400e'}">${ost.bothSubmitted?'오더 양팀완료':(ost.s1||ost.s2?'오더 제출중':'오더 미제출')}</span>`:''}
+        ${canEdit?`<button class="btn btn-accent" style="margin-left:auto;padding:5px 9px;font-size:.7rem" onclick="event.stopPropagation();openMatchOperations('${key}','${mid}')">${opText}</button>`:''}
       </div>`;
     }).join('');
   }
@@ -8512,7 +8525,7 @@ function renderMatchProgressSummary(key){
         </div>
       </div>
       ${standingsHtml(gi, s.matches)}
-      ${useOrder&&pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:${pendingInGrp.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:4px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:4px">${buildOrderChips(pendingInGrp)}</div>`:''}
+      ${pendingInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:800;color:#334155;margin-bottom:4px">⚡ 경기 운영</div><div style="display:flex;flex-direction:column;gap:4px">${buildOrderChips(pendingInGrp)}</div>`:''}
       ${doneInGrp.length?`<div style="margin-top:8px;font-size:.74rem;font-weight:700;color:#1e3a8a;margin-bottom:4px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:4px">${doneInGrp.map(resultLine).join('')}</div>`:''}
     </div>`;
   }).join('');
@@ -8523,7 +8536,7 @@ function renderMatchProgressSummary(key){
     if(ra !== rb) return ra - rb; // 8강 → 준결승 → 결승
     return Number(a?.slot ?? 0) - Number(b?.slot ?? 0);
   });
-  const mainPending = useOrder ? sortMainStatusMatches(main.matches.filter(m=>!m.bye&&!isDone(m))) : [];
+  const mainPending = sortMainStatusMatches(main.matches.filter(m=>!m.bye&&!isDone(m)));
   const doneInMain = sortMainStatusMatches(main.matches.filter(m=>isDone(m) && !m.bye));
   const mainTheme = getRoundVisualTheme(mainRoundLabel||'본선', 'main');
   const mainHtml = main.total ? `<div class="card main-status-card${main.playing>0?' live-card':''}" style="padding:12px 14px;background:${mainTheme.softBg};border:1.5px solid ${mainTheme.bd};margin:0">
@@ -8537,7 +8550,7 @@ function renderMatchProgressSummary(key){
           ${main.matches.length===0&&estimatedMainTotal>0?`<span class="badge" style="background:#eef2ff;color:#4338ca">예상 경기수 반영</span>`:''}
         </div>
       </div>
-      ${useOrder&&mainPending.length?`<div class="main-status-section-title" style="margin-top:8px;font-size:.84rem;font-weight:800;color:${mainPending.every(m=>getOnlineOrderState(key,m).bothSubmitted)?'#166534':'#92400e'};margin-bottom:6px">📋 오더 제출 현황</div><div style="display:flex;flex-direction:column;gap:6px">${buildOrderChips(mainPending)}</div>`:''}
+      ${mainPending.length?`<div class="main-status-section-title" style="margin-top:8px;font-size:.84rem;font-weight:800;color:#334155;margin-bottom:6px">⚡ 경기 운영</div><div style="display:flex;flex-direction:column;gap:6px">${buildOrderChips(mainPending)}</div>`:''}
       ${doneInMain.length?`<div class="main-status-section-title" style="margin-top:10px;font-size:.84rem;font-weight:800;color:#1e3a8a;margin-bottom:6px">🏁 경기 결과</div><div style="display:flex;flex-direction:column;gap:6px">${doneInMain.map(resultLine).join('')}</div>`:''}
       ${main.matches.length===0&&estimatedMainTotal>0?`<div style="margin-top:8px;font-size:.82rem;color:var(--text2);line-height:1.65">예선 조 추첨 기준으로 본선 예상 경기수를 미리 포함했습니다. 본선 추첨 전이라 결과는 아직 없습니다.</div>`:''}
     </div>` : '';
@@ -8547,7 +8560,7 @@ function renderMatchProgressSummary(key){
 
   return `<div class="card main-status-board" style="margin-top:12px;background:linear-gradient(135deg,#f9fbff,#eef4ff);border:1.5px solid #d7e3ff">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <div class="main-status-top-title" style="font-weight:900;color:var(--primary-dark);font-size:.98rem">📊 경기 진행 현황</div>
+      <div class="main-status-top-title" style="font-weight:900;color:var(--primary-dark);font-size:.98rem">📊 경기 진행 현황 <span style="font-size:.7rem;font-weight:600;color:var(--text3)">· 여기서 오더·결과·상세조회까지 처리</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${groupTotal+main.total}경기</span>
         <span class="badge" style="background:${getRoundVisualTheme('예선','group').chipBg};color:${getRoundVisualTheme('예선','group').chipFg};border:1px solid ${getRoundVisualTheme('예선','group').bd}">예선 ${groupTotal}경기</span>
