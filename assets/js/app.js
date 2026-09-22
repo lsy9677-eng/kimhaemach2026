@@ -3770,7 +3770,7 @@ function _ensureClubLoginRoleUI(){
   if(!box){
     box=document.createElement('div');box.id='clubLoginRoleBox';
     box.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0 12px';
-    box.innerHTML=`<button type="button" id="clubMemberLoginModeBtn" class="btn btn-outline" onclick="setClubLoginRole('member')">👥 클럽 회원</button><button type="button" id="clubDirectorLoginModeBtn" class="btn btn-primary" onclick="setClubLoginRole('director')">🏆 경기이사</button><div id="clubLoginRoleGuide" style="grid-column:1/-1;font-size:.72rem;line-height:1.45;color:var(--text3);padding:7px 9px;background:var(--panel2);border-radius:8px"></div>`;
+    box.innerHTML=`<button type="button" id="clubMemberLoginModeBtn" class="btn btn-outline" onclick="setClubLoginRole('member')">👥 클럽 회원</button><button type="button" id="clubDirectorLoginModeBtn" class="btn btn-primary" onclick="setClubLoginRole('director')">🏆 경기이사</button><div id="clubLoginRoleGuide" style="grid-column:1/-1;font-size:.72rem;line-height:1.45;color:var(--text3);padding:7px 9px;background:var(--panel2);border-radius:8px"></div><button type="button" id="clubPwHelpBtn" class="btn btn-outline" style="grid-column:1/-1;font-size:.74rem;padding:6px" onclick="showClubPasswordHelp()">🔑 비밀번호를 잊으셨나요?</button>`;
     const fg=pw.closest('.form-group')||pw.parentElement;fg?.parentElement?.insertBefore(box,fg);
   }
   setClubLoginRole(CLUB_LOGIN_ROLE||'director');
@@ -3778,6 +3778,16 @@ function _ensureClubLoginRoleUI(){
   if(title && /경기이사|클럽/.test(title.textContent||'')) title.textContent='클럽 로그인';
 
 }
+
+function showClubPasswordHelp(){
+  const club=(ge('regClubLogin')?.value||'').trim();
+  if(CLUB_LOGIN_ROLE==='member'){
+    alert(`${club?club+' ':''}클럽 공용 비밀번호는 경기이사에게 문의해 주세요.\n경기이사 또는 관리자가 변경할 수 있습니다.`);
+  }else{
+    alert(`${club?club+' ':''}경기이사 비밀번호는 관리자에게 초기화를 요청해 주세요.\n관리자가 임시 비밀번호를 발급해 문자로 전달할 수 있습니다.`);
+  }
+}
+
 function setClubLoginRole(role){
   CLUB_LOGIN_ROLE=role==='member'?'member':'director';
   const mb=ge('clubMemberLoginModeBtn'),db=ge('clubDirectorLoginModeBtn'),hint=ge('regLoginHint');
@@ -4859,12 +4869,15 @@ function renderAdminContactList(){
         <span style="font-size:.72rem;font-weight:700;color:${statusColor};white-space:nowrap">${statusTxt}</span>
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap;color:#1565c0" onclick="saveClubPassword('${club}')">🔑저장</button>
         <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetClubPassword('${club}')">초기화</button>
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="issueTemporaryPasswordAdmin('${club}','club')">임시발급</button>
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="sendCurrentPasswordSmsAdmin('${club}','club')">📱문자</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
         <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🏆 경기이사</span>
         <input class="form-input" value="${directorPasswords[club]||pw}" placeholder="경기이사 비밀번호" id="dpw_${club}" maxlength="20" style="flex:1;min-width:100px;font-size:.8rem;padding:4px 8px" type="text">
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveDirectorPasswordAdmin('${club}')">💾저장</button>
-        <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetDirectorPasswordAdmin('${club}')">초기화</button>
+        <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetDirectorPasswordAdmin('${club}')">임시발급</button>
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="sendCurrentPasswordSmsAdmin('${club}','director')">📱문자</button>
       </div>
       <div style="font-size:.66rem;color:var(--text3);padding-left:71px;margin-top:2px">회원: ${clubAudit[club]?.changedAt?new Date(clubAudit[club].changedAt).toLocaleDateString()+' · '+esc(clubAudit[club].changedBy||''):'기록 없음'} / 경기이사: ${directorAudit[club]?.changedAt?new Date(directorAudit[club].changedAt).toLocaleDateString()+' · '+esc(directorAudit[club].changedBy||''):'기존 비번 호환중'}</div>
       ${email?`<div style="font-size:.72rem;color:#1a73e8;padding-left:2px">📧 ${email}</div>`:''}
@@ -4898,6 +4911,70 @@ async function resetClubPassword(club){
 }
 
 
+
+function generateTemporaryClubPassword(length=6){
+  const chars='23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const n=Math.max(6,Math.min(10,Number(length)||6));
+  const out=[];
+  try{
+    const a=new Uint32Array(n);crypto.getRandomValues(a);
+    for(let i=0;i<n;i++)out.push(chars[a[i]%chars.length]);
+  }catch(e){
+    for(let i=0;i<n;i++)out.push(chars[Math.floor(Math.random()*chars.length)]);
+  }
+  return out.join('');
+}
+function getClubDirectorPhone(club){
+  return String((G.meta.clubPhones||{})[club]||(G.meta.clubContacts||{})[club]||'').replace(/[^0-9]/g,'');
+}
+function buildPasswordResetSmsText(club,kind,tempPw){
+  const label=kind==='director'?'경기이사':'클럽 회원 공용';
+  return `[김해시 시합관리]\n${club} ${label} 비밀번호가 초기화되었습니다.\n임시 비밀번호: ${tempPw}\n로그인 후 새 비밀번호로 변경해 주세요.`;
+}
+function copyTextSafe(text){
+  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
+  const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();return Promise.resolve();
+}
+async function showTemporaryPasswordResult(club,kind,tempPw){
+  const phone=getClubDirectorPhone(club),label=kind==='director'?'경기이사':'클럽 회원 공용';
+  const text=buildPasswordResetSmsText(club,kind,tempPw);
+  try{await copyTextSafe(tempPw);}catch(e){}
+  const send=confirm(`${club} ${label} 비밀번호 초기화 완료\n\n임시 비밀번호: ${tempPw}\n\n임시 비밀번호를 클립보드에 복사했습니다.${phone?'\n등록된 경기이사 번호로 문자앱을 열까요?':'\n등록된 경기이사 전화번호가 없습니다.'}`);
+  if(send && phone){
+    const body=encodeURIComponent(text);
+    // Android/Samsung browser/PWA friendly sms URI
+    location.href=`sms:${phone}?body=${body}`;
+  }
+}
+async function issueTemporaryPasswordAdmin(club,kind='director'){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const isDirector=kind==='director',tempPw=generateTemporaryClubPassword(6);
+  const label=isDirector?'경기이사':'클럽 회원 공용';
+  if(!confirm(`${club} ${label} 비밀번호를 임시 비밀번호로 초기화할까요?\n기존 비밀번호는 즉시 사용할 수 없게 됩니다.`))return;
+  if(isDirector){
+    if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+    if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+    G.meta.directorPasswords[club]=tempPw;G.meta.directorPasswordCustom[club]=true;
+    _passwordAudit('director',club,'관리자 임시비밀번호 발급');
+  }else{
+    setClubPassword(G.meta,club,tempPw,{custom:true});
+    _passwordAudit('club',club,'관리자 임시비밀번호 발급');
+  }
+  try{
+    await saveMeta();renderAdminContactList();
+    await showTemporaryPasswordResult(club,kind,tempPw);
+    toast(`${club} ${label} 임시 비밀번호 발급 완료 ✅`,'success');
+  }catch(e){toast('초기화 실패: '+e.message,'error');}
+}
+function sendCurrentPasswordSmsAdmin(club,kind='director'){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  const pw=kind==='director'?getDirectorPassword(club):getClubLoginPassword(G.meta,club);
+  const phone=getClubDirectorPhone(club);
+  if(!phone){toast(`${club} 경기이사 전화번호가 등록되어 있지 않습니다`,'error');return;}
+  const body=encodeURIComponent(buildPasswordResetSmsText(club,kind,pw));
+  location.href=`sms:${phone}?body=${body}`;
+}
+
 async function saveDirectorPasswordAdmin(club){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   const pw=(ge('dpw_'+club)?.value||'').trim();
@@ -4908,13 +4985,7 @@ async function saveDirectorPasswordAdmin(club){
   try{await saveMeta();renderAdminContactList();toast(`${club} 경기이사 비밀번호 저장 완료 ✅`,'success');}catch(e){toast('저장 실패: '+e.message,'error');}
 }
 async function resetDirectorPasswordAdmin(club){
-  if(!AD){toast('관리자 로그인 필요','info');return;}
-  const fallback=getClubLoginPassword(G.meta,club);
-  if(!confirm(`${club} 경기이사 비밀번호를 현재 클럽 공용 비밀번호로 초기화할까요?\n초기화 후 경기이사가 로그인하여 새 비밀번호로 변경할 수 있습니다.`))return;
-  if(!G.meta.directorPasswords)G.meta.directorPasswords={};
-  if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
-  G.meta.directorPasswords[club]=fallback;G.meta.directorPasswordCustom[club]=false;_passwordAudit('director',club,'관리자 초기화');
-  try{await saveMeta();renderAdminContactList();toast(`${club} 경기이사 비밀번호 초기화 완료 ✅`,'success');}catch(e){toast('초기화 실패: '+e.message,'error');}
+  return issueTemporaryPasswordAdmin(club,'director');
 }
 
 async function saveContactFromAdmin(club){
@@ -22477,7 +22548,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
