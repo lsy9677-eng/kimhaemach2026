@@ -734,6 +734,7 @@ import{cloneResultMatchForRollback,createPlayerStatSnapshot,runResultPersistence
 import{buildResultModalTitle,getResultFooterButtonState,buildScoreButtonsHtml,buildResultTeamsHeaderHtml,buildRubberResultCardHtml,buildResultSectionHtml,buildResultMemoHtml,buildMatchMemoFieldHtml,buildTeamResultIntroHtml,buildOrderSubmitStatusHtml,buildPhotoAssistHtml,buildIndividualResultBodyHtml,buildOrderSideBoxHtml,buildTeamRubberCardHtml,buildQuickActionPanelHtml}from'./match-result-ui.js';
 import{getBlankRubberNumbers,getBlankRubberLabel,validateOrderRubbers,normalizeOrderPayloadsForSave,applyOrderSubmissions,clearOnlineOrderSubmissionState,resetMatchOrderResultState,buildSubmitSuccessMessage,buildUnlockSuccessMessage}from'./order-ops.js';
 import{cloneOrderState,commitOrderSubmission,commitOrderReset,createOrderResetPlayerSnapshot,snapshotBooleanMapEntry}from'./order-service.js';
+import{MATCH_OPERATION_MODE_ONLINE,MATCH_OPERATION_MODE_SIMPLE,normalizeMatchOperationMode,isOnlineOrderMode,isSimpleResultMode,applyMatchOperationMode,getMatchOperationModeLabel}from'./match-operation-mode.js';
 import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPlayer,setTapGhost,backspaceTapSlot,resetTapSlots,buildReorderSlots,toggleReorderPick,applyReorderPlan,getGhostScorePlan}from'./order-picker-ops.js';
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
@@ -766,7 +767,7 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},regDeadlineDt:'',matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
 const PLAYER_CACHE_TTL=1000*60*60*12;
 const TOURNAMENT_BUNDLE_CACHE_KEY='OAI_TOURNAMENT_BUNDLE_CACHE_V3';
@@ -2189,7 +2190,7 @@ async function loadMeta(){
       const d=s.data();
       // memberRegistry2026은 meta/config에서 제외 → memberRegistries/2026 에서만 관리
       const {memberRegistry2026:_mr, ...dClean}=d;
-      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
+      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
       if(Array.isArray(d.clubs)){
         G.clubs=d.clubs.map(x=>String(x||'').trim()).filter(Boolean);
       }
@@ -4155,7 +4156,10 @@ function openAdminSettings(){
   const ap=ge('adminPhoneInput'); if(ap) ap.value=(G.meta.adminPhone||'');
   const fn=ge('adminFloatingNoticeInput'); if(fn) fn.value=(G.meta.adminFloatingNotice||'');
   const fne=ge('adminFloatingNoticeEnabled'); if(fne) fne.checked=!!G.meta.adminFloatingNoticeEnabled;
-  const ooe=ge('onlineOrderEnabled'); if(ooe) ooe.checked=!!G.meta.onlineOrderEnabled;
+  const opMode=normalizeMatchOperationMode(G.meta);
+  const opOnline=ge('matchOperationModeOnline'); if(opOnline) opOnline.checked=opMode===MATCH_OPERATION_MODE_ONLINE;
+  const opSimple=ge('matchOperationModeSimple'); if(opSimple) opSimple.checked=opMode===MATCH_OPERATION_MODE_SIMPLE;
+  const opStatus=ge('matchOperationModeStatus'); if(opStatus) opStatus.textContent=`현재 설정: ${getMatchOperationModeLabel(G.meta)}`;
   const upr=ge('metaUsePlayerRegistry'); if(upr) upr.checked=!!G.meta.usePlayerRegistry;
   const sad=ge('metaShowAssociationDashboard'); if(sad) sad.checked=!!G.meta.showAssociationDashboard;
   const ufc=ge('metaUseFixedClubs'); if(ufc) ufc.checked=!!G.meta.useFixedClubs;
@@ -4643,6 +4647,10 @@ function onRegClubChange(){
   const badge = ge('regContactSavedBadge');
   if(lbl) lbl.textContent = club;
   if(inp) inp.value = saved;
+  // 저장된 구글 이메일 불러오기
+  const emailInp = ge('regContactEmail');
+  const savedEmail = (G.meta.clubEmails||{})[club]||'';
+  if(emailInp) emailInp.value = savedEmail;
   if(badge) badge.style.display = saved ? 'inline' : 'none';
   if(row) row.style.display = 'block';
 }
@@ -4656,16 +4664,22 @@ async function saveRegContact(){
   const club = (ge('regClub')?.value||'').trim();
   const raw = (ge('regContactPhone')?.value||'').trim();
   const phone = raw.replace(/[^0-9-]/g,'');
+  const emailRaw = (ge('regContactEmail')?.value||'').trim().toLowerCase();
   if(!club){ toast('클럽을 먼저 선택하세요','error'); return; }
   if(phone && phone.length < 9){ toast('번호를 확인해주세요','error'); return; }
-  // Play 스토어 정식 등록 이후 팀 등록 화면에서는 전화번호만 저장한다.
-  // 과거 clubEmails 데이터는 관리자 호환성을 위해 그대로 보존한다.
-  const savedEmail=(G.meta.clubEmails||{})[club]||'';
-  saveClubDirectorContact(G.meta,club,phone,savedEmail);
+  // 이메일 형식 검사 (입력한 경우만)
+  if(emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)){
+    toast('이메일 형식을 확인해주세요','error'); return;
+  }
+  if(emailRaw && !emailRaw.endsWith('@gmail.com')){
+    toast('구글 계정(@gmail.com)만 등록 가능합니다','error'); return;
+  }
+  saveClubDirectorContact(G.meta,club,phone,emailRaw);
   try{
     await saveMeta();
     ge('regContactSavedBadge') && (ge('regContactSavedBadge').style.display='inline');
-    toast(`${club} 경기이사 번호 저장 완료 ✅`,'success');
+    const emailMsg = emailRaw ? ' + 구글 이메일' : '';
+    toast(`${club} 경기이사 번호${emailMsg} 저장 완료 ✅`,'success');
     renderAdminContactList();
   renderAdminDirectorEmailSection();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
@@ -15865,14 +15879,14 @@ function applyBlankOrderAutoScore(rb){
 }
 
 function isOnlineOrderLocked(match,key=''){
-  if(!(match&&G.meta.onlineOrderEnabled)) return false;
+  if(!(match&&isOnlineOrderMode(G.meta))) return false;
   if(!key) return !!(match.orderSubmitted || (match.orderSubmissions&&Object.keys(match.orderSubmissions).length));
   const st=getOnlineOrderState(key,match);
   return !!(st.s1||st.s2);
 }
 
 function getOnlineOrderStatusLabel(key,m){
-  if(!G.meta.onlineOrderEnabled) return '';
+  if(!isOnlineOrderMode(G.meta)) return '';
   const st=getOnlineOrderState(key,m);
   if(st.bothSubmitted) return '공개됨';
   if(st.s1||st.s2) return '제출완료';
@@ -15880,7 +15894,7 @@ function getOnlineOrderStatusLabel(key,m){
 }
 
 function getOnlineOrderStatusBadgeHTML(key,m){
-  if(!G.meta.onlineOrderEnabled) return '';
+  if(!isOnlineOrderMode(G.meta)) return '';
   const st=getOnlineOrderState(key,m);
   if(st.bothSubmitted) return `<span class="badge bg-green" style="font-size:.76rem;padding:3px 9px">🔓 오더공개</span>`;
   if(st.s1||st.s2) return `<span class="badge bg-gold" style="font-size:.76rem;padding:3px 9px">📝 제출완료</span>`;
@@ -15888,7 +15902,7 @@ function getOnlineOrderStatusBadgeHTML(key,m){
 }
 
 function getOnlineOrderTeamStatusHTML(key,m){
-  if(!G.meta.onlineOrderEnabled) return '';
+  if(!isOnlineOrderMode(G.meta)) return '';
   const st=getOnlineOrderState(key,m);
   const {t1,t2}=getMatchTeamObjects(key,m);
   const dn1=t1?tdn(t1,key,m.t1):'팀1';
@@ -15899,7 +15913,7 @@ function getOnlineOrderTeamStatusHTML(key,m){
 }
 
 function getMyClubOrderStatusSummaryHTML(key,m,myBaseClub=''){
-  if(!G.meta.onlineOrderEnabled) return '';
+  if(!isOnlineOrderMode(G.meta)) return '';
   const st=getOnlineOrderState(key,m);
   const myBase=baseClub(myBaseClub||REG_CLUB||'')||(myBaseClub||REG_CLUB||'');
   const isSide1=!!(myBase && st.c1===myBase);
@@ -15970,7 +15984,7 @@ async function submitSavedOrderFromCard(tid,div,mid){
   const list=G.matches[key]||[];
   const m=list.find(x=>x.id===mid);
   if(!m){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
-  if(!G.meta.onlineOrderEnabled){ toast('온라인 오더 제출 기능이 꺼져 있습니다','info'); return; }
+  if(!isOnlineOrderMode(G.meta)){ toast('현재 경기 운영 방식은 현장 수기 · 결과만 입력입니다','info'); return; }
   if(!(REG && REG_CLUB) && !AD && !OP){ toast('클럽 로그인 후 사용해 주세요','info'); return; }
   if(!(AD || OP || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽만 제출할 수 있습니다','error'); return; }
   const info=getMySavedOrderDraftInfo(key,m,REG_CLUB||'');
@@ -16029,12 +16043,15 @@ function collectSideOrderFromModal(key, mid, side){
 
 async function saveOnlineOrderSettings(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const chk=ge('onlineOrderEnabled');
-  G.meta.onlineOrderEnabled=!!chk?.checked;
+  const mode=ge('matchOperationModeOnline')?.checked ? MATCH_OPERATION_MODE_ONLINE : MATCH_OPERATION_MODE_SIMPLE;
+  applyMatchOperationMode(G.meta,mode);
   try{
     await saveMeta();
-    toast('온라인 오더 설정 저장 완료 ✅','success');
+    const status=ge('matchOperationModeStatus');
+    if(status) status.textContent=`현재 설정: ${getMatchOperationModeLabel(G.meta)}`;
+    toast(`경기 운영 방식 저장 완료 — ${getMatchOperationModeLabel(G.meta)} ✅`,'success');
     renderBracket();
+    if(REG&&REG_CLUB&&!AD) updateMyClubHomeCard();
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
 
@@ -16157,7 +16174,7 @@ async function submitOnlineOrder(sideOnly=null){
   const list=G.matches[key]||[]; const idx=list.findIndex(x=>x.id===mid); if(idx<0) return;
   const m=list[idx];
   const orderSubmitSnapshot=cloneOrderState(m);
-  if(!G.meta.onlineOrderEnabled){ toast('온라인 오더 제출 기능이 비활성화되어 있습니다','info'); return; }
+  if(!isOnlineOrderMode(G.meta)){ toast('현재 경기 운영 방식은 현장 수기 · 결과만 입력입니다','info'); return; }
   if(!(AD || canEditMatchByDirector(key,m))){ toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 제출할 수 있습니다','error'); return; }
   const st=getOnlineOrderState(key,m);
   if(st.bothSubmitted && !AD){ toast('양쪽 오더가 이미 공개되었습니다. 오더 수정은 관리자 초기화 후 가능합니다','info'); return; }
