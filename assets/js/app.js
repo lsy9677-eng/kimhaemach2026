@@ -12957,7 +12957,7 @@ function buildIndivRedrawPreviewData(groupData, gs){
 
 // Phase 52 · 예선/본선 현장 완전수동 추첨
 function _manualDrawSelectHtml(id, teams, key){
-  return `<select class="form-input manual-draw-select" id="${id}" style="min-height:38px;font-size:.78rem"><option value="">— 팀 선택 —</option>${teams.map((tm,i)=>`<option value="${i}">#${i+1} ${esc(tdn(tm,key,i))}</option>`).join('')}</select>`;
+  return `<select class="form-input manual-draw-select" id="${id}" onchange="syncManualDrawSelections('prelim')" style="min-height:38px;font-size:.78rem"><option value="">— 팀 선택 —</option>${teams.map((tm,i)=>`<option value="${i}">#${i+1} ${esc(tdn(tm,key,i))}</option>`).join('')}</select>`;
 }
 function _ensureManualPrelimButton(){
   const footer=ge('mDraw')?.querySelector('.modal-footer'); if(!footer||ge('manualPrelimDrawBtn'))return;
@@ -12976,9 +12976,35 @@ function openManualPrelimDraw(){
   const sizes=Array.isArray(DW.cfg?.grpSizes)?DW.cfg.grpSizes:[];
   if(!sizes.length||sizes.reduce((a,b)=>a+Number(b||0),0)!==DW.teams.length){toast('먼저 예선 조 구성(조 수/팀 수)을 선택해 주세요','info');return;}
   _ensureManualPrelimModal();
-  ge('manualPrelimBody').innerHTML=`<div style="padding:10px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 그대로 입력합니다.</b><br>같은 클럽·시드·기존 대진 여부를 앱이 제한하지 않습니다.</div>${sizes.map((sz,gi)=>`<div style="margin-bottom:12px;padding:10px;border:1px solid #e2e8f0;border-radius:10px"><b>${grpLabel(gi)}조</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;margin-top:7px">${Array.from({length:Number(sz)},(_,si)=>`<div><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">${si+1}번 자리</div>${_manualDrawSelectHtml(`mp_${gi}_${si}`,DW.teams,DW.key)}</div>`).join('')}</div></div>`).join('')}`;
+  ge('manualPrelimBody').innerHTML=`<div style="padding:10px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 그대로 입력합니다.</b><br>같은 클럽·시드·기존 대진 여부를 앱이 제한하지 않습니다.</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b id="manualPrelimCounter" style="font-size:.75rem">선택 0 / ${DW.teams.length}팀</b><button type="button" class="btn btn-gray" onclick="swapManualDrawSlots('prelim')">↔ 자리 교환</button><button type="button" class="btn btn-gray" onclick="clearManualDraw('prelim')">전체 비우기</button></div>${sizes.map((sz,gi)=>`<div style="margin-bottom:12px;padding:10px;border:1px solid #e2e8f0;border-radius:10px"><b>${grpLabel(gi)}조</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px;margin-top:7px">${Array.from({length:Number(sz)},(_,si)=>`<div><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">${si+1}번 자리</div>${_manualDrawSelectHtml(`mp_${gi}_${si}`,DW.teams,DW.key)}</div>`).join('')}</div></div>`).join('')}`;
+  syncManualDrawSelections('prelim');
   cm('mDraw');om('mManualPrelimDraw');
 }
+
+function syncManualDrawSelections(kind){
+  const selector=kind==='main'?'#manualMainBody select[id^="mm_"]':'#manualPrelimBody select[id^="mp_"]';
+  const sels=[...document.querySelectorAll(selector)], picked=new Map();
+  sels.forEach(sel=>{if(sel.value&&sel.value!=='BYE')picked.set(sel.value,(picked.get(sel.value)||0)+1);});
+  sels.forEach(sel=>[...sel.options].forEach(opt=>{
+    if(!opt.value||opt.value==='BYE'){opt.disabled=false;return;}
+    opt.disabled=(picked.get(opt.value)||0)>0&&sel.value!==opt.value;
+  }));
+  const counter=ge(kind==='main'?'manualMainCounter':'manualPrelimCounter');
+  if(counter){const chosen=sels.filter(x=>x.value&&x.value!=='BYE').length;counter.textContent=`선택 ${chosen} / ${kind==='main'?(MD?.advT?.length||0):(DW?.teams?.length||0)}팀`;}
+}
+function clearManualDraw(kind){
+  const selector=kind==='main'?'#manualMainBody select[id^="mm_"]':'#manualPrelimBody select[id^="mp_"]';
+  document.querySelectorAll(selector).forEach(x=>x.value='');syncManualDrawSelections(kind);
+}
+function swapManualDrawSlots(kind){
+  const selector=kind==='main'?'#manualMainBody select[id^="mm_"]':'#manualPrelimBody select[id^="mp_"]';
+  const sels=[...document.querySelectorAll(selector)].filter(x=>x.offsetParent!==null);
+  const a=prompt(`교환할 첫 번째 자리 번호를 입력하세요. (1~${sels.length})`);if(a===null)return;
+  const b=prompt(`교환할 두 번째 자리 번호를 입력하세요. (1~${sels.length})`);if(b===null)return;
+  const ia=Number(a)-1,ib=Number(b)-1;if(!Number.isInteger(ia)||!Number.isInteger(ib)||ia<0||ib<0||ia>=sels.length||ib>=sels.length||ia===ib){toast('자리 번호를 다시 확인해 주세요','error');return;}
+  const va=sels[ia].value,vb=sels[ib].value;sels[ia].value=vb;sels[ib].value=va;syncManualDrawSelections(kind);toast(`${a}번 ↔ ${b}번 자리 교환 완료`,'success');
+}
+
 async function saveManualPrelimDraw(){
   const sizes=DW.cfg?.grpSizes||[], groups=[], used=[];
   for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===''){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
@@ -13985,11 +14011,17 @@ function openManualMainDraw(){
   if(!MD?.advT?.length){toast('본선 진출팀 정보가 없습니다','error');return;}
   _ensureManualMainModal();window.__manualMainN=_manualMainSize(MD.advT.length);window.__manualMainByeMode='fixed';renderManualMainSlots();cm('mMain');om('mManualMainDraw');
 }
-function setManualMainByeMode(mode){window.__manualMainByeMode=mode==='manual'?'manual':'fixed';renderManualMainSlots();}
+function setManualMainByeMode(mode){
+  const next=mode==='manual'?'manual':'fixed',cur=window.__manualMainByeMode||'fixed';if(next===cur)return;
+  const has=[...document.querySelectorAll('#manualMainBody select[id^="mm_"]')].some(x=>x.value);
+  if(has&&!confirm('BYE 방식을 바꾸면 현재 수동 배치가 초기화됩니다. 변경할까요?'))return;
+  window.__manualMainByeMode=next;renderManualMainSlots();
+}
 function renderManualMainSlots(){
   const body=ge('manualMainBody');if(!body||!MD?.advT)return;const entries=MD.advT,n=window.__manualMainN||_manualMainSize(entries.length),bye=n-entries.length,mode=window.__manualMainByeMode||'fixed',fixed=new Set(_manualMainFixedByePositions(entries,n));
   const opts=()=>`<option value="">— 팀 선택 —</option>${entries.map((a,i)=>`<option value="${i}">${esc(a.nm||('진출팀 '+(i+1)))}</option>`).join('')}${mode==='manual'?'<option value="BYE">BYE</option>':''}`;
-  body.innerHTML=`<div style="padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 결과를 그대로 입력합니다.</b><br>예선 재대결·1위끼리 대결도 제한하지 않습니다. ${bye?`현재 ${n}강 · BYE ${bye}자리`:''}</div>${bye?`<div style="display:flex;gap:7px;margin-bottom:12px"><button class="btn ${mode==='fixed'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('fixed')">BYE 자리 미리 고정</button><button class="btn ${mode==='manual'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('manual')">BYE까지 완전수동</button></div>`:''}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${Array.from({length:n},(_,i)=>{const isBye=bye&&mode==='fixed'&&fixed.has(i);return `<div style="padding:8px;border:1px solid #e2e8f0;border-radius:9px;background:${isBye?'#f8fafc':'white'}"><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">대진 ${Math.floor(i/2)+1} · ${i%2===0?'위':'아래'} 자리</div>${isBye?'<div style="padding:9px;font-weight:900;text-align:center;color:#64748b">BYE (고정)</div>':`<select class="form-input" id="mm_${i}" style="min-height:38px;font-size:.78rem">${opts()}</select>`}</div>`}).join('')}</div>`;
+  body.innerHTML=`<div style="padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin-bottom:10px;font-size:.76rem;line-height:1.6"><b>현장에서 뽑힌 결과를 그대로 입력합니다.</b><br>예선 재대결·1위끼리 대결도 제한하지 않습니다. ${bye?`현재 ${n}강 · BYE ${bye}자리`:''}</div>${bye?`<div style="display:flex;gap:7px;margin-bottom:8px"><button class="btn ${mode==='fixed'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('fixed')">BYE 자리 미리 고정</button><button class="btn ${mode==='manual'?'btn-primary':'btn-outline'}" onclick="setManualMainByeMode('manual')">BYE까지 완전수동</button></div>`:''}<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b id="manualMainCounter" style="font-size:.75rem">선택 0 / ${entries.length}팀</b><button type="button" class="btn btn-gray" onclick="swapManualDrawSlots('main')">↔ 자리 교환</button><button type="button" class="btn btn-gray" onclick="clearManualDraw('main')">전체 비우기</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${Array.from({length:n},(_,i)=>{const isBye=bye&&mode==='fixed'&&fixed.has(i);return `<div style="padding:8px;border:1px solid #e2e8f0;border-radius:9px;background:${isBye?'#f8fafc':'white'}"><div style="font-size:.68rem;color:#64748b;margin-bottom:3px">대진 ${Math.floor(i/2)+1} · ${i%2===0?'위':'아래'} 자리</div>${isBye?'<div style="padding:9px;font-weight:900;text-align:center;color:#64748b">BYE (고정)</div>':`<select class="form-input" id="mm_${i}" onchange="syncManualDrawSelections('main')" style="min-height:38px;font-size:.78rem">${opts()}</select>`}</div>`}).join('')}</div>`;
+  syncManualDrawSelections('main');
 }
 async function saveManualMainDraw(){
   const entries=MD.advT,n=window.__manualMainN||_manualMainSize(entries.length),bye=n-entries.length,mode=window.__manualMainByeMode||'fixed',fixed=new Set(_manualMainFixedByePositions(entries,n)),positions=[],used=[],byeSeen=[];
@@ -22306,7 +22338,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,openManualPrelimDraw,saveManualPrelimDraw,openManualMainDraw,setManualMainByeMode,saveManualMainDraw,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,openManualPrelimDraw,saveManualPrelimDraw,openManualMainDraw,setManualMainByeMode,saveManualMainDraw,syncManualDrawSelections,clearManualDraw,swapManualDrawSlots,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
