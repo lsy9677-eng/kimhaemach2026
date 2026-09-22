@@ -9642,6 +9642,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     }
 
     html+=`<div class="sec-title" style="margin-top:14px">⚡ 본선 경기 현황 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">· 결과는 한 줄, 상세는 필요할 때만</span></div>`;
+    html+=matchStatusFilterBar();
     rounds.forEach((r,rIdx)=>{
       const rms=mMs.filter(m=>Number(m.round||0)===r).filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m)).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
       if(!rms.length)return;
@@ -9856,6 +9857,30 @@ function toggleIndividualGroupMatches(key,gi){
 }
 
 
+
+
+let MATCH_STATUS_FILTER='all';
+function setMatchStatusFilter(v){
+  MATCH_STATUS_FILTER=['all','waiting','playing','done'].includes(v)?v:'all';
+  document.querySelectorAll('[data-match-status]').forEach(el=>{
+    el.style.display=(MATCH_STATUS_FILTER==='all'||el.dataset.matchStatus===MATCH_STATUS_FILTER)?'':'none';
+  });
+  document.querySelectorAll('[data-status-filter]').forEach(b=>{
+    const on=b.dataset.statusFilter===MATCH_STATUS_FILTER;
+    b.style.background=on?'var(--primary)':'#fff';b.style.color=on?'#fff':'var(--text2)';
+  });
+}
+function matchStatusFilterBar(){
+  const b=(v,t)=>`<button data-status-filter="${v}" onclick="setMatchStatusFilter('${v}')" style="padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:${MATCH_STATUS_FILTER===v?'var(--primary)':'#fff'};color:${MATCH_STATUS_FILTER===v?'#fff':'var(--text2)'};font-size:.72rem;font-weight:800">${t}</button>`;
+  return `<div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 10px">${b('all','전체')}${b('waiting','대기')}${b('playing','진행중')}${b('done','완료')}</div>`;
+}
+
+function openMatchOperations(key,mid){
+  const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
+  if(!m){toast('경기를 찾을 수 없습니다','error');return;}
+  openM3(key,mid);
+}
+
 function toggleCompactMatchDetail(id){
   const el=ge(id);if(!el)return;
   const open=el.style.display==='none'||!el.style.display;
@@ -10015,7 +10040,9 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
       ? (_ost2.bothSubmitted ? '📝 오더/기록확인입력' : (_ost2.mySubmitted ? '📝 오더/기록확인입력' : '📝 오더 입력·제출'))
       : '⚡ 결과입력';
   const _btnStyle = done ? 'btn-gray' : (useOrderHere ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
-  const btn=(AD||OP||canEditMatchByClubMember(key,m))?`<button class="btn ${_btnStyle}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${_btnLabel}</button>`:'';
+  const _opsLabel = done ? '✏️ 결과수정' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
+  const _opsStyle = done ? 'btn-gray' : 'btn-accent';
+  const btn=(AD||OP||canEditMatchByClubMember(key,m))?`<button class="btn ${_opsStyle}" style="padding:6px 12px;font-size:.77rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">${_opsLabel}</button>`:'';
   const memoBtn=canManageBracket()?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border-color:${matchMemo?'#f6d365':'var(--border)'}" onclick="openMatchMemoModal('${key}','${m.id}')">📢 공지(경기)${matchMemo?' 수정':' 입력'}</button>`:'';
   const orderBadge=useOrderHere?getOnlineOrderStatusBadgeHTML(key,m):'';
   const orderTeamStatus=useOrderHere?getOnlineOrderTeamStatusHTML(key,m):'';
@@ -10030,8 +10057,8 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   if(done){
     const detailId='compactDetail_'+String(key+'_'+m.id).replace(/[^a-zA-Z0-9_-]/g,'_');
     const resultBtn=(AD||OP||canEditMatchByClubMember(key,m))
-      ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openM3('${key}','${m.id}')">✏️ 결과</button>`:'';
-    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="margin-bottom:7px;border:1.5px solid #bbf7d0;background:#f7fff9">
+      ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">✏️ 결과수정</button>`:'';
+    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-status="done" style="margin-bottom:7px;border:1.5px solid #bbf7d0;background:#f7fff9">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:44px;flex-wrap:wrap">
         <span style="font-size:.72rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 8px">${label||'경기'}</span>
         <div style="display:flex;align-items:center;gap:7px;flex:1;min-width:190px">
@@ -10054,9 +10081,9 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
 
   const teamCardStyleBase=`${_isMyCM?'border:2.5px solid #16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.15);':''}${_isOtherM?'opacity:0.35;':''}`;
   const teamWinTint=done&&wn1?'background:linear-gradient(135deg,#f7fff9,#eefbf3);border-color:#86efac;':done&&wn2?'background:linear-gradient(135deg,#fff7f7,#fef2f2);border-color:#fecaca;':'';
-  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${grpCourtShareBadge} ${matchMemoBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${memoBtn} ${btn}</div></div>
+  return`<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-status="${st2.started?'playing':'waiting'}" style="${teamCardStyleBase}${teamWinTint}"><div class="m3hdr ${divisionHeaderClass(div)}" style="${_isMyCM?'background:linear-gradient(90deg,#14532d,#166534)':''}"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span class="m3badge">${dl(div)}</span><span class="m3badge">${label}</span><span style="font-size:1.08rem;font-weight:800">${dn1} vs ${dn2}</span></div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">${grpCourtBadge} ${grpCourtShareBadge} ${matchMemoBadge} ${courtUI} ${orderBadge} ${done?'<span class="badge bg-green" style="font-size:.82rem;padding:3px 9px">완료</span>':(st2.started?`<span style="font-size:.82rem;opacity:.95;font-weight:700;color:#ffd166">진행중 ${st2.disp1??st2.sc1}:${st2.disp2??st2.sc2}</span>`:'<span style="font-size:.86rem;opacity:.8;font-weight:600">대기중</span>')} ${unlockBtn} ${memoBtn} ${btn}</div></div>
     <div class="m3body">
-      ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}${orderTeamStatus}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
+      ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}${orderTeamStatus}${!done?`<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:2px 0 8px"><span style="font-size:.68rem;color:var(--text3);background:var(--panel2);border:1px solid var(--border);padding:4px 8px;border-radius:999px">이 경기에서 오더 · 결과 · 상세기록을 바로 처리합니다</span></div>`:''}${done?`<div class="m3sc-row"><div class="m3tnm ${wn1?'win':'lose'}">${wn1?'🏆 ':''} ${dn1}</div><div class="m3sc">${sc1}:${sc2}</div><div class="m3tnm ${wn2?'win':'lose'}">${dn2} ${wn2?' 🏆':''}</div></div>`:`<div style="text-align:center;color:var(--text3);font-size:.8rem;margin:${orderTeamStatus?'8px':'0'} 0 6px">경기 대기중</div>`}
     <div style="font-size:.7rem;font-weight:700;color:var(--text2);margin-bottom:5px">${dbl}복식 상세 (6게임 선취 승리 · 타이브렉)</div>
     <div class="rb-rows">${rbH}</div></div></div>`;
 }
@@ -22662,7 +22689,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
   openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
   updateMainManualSeeds,
-  toggleIndividualGroupMatches,toggleCompactMatchDetail});
+  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,setMatchStatusFilter});
 
 document.addEventListener('DOMContentLoaded',()=>{
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
