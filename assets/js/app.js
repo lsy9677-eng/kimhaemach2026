@@ -773,7 +773,7 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},regDeadlineDt:'',matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
 const PLAYER_CACHE_TTL=1000*60*60*12;
 const TOURNAMENT_BUNDLE_CACHE_KEY='OAI_TOURNAMENT_BUNDLE_CACHE_V3';
@@ -2196,7 +2196,7 @@ async function loadMeta(){
       const d=s.data();
       // memberRegistry2026은 meta/config에서 제외 → memberRegistries/2026 에서만 관리
       const {memberRegistry2026:_mr, ...dClean}=d;
-      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,matchOperationMode:'simple_result',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
+      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
       if(Array.isArray(d.clubs)){
         G.clubs=d.clubs.map(x=>String(x||'').trim()).filter(Boolean);
       }
@@ -2599,6 +2599,7 @@ function onDU(){
   if(!REG && localStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=localStorage.getItem('reg_club')||'';}
   if((REG||CLUB_MEMBER) && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
   applyClubRoleVisibility();
+  runPhase57SafetyCheck();
 
   try{ upDash(); }catch(e){ console.warn('onDU upDash failed', e); }
   const p=document.querySelector('.nav-tab.active')?.dataset.page;
@@ -3829,6 +3830,20 @@ function hideLegacyTeamRegistrationPasswordUI(){
     const parent=box?.parentElement;
     if(parent && /팀등록 비밀번호/.test(parent.textContent||'')){parent.style.display='none';parent.dataset.legacyRegPwHidden='1';}
   }
+}
+
+
+function runPhase57SafetyCheck(){
+  const checks=[
+    ['운영방식 호환', !Object.prototype.hasOwnProperty.call(G.meta||{},'matchOperationMode') || ['online_order','simple_result'].includes(String(G.meta.matchOperationMode))],
+    ['클럽 비밀번호 데이터', !!(G.meta&&G.meta.clubPasswords&&typeof G.meta.clubPasswords==='object')],
+    ['경기이사 비밀번호 데이터', !!(G.meta&&G.meta.directorPasswords&&typeof G.meta.directorPasswords==='object')],
+    ['경기 데이터', !!(G.matches&&typeof G.matches==='object')],
+    ['팀 데이터', !!(G.teams&&typeof G.teams==='object')]
+  ];
+  const bad=checks.filter(x=>!x[1]);
+  if(bad.length){console.warn('[Phase57]',bad);return {ok:false,checks};}
+  console.info('[Phase57] safety checks OK',checks);return {ok:true,checks};
 }
 
 function applyClubRoleVisibility(){
@@ -15042,13 +15057,16 @@ async function saveMainWinnerOnly(side){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
+  if(m.simpleResult?.confirmed && !(AD||OP)){
+    toast('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
+  }
   if(m.phase!=='main'){toast('승리팀만 확정 기능은 본선에서만 사용할 수 있습니다','info');return;}
   if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const winner=Number(side)===1?m.t1:Number(side)===2?m.t2:null;if(winner==null)return;
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2',winnerName=Number(side)===1?dn1:dn2;
   if(!confirm(`${winnerName} 승리로 확정하시겠습니까?\n\n스코어 없이 바로 다음 라운드로 진출합니다.\n스코어와 선수 상세기록은 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
-  m.winner=winner;m.simpleResult={confirmed:true,winnerOnly:true,winnerSide:Number(side),scorePending:true,detailsPending:true,confirmedAt:new Date().toISOString(),confirmedBy:String(AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사')),phase:'main'};
+  m.winner=winner;m.detailStatsApplied=false;m.simpleResult={confirmed:true,winnerOnly:true,winnerSide:Number(side),scorePending:true,detailsPending:true,confirmedAt:new Date().toISOString(),confirmedBy:String(AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사')),phase:'main'};
   sl(true);
   try{await persistSingleMatchDoc(key,m);await autoAdv(key,m.id);await fbLog(`본선 초간편 결과: ${winnerName} 승리 · 스코어 미입력`,'⚡');sl(false);cm('mM3');toast(`${winnerName} 승리 확정 ✅`,'success');renderBracket();}
   catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);toast('승리팀 저장 실패: '+e.message,'error');}
@@ -15057,13 +15075,16 @@ async function saveSimpleMatchResult(score1,score2){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
+  if(m.simpleResult?.confirmed && !(AD||OP)){
+    toast('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
+  }
   if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers,m.phase);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
   const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers,m.phase);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
   if(!confirm(`${dn1} ${normalized.score1} : ${normalized.score2} ${dn2}\n\n이 결과로 경기 완료 처리하시겠습니까?\n선수 상세 오더는 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
-  m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
+  m.detailStatsApplied=false;m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
   // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
   sl(true);
   try{await persistSingleMatchDoc(key,m);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
@@ -15294,7 +15315,7 @@ async function saveM3(){
     newRb.push(scoreRb);
   }
 
-  const prevW=m.winner;
+  const prevW=(m.detailStatsApplied===false)?null:m.winner;
 
   if(validScoreCount===0){
     if(prevW!=null && !m.bye){toast('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
@@ -15345,6 +15366,13 @@ async function saveM3(){
   }
 
   const calculatedWinner=resolveWinnerTeamIndex({team1Index:m.t1,team2Index:m.t2,outcome:resultOutcome});
+  if(m.simpleResult?.confirmed && !m.simpleResult?.winnerOnly){
+    const officialS1=Number(m.simpleResult.score1),officialS2=Number(m.simpleResult.score2);
+    if(Number.isFinite(officialS1)&&Number.isFinite(officialS2) && (officialS1!==Number(w1)||officialS2!==Number(w2))){
+      toast(`공식 결과 점수(${officialS1}:${officialS2})와 상세기록 계산(${w1}:${w2})이 다릅니다. 관리자 확인이 필요합니다.`,'error');
+      return;
+    }
+  }
   const existingSimple=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
   if(isSimpleResultMode(G.meta)&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=m.simpleResult?.winnerOnly?m.winner:(existingSimple?getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers,m.phase):null);if(officialWinner!=null&&calculatedWinner!==officialWinner){const officialLabel=m.simpleResult?.winnerOnly?'승리팀만 확정':`${existingSimple.score1}:${existingSimple.score2}`;toast(`현장 확정 결과(${officialLabel})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
   m.rubbers=newRb;
@@ -15380,7 +15408,7 @@ async function saveM3(){
   ].filter(Boolean))];
   const resultPlayerSnapshot=createPlayerStatSnapshot(G.players,resultPlayerKeys);
 
-  if(hasFinalWinner) await updPS(key,m,prevW);
+  if(hasFinalWinner) await updPS(key,m,prevW);m.detailStatsApplied=true;
   else await adjustPlayerStatsForUnfinalized();
 
   const finishedCourts = hasFinalWinner ? (Array.isArray(m.courts) ? m.courts : (m.court ? [m.court] : [])) : [];
@@ -22548,7 +22576,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
