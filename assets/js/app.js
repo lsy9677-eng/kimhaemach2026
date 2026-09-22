@@ -10444,7 +10444,7 @@ function getMatchResultState(key,m){
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
   const simpleResult=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
-  if(simpleResult && m.simpleResult?.confirmed){const winner=simpleResult.winnerSide===1?m.t1:m.t2;return {done:true,started:true,sc1:simpleResult.score1,sc2:simpleResult.score2,disp1:simpleResult.score1,disp2:simpleResult.score2,winner,totalRubbers,simpleResult:true};}
+  if(simpleResult && m.simpleResult?.confirmed){const winner=simpleResult.winnerSide===1?m.t1:m.t2;return {done:true,started:true,sc1:simpleResult.score1,sc2:simpleResult.score2,disp1:simpleResult.score1,disp2:simpleResult.score2,winner,totalRubbers,simpleResult:true,detailsPending:!(Array.isArray(m.rubbers)&&m.rubbers.some(rb=>Array.isArray(rb?.players1)&&rb.players1.length||Array.isArray(rb?.players2)&&rb.players2.length))};}
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
   const indivMode=isIndividualByKey(key);
   let sc1=0, sc2=0, started=false;
@@ -14658,7 +14658,11 @@ function openM3(key,mid){
     });
   }
   const simpleModeHere=isSimpleResultMode(G.meta) && !isIndividualMode;
-  if(simpleModeHere){const savedSimple=normalizeSimpleResult(m.simpleResult,dbl,m.phase);html=`${buildSimpleResultPanelHtml({team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl,m.phase),saved:savedSimple,escapeHtml:esc})}<div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
+  if(simpleModeHere){const savedSimple=normalizeSimpleResult(m.simpleResult,dbl,m.phase);html=`${buildSimpleResultPanelHtml({
+      team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl,m.phase),saved:savedSimple,escapeHtml:esc,
+      photo1:!!_orderPhotoGetSaved(m,1),photo2:!!_orderPhotoGetSaved(m,2),
+      canPhoto1:!!(AD||OP||mySide===1),canPhoto2:!!(AD||OP||mySide===2)
+    })}<div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
   if(body && !simpleModeHere){
@@ -21437,7 +21441,14 @@ async function persistOrderPhoto(side, imageDataUrl, source){
   return m.orderPhotoStore[base];
 }
 async function openOrderPhotoViewer(side){
-  toast('사진보기는 제공되지 않습니다','info');
+  const key=CM_key,mid=CM_id;if(!key||!mid)return;
+  const m=(G.matches[key]||[]).find(x=>x.id===mid||x._id===mid);if(!m)return;
+  const saved=_orderPhotoGetSaved(m,side);
+  if(!saved){toast('저장된 오더지 사진이 없습니다','info');return;}
+  if(!_orderPhotoCanView(m,side)){toast('사진 열람 권한이 없습니다','error');return;}
+  const url=saved.dataUrl||saved.downloadURL||'';
+  if(!url){toast('사진 주소를 찾을 수 없습니다','error');return;}
+  window.open(url,'_blank','noopener,noreferrer');
 }
 
 function _tapOrderUsedPlayers(slots){
@@ -21871,6 +21882,23 @@ async function _processOrderPhoto(side,file){
     toast('사진 인식 실패: '+(err?.message||err), 'error');
   }
 }
+async function _processSimpleOrderPhoto(side,file){
+  const ctx=_orderPhotoGetContext(side);
+  if(!ctx){toast('경기 정보를 찾을 수 없습니다','error');return;}
+  try{
+    const image=await _orderPhotoReadFile(file);
+    await persistOrderPhoto(side,image,file?.__captureSource||'upload');
+    toast('오더지 사진 저장 완료 ✅','success');
+    if(CM_key&&CM_id) openM3(CM_key,CM_id);
+  }catch(err){console.error(err);toast('오더지 사진 저장 실패: '+(err?.message||err),'error');}
+}
+function triggerSimpleOrderPhoto(side,source){
+  const input=document.createElement('input');input.type='file';input.accept='image/*';
+  if(source==='camera')input.setAttribute('capture','environment');
+  input.style.display='none';
+  input.addEventListener('change',()=>{const file=input.files&&input.files[0];if(file){file.__captureSource=source;_processSimpleOrderPhoto(side,file);}input.remove();},{once:true});
+  document.body.appendChild(input);input.click();
+}
 function triggerOrderPhoto(side, source){
   const input=document.createElement('input');
   input.type='file';
@@ -22092,7 +22120,7 @@ Object.assign(window,{selectRegistrationPlayerSuggestion,openAdvancedDataTools,a
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
   saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
-  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,
+  toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
   switchToRunScreen,runRoulette,leafLandReveal,initDrawStage,fillSlotWithLeaf,
