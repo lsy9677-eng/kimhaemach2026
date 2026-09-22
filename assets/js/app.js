@@ -9905,7 +9905,17 @@ function openSimpleMatchDetail(key,mid){
     </div>`;
     document.body.appendChild(ov);
   }
-  const roundLabel=m.phase==='main'?(mainMatchRoundLabel(m)||'본선'):(m.phase==='group'?`예선 ${(Number(m.group)||0)+1}조`:'경기');
+  const roundLabel=(()=>{
+    if(m.phase==='group') return `예선 ${(Number(m.group)||0)+1}조`;
+    if(m.phase!=='main') return '경기';
+    const mainMs=(G.matches[key]||[]).filter(x=>x.phase==='main');
+    const maxRound=mainMs.reduce((mx,x)=>Math.max(mx,Number(x.round)||0),0);
+    const r=Number(m.round)||0;
+    if(r===maxRound) return '결승';
+    if(r===maxRound-1) return '준결승';
+    const teamsInRound=Math.pow(2,Math.max(1,maxRound-r+1));
+    return `${teamsInRound}강`;
+  })();
   ge('mSimpleMatchDetailHead').innerHTML=`<div style="background:#10264b;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px">
     <b style="font-size:.95rem">🔎 ${roundLabel} · 경기 상세</b>
     <button onclick="cm('mSimpleMatchDetail')" style="margin-left:auto;border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:999px;width:30px;height:30px;font-size:1rem;cursor:pointer">✕</button>
