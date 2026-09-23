@@ -15130,14 +15130,23 @@ function openM3(key,mid){
     const sv2=rb.score2!=null?rb.score2:'';
     // 현장 수기 모드에서는 온라인 제출/잠금 절차를 쓰지 않는다.
     // 해당 경기를 수정할 권한이 있으면 양 팀 실제 출전명단을 현장에서 함께 기록할 수 있다.
-    const offlineDetailEditor=!isOnlineOrderMode(G.meta) && canEditMatchByClubMember(key,m);
+    const offlineDetailEditor=!isOnlineOrderMode(G.meta) && (AD||OP||canEditMatchByDirector(key,m)||canEditMatchByClubMember(key,m)||isPublicResultEntryEnabled());
     const canEditSide1=offlineDetailEditor || AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted);
     const canEditSide2=offlineDetailEditor || AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted);
     const showSide1=offlineDetailEditor || isOperator || revealBoth || mySide===1 || AD;
     const showSide2=offlineDetailEditor || isOperator || revealBoth || mySide===2 || AD;
     const displaySelP1=(isOnlineOrderMode(G.meta) && isOperator && !st.bothSubmitted && st.s1)?[]:selP1;
     const displaySelP2=(isOnlineOrderMode(G.meta) && isOperator && !st.bothSubmitted && st.s2)?[]:selP2;
-    const pickerHtml=(arr,selArr,cid,editable)=>`<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"><div class="m3-picked"></div>${editable?`<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`:''}</div>`;
+    const pickerHtml=(arr,selArr,cid,editable)=>{
+      const directOffline=!useOrderHere && editable;
+      return `<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}">
+        <div class="m3-picked"></div>
+        ${editable?(directOffline
+          ? `<div style="font-size:.66rem;color:#64748b;margin:5px 0">아래 선수 이름을 누르면 선택됩니다 · 2명 선택</div><div class="m3-picker-list open" id="${cid}_list" style="display:block;position:static;max-height:none"></div>`
+          : `<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`)
+        :''}
+      </div>`;
+    };
     const hiddenHtml=(selArr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"></div>`;
     const fixedPairHtml=(arr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(arr||[]))}"></div><div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.82rem;color:var(--text);font-weight:800;line-height:1.6">${(arr||[]).length?arr.join(' / '):'선수 정보 없음'}</div>`;
     const side1BoxHtml=buildOrderSideBoxHtml({
@@ -15187,14 +15196,11 @@ function openM3(key,mid){
       canPhoto1:!!(AD||OP||mySide===1),canPhoto2:!!(AD||OP||mySide===2),
       allowWinnerOnly:m.phase==='main',
       winnerOnlySide:(m.simpleResult?.winnerOnly&&m.winner===m.t1)?1:((m.simpleResult?.winnerOnly&&m.winner===m.t2)?2:0)
-    })}<div id="offlineResultEntryModeBar" style="margin:10px 0;padding:10px;border:1.5px solid #bfdbfe;border-radius:13px;background:#eff6ff">
-      <div style="font-size:.72rem;font-weight:900;color:#1e3a8a;margin-bottom:7px">현장 입력 방식</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-        <button type="button" id="btnOfflineQuickResult" class="btn btn-primary" onclick="setOfflineResultEntryMode('quick')">⚡ 결과만 빠르게</button>
-        <button type="button" id="btnOfflineDetailResult" class="btn btn-outline" onclick="setOfflineResultEntryMode('detail')">👥 선수명단 · 상세결과</button>
-      </div>
-      <div id="offlineResultEntryHint" style="font-size:.68rem;color:#475569;margin-top:7px">결과만 먼저 저장할 수 있습니다. 선수명단은 나중에 보완해도 됩니다.</div>
+    })}
+    <div style="margin:9px 0 5px">
+      <button type="button" id="btnOfflineDetailResult" class="btn btn-outline" style="width:100%;padding:10px" onclick="toggleSimpleResultDetail()">👥 선수명단 입력</button>
     </div>
+    <div id="offlineResultEntryHint" style="font-size:.67rem;color:#64748b;margin:0 2px 8px">필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.</div>
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
@@ -15243,12 +15249,14 @@ function setOfflineResultEntryMode(mode){
   const wrap=ge('simpleResultDetailWrap');if(!wrap)return;
   const detail=String(mode)==='detail';
   wrap.style.display=detail?'block':'none';
-  const q=ge('btnOfflineQuickResult'),d=ge('btnOfflineDetailResult'),h=ge('offlineResultEntryHint');
-  if(q){q.classList.toggle('btn-primary',!detail);q.classList.toggle('btn-outline',detail);}
-  if(d){d.classList.toggle('btn-primary',detail);d.classList.toggle('btn-outline',!detail);}
+  const d=ge('btnOfflineDetailResult'),h=ge('offlineResultEntryHint');
+  if(d){
+    d.classList.toggle('btn-primary',detail);d.classList.toggle('btn-outline',!detail);
+    d.textContent=detail?'▲ 선수명단 입력 닫기':'👥 선수명단 입력';
+  }
   if(h)h.textContent=detail
-    ?'양 팀 등록선수에서 실제 출전선수를 선택하고 복식별 점수까지 입력한 뒤 아래 저장 버튼을 누르세요.'
-    :'결과만 먼저 저장할 수 있습니다. 선수명단은 나중에 보완해도 됩니다.';
+    ?'선수 이름을 눌러 각 복식 2명씩 선택하고 점수를 입력한 뒤 저장하세요.'
+    :'필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.';
   if(detail){
     refreshAllOrderChipAvailability();
     setTimeout(()=>wrap.scrollIntoView({behavior:'smooth',block:'start'}),30);
