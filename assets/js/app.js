@@ -15011,7 +15011,7 @@ function openM3(key,mid){
     isIndividual:isIndividualMode,
     escapeHtml:esc
   });
-  const p1=t1.players||[],p2=t2.players||[];
+  const p1=getMatchRegisteredRoster(key,t1),p2=getMatchRegisteredRoster(key,t2);
   const exRb=Array.isArray(m.rubbers)?m.rubbers:[];
   const existingMatchMemo=getMatchMemoByObj(m);
   const scBtns=(id,cur)=>buildScoreButtonsHtml({
@@ -15142,7 +15142,7 @@ function openM3(key,mid){
       return `<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}">
         <div class="m3-picked"></div>
         ${editable?(directOffline
-          ? `<div style="font-size:.66rem;color:#64748b;margin:5px 0">아래 선수 이름을 누르면 선택됩니다 · 2명 선택</div><div class="m3-picker-list open" id="${cid}_list" style="display:block;position:static;max-height:none"></div>`
+          ? `<div style="font-size:.66rem;color:#64748b;margin:5px 0">아래 선수 이름을 누르면 선택됩니다 · 2명 선택</div><div id="${cid}_list" data-direct-offline="1" style="display:flex;flex-wrap:wrap;gap:6px;padding:5px 0"></div>`
           : `<button type="button" class="btn btn-outline m3-picker-toggle" onclick="togglePlayerDropdown('${cid}')"><span>선수 선택</span><span>▼</span></button><div class="m3-picker-list" id="${cid}_list"></div>`)
         :''}
       </div>`;
@@ -15331,6 +15331,21 @@ function setPickerSelected(cid, arr){
   const cont=ge(cid); if(!cont) return;
   cont.dataset.selected=encodeURIComponent(JSON.stringify((arr||[]).filter(Boolean).slice(0,2)));
 }
+function getMatchRegisteredRoster(key,team){
+  const direct=Array.isArray(team?.players)?team.players.map(x=>String(x||'').trim()).filter(Boolean):[];
+  if(direct.length) return [...new Set(direct)];
+  const [tid,div]=String(key||'').split('_');
+  const club=baseClub(team?.club||'')||(team?.club||'');
+  const out=[];
+  Object.values(G.players||{}).forEach(p=>{
+    const name=String(p?.name||'').trim(); if(!name)return;
+    const pClub=baseClub(p?.club||'')||(p?.club||'');
+    const hist=Array.isArray(p?.history)?p.history:[];
+    if(pClub===club && hist.some(h=>String(h?.tid||'')===tid && String(h?.div||'')===div)) out.push(name);
+  });
+  return [...new Set(out)];
+}
+
 function getPickerPlayers(cid){
   const cont=ge(cid); if(!cont) return [];
   if(cont.dataset.players){
@@ -15407,6 +15422,12 @@ function renderPlayerDropdown(cid){
       : (selected.length===2 ? '선수 선택 완료 (2/2)' : `선수 ${selected.length}명 선택됨 (${selected.length}/2)`);
     btn.innerHTML=`<span>${label}</span><span>${list.classList.contains('open')?'▲':'▼'}</span>`;
   }
+  if(list.dataset.directOffline==='1'){
+    list.innerHTML=available.length
+      ? available.map(p=>`<button type="button" onclick="choosePlayerFromDropdown('${cid}','${esc(p)}')" style="border:1.5px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:999px;padding:7px 11px;font-size:.76rem;font-weight:800;cursor:pointer">${esc(p)}</button>`).join('')
+      : `<div style="width:100%;padding:8px;border-radius:9px;background:#fff7ed;color:#9a3412;font-size:.7rem;font-weight:700">${players.length?'이 팀의 다른 복식에 모든 선수가 이미 선택되었습니다.':'등록된 선수명단을 찾지 못했습니다. 팀등록 명단을 확인해 주세요.'}</div>`;
+    return;
+  }
   list.innerHTML=available.length
     ? available.map((p,idx)=>`<div class="m3-picker-row pickable" role="button" tabindex="0" onclick="choosePlayerFromDropdown('${cid}','${esc(p)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();choosePlayerFromDropdown('${cid}','${esc(p)}')}"><span>${p}</span><span class="meta">${idx+1}</span></div>`).join('')
     : '<div class="m3-picker-row"><span>선택 가능한 선수가 없습니다</span><span class="meta">다른 복식조 사용중</span></div>';
@@ -15419,14 +15440,15 @@ function togglePlayerDropdown(cid){
   renderPlayerDropdown(cid);
 }
 function choosePlayerFromDropdown(cid, player){
-  const selected=getPickerSelected(cid);
+  let selected=getPickerSelected(cid);
+  if(selected[0]==='__GHOST__') selected=[];
   if(selected.includes(player)) return;
   if(selected.length>=2){ toast('이 복식조는 이미 2명 선택되었습니다','info'); return; }
   selected.push(player);
   setPickerSelected(cid, selected);
   refreshAllOrderChipAvailability();
   const list=ge(cid+'_list');
-  if(list && selected.length>=2){
+  if(list && selected.length>=2 && list.dataset.directOffline!=='1'){
     list.classList.remove('open');
     renderPlayerDropdown(cid);
   }
