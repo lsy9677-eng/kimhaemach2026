@@ -267,6 +267,20 @@ function setRegClubInputMode(isIndividual){
   const row=ge('regContactRow');
   if(row && (freeClubInput || isIndividual)) row.style.display='none';
 }
+function getTeamRegistrationManageAccess(tid, team=null){
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  if(AD) return {ok:true,role:'admin'};
+  if(!REG || !REG_CLUB) return {ok:false,reason:'경기이사 로그인 필요'};
+  if(t?.status && t.status!=='open') return {ok:false,reason:'접수중인 대회만 가능합니다'};
+  if(isRegDeadlinePassed(tid)) return {ok:false,reason:'등록 기한이 만료되었습니다'};
+  if(team){
+    const myClub=baseClub(REG_CLUB)||REG_CLUB;
+    const teamClub=baseClub(team.club||'')||(team.club||'');
+    if(!myClub || teamClub!==myClub) return {ok:false,reason:'내 클럽 팀만 관리할 수 있습니다'};
+  }
+  return {ok:true,role:'director'};
+}
+
 function getRegClubInputValue(){
   if(currentRegIsIndividual() || !usesFixedClubList()) return (ge('regClubText')?.value||'').trim();
   return (ge('regClub')?.value||'').trim();
@@ -7188,8 +7202,9 @@ function renderRL(){
   const t=G.tournaments.find(t=>t.id===tid);
   const isIndividual=isIndividualTournament(t);
   const isOpen = (t?.status==='open');
-  const deadlinePassed = !AD && isRegDeadlinePassed();
-  const canRegister = isIndividual ? isOpen : (AD || REG || (isPublicTeamRegistrationEnabled() && !deadlinePassed));
+  const deadlinePassed = !AD && isRegDeadlinePassed(tid);
+  const directorTeamAccess=!isIndividual?getTeamRegistrationManageAccess(tid):{ok:false};
+  const canRegister = isIndividual ? isOpen : (AD || directorTeamAccess.ok || (isPublicTeamRegistrationEnabled() && isOpen && !deadlinePassed));
   const lock = (!AD && !isOpen) || (!isIndividual && deadlinePassed);
 
   ge('regSection').style.display='block';
@@ -7292,10 +7307,18 @@ async function registerTeam(){
   const isIndividual=isIndividualTournament(t);
   const club=getRegClubInputValue();
 
-  if(!AD && !isIndividual && isRegDeadlinePassed()){ toast(`등록 기한이 만료되어 등록할 수 없습니다.\n${regDeadlineLabel()}`,'error'); return; }
   if(!tid||!div){toast('대회/부서 선택','error');return;}
-  if(t?.status&&t.status!=='open'){toast('접수중인 대회만 등록 가능','error');return;}
+  if(t?.status&&t.status!=='open' && !AD){toast('접수중인 대회만 등록 가능','error');return;}
   if(!isIndividual && !club){toast('클럽 선택','error');return;}
+  if(!isIndividual && REG && !AD){
+    const access=getTeamRegistrationManageAccess(tid);
+    if(!access.ok){toast(access.reason,'error');return;}
+    const myClub=baseClub(REG_CLUB)||REG_CLUB;
+    const inputClub=baseClub(club)||club;
+    if(inputClub!==myClub){toast('경기이사는 자기 클럽 팀만 등록할 수 있습니다','error');return;}
+  }else if(!AD && !isIndividual && isRegDeadlinePassed(tid)){
+    toast(`등록 기한이 만료되어 등록할 수 없습니다.\n${regDeadlineLabel(tid)}`,'error');return;
+  }
 
   const key=tid+'_'+div,ex=G.teams[key]||[];
   const maxTeams=getDivisionMaxTeams(tid,div);
@@ -7500,18 +7523,9 @@ async function delTeam(key,idx){
   if(isIndividual){
     if(!AD && !verifyIndividualEditPin(team,'삭제')) return;
   }else{
-    const deleteCheck=canDeleteRegistration({
-      isAdmin:AD,
-      isDirector:REG,
-      teamClub:baseClub(team.club||''),
-      directorClub:baseClub(REG_CLUB||'')
-    });
+    const deleteCheck=getTeamRegistrationManageAccess(tid0,team);
     if(!deleteCheck.ok){
-      toast(deleteCheck.error==='삭제 권한이 없습니다'?'경기이사 로그인 후 내 클럽 팀만 삭제할 수 있습니다':deleteCheck.error,'error');
-      return;
-    }
-    if(!AD && isRegDeadlinePassed()){
-      toast(`등록 기한이 만료되어 삭제할 수 없습니다.\n${regDeadlineLabel()}`,'error');
+      toast(deleteCheck.reason,'error');
       return;
     }
   }
@@ -7587,14 +7601,9 @@ function openETeam(key,idx){
   window.__IND_TEAM_EDIT_VERIFIED = false;
 
   if(!isIndividual){
-    const editAccess=canDeleteRegistration({
-      isAdmin:AD,
-      isDirector:REG,
-      teamClub:baseClub(team.club||''),
-      directorClub:baseClub(REG_CLUB||'')
-    });
+    const editAccess=getTeamRegistrationManageAccess(tid0,team);
     if(!editAccess.ok){
-      toast(AD||REG?'내 클럽 팀만 수정할 수 있습니다':'경기이사 로그인 후 수정할 수 있습니다','error');
+      toast(editAccess.reason,'error');
       return;
     }
   }else{
@@ -7767,18 +7776,9 @@ async function saveETeam(){
     return;
   }
 
-  const saveEditAccess=canDeleteRegistration({
-    isAdmin:AD,
-    isDirector:REG,
-    teamClub:baseClub(team.club||''),
-    directorClub:baseClub(REG_CLUB||'')
-  });
+  const saveEditAccess=getTeamRegistrationManageAccess(tid0,team);
   if(!saveEditAccess.ok){
-    toast(AD||REG?'내 클럽 팀만 수정할 수 있습니다':'경기이사 로그인 후 수정할 수 있습니다','error');
-    return;
-  }
-  if(!AD && isRegDeadlinePassed()){
-    toast(`등록 기한이 만료되어 수정할 수 없습니다.\n${regDeadlineLabel()}`,'error');
+    toast(saveEditAccess.reason,'error');
     return;
   }
 
