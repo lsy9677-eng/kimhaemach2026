@@ -817,6 +817,63 @@ function logSnapshotError(scope, err){
 function stopTournamentListSync(){
   if(_tournamentsUnsub){ try{_tournamentsUnsub();}catch(e){} _tournamentsUnsub=null; }
 }
+function startTournamentListSync(){
+  stopTournamentListSync();
+  _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async snap=>{
+    G.tournaments=snap.docs.map(d=>({id:d.id,...d.data()}));
+    try{
+      const activeTid=getRealtimeTargetTournamentId()||null;
+      await syncTournamentDataForPage(getCurrentPageName(),activeTid,false);
+    }catch(syncErr){
+      console.warn('initial tournament sync failed',syncErr);
+    }
+    onDU();
+  },e=>logSnapshotError('tournaments',e));
+}
+
+let _firestoreLastVisibleAt=Date.now();
+let _firestoreRecoveryBusy=false;
+let _firestoreRecoveryTimer=null;
+async function recoverFirestoreAfterResume(reason='resume'){
+  if(_firestoreRecoveryBusy || !_firebaseInitDone || !navigator.onLine) return;
+  _firestoreRecoveryBusy=true;
+  try{
+    // 오래 열린 탭/절전 복귀 시 기존 WebChannel을 정리하고 listener를 새로 만든다.
+    const tid=getRealtimeTargetTournamentId()||'';
+    stopRealtimeTournamentSync();
+    startTournamentListSync();
+    if(tid){
+      await syncTournamentDataForPage(getCurrentPageName(),tid,true);
+    }
+    console.info(`[Firestore] ${reason} 후 실시간 연결 새로고침 완료`);
+  }catch(e){
+    console.warn(`[Firestore] ${reason} 후 재연결 대기`,e?.code||e?.message||e);
+  }finally{
+    _firestoreRecoveryBusy=false;
+  }
+}
+function scheduleFirestoreResumeRecovery(reason='resume',delay=500){
+  clearTimeout(_firestoreRecoveryTimer);
+  _firestoreRecoveryTimer=setTimeout(()=>recoverFirestoreAfterResume(reason),Math.max(0,delay||0));
+}
+function installFirestoreLifecycleRecovery(){
+  if(window.__firestoreLifecycleRecoveryInstalled) return;
+  window.__firestoreLifecycleRecoveryInstalled=true;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'){
+      _firestoreLastVisibleAt=Date.now();
+      return;
+    }
+    const sleptFor=Date.now()-Number(_firestoreLastVisibleAt||Date.now());
+    _firestoreLastVisibleAt=Date.now();
+    if(sleptFor>=60000) scheduleFirestoreResumeRecovery('절전/백그라운드 복귀',350);
+  });
+  window.addEventListener('online',()=>scheduleFirestoreResumeRecovery('네트워크 복구',250));
+  window.addEventListener('focus',()=>{
+    const sleptFor=Date.now()-Number(_firestoreLastVisibleAt||Date.now());
+    if(sleptFor>=5*60*1000) scheduleFirestoreResumeRecovery('장시간 탭 복귀',500);
+  });
+}
 let _viewerBracketPoller=null;
 let _viewerBracketPollTid='';
 const VIEWER_BRACKET_POLL_MS=20000;
@@ -2154,17 +2211,8 @@ async function initFB(){
     await loadRegistry(2026);
 
     // 대회 목록은 앱 전체에서 단 하나의 listener만 유지
-    stopTournamentListSync();
-    _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async s=>{
-      G.tournaments=s.docs.map(d=>({id:d.id,...d.data()}));
-      try{
-        const activeTid = getRealtimeTargetTournamentId() || null;
-        await syncTournamentDataForPage(getCurrentPageName(), activeTid, false);
-      }catch(syncErr){
-        console.warn('initial tournament sync failed', syncErr);
-      }
-      onDU();
-    },e=>logSnapshotError('tournaments',e));
+    startTournamentListSync();
+    installFirestoreLifecycleRecovery();
 
     // 선수기록은 로컬 캐시 우선
     loadPlayersFromLocalCache();
