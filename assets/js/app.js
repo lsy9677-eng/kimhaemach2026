@@ -23808,6 +23808,13 @@ function outputMainTreeHtml(tid,div,blank=false){
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length){
+    // 예선 추첨이 끝났고 본선 추첨 전이면 실제 본선 화면과 동일한 '빈 피라미드'를 사용한다.
+    // 이 단계에서는 팀명/조/순위 배정 위치를 절대 노출하지 않고, 구조상 필요한 부전승 자리만 표시한다.
+    const skeleton=outputPreDrawPyramidSkeleton(tid,div);
+    if(skeleton){
+      return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 추첨 전')+skeleton;
+    }
+    // 예선 추첨 자체가 없는 과거 자료만 기존 fallback을 유지한다.
     const gen=outputGeneratedTree(tid,div,blank);if(gen)return gen;
     const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
     return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
