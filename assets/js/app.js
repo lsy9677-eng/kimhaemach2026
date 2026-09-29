@@ -755,11 +755,11 @@ import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPl
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{initializeFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
-const db=getFirestore(_app);
+const db=initializeFirestore(_app,{experimentalForceLongPolling:true,useFetchStreams:false});
 const storage=getStorage(_app);
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
 if(FIRESTORE_WRITE_TRACE){
@@ -21839,23 +21839,39 @@ function _isRegistryClean(members, version, year){
   return (validClub/members.length) >= 0.8;
 }
 
+function registryLocalCacheKey(year){return `kimhae_registry_cache_${year}`;}
+function readRegistryLocalCache(year){
+  try{
+    const raw=localStorage.getItem(registryLocalCacheKey(year));if(!raw)return [];
+    const parsed=JSON.parse(raw);return Array.isArray(parsed?.members)?parsed.members:[];
+  }catch(e){return [];}
+}
+function writeRegistryLocalCache(year,members){
+  try{localStorage.setItem(registryLocalCacheKey(year),JSON.stringify({savedAt:Date.now(),members:members||[]}));}catch(e){}
+}
+function withRegistryTimeout(promise,ms=7000){
+  return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('REGISTRY_TIMEOUT')),ms))]);
+}
 async function loadRegistry(year){
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
+  const cached=readRegistryLocalCache(year);
+  if(cached.length)G_REGISTRY[year]=cached;
   try{
-    const loaded=await loadRegistryDocument({db,doc,getDoc,year});
+    const loaded=await withRegistryTimeout(loadRegistryDocument({db,doc,getDoc,year}),7000);
     if(loaded.exists){
       if(!_isRegistryClean(loaded.members, loaded.version, year)){
         console.warn(`⚠️ memberRegistries/${year} 버전 불일치 - 그대로 사용`);
       }
       G_REGISTRY[year]=loaded.members;
-    }else{
+      writeRegistryLocalCache(year,loaded.members);
+    }else if(!cached.length){
       G_REGISTRY[year]=[];
     }
-    REGISTRY_YEARS_LOADED.push(year);
   }catch(e){
-    G_REGISTRY[year]=[];
-    REGISTRY_YEARS_LOADED.push(year);
+    console.warn(`[Registry] ${year} 원격 로드 지연/실패 → 로컬 캐시 사용`,e?.message||e);
+    if(!G_REGISTRY[year])G_REGISTRY[year]=cached||[];
   }
+  if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
   return G_REGISTRY[year]||[];
 }
 async function saveRegistry(year){
@@ -21864,14 +21880,12 @@ async function saveRegistry(year){
     db,doc,setDoc,serverTimestamp,year,members,
     version:_registryVersion(year)
   });
+  writeRegistryLocalCache(year,members);
 }
 async function getRegistryYears(){
-  try{
-    const snaps=await getDocs(collection(db,'memberRegistries'));
-    const years=snaps.docs.map(d=>parseInt(d.id)).filter(y=>!isNaN(y)).sort();
-    if(!years.includes(REG_YEAR)) years.push(REG_YEAR);
-    return years.sort();
-  }catch(e){ return [REG_YEAR]; }
+  // 선수현황 진입을 Firestore 컬렉션 목록 조회로 막지 않는다.
+  // 현재 공식명단 연도는 REG_YEAR(2026)를 즉시 사용한다.
+  return [REG_YEAR];
 }
 
 // 탭 전환
@@ -21937,6 +21951,14 @@ async function renderRegistryTab(force){
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   let registryMembers = await loadRegistry(year);
+  if(!registryMembers.length){
+    const regTabBody=ge('regTabBody');
+    if(regTabBody){
+      regTabBody.dataset.ready='1';
+      regTabBody.innerHTML='<div class="card" style="padding:22px;text-align:center"><b>선수 명단 연결이 지연되고 있습니다.</b><div style="margin-top:7px;font-size:.78rem;color:var(--text2)">네트워크 연결이 복구되면 새로고침해 주세요. 저장된 명단 캐시가 있으면 자동으로 표시됩니다.</div><button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">↻ 다시 연결</button></div>';
+    }
+    return;
+  }
   // 중요: 현황 렌더링 중에는 Firestore 저장/보정 작업을 절대 실행하지 않는다.
   // 데이터 보정은 관리자 수동 '중복 클럽 자동 통합'에서만 수행한다.
   const members = (registryMembers||[])
