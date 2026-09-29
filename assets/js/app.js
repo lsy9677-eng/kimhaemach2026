@@ -10145,13 +10145,32 @@ function openSimpleMatchDetail(key,mid){
         <span>${dn1}</span><span style="text-align:center">점수</span><span style="text-align:right">${dn2}</span>
       </div>${rows}
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-outline" onclick="cm('mSimpleMatchDetail')">닫기</button></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      ${(AD||OP||canEditMatchByDirector(key,m)||canEditMatchByClubMember(key,m)||isPublicResultEntryEnabled())?`<button class="btn btn-primary" onclick="openMatchOperationsEdit('${key}','${m.id}')">✏️ 결과 수정</button>`:''}
+      <button class="btn btn-outline" onclick="cm('mSimpleMatchDetail')">닫기</button>
+    </div>
   </div>`;
   ov.classList.add('open');
 }
 function openMatchOperations(key,mid){
   const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
   if(!m){toast('경기를 찾을 수 없습니다','error');return;}
+  // PHASE89: 완료된 경기는 관리자/운영자도 입력폼부터 열지 않는다.
+  // 먼저 실제 확정 결과를 요약해서 보여주고, 사용자가 '결과 수정'을 눌렀을 때만 편집폼으로 진입한다.
+  const rs=getMatchResultState(key,m);
+  if(rs.done){
+    openSimpleMatchDetail(key,mid);
+    return;
+  }
+  openM3(key,mid);
+}
+function openMatchOperationsEdit(key,mid){
+  const m=(G.matches[key]||[]).find(x=>String(x.id)===String(mid));
+  if(!m){toast('경기를 찾을 수 없습니다','error');return;}
+  if(!(AD||OP||canEditMatchByDirector(key,m)||canEditMatchByClubMember(key,m)||isPublicResultEntryEnabled())){
+    toast('결과 수정 권한이 없습니다','error');return;
+  }
+  cm('mSimpleMatchDetail');
   openM3(key,mid);
 }
 
@@ -15419,7 +15438,7 @@ function openM3(key,mid){
       winnerOnlySide:(m.simpleResult?.winnerOnly&&m.winner===m.t1)?1:((m.simpleResult?.winnerOnly&&m.winner===m.t2)?2:0)
     })}
     <div style="margin:9px 0 5px">
-      <button type="button" id="btnOfflineDetailResult" class="btn btn-outline" style="width:100%;padding:10px" onclick="toggleSimpleResultDetail()">👥 선수명단 입력</button>
+      <button type="button" id="btnOfflineDetailResult" class="btn btn-outline" style="width:100%;padding:10px" onclick="toggleSimpleResultDetail()">👥 상세 입력(선수·복식)</button>
     </div>
     <div id="offlineResultEntryHint" style="font-size:.67rem;color:#64748b;margin:0 2px 8px">필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.</div>
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
@@ -15473,11 +15492,11 @@ function setOfflineResultEntryMode(mode){
   const d=ge('btnOfflineDetailResult'),h=ge('offlineResultEntryHint');
   if(d){
     d.classList.toggle('btn-primary',detail);d.classList.toggle('btn-outline',!detail);
-    d.textContent=detail?'▲ 선수명단 입력 닫기':'👥 선수명단 입력';
+    d.textContent=detail?'▲ 상세 입력 닫기':'👥 상세 입력(선수·복식)';
   }
   if(h)h.textContent=detail
     ?'선수 이름을 눌러 각 복식 2명씩 선택하고 점수를 입력한 뒤 저장하세요.'
-    :'필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.';
+    :'선수명단·복식별 상세 기록이 필요할 때만 열어 입력하세요.';
   if(detail){
     refreshAllOrderChipAvailability();
     setTimeout(()=>wrap.scrollIntoView({behavior:'smooth',block:'start'}),30);
@@ -24083,7 +24102,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   saveLastOrderFromPicker,applyLastOrderIfEmpty,clearLastOrderFill,
   openReorderPopup,reorderTap,reorderReset,applyReorder,closeReorderPopup,
   updateMainManualSeeds,
-  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
+  toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchOperationsEdit,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
 
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
