@@ -9845,7 +9845,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         ${isIndividualByKey(key)?`<button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 가지형 대진표 펼치기':'📁 가지형 대진표 접기'}</button>`:''}
         ${canManageBracket()?`<div style="display:flex;gap:6px">
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>
-          <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">✏️ 수동수정</button>
+          <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">⚙️ 고급 수동수정</button>
         </div>`:''}
       </div>
     </div>`;
@@ -9853,6 +9853,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
     const hasMainOpFilter=(getDisplayMainBlockFilters(key).length>0);
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
+    if(canManageBracket()) html+=`<div style="margin:4px 0 8px;padding:8px 10px;border-radius:10px;background:#eef6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:.75rem;font-weight:800">📱 수기 추첨 결과 입력: 피라미드 맨 아래 <b>팀 박스를 누르면</b> 팀 · 부전승 · 빈 슬롯을 바로 선택할 수 있습니다.</div>`;
     html+= `<div id="mainStage_${tid}_${div}">`+(filteredMainMs.length?renderActualMainPyramidForDiv(tid,div):`<div style="padding:14px 12px;border:1px dashed #bfdbfe;border-radius:12px;background:#fff;font-size:.82rem;color:var(--text2)">선택한 본선 구간에 표시할 대진이 없습니다.</div>`)+`</div>`;
     html+=`</div>`;
     if(mainCollapsed){
@@ -15174,6 +15175,106 @@ async function saveManualEdit(){
     await fbLog(`본선 수동수정: ${dl(div)}`,'✏️');
     sl(false);cm('mManualEdit');renderBracket();toast('수정 저장 완료 ✅','success');
   }catch(e){sl(false);toast('저장 실패','error');}
+}
+
+
+// PHASE98: 피라미드 최하단 슬롯을 휴대폰에서 바로 입력하는 간편 수기등록.
+// 수기로 추첨한 결과를 그대로 팀/부전승/빈 슬롯만 선택해서 저장한다.
+let PQE={key:null,mid:null,side:1};
+function ensurePyramidQuickEditModal(){
+  if(ge('mPyramidQuickEdit')) return;
+  const wrap=document.createElement('div');
+  wrap.className='modal-overlay';
+  wrap.id='mPyramidQuickEdit';
+  wrap.innerHTML=`<div class="modal-box" style="max-width:410px">
+    <div class="modal-header" style="background:#0f1e3a"><h3>✍️ 본선 자리 입력</h3><button class="modal-close" onclick="cm('mPyramidQuickEdit')">✕</button></div>
+    <div class="modal-body" style="padding:16px">
+      <div id="pqeSlotLabel" style="font-size:.78rem;font-weight:900;color:#1e3a8a;margin-bottom:8px"></div>
+      <div style="padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe4f0;font-size:.74rem;color:#475569;line-height:1.5;margin-bottom:12px">수기로 뽑힌 결과 그대로 선택하세요. 이미 다른 자리에 있는 팀을 고르면 그 자리는 자동으로 비워집니다.</div>
+      <select id="pqeSelect" class="form-select" style="width:100%;min-height:48px;font-size:1rem;font-weight:800"></select>
+    </div>
+    <div class="modal-footer" style="display:grid;grid-template-columns:1fr 1.25fr;gap:8px">
+      <button class="btn btn-gray" onclick="cm('mPyramidQuickEdit')">취소</button>
+      <button class="btn btn-primary" onclick="savePyramidSlotQuickEdit()">💾 저장</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+}
+function openPyramidSlotQuickEdit(key,mid,side){
+  if(!(AD||OP)){ toast('관리자 또는 진행자만 본선 자리를 수정할 수 있습니다','error'); return; }
+  const list=G.matches?.[key]||[], m=list.find(x=>String(x.id||x._id||'')===String(mid));
+  if(!m){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
+  const firstRound=Math.min(...list.filter(x=>x.phase==='main').map(x=>Number(x.round||0)));
+  if(Number(m.round||0)!==firstRound){ toast('맨 아래 본선 자리만 직접 수정할 수 있습니다','error'); return; }
+  const hasPlayed=list.filter(x=>x.phase==='main').some(x=>{
+    if(x.bye) return false;
+    const st=getMatchResultState(key,x);
+    return !!st.done || (Array.isArray(x.rubbers)&&x.rubbers.some(rb=>rb&&((rb.score1!=null)||(rb.score2!=null))));
+  });
+  if(hasPlayed){
+    alert('이미 본선 경기 결과가 입력되어 있습니다.\n\n피라미드 직접 자리지정은 수기 추첨 결과를 처음 등록할 때 사용하는 기능입니다. 결과 입력 후 변경은 「고급 수동수정」을 이용해주세요.');
+    return;
+  }
+  ensurePyramidQuickEditModal();
+  PQE={key,mid:String(mid),side:Number(side)===2?2:1};
+  const teams=G.teams?.[key]||[];
+  const current=PQE.side===1?m.t1:m.t2;
+  const roundNo=Math.floor(Number(m.slot||0))+1;
+  ge('pqeSlotLabel').textContent=`${roundNo}번 매치 · ${PQE.side===1?'왼쪽':'오른쪽'} 자리`;
+  const opts=[`<option value="">— 빈 슬롯 —</option>`,`<option value="__BYE__">🎫 부전승</option>`,...teams.map((t,i)=>`<option value="${i}">${outputEsc(pyramidDisplayNameForQuickEdit(tdn(t,key,i)))}</option>`)].join('');
+  const sel=ge('pqeSelect'); sel.innerHTML=opts;
+  if(current!==null&&current!==undefined) sel.value=String(current);
+  else if(m.bye) sel.value='__BYE__';
+  else sel.value='';
+  om('mPyramidQuickEdit');
+}
+function pyramidDisplayNameForQuickEdit(name){ return String(name||'').replace(/-([A-C])$/i,'$1'); }
+async function savePyramidSlotQuickEdit(){
+  if(!(AD||OP)){ toast('수정 권한이 없습니다','error'); return; }
+  const {key,mid,side}=PQE||{}; if(!key||!mid)return;
+  const all=G.matches?.[key]||[], main=all.filter(x=>x.phase==='main');
+  const m=main.find(x=>String(x.id||x._id||'')===String(mid)); if(!m)return;
+  const firstRound=Math.min(...main.map(x=>Number(x.round||0)));
+  const first=main.filter(x=>Number(x.round||0)===firstRound);
+  const sel=ge('pqeSelect'), raw=sel?sel.value:'';
+  const newTeam=(raw===''||raw==='__BYE__')?null:Number(raw);
+
+  // 한 팀이 여러 슬롯에 중복되지 않게, 선택한 팀의 기존 자리는 자동 비움.
+  if(newTeam!==null){
+    first.forEach(x=>{
+      if(x===m) return;
+      if(Number(x.t1)===newTeam) x.t1=null;
+      if(Number(x.t2)===newTeam) x.t2=null;
+    });
+    if(side===1 && Number(m.t2)===newTeam) m.t2=null;
+    if(side===2 && Number(m.t1)===newTeam) m.t1=null;
+  }
+  if(side===1) m.t1=newTeam; else m.t2=newTeam;
+
+  // 첫 라운드의 팀/부전승 상태를 다시 계산한다.
+  first.forEach(x=>{
+    const has1=x.t1!==null&&x.t1!==undefined, has2=x.t2!==null&&x.t2!==undefined;
+    if(has1!==has2){ x.bye=true; x.winner=has1?x.t1:x.t2; }
+    else { x.bye=false; x.winner=null; }
+    x.rubbers=[]; delete x.simpleResult;
+  });
+  // 부전승 선택은 해당 슬롯을 비우고 반대편 팀을 자동 진출시키는 의미.
+  // 양쪽이 모두 비어 있으면 아직 미정 슬롯으로 남긴다.
+
+  // 다음 라운드는 첫 라운드 배치 기준으로 새로 구성한다.
+  main.filter(x=>Number(x.round||0)>firstRound).forEach(x=>{x.t1=null;x.t2=null;x.winner=null;x.bye=false;x.rubbers=[];delete x.simpleResult;});
+  first.filter(x=>x.bye&&x.winner!==null&&x.winner!==undefined).forEach(bm=>{
+    const nm=main.find(x=>Number(x.round||0)===firstRound+1&&Number(x.slot||0)===Math.floor(Number(bm.slot||0)/2));
+    if(!nm)return;
+    if(Number(bm.slot||0)%2===0) nm.t1=bm.winner; else nm.t2=bm.winner;
+  });
+
+  sl(true);
+  try{
+    await stM(key);
+    await fbLog(`본선 피라미드 수기 자리입력: ${raw==='__BYE__'?'부전승':raw===''?'빈 슬롯':pyramidDisplayNameForQuickEdit(tdn((G.teams?.[key]||[])[newTeam],key,newTeam))}`,'✍️');
+    sl(false); cm('mPyramidQuickEdit'); renderBracket(); toast('본선 자리 저장 완료 ✅','success');
+  }catch(e){ sl(false); toast('저장 실패: '+(e?.message||e),'error'); }
 }
 
 function seedAdv(advT){
@@ -23975,13 +24076,22 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
   const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
   const entrants=[];
   first.forEach(m=>{
+    const mid=String(m.id||m._id||'');
     if(m.bye){
-      const byeTeam=(m.winner!==null&&m.winner!==undefined)?m.winner:(m.t1!==null&&m.t1!==undefined?m.t1:m.t2);
-      entrants.push({name:outputTeamName(key,byeTeam),team:byeTeam,byeWinner:true,sourceLabel:String(m.source1Label||m.source2Label||'').trim()});
-      entrants.push({name:'부전승',team:null,byeSlot:true,sourceLabel:''});
+      const has1=m.t1!==null&&m.t1!==undefined, has2=m.t2!==null&&m.t2!==undefined;
+      if(has1){
+        entrants.push({name:outputTeamName(key,m.t1),team:m.t1,byeWinner:true,sourceLabel:String(m.source1Label||'').trim(),matchId:mid,side:1});
+        entrants.push({name:'부전승',team:null,byeSlot:true,sourceLabel:'',matchId:mid,side:2});
+      }else if(has2){
+        entrants.push({name:'부전승',team:null,byeSlot:true,sourceLabel:'',matchId:mid,side:1});
+        entrants.push({name:outputTeamName(key,m.t2),team:m.t2,byeWinner:true,sourceLabel:String(m.source2Label||'').trim(),matchId:mid,side:2});
+      }else{
+        entrants.push({name:'',team:null,sourceLabel:'',matchId:mid,side:1});
+        entrants.push({name:'',team:null,sourceLabel:'',matchId:mid,side:2});
+      }
     }else{
-      entrants.push({name:outputTeamName(key,m.t1),team:m.t1,sourceLabel:String(m.source1Label||'').trim()});
-      entrants.push({name:outputTeamName(key,m.t2),team:m.t2,sourceLabel:String(m.source2Label||'').trim()});
+      entrants.push({name:outputTeamName(key,m.t1),team:m.t1,sourceLabel:String(m.source1Label||'').trim(),matchId:mid,side:1});
+      entrants.push({name:outputTeamName(key,m.t2),team:m.t2,sourceLabel:String(m.source2Label||'').trim(),matchId:mid,side:2});
     }
   });
   if(!entrants.length)return '';
@@ -24063,8 +24173,12 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     const nameLen=Array.from(pyramidDisplayTeamName(e.name)).length;
     const teamFont=nameLen<=3?(n>=32?14:18):nameLen<=5?(n>=32?11.5:14.5):(n>=32?9.2:11.5);
     const maxReadableFont=Math.max(24,Math.min(40,bw-2));
-    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:1px solid ${border};background:${bg};border-radius:5px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px">
-      ${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
+    const quickEditable=interactive&&!blank&&(AD||OP)&&e.matchId&&e.side;
+    const qClick=quickEditable?`onclick="event.stopPropagation();openPyramidSlotQuickEdit('${key}','${String(e.matchId).replace(/'/g,"\\'")}',${Number(e.side)})"`:'';
+    const qTitle=quickEditable?'title="눌러서 팀/부전승 선택"':'';
+    const editBadge=quickEditable?`<div style="position:absolute;right:-5px;top:-7px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
+    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
+      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name||'빈슬롯')}</div>
     </div>`;
   }).join('');
 
@@ -24378,7 +24492,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
   onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetPrelimDrawOnly,resetMainDrawOnly,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
-  openManualEdit,saveManualEdit,toggleByeEdit,
+  openManualEdit,saveManualEdit,toggleByeEdit,openPyramidSlotQuickEdit,savePyramidSlotQuickEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,setOperationViewMode,
   openMatchCourtModal,saveMatchCourtModal,autoOrderMatches,runAutoOrder,
   openPD,openEditPlayer,saveEditPlayer,deletePlayer,saveClubPassword,resetClubPassword,saveFirstLoginPhone,saveForcedClubPassword,cancelForcedClubPassword,_completeRegLogin,updateMyClubUI,updateMyClubHomeCard,goMyClubBracket,openMyClubQuickOrder,openMyMatchOrderFromCard,submitSavedOrderFromCard,toggleMyClubFilter,saveRegDeadline,clearRegDeadline,refreshRegDeadlineUI,mergePlayer,openSelectiveClearModal,selectiveClearTournament,cleanupPlayerHistories,hardResetAllData,
