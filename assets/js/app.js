@@ -21936,7 +21936,13 @@ async function renderRegistryTab(force){
 
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
-  const registryMembers = await loadRegistry(year);
+  let registryMembers = await loadRegistry(year);
+  if((registryMembers||[]).some(x=>!String(x.region||'').trim())){
+    try{
+      const repaired=await autoFillClubRegionDefaultsFromRegistry(year);
+      if(repaired.rowChanged) registryMembers=await loadRegistry(year);
+    }catch(e){console.warn('auto club-region repair skipped',e);}
+  }
   const members = (registryMembers||[])
     .map((m, idx)=>({
       ...m,
@@ -22114,6 +22120,32 @@ async function saveClubDefaultRegionSetting(){
   return saveAllClubDefaultRegions();
 }
 
+function resolveClubRegionForRegistry(club, members=[]){
+  const c=normalizeClub(club||''); if(!c)return '';
+  const configured=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
+  if(configured)return configured;
+  const inferred=inferClubRegionFromMembers(members,c,normalizeClub);
+  return normalizeRegionLabel(inferred?.region||'');
+}
+async function autoFillClubRegionDefaultsFromRegistry(year=2026){
+  const members=await loadRegistry(year);
+  let metaChanged=false,rowChanged=0;
+  const clubs=[...new Set(members.map(m=>normalizeClub(m.club||'')).filter(Boolean))];
+  clubs.forEach(club=>{
+    if(getClubDefaultRegion(G.meta,club))return;
+    const inferred=inferClubRegionFromMembers(members,club,normalizeClub);
+    const region=normalizeRegionLabel(inferred?.region||'');
+    if(region){setClubDefaultRegion(G.meta,club,region);metaChanged=true;}
+  });
+  members.forEach(m=>{
+    if(String(m.region||'').trim())return;
+    const region=resolveClubRegionForRegistry(m.club,members);
+    if(region){m.region=region;rowChanged++;}
+  });
+  if(metaChanged)await saveMeta();
+  if(rowChanged){G_REGISTRY[year]=members;await saveRegistry(year);}
+  return {metaChanged,rowChanged};
+}
 async function applyDefaultRegionsToUnassigned(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
@@ -22184,7 +22216,7 @@ async function registryTabQuickAdd(){
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(applyClubDefaultRegion(G.meta,{name,club,region:'',subClub:subClub||''}));
+  members.push(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}));
   if(!window.G_REGISTRY) window.G_REGISTRY={};
   G_REGISTRY[year]=members;
   // G.players에도 추가
@@ -22228,10 +22260,7 @@ async function quickEditRegistryMember(year, idx){
   if(!newClub){ toast('주 클럽을 입력하세요','error'); return; }
 
   const currentRegion=String(m.region||'').trim();
-  const suggestedRegion=currentRegion || getClubDefaultRegion(G.meta,newClub);
-  const newRegionRaw=prompt(`소속 코트/지역 수정\n현재: ${currentRegion||'미배정'}\n\n클럽 기본값이 있으면 자동 제안됩니다.`, suggestedRegion);
-  if(newRegionRaw===null) return;
-  const newRegion=normalizeRegionLabel(newRegionRaw);
+  const newRegion=resolveClubRegionForRegistry(newClub,members) || normalizeRegionLabel(currentRegion);
 
   if(newName===oldName && newClub===normalizeClub(oldClub) && newRegion===currentRegion){
     toast('변경된 내용이 없습니다','info');
@@ -22358,9 +22387,10 @@ async function removeOfficialRegistryPlayerIfUnused(name,club){
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const name=(ge('rmgr_name')?.value||'').trim(); const club=ge('rmgr_club')?.value||'';
-  const region=(ge('rmgr_region')?.value||'').trim(); const subClub=(ge('rmgr_subclub')?.value||'').trim();
+  let region=(ge('rmgr_region')?.value||'').trim(); const subClub=(ge('rmgr_subclub')?.value||'').trim();
   if(!name||!club){ toast('이름과 클럽은 필수입니다','error'); return; }
   const members=await loadRegistry(year);
+  if(!region) region=resolveClubRegionForRegistry(club,members);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
   members.push(applyClubDefaultRegion(G.meta,{name,club,region,subClub})); sl(true);
   try{
@@ -22379,7 +22409,7 @@ async function saveRegistryRow(year,idx){
   const members=await loadRegistry(year); if(!members[idx]) return;
   const oldIdentity={name:members[idx].name,club:members[idx].club};
   members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=ge(`rmgr_c_${idx}`)?.value||'';
-  members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim(); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
+  members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim() || resolveClubRegionForRegistry(members[idx].club,members); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
   sl(true);
   try{
     await saveRegistry(year);
