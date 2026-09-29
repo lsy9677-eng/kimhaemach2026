@@ -23698,53 +23698,47 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
-  const entrants=[]; first.forEach(m=>{entrants.push({name:outputTeamName(key,m.t1),team:m.t1});entrants.push({name:outputTeamName(key,m.t2),team:m.t2});});
+  const entrants=[];first.forEach(m=>{entrants.push({name:outputTeamName(key,m.t1),team:m.t1});entrants.push({name:outputTeamName(key,m.t2),team:m.t2});});
   if(!entrants.length)return '';
-  let n=1;while(n<entrants.length)n*=2;
-  while(entrants.length<n)entrants.push({name:'',team:null});
-  const width=Math.max(820,n*72), baseY=330, stepY=52, topY=Math.max(24,baseY-Math.log2(n)*stepY), height=baseY+70;
+  let n=1;while(n<entrants.length)n*=2;while(entrants.length<n)entrants.push({name:'',team:null});
+  const width=Math.max(900,n*84), baseY=360, stepY=62, levels=Math.log2(n), height=baseY+72;
   const x=i=>(i+.5)*width/n;
   const winnerTeam=m=>{
     if(blank||!m)return null;
     if(m.winner!=null)return m.winner;
-    const rs=getMatchResultState(key,m);
-    if(!rs.done)return null;
+    const rs=getMatchResultState(key,m);if(!rs.done)return null;
     const a=Number(rs.disp1),b=Number(rs.disp2);
     return Number.isFinite(a)&&Number.isFinite(b)&&a!==b?(a>b?m.t1:m.t2):null;
   };
-  const matchByRoundSlot=new Map();
-  all.forEach(m=>matchByRoundSlot.set(Number(m.round||0)+'|'+Number(m.slot||0),m));
-  let paths='', labels='', roundCount=Math.log2(n);
-  // Bracket geometry: each lower pair joins at midpoint, then rises to next round.
-  for(let level=0;level<roundCount;level++){
-    const group=2**(level+1), y0=baseY-level*stepY, y1=baseY-(level+1)*stepY;
-    const round=rounds[Math.min(level,rounds.length-1)];
+  const byRS=new Map();all.forEach(m=>byRS.set(Number(m.round||0)+'|'+Number(m.slot||0),m));
+  let paths='',labels='';
+  const BLUE='#1565c0', THIN='#94a3b8';
+  for(let level=0;level<levels;level++){
+    const group=2**(level+1),y0=baseY-level*stepY,y1=baseY-(level+1)*stepY,round=rounds[Math.min(level,rounds.length-1)];
     for(let g=0;g<n;g+=group){
-      const left=x(g+group/4-0.5), right=x(g+3*group/4-0.5), mid=(left+right)/2;
-      const slot=Math.floor(g/group);
-      const m=matchByRoundSlot.get(Number(round)+'|'+slot);
-      const wt=winnerTeam(m);
-      let leftWin=false,rightWin=false;
-      if(wt!=null&&m){leftWin=String(wt)===String(m.t1);rightWin=String(wt)===String(m.t2);}
-      const sw=blank?1.2:3.2;
-      const thin=1.15;
-      paths+=`<path d="M ${left} ${y0} V ${y1} H ${mid}" fill="none" stroke="#64748b" stroke-width="${leftWin?sw:thin}" stroke-linecap="square"/>`;
-      paths+=`<path d="M ${right} ${y0} V ${y1} H ${mid}" fill="none" stroke="#64748b" stroke-width="${rightWin?sw:thin}" stroke-linecap="square"/>`;
-      // Continue winner trunk upward; current-state gets bold only when a winner exists.
-      paths+=`<path d="M ${mid} ${y1} V ${Math.max(topY,y1-stepY)}" fill="none" stroke="#64748b" stroke-width="${(!blank&&wt!=null)?sw:thin}" stroke-linecap="square"/>`;
+      const li=g+group/4-.5,ri=g+3*group/4-.5,left=x(li),right=x(ri),mid=(left+right)/2,slot=Math.floor(g/group);
+      const m=byRS.get(Number(round)+'|'+slot),wt=winnerTeam(m);
+      const lw=(!blank&&wt!=null&&m&&String(wt)===String(m.t1)),rw=(!blank&&wt!=null&&m&&String(wt)===String(m.t2));
+      const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.2:1.35}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      paths+=seg(left,lw)+seg(right,rw);
+      const trunkWin=!blank&&wt!=null;
+      paths+=`<path d="M ${mid} ${y1} V ${Math.max(30,y1-stepY)}" fill="none" stroke="${trunkWin?BLUE:THIN}" stroke-width="${trunkWin?4.2:1.35}" stroke-linecap="round"/>`;
     }
-    const teamsLeft=n/(2**level);
-    const roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
-    labels+=`<text x="8" y="${y1+4}" font-size="8" font-weight="800" fill="#475569">${roundLabel}</text>`;
+    const teamsLeft=n/(2**level),roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
+    labels+=`<g><rect x="7" y="${y1-11}" width="40" height="18" rx="9" fill="#eff6ff" stroke="#bfdbfe"/><text x="27" y="${y1+2}" text-anchor="middle" font-size="8" font-weight="900" fill="#1d4ed8">${roundLabel}</text></g>`;
   }
-  const teamBoxes=entrants.map((e,i)=>{
-    const xx=x(i), bw=Math.max(46,width/n-4);
-    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:48px;border:1px solid #94a3b8;background:#f8fbff;text-align:center;font-size:7px;font-weight:800;padding:4px 2px;writing-mode:vertical-rl;overflow:hidden">${outputEsc(e.name)}</div>`;
+  const boxes=entrants.map((e,i)=>{
+    const xx=x(i),bw=Math.max(66,width/n-8),name=outputEsc(e.name||'');
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+5}px;transform:translateX(-50%);width:${bw}px;height:44px;border:1.2px solid #b7c5d8;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;font-weight:900;line-height:1.15;padding:4px;overflow:hidden;word-break:keep-all">${name}</div>
+      <div style="position:absolute;left:${xx}px;top:${baseY-7}px;transform:translateX(-50%);font-size:6.5px;font-weight:700;color:#64748b">${i+1}</div>`;
   }).join('');
-  const nums=entrants.map((e,i)=>`<div style="position:absolute;left:${x(i)}px;top:${baseY-2}px;transform:translate(-50%,-100%);font-size:6px;color:#64748b">${i+1}</div>`).join('');
-  return `<div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
-    <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${nums}${teamBoxes}
-  </div></div>`;
+  const legend=blank
+    ?`<div style="font-size:7.5px;color:#64748b;text-align:center;margin-top:2px">수기용 · 승리팀의 가지선을 펜으로 굵게 따라 표시하세요.</div>`
+    :`<div style="display:flex;justify-content:center;gap:14px;align-items:center;font-size:7.5px;color:#64748b;margin-top:2px"><span><i style="display:inline-block;width:24px;border-top:4px solid ${BLUE};vertical-align:middle;margin-right:4px"></i>승리팀 경로</span><span><i style="display:inline-block;width:24px;border-top:1px solid ${THIN};vertical-align:middle;margin-right:4px"></i>미진행/패자 경로</span></div>`;
+  return `<div class="oc-bracket-frame" style="width:100%;padding:8px 4px 2px;background:#fff">
+    <div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
+      <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
+    </div></div>${legend}</div>`;
 }
 function outputMainTreeHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
