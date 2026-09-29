@@ -23570,6 +23570,7 @@ function outputAvailableDivisions(tid,t=null,rawRegs=[],bundle=null){
 }
 function outputTeamName(key,idx){
   const teams=G.teams?.[key]||[];
+  if(idx===null||idx===undefined||idx==='')return '미정';
   const i=Number(idx);
   if(!Number.isFinite(i)||i<0||!teams[i])return '미정';
   return tdn(teams[i],key,i)||teams[i]?.club||'미정';
@@ -23698,7 +23699,17 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
-  const entrants=[]; first.forEach(m=>{entrants.push({name:outputTeamName(key,m.t1),team:m.t1});entrants.push({name:outputTeamName(key,m.t2),team:m.t2});});
+  const entrants=[];
+  first.forEach(m=>{
+    if(m.bye){
+      const byeTeam=(m.winner!==null&&m.winner!==undefined)?m.winner:(m.t1!==null&&m.t1!==undefined?m.t1:m.t2);
+      entrants.push({name:outputTeamName(key,byeTeam),team:byeTeam,byeWinner:true});
+      entrants.push({name:'부전승',team:null,byeSlot:true});
+    }else{
+      entrants.push({name:outputTeamName(key,m.t1),team:m.t1});
+      entrants.push({name:outputTeamName(key,m.t2),team:m.t2});
+    }
+  });
   if(!entrants.length)return '';
   let n=1;while(n<entrants.length)n*=2;while(entrants.length<n)entrants.push({name:'',team:null});
 
@@ -23721,7 +23732,8 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     for(let g=0;g<n;g+=group){
       const left=x(g+group/4-.5), right=x(g+3*group/4-.5), mid=(left+right)/2, slot=Math.floor(g/group);
       const m=byRS.get(Number(round)+'|'+slot), wt=blank?null:winnerTeam(m);
-      const lw=wt!=null&&m&&String(wt)===String(m.t1), rw=wt!=null&&m&&String(wt)===String(m.t2);
+      let lw=wt!=null&&m&&String(wt)===String(m.t1), rw=wt!=null&&m&&String(wt)===String(m.t2);
+      if(m?.bye&&wt!=null){ lw=true; rw=false; }
       const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.4:1.25}" stroke-linecap="round" stroke-linejoin="round"/>`;
       paths+=seg(left,lw)+seg(right,rw);
       paths+=`<path d="M ${mid} ${y1} V ${Math.max(28,y1-stepY)}" fill="none" stroke="${(!blank&&wt!=null)?BLUE:THIN}" stroke-width="${(!blank&&wt!=null)?4.4:1.25}" stroke-linecap="round"/>`;
@@ -23738,8 +23750,11 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   };
   const boxes=entrants.map((e,i)=>{
     const xx=x(i), bw=Math.max(27,Math.min(42,width/n-3));
-    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid #9fb4cf;background:${i%2?'#f8fbff':'#edf5ff'};border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:3px 1px">
-      <div style="font-size:${n>=32?'8':'10'}px;font-weight:950;color:#10213d;letter-spacing:.1px;max-height:70px;overflow:hidden">${verticalName(e.name)}</div>
+    const bg=e.byeSlot?'#fff8dc':(i%2?'#f8fbff':'#edf5ff');
+    const border=e.byeSlot?'#e0a400':'#9fb4cf';
+    const color=e.byeSlot?'#9a6700':'#10213d';
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid ${border};background:${bg};border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:3px 1px">
+      <div style="font-size:${n>=32?'8':'10'}px;font-weight:950;color:${color};letter-spacing:.1px;max-height:70px;overflow:hidden">${verticalName(e.name)}</div>
     </div>`;
   }).join('');
 
