@@ -755,11 +755,11 @@ import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPl
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{initializeFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
-const db=initializeFirestore(_app,{experimentalForceLongPolling:true,useFetchStreams:false});
+const db=getFirestore(_app);
 const storage=getStorage(_app);
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
 if(FIRESTORE_WRITE_TRACE){
@@ -21839,39 +21839,23 @@ function _isRegistryClean(members, version, year){
   return (validClub/members.length) >= 0.8;
 }
 
-function registryLocalCacheKey(year){return `kimhae_registry_cache_${year}`;}
-function readRegistryLocalCache(year){
-  try{
-    const raw=localStorage.getItem(registryLocalCacheKey(year));if(!raw)return [];
-    const parsed=JSON.parse(raw);return Array.isArray(parsed?.members)?parsed.members:[];
-  }catch(e){return [];}
-}
-function writeRegistryLocalCache(year,members){
-  try{localStorage.setItem(registryLocalCacheKey(year),JSON.stringify({savedAt:Date.now(),members:members||[]}));}catch(e){}
-}
-function withRegistryTimeout(promise,ms=7000){
-  return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('REGISTRY_TIMEOUT')),ms))]);
-}
 async function loadRegistry(year){
   if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
-  const cached=readRegistryLocalCache(year);
-  if(cached.length)G_REGISTRY[year]=cached;
   try{
-    const loaded=await withRegistryTimeout(loadRegistryDocument({db,doc,getDoc,year}),7000);
+    const loaded=await loadRegistryDocument({db,doc,getDoc,year});
     if(loaded.exists){
       if(!_isRegistryClean(loaded.members, loaded.version, year)){
         console.warn(`⚠️ memberRegistries/${year} 버전 불일치 - 그대로 사용`);
       }
       G_REGISTRY[year]=loaded.members;
-      writeRegistryLocalCache(year,loaded.members);
-    }else if(!cached.length){
+    }else{
       G_REGISTRY[year]=[];
     }
+    REGISTRY_YEARS_LOADED.push(year);
   }catch(e){
-    console.warn(`[Registry] ${year} 원격 로드 지연/실패 → 로컬 캐시 사용`,e?.message||e);
-    if(!G_REGISTRY[year])G_REGISTRY[year]=cached||[];
+    G_REGISTRY[year]=[];
+    REGISTRY_YEARS_LOADED.push(year);
   }
-  if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
   return G_REGISTRY[year]||[];
 }
 async function saveRegistry(year){
@@ -21880,12 +21864,14 @@ async function saveRegistry(year){
     db,doc,setDoc,serverTimestamp,year,members,
     version:_registryVersion(year)
   });
-  writeRegistryLocalCache(year,members);
 }
 async function getRegistryYears(){
-  // 선수현황 진입을 Firestore 컬렉션 목록 조회로 막지 않는다.
-  // 현재 공식명단 연도는 REG_YEAR(2026)를 즉시 사용한다.
-  return [REG_YEAR];
+  try{
+    const snaps=await getDocs(collection(db,'memberRegistries'));
+    const years=snaps.docs.map(d=>parseInt(d.id)).filter(y=>!isNaN(y)).sort();
+    if(!years.includes(REG_YEAR)) years.push(REG_YEAR);
+    return years.sort();
+  }catch(e){ return [REG_YEAR]; }
 }
 
 // 탭 전환
@@ -21951,16 +21937,12 @@ async function renderRegistryTab(force){
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   let registryMembers = await loadRegistry(year);
-  if(!registryMembers.length){
-    const regTabBody=ge('regTabBody');
-    if(regTabBody){
-      regTabBody.dataset.ready='1';
-      regTabBody.innerHTML='<div class="card" style="padding:22px;text-align:center"><b>선수 명단 연결이 지연되고 있습니다.</b><div style="margin-top:7px;font-size:.78rem;color:var(--text2)">네트워크 연결이 복구되면 새로고침해 주세요. 저장된 명단 캐시가 있으면 자동으로 표시됩니다.</div><button class="btn btn-outline" style="margin-top:12px" onclick="location.reload()">↻ 다시 연결</button></div>';
-    }
-    return;
-  }
-  // 중요: 현황 렌더링 중에는 Firestore 저장/보정 작업을 절대 실행하지 않는다.
-  // 데이터 보정은 관리자 수동 '중복 클럽 자동 통합'에서만 수행한다.
+  try{
+    const grouped=await forceRegistryMembersIntoCanonicalClubGroups(year);
+    if(grouped.changed) registryMembers=await loadRegistry(year);
+    const repaired=await autoFillClubRegionDefaultsFromRegistry(year);
+    if(repaired.rowChanged) registryMembers=await loadRegistry(year);
+  }catch(e){console.warn('auto club/region repair skipped',e);}
   const members = (registryMembers||[])
     .map((m, idx)=>({
       ...m,
@@ -21993,7 +21975,6 @@ async function renderRegistryTab(force){
   const selRegion=ge('regRegionSel')?.value||'';
   const selClub=ge('regClubSel')?.value||'';
   const showSubOnly=ge('regShowSubOnly')?.checked||false;
-  const showNewOnly=AD && !!ge('regShowNewOnly')?.checked;
   const keyword=(ge('regSearchInput')?.value||'').trim();
 
   const filtered=members.filter(m=>{
@@ -22018,15 +21999,7 @@ async function renderRegistryTab(force){
     return;
   }
 
-  const displayFiltered=filtered.map(m=>{
-    const club=canonicalRegistryClub(m.club||'');
-    const region=getRegistryDisplayRegion(club,registryMembers)||normalizeRegionLabel(m.region||'');
-    const row={...m,club,region};
-    if(!AD||!isNewlyAddedRegistryMember(m))return row;
-    const d=registryAddedDateLabel(m.addedAt);
-    return {...row,name:`${m.name}  🆕${d?` ${d}`:''}`};
-  });
-  const sortedFiltered=displayFiltered.slice().sort((a,b)=>{
+  const sortedFiltered=filtered.slice().sort((a,b)=>{
     const cr=String(a.region||'소속 코트 미지정').localeCompare(String(b.region||'소속 코트 미지정'),'ko',{numeric:true});
     if(cr!==0) return cr;
     const cc=String(a.club||'소속 미상').localeCompare(String(b.club||'소속 미상'),'ko',{numeric:true});
@@ -22042,18 +22015,9 @@ async function renderRegistryTab(force){
     escapeAttr:escAttr
   });
   body.dataset.ready='1';
-  setTimeout(()=>{ensureRegistryRepairButton();ensureRegistryNewMemberAdminControls();},0);
+  setTimeout(ensureRegistryRepairButton,0);
 }
 
-function ensureRegistryNewMemberAdminControls(){
-  if(!AD||ge('regShowNewOnly'))return;
-  const search=ge('regSearchInput');if(!search)return;
-  const host=search.parentElement;if(!host)return;
-  const label=document.createElement('label');label.id='regNewMemberAdminFilter';
-  label.style.cssText='display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:7px 9px;margin:4px';
-  label.innerHTML='<input id="regShowNewOnly" type="checkbox" onchange="renderRegistryTab(true)"> 🆕 신규 추가만';
-  host.appendChild(label);
-}
 async function repairRegistryClubGroupsNow(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   sl(true);
@@ -22086,7 +22050,6 @@ async function exportRegistryFiltered(fmt){
     if(selRegion&&m.region!==selRegion) return false;
     if(selClub&&m.club!==selClub) return false;
     if(showSubOnly&&!m.subClub) return false;
-    if(showNewOnly&&!isNewlyAddedRegistryMember(m)) return false;
     if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)) return false;
     return true;
   });
@@ -22192,27 +22155,10 @@ function canonicalizeRegistryMembers(members=[]){
 }
 function resolveClubRegionForRegistry(club, members=[]){
   const c=canonicalRegistryClub(club||''); if(!c)return '';
-  const displayRegion=getRegistryDisplayRegion(c,members);
-  if(displayRegion)return displayRegion;
   const configured=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
   if(configured)return configured;
   const inferred=inferClubRegionFromMembers(members,c,normalizeClub);
   return normalizeRegionLabel(inferred?.region||'');
-}
-function getRegistryDisplayRegion(club,members=[]){
-  const c=canonicalRegistryClub(club||'');if(!c)return '';
-  const counts={};
-  (members||[]).forEach(m=>{
-    if(canonicalRegistryClub(m.club||'')!==c)return;
-    const r=normalizeRegionLabel(m.region||'');
-    if(r)counts[r]=(counts[r]||0)+1;
-  });
-  const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'));
-  const saved=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
-  if(!ranked.length)return saved;
-  if(ranked.length===1)return ranked[0][0];
-  if(ranked[0][1]>ranked[1][1])return ranked[0][0];
-  return saved||ranked[0][0];
 }
 async function forceRegistryMembersIntoCanonicalClubGroups(year=2026){
   const members=await loadRegistry(year);
@@ -22327,7 +22273,7 @@ async function registryTabQuickAdd(){
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}),'quick-add'));
+  members.push(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}));
   if(!window.G_REGISTRY) window.G_REGISTRY={};
   G_REGISTRY[year]=members;
   // G.players에도 추가
@@ -22365,7 +22311,6 @@ async function quickEditRegistryMember(year, idx){
   ge('rqemClub').innerHTML='<option value="">-- 클럽 선택 --</option>'+clubOptions.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
   ge('rqemClub').value=canonicalRegistryClub(m.club||'');
   ge('rqemSubClub').value=m.subClub||'';
-  const addedInfo=ge('rqemAddedInfo');if(addedInfo)addedInfo.textContent=m.addedAt?`추가 등록일: ${registryAddedDateLabel(m.addedAt)}`:'기존 등록선수';
   updateRegistryQuickEditRegionHint();
   ge('registryQuickEditOverlay').style.display='flex';
 }
@@ -22382,8 +22327,7 @@ function ensureRegistryQuickEditModal(){
     <select id="rqemClub" class="form-select" onchange="updateRegistryQuickEditRegionHint()" style="width:100%;box-sizing:border-box;margin-bottom:6px"></select>
     <div id="rqemRegionHint" style="font-size:.7rem;color:#64748b;margin-bottom:11px"></div>
     <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">부클럽 <span style="font-weight:500;color:#64748b">(선택)</span></label>
-    <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:8px">
-    <div id="rqemAddedInfo" style="font-size:.72rem;font-weight:800;color:#b45309;background:#fffbeb;border-radius:8px;padding:8px;margin-bottom:14px"></div>
+    <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:14px">
     <button class="btn btn-primary" style="width:100%;font-weight:900" onclick="saveRegistryQuickEditModal()">💾 수정 저장</button>
   </div>`;
   document.body.appendChild(o);
@@ -22485,18 +22429,6 @@ async function removeOfficialRegistryPlayerIfUnused(name,club){
   if(hasHistory||hasStats)return; // 경기기록이 있는 선수 마스터는 보존
   try{await deleteDoc(doc(db,'players',key.replace(/[/.#$[\]]/g,'_')));delete G.players[key];savePlayersToLocalCache();}catch(e){console.warn('registry player cleanup skipped',e);}
 }
-function stampRegistryAddedMeta(row, source='manual'){
-  if(!row||typeof row!=='object')return row;
-  if(!row.addedAt)row.addedAt=new Date().toISOString();
-  if(!row.addedSource)row.addedSource=source;
-  return row;
-}
-function registryAddedDateLabel(v){
-  if(!v)return '';
-  const d=new Date(v);if(Number.isNaN(d.getTime()))return '';
-  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-}
-function isNewlyAddedRegistryMember(m){return !!String(m?.addedAt||'').trim();}
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const name=(ge('rmgr_name')?.value||'').trim(); const club=canonicalRegistryClub(ge('rmgr_club')?.value||'');
@@ -22505,7 +22437,7 @@ async function addRegistryRow(){
   const members=await loadRegistry(year);
   if(!region) region=resolveClubRegionForRegistry(club,members);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region,subClub}),'admin-manual')); sl(true);
+  members.push(applyClubDefaultRegion(G.meta,{name,club,region,subClub})); sl(true);
   try{
     await saveRegistry(year);
     await syncOfficialRegistryRowsToPlayers([members[members.length-1]]);
@@ -23467,7 +23399,7 @@ Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,saveUnified
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
+  registryTabQuickAdd,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
   toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,openDirectorSettings,ensureDirectorPasswordSettingsButton,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
