@@ -22258,101 +22258,89 @@ async function registryTabQuickAdd(){
 // 과거 대회 history 안의 club 값은 당시 기록 보존을 위해 변경하지 않는다.
 async function quickEditRegistryMember(year, idx){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const members = await loadRegistry(year);
-  const m = members[idx];
+  const members=await loadRegistry(year);
+  const m=members[idx];
   if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
 
-  const oldName=(m.name||'').trim();
-  const oldClub=(m.club||'').trim();
-
-  const newNameRaw = prompt(`이름 수정\n현재: ${oldName}`, oldName);
-  if(newNameRaw===null) return;
-  const newName = newNameRaw.trim();
-  if(!newName){ toast('이름을 입력하세요','error'); return; }
-
-  const newClubRaw = prompt(`주 클럽 수정\n현재: ${oldClub}\n\n김해시 등록 클럽명을 정확히 입력하세요.`, oldClub);
-  if(newClubRaw===null) return;
-  const newClub = canonicalRegistryClub(newClubRaw.trim());
-  if(!newClub){ toast('주 클럽을 입력하세요','error'); return; }
-
-  const currentRegion=String(m.region||'').trim();
-  const newRegion=resolveClubRegionForRegistry(newClub,members) || normalizeRegionLabel(currentRegion);
-
-  if(newName===oldName && newClub===normalizeClub(oldClub) && newRegion===currentRegion){
-    toast('변경된 내용이 없습니다','info');
-    return;
-  }
-
-  // 공식 등록명단 내 동일 이름+클럽 중복 방지
-  const duplicate = members.some((r,i)=>
-    i!==idx &&
-    normName(cleanName(r.name||''))===normName(cleanName(newName)) &&
-    normalizeClub(r.club||'')===normalizeClub(newClub)
-  );
-  if(duplicate){
-    toast('같은 이름과 클럽으로 이미 등록된 선수가 있습니다','error');
-    return;
-  }
-
-  const oldKey=pKey(oldName,oldClub);
-  const newKey=pKey(newName,newClub);
-
-  // 선수 DB에 새 키가 이미 있으면 자동 합치지 않고 차단
-  if(newKey!==oldKey && G.players[newKey]){
-    toast('변경하려는 이름+클럽의 선수 기록이 이미 존재합니다. 선수 합치기 기능을 사용하세요.','error');
-    return;
-  }
-
+  ensureRegistryQuickEditModal();
+  const clubOptions=(G.clubs||[]).slice().sort((a,b)=>a.localeCompare(b,'ko'));
+  ge('rqemYear').value=String(year);
+  ge('rqemIdx').value=String(idx);
+  ge('rqemName').value=m.name||'';
+  ge('rqemClub').innerHTML='<option value="">-- 클럽 선택 --</option>'+clubOptions.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
+  ge('rqemClub').value=canonicalRegistryClub(m.club||'');
+  ge('rqemSubClub').value=m.subClub||'';
+  updateRegistryQuickEditRegionHint();
+  ge('registryQuickEditOverlay').style.display='flex';
+}
+function ensureRegistryQuickEditModal(){
+  if(ge('registryQuickEditOverlay'))return;
+  const o=document.createElement('div');o.id='registryQuickEditOverlay';
+  o.style.cssText='display:none;position:fixed;inset:0;z-index:10080;background:rgba(15,23,42,.58);align-items:center;justify-content:center;padding:14px';
+  o.innerHTML=`<div style="width:min(460px,96vw);background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><b style="font-size:1rem;color:#0f172a">✏️ 등록선수 수정</b><button class="btn btn-outline" onclick="closeRegistryQuickEditModal()">닫기</button></div>
+    <input id="rqemYear" type="hidden"><input id="rqemIdx" type="hidden">
+    <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">이름</label>
+    <input id="rqemName" class="form-input" style="width:100%;box-sizing:border-box;margin-bottom:11px">
+    <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">주 클럽</label>
+    <select id="rqemClub" class="form-select" onchange="updateRegistryQuickEditRegionHint()" style="width:100%;box-sizing:border-box;margin-bottom:6px"></select>
+    <div id="rqemRegionHint" style="font-size:.7rem;color:#64748b;margin-bottom:11px"></div>
+    <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">부클럽 <span style="font-weight:500;color:#64748b">(선택)</span></label>
+    <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:14px">
+    <button class="btn btn-primary" style="width:100%;font-weight:900" onclick="saveRegistryQuickEditModal()">💾 수정 저장</button>
+  </div>`;
+  document.body.appendChild(o);
+}
+function closeRegistryQuickEditModal(){const o=ge('registryQuickEditOverlay');if(o)o.style.display='none';}
+function updateRegistryQuickEditRegionHint(){
+  const club=canonicalRegistryClub(ge('rqemClub')?.value||'');
+  const year=parseInt(ge('rqemYear')?.value||2026);
+  const members=(G_REGISTRY&&G_REGISTRY[year])||[];
+  const region=resolveClubRegionForRegistry(club,members);
+  const el=ge('rqemRegionHint');
+  if(el)el.textContent=club?(region?`소속 코트: ${region} (클럽 선택에 따라 자동 적용)`:'소속 코트: 미지정 — 클럽 기본 코트 설정 필요'):'';
+}
+async function saveRegistryQuickEditModal(){
+  if(!AD)return;
+  const year=parseInt(ge('rqemYear')?.value||2026);
+  const idx=parseInt(ge('rqemIdx')?.value||'-1',10);
+  const members=await loadRegistry(year),m=members[idx];
+  if(!m){toast('선수를 찾을 수 없습니다','error');return;}
+  const oldName=cleanName(m.name||''),oldClub=canonicalRegistryClub(m.club||'');
+  const newName=cleanName(ge('rqemName')?.value||'');
+  const newClub=canonicalRegistryClub(ge('rqemClub')?.value||'');
+  const newSubClub=(ge('rqemSubClub')?.value||'').trim();
+  if(!newName||!newClub){toast('이름과 주 클럽을 확인해 주세요','error');return;}
+  const duplicate=members.some((r,i)=>i!==idx&&normName(cleanName(r.name||''))===normName(newName)&&canonicalRegistryClub(r.club||'')===newClub);
+  if(duplicate){toast('같은 이름과 클럽으로 이미 등록된 선수가 있습니다','error');return;}
+  const newRegion=resolveClubRegionForRegistry(newClub,members)||normalizeRegionLabel(m.region||'');
+  const oldKey=pKey(oldName,oldClub),newKey=pKey(newName,newClub);
   sl(true);
   try{
-    // 1) 공식 등록명단 수정
-    members[idx]={...m,name:newName,club:newClub,region:newRegion};
-    G_REGISTRY[year]=members;
-    await saveRegistry(year);
+    members[idx]={...m,name:newName,club:newClub,subClub:newSubClub,region:newRegion};
+    G_REGISTRY[year]=members;await saveRegistry(year);
 
-    // 2) 현재 선수 DB도 동기화
-    //    과거 history의 h.club은 과거 소속 기록이므로 그대로 유지
     const oldPlayer=G.players[oldKey];
-    if(oldPlayer){
-      const existingClubs=Array.isArray(oldPlayer.clubs)?oldPlayer.clubs:[];
-      const nextClubs=[
-        newClub,
-        ...existingClubs.filter(c=>c && normalizeClub(c)!==normalizeClub(oldClub) && normalizeClub(c)!==normalizeClub(newClub))
-      ];
-
-      const nextPlayer={
-        ...oldPlayer,
-        key:newKey,
-        name:newName,
-        club:newClub,
-        clubs:nextClubs
-      };
-
-      if(newKey!==oldKey){
-        await setDoc(doc(db,'players',newKey.replace(/[/.#$[\]]/g,'_')),nextPlayer);
-        await deleteDoc(doc(db,'players',oldKey.replace(/[/.#$[\]]/g,'_')));
-        delete G.players[oldKey];
-        G.players[newKey]=nextPlayer;
-      }else{
-        G.players[oldKey]=nextPlayer;
-        await stP(oldKey);
-      }
+    const targetPlayer=G.players[newKey];
+    if(oldPlayer&&newKey!==oldKey){
+      // 목적지에 기존 기록이 있으면 안전하게 합치고, 과거 history는 보존한다.
+      const mergedHistory=[...(targetPlayer?.history||[]),...(oldPlayer.history||[])];
+      const uniqHist=[];const seen=new Set();
+      mergedHistory.forEach(h=>{const k=JSON.stringify([h.tid||'',h.date||'',h.club||'',h.div||'',h.rank||'',h.matchId||'']);if(!seen.has(k)){seen.add(k);uniqHist.push(h);}});
+      const next={...(targetPlayer||{}),...oldPlayer,key:newKey,name:newName,club:newClub,clubs:[...new Set([newClub,...(targetPlayer?.clubs||[]),...(oldPlayer.clubs||[]),...String(newSubClub).split(',').map(x=>normalizeClub(x.trim())).filter(Boolean)])],history:uniqHist,wins:Math.max(Number(targetPlayer?.wins||0),Number(oldPlayer.wins||0)),losses:Math.max(Number(targetPlayer?.losses||0),Number(oldPlayer.losses||0))};
+      await setDoc(doc(db,'players',newKey.replace(/[/.#$[\]]/g,'_')),next);
+      await deleteDoc(doc(db,'players',oldKey.replace(/[/.#$[\]]/g,'_')));
+      delete G.players[oldKey];G.players[newKey]=next;
+    }else{
+      await syncOfficialRegistryRowsToPlayers([members[idx]]);
     }
-
-    await fbLog(`등록선수 수정: ${oldName}(${oldClub}/${currentRegion||'미배정'}) → ${newName}(${newClub}/${newRegion||'미배정'})`,'✏️');
-
     savePlayersToLocalCache();
-    sl(false);
-    toast(`수정 완료되었습니다.\n${oldName}(${oldClub}) → ${newName}(${newClub})\n소속 코트: ${newRegion||'미배정'}`,'success');
-
-    try{ renderAllP(); }catch(e){ console.warn('renderAllP after quickEditRegistryMember',e); }
-    try{ await renderRegistryTab(); }catch(e){ console.warn('renderRegistryTab after quickEditRegistryMember',e); }
-    try{ await renderRegistryMgr(); }catch(e){ /* 관리자 명단관리 모달이 닫혀있으면 무시 */ }
-  }catch(e){
-    sl(false);
-    toast('저장 실패: '+e.message,'error');
-    console.error('quickEditRegistryMember',e);
-  }
+    await fbLog(`등록선수 수정: ${oldName}(${oldClub}) → ${newName}(${newClub}) / 부클럽 ${newSubClub||'없음'}`,'✏️');
+    closeRegistryQuickEditModal();sl(false);
+    toast('이름 · 클럽 · 부클럽 수정 완료 ✅','success');
+    renderAllP();await renderRegistryTab(true);
+    try{await renderRegistryMgr();}catch(e){}
+  }catch(e){sl(false);console.error(e);toast('저장 실패: '+e.message,'error');}
 }
 
 // 선수 등록 현황 탭 — 인라인 빠른 삭제
@@ -23370,7 +23358,7 @@ Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,saveUnified
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
+  registryTabQuickAdd,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
   toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,openDirectorSettings,ensureDirectorPasswordSettingsButton,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
