@@ -21937,12 +21937,14 @@ async function renderRegistryTab(force){
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   let registryMembers = await loadRegistry(year);
-  if((registryMembers||[]).some(x=>!String(x.region||'').trim())){
-    try{
+  try{
+    const repairKey=`registryClubRepair_${year}`;
+    if(!window[repairKey]){
+      window[repairKey]=true;
       const repaired=await autoFillClubRegionDefaultsFromRegistry(year);
       if(repaired.rowChanged) registryMembers=await loadRegistry(year);
-    }catch(e){console.warn('auto club-region repair skipped',e);}
-  }
+    }
+  }catch(e){console.warn('auto club/region repair skipped',e);}
   const members = (registryMembers||[])
     .map((m, idx)=>({
       ...m,
@@ -22120,8 +22122,21 @@ async function saveClubDefaultRegionSetting(){
   return saveAllClubDefaultRegions();
 }
 
+function canonicalRegistryClub(club){
+  const raw=normalizeClub(club||''); if(!raw)return '';
+  const compact=v=>String(v||'').replace(/\s+/g,'').toLowerCase();
+  const exact=(G.clubs||[]).find(c=>normalizeClub(c||'')===raw);
+  if(exact)return normalizeClub(exact);
+  const loose=(G.clubs||[]).find(c=>compact(normalizeClub(c||''))===compact(raw));
+  return loose?normalizeClub(loose):raw;
+}
+function canonicalizeRegistryMembers(members=[]){
+  let changed=0;
+  members.forEach(m=>{const c=canonicalRegistryClub(m.club||'');if(c&&c!==m.club){m.club=c;changed++;}});
+  return changed;
+}
 function resolveClubRegionForRegistry(club, members=[]){
-  const c=normalizeClub(club||''); if(!c)return '';
+  const c=canonicalRegistryClub(club||''); if(!c)return '';
   const configured=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
   if(configured)return configured;
   const inferred=inferClubRegionFromMembers(members,c,normalizeClub);
@@ -22130,6 +22145,7 @@ function resolveClubRegionForRegistry(club, members=[]){
 async function autoFillClubRegionDefaultsFromRegistry(year=2026){
   const members=await loadRegistry(year);
   let metaChanged=false,rowChanged=0;
+  rowChanged+=canonicalizeRegistryMembers(members);
   const clubs=[...new Set(members.map(m=>normalizeClub(m.club||'')).filter(Boolean))];
   clubs.forEach(club=>{
     if(getClubDefaultRegion(G.meta,club))return;
@@ -22209,7 +22225,7 @@ async function renderRegistryMgr(){
 async function registryTabQuickAdd(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const name=(ge('rtabAddName')?.value||'').trim();
-  const club=(ge('rtabAddClub')?.value||'').trim();
+  const club=canonicalRegistryClub((ge('rtabAddClub')?.value||'').trim());
   const subClub=(ge('rtabAddSubClub')?.value||'').trim();
   if(!name){ toast('이름을 입력하세요','error'); return; }
   if(!club){ toast('클럽을 선택하세요','error'); return; }
@@ -22256,7 +22272,7 @@ async function quickEditRegistryMember(year, idx){
 
   const newClubRaw = prompt(`주 클럽 수정\n현재: ${oldClub}\n\n김해시 등록 클럽명을 정확히 입력하세요.`, oldClub);
   if(newClubRaw===null) return;
-  const newClub = normalizeClub(newClubRaw.trim());
+  const newClub = canonicalRegistryClub(newClubRaw.trim());
   if(!newClub){ toast('주 클럽을 입력하세요','error'); return; }
 
   const currentRegion=String(m.region||'').trim();
@@ -22386,7 +22402,7 @@ async function removeOfficialRegistryPlayerIfUnused(name,club){
 }
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
-  const name=(ge('rmgr_name')?.value||'').trim(); const club=ge('rmgr_club')?.value||'';
+  const name=(ge('rmgr_name')?.value||'').trim(); const club=canonicalRegistryClub(ge('rmgr_club')?.value||'');
   let region=(ge('rmgr_region')?.value||'').trim(); const subClub=(ge('rmgr_subclub')?.value||'').trim();
   if(!name||!club){ toast('이름과 클럽은 필수입니다','error'); return; }
   const members=await loadRegistry(year);
@@ -22408,7 +22424,7 @@ async function addRegistryRow(){
 async function saveRegistryRow(year,idx){
   const members=await loadRegistry(year); if(!members[idx]) return;
   const oldIdentity={name:members[idx].name,club:members[idx].club};
-  members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=ge(`rmgr_c_${idx}`)?.value||'';
+  members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=canonicalRegistryClub(ge(`rmgr_c_${idx}`)?.value||'');
   members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim() || resolveClubRegionForRegistry(members[idx].club,members); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
   sl(true);
   try{
