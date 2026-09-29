@@ -23836,7 +23836,7 @@ function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
   </div>`;
 }
 
-// Phase81: 모바일 피라미드 대진표는 페이지 스와이프 대신 대진표 자체 가로 스크롤을 우선한다.
+// Phase82: 모바일 피라미드 대진표는 가로 스크롤 + 축소/확대/한눈에 맞춤을 함께 지원한다.
 function initMobileBracketHorizontalScroll(root=document){
   const targets=[...root.querySelectorAll('.mobile-bracket-hscroll,.actual-main-pyramid-body')];
   targets.forEach(el=>{
@@ -23844,6 +23844,46 @@ function initMobileBracketHorizontalScroll(root=document){
     el.dataset.mobileHscrollReady='1';
     el.style.overflowX='auto'; el.style.overflowY='hidden';
     el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-x pan-y';
+
+    const content=el.firstElementChild;
+    const isMobile=()=>window.innerWidth<=768;
+    const clamp=v=>Math.max(.38,Math.min(1.35,v));
+    const getZoom=()=>Number(el.dataset.bracketZoom||1);
+    const applyZoom=(z,keepCenter=true)=>{
+      if(!content)return;
+      const old=getZoom(), center=el.scrollLeft+el.clientWidth/2;
+      z=clamp(z); el.dataset.bracketZoom=String(z);
+      content.style.zoom=String(z);
+      if(keepCenter) requestAnimationFrame(()=>{
+        const ratio=old?z/old:1;
+        el.scrollLeft=Math.max(0,center*ratio-el.clientWidth/2);
+      });
+      const label=el.previousElementSibling?.querySelector?.('[data-bracket-zoom-label]');
+      if(label)label.textContent=Math.round(z*100)+'%';
+    };
+    const fitZoom=()=>{
+      if(!content)return;
+      content.style.zoom='1'; el.dataset.bracketZoom='1';
+      requestAnimationFrame(()=>{
+        const natural=Math.max(content.scrollWidth,content.getBoundingClientRect().width||0);
+        const available=Math.max(1,el.clientWidth-8);
+        const z=natural>available?clamp(available/natural):1;
+        applyZoom(z,false);
+        requestAnimationFrame(()=>{ el.scrollLeft=Math.max(0,(el.scrollWidth-el.clientWidth)/2); });
+      });
+    };
+
+    if(isMobile() && !el.previousElementSibling?.classList?.contains('mobile-bracket-zoom-tools')){
+      const tools=document.createElement('div');
+      tools.className='mobile-bracket-zoom-tools';
+      tools.style.cssText='display:flex;justify-content:center;align-items:center;gap:6px;margin:5px 0 7px;position:sticky;left:0;z-index:3';
+      tools.innerHTML='<button type="button" class="btn btn-outline" data-zout style="padding:5px 11px;font-size:.78rem">− 축소</button><button type="button" class="btn btn-outline" data-zfit style="padding:5px 10px;font-size:.78rem">↔ 한눈에</button><span data-bracket-zoom-label style="min-width:42px;text-align:center;font-size:.72rem;font-weight:800;color:#475569">100%</span><button type="button" class="btn btn-outline" data-zin style="padding:5px 11px;font-size:.78rem">＋ 확대</button>';
+      el.parentNode?.insertBefore(tools,el);
+      tools.querySelector('[data-zout]')?.addEventListener('click',()=>applyZoom(getZoom()-.1));
+      tools.querySelector('[data-zin]')?.addEventListener('click',()=>applyZoom(getZoom()+.1));
+      tools.querySelector('[data-zfit]')?.addEventListener('click',fitZoom);
+    }
+
     let sx=0,sy=0,horizontal=false;
     el.addEventListener('touchstart',ev=>{
       const t=ev.touches&&ev.touches[0]; if(!t)return; sx=t.clientX; sy=t.clientY; horizontal=false;
@@ -23854,11 +23894,9 @@ function initMobileBracketHorizontalScroll(root=document){
       if(dx>8 && dx>dy){ horizontal=true; ev.stopPropagation(); }
     },{passive:true});
     el.addEventListener('touchend',ev=>{ if(horizontal)ev.stopPropagation(); horizontal=false; },{passive:true});
-    // 모바일 최초 진입 시 전체 폭의 중앙부터 보여준다. 사용자가 이미 스크롤했다면 다시 이동시키지 않는다.
-    if(window.innerWidth<=768 && !el.dataset.mobileCentered){
-      el.dataset.mobileCentered='1';
-      requestAnimationFrame(()=>{ const max=Math.max(0,el.scrollWidth-el.clientWidth); if(max>0)el.scrollLeft=Math.round(max/2); });
-    }
+
+    // 모바일은 처음 열 때 '한눈에' 배율로 자동 축소한다. 이후 확대하면 가로 스크롤로 세부 확인 가능하다.
+    if(isMobile() && !el.dataset.mobileFitDone){ el.dataset.mobileFitDone='1'; fitZoom(); }
   });
 }
 
