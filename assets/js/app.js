@@ -18242,14 +18242,21 @@ function renderAllP(){
     if(limited.length===1){ showP(limited[0].name, limited[0].club); }
   } else {
     displayRows.sort((a,b)=>{
+      // 전체 현황에서는 2026 공식 등록선수를 우선 표시하고,
+      // 같은 그룹 안에서는 최근 참가일/경기수 순으로 정렬한다.
+      if(!!a.isReg!==!!b.isReg) return a.isReg?-1:1;
       const ad=String(a.summary?.lastDate||'');
       const bd=String(b.summary?.lastDate||'');
       if(ad!==bd) return bd.localeCompare(ad);
-      return Number(b.summary?.totalCount||0)-Number(a.summary?.totalCount||0);
+      const cnt=Number(b.summary?.totalCount||0)-Number(a.summary?.totalCount||0);
+      if(cnt!==0)return cnt;
+      return String(a.name||'').localeCompare(String(b.name||''),'ko',{numeric:true});
     });
-    const recentRows=displayRows.slice(0,8);
-    container.innerHTML = recentRows.length
-      ? `<div style="font-size:.84rem;font-weight:900;color:var(--primary-dark);margin-bottom:10px">최근 참가자 빠르게 보기</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${recentRows.map(row=>buildCard(row)).join('')}</div>`
+    // 검색하지 않은 전체 현황도 일부(기존 8명)만 자르지 않고 전체 대상을 표시한다.
+    // 그래야 신규 공식명단/0경기 선수도 검색 없이 확인할 수 있다.
+    const allRows=displayRows;
+    container.innerHTML = allRows.length
+      ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark)">전체 선수 현황</div><div style="font-size:.72rem;color:var(--text3)">총 ${allRows.length}명</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${allRows.map(row=>buildCard(row)).join('')}</div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>표시할 참가자 기록이 없습니다</p></div>';
   }
 }
