@@ -23446,7 +23446,8 @@ function installPublicOutputCenter(){
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
           <option value="main-blank">본선 대진표 · 현장 수기용</option>
-          <option value="main-tree">가지형 본선 대진표</option>
+          <option value="main-tree">가지형 본선 대진표 · 현재상황</option>
+          <option value="main-tree-blank">가지형 본선 대진표 · 현장 수기용</option>
         </select></label>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
@@ -23460,6 +23461,32 @@ function installPublicOutputCenter(){
     </div>`;
   main.appendChild(page);
 }
+function outputTournamentYear(t){
+  const vals=[t?.date,t?.startDate,t?.createdAt,t?.name];
+  for(const v of vals){
+    const str=typeof v==='string'?v:(v?.toDate?String(v.toDate().getFullYear()):'');
+    const m=String(str||'').match(/(20\d{2})/);if(m)return Number(m[1]);
+  }
+  return 0;
+}
+function outputTournamentTime(t){
+  for(const v of [t?.date,t?.startDate]){
+    const n=Date.parse(String(v||''));if(Number.isFinite(n))return n;
+  }
+  const c=t?.createdAt?.toMillis?.();return Number(c||0);
+}
+function outputSortedTournaments(){
+  const currentId=outputDefaultTournamentId();
+  return (G.tournaments||[]).filter(t=>outputTournamentYear(t)>=2026).sort((a,b)=>{
+    if(a.id===currentId&&b.id!==currentId)return -1;
+    if(b.id===currentId&&a.id!==currentId)return 1;
+    const ao=a.status==='ongoing'?1:0,bo=b.status==='ongoing'?1:0;
+    if(ao!==bo)return bo-ao;
+    const at=outputTournamentTime(a),bt=outputTournamentTime(b);
+    if(at!==bt)return bt-at;
+    return String(b.name||'').localeCompare(String(a.name||''),'ko');
+  });
+}
 function outputDefaultTournamentId(){
   return ge('brTS')?.value || (G.tournaments||[]).find(t=>t.status==='ongoing')?.id || (G.tournaments||[])[0]?.id || '';
 }
@@ -23467,8 +23494,9 @@ function initOutputCenter(){
   installPublicOutputCenter();
   const ts=ge('outTS');if(!ts)return;
   const prev=ts.value;
-  ts.innerHTML=(G.tournaments||[]).map(t=>`<option value="${outputEsc(t.id)}">${outputEsc(t.name||'대회')}</option>`).join('');
-  ts.value=(prev&&(G.tournaments||[]).some(t=>t.id===prev))?prev:outputDefaultTournamentId();
+  const outTours=outputSortedTournaments();
+  ts.innerHTML=outTours.map(t=>`<option value="${outputEsc(t.id)}">${outputEsc(t.name||'대회')}</option>`).join('');
+  ts.value=(prev&&outTours.some(t=>t.id===prev))?prev:(outTours[0]?.id||'');
   outputTournamentChanged();
 }
 async function outputTournamentChanged(){
@@ -23582,7 +23610,7 @@ function outputGeneratedMainTable(tid,div){
   const rows=[];for(let i=0;i<n;i+=2)rows.push(`<tr><td>${i+1}</td><td>${outputEsc(slots[i]||'')}</td><td>vs</td><td>${outputEsc(slots[i+1]||'')}</td><td class="oc-write"></td><td class="oc-write"></td></tr>`);
   return outputHeader(t,div,'본선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 참가팀을 기준으로 만든 ${n}강 수기용 빈 대진표입니다. 당시 실제 본선 대진 복원본은 아닙니다.</div><section class="oc-round"><div class="oc-round-title">${n}강</div><table><thead><tr><th>No</th><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${rows.join('')}</tbody></table></section>`;
 }
-function outputGeneratedTree(tid,div){
+function outputGeneratedTree(tid,div,blank=true){
   const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
   if(!regs.length)return '';
   let n=1;while(n<Math.max(2,regs.length))n*=2;
@@ -23590,7 +23618,7 @@ function outputGeneratedTree(tid,div){
   cols.push(cur);
   while(cur.length>1){cur=Array.from({length:Math.ceil(cur.length/2)},()=> '________________');cols.push(cur);}
   const html=`<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:10px;align-items:stretch">`+cols.map((col,ci)=>`<div><div style="font-weight:900;text-align:center;margin-bottom:6px">${ci===0?n+'강':(Math.max(1,n/(2**ci))===1?'우승':Math.max(1,n/(2**ci))+'강')}</div>`+col.map(x=>`<div style="border:1px solid #334155;border-radius:4px;padding:6px 4px;margin:${Math.max(3,(2**ci)*4)}px 0;min-height:16px;text-align:center;font-size:8px">${x||'________________'}</div>`).join('')+`</div>`).join('')+`</div>`;
-  return outputHeader(t,div,'가지형 본선 대진표 · 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 수기용 가지형 양식입니다.</div>`+html;
+  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 수기용 가지형 양식입니다.</div>`+html;
 }
 function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   const t=(G.tournaments||[]).find(x=>x.id===tid);
@@ -23652,16 +23680,18 @@ function outputMainTableHtml(tid,div,blank=false){
   }).join('');
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
-function outputMainTreeHtml(tid,div){
+function outputMainTreeHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),teams=G.teams?.[key]||[];
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length){
-    const gen=outputGeneratedTree(tid,div);if(gen)return gen;
+    const gen=outputGeneratedTree(tid,div,blank);if(gen)return gen;
     const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
     return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   }
-  return outputHeader(t,div,'가지형 본선 대진표')+`<div class="oc-tree">${renderBracketTree(key,ms,teams)}</div>`;
+  const tree=renderBracketTree(key,ms,teams);
+  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
+    `<div class="oc-tree ${blank?'oc-tree-blank':''}">${tree}</div>`;
 }
 function outputCenterBody(){
   const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.value||'prelim-current';
@@ -23670,7 +23700,8 @@ function outputCenterBody(){
   if(type==='prelim-blank')return outputPrelimHtml(tid,div,true);
   if(type==='main-current')return outputMainTableHtml(tid,div,false);
   if(type==='main-blank')return outputMainTableHtml(tid,div,true);
-  return outputMainTreeHtml(tid,div);
+  if(type==='main-tree-blank')return outputMainTreeHtml(tid,div,true);
+  return outputMainTreeHtml(tid,div,false);
 }
 function outputCenterCss(){
   return `*{box-sizing:border-box}body{font-family:Arial,"Noto Sans KR",sans-serif;color:#111;margin:0;background:#eef2f7}
@@ -23679,7 +23710,7 @@ function outputCenterCss(){
   .oc-groups{display:grid;grid-template-columns:1fr 1fr;gap:7px}.oc-group,.oc-round{break-inside:avoid;border:1px solid #777;border-radius:5px;overflow:hidden;margin-bottom:7px}
   .oc-group-title,.oc-round-title{display:flex;justify-content:space-between;background:#e9eef8;padding:5px 7px;font-size:11px;font-weight:900}.oc-teamline{font-size:9px;padding:4px 6px;border-bottom:1px solid #bbb}
   table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #aaa;padding:4px 5px;text-align:center;height:24px}th{background:#f4f5f7;font-weight:900}.oc-score{font-weight:900;white-space:nowrap}.oc-write{min-width:50px}
-  .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}
+  .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
   @page{size:A4 landscape;margin:7mm}@media print{body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}`;
 }
 function renderOutputPreview(){
