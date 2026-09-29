@@ -23710,8 +23710,8 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   // 한글/영문 모두 글자 단위로 위→아래 세로 배열.
   // writing-mode을 쓰지 않아 T-ONE, UDT-A 같은 영문도 옆으로 눕지 않는다.
   const verticalName=name=>{
-    const chars=Array.from(String(name||''));
-    return chars.map(ch=>`<span style="display:block;line-height:1.08;height:1.08em;overflow:visible">${outputEsc(ch)}</span>`).join('');
+    const chars=Array.from(String(name||'')).map(ch=>(ch==='-'||ch==='–'||ch==='—')?'│':ch);
+    return chars.map(ch=>`<span style="display:block;line-height:1.02;height:1.02em;overflow:visible">${outputEsc(ch)}</span>`).join('');
   };
   const boxes=entrants.map((e,i)=>{
     const xx=x(i), bw=Math.max(27,Math.min(42,width/n-3));
@@ -23721,9 +23721,9 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     const src=String(e.sourceLabel||'').trim();
     const srcBadge=src?`<div style="position:absolute;top:2px;left:2px;right:2px;border-radius:4px;background:#1565c0;color:#fff;font-size:${n>=32?'5.8':'6.8'}px;font-weight:900;line-height:1.25;padding:2px 1px;white-space:normal">${outputEsc(src)}</div>`:'';
     const nameLen=Array.from(String(e.name||'')).length;
-    const teamFont=nameLen<=3?(n>=32?12.5:16):nameLen<=5?(n>=32?10.5:13.5):(n>=32?8.8:11);
+    const teamFont=nameLen<=3?(n>=32?18:24):nameLen<=5?(n>=32?15:20):(n>=32?12:16);
     return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:1px solid ${border};background:${bg};border-radius:5px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px">
-      ${srcBadge}<div class="pyramid-team-name" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:.08px;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
+      ${srcBadge}<div class="pyramid-team-name" style="font-size:${teamFont}px;font-weight:1000;color:${color};letter-spacing:.12px;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
     </div>`;
   }).join('');
 
