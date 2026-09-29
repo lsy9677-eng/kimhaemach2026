@@ -9818,7 +9818,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
             <span>🏆 본선 토너먼트 대진표 <small style="font-size:.68rem;color:var(--text3);font-weight:600">· 추첨 전 빈 구조</small></span>
           </div>`;
           html+=`<div class="card" id="mainPreviewCard_${tid}_${div}" style="padding:10px;background:#fff;border:1px solid var(--border)">
-            ${outputPreDrawPyramidSkeleton(tid,div)}
+            <div class="mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y">${outputPreDrawPyramidSkeleton(tid,div)}</div>
           </div>`;
         }
       }
@@ -10442,7 +10442,7 @@ function renderCombinedBracketSection(tid, div){
         if(bronzeMode==='match' && bronzeMatch){ const bst=getMatchResultState(key,bronzeMatch); const b1=bronzeMatch.t1!==null?teams[bronzeMatch.t1]:null; const b2=bronzeMatch.t2!==null?teams[bronzeMatch.t2]:null; mainHTML += `<div class="card" style="margin-top:10px"><div class="card-title">🥉 3·4위전</div>${mCard(bronzeMatch,key,b1?tdn(b1,key,bronzeMatch.t1):(bronzeMatch.t1===null?'TBD':'?'),b2?tdn(b2,key,bronzeMatch.t2):(bronzeMatch.t2===null?'TBD':'?'),bst.done,bst.sc1,bst.sc2,'3·4위전')}</div>`; }
       } else {
         // 본선 추첨 전: 팀/조순위 위치는 숨기고 구조와 부전승 자리만 공개
-        mainHTML = outputPreDrawPyramidSkeleton(tid,div) || `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`;
+        { const _sk=outputPreDrawPyramidSkeleton(tid,div); mainHTML = _sk ? `<div class="mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y">${_sk}</div>` : `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`; }
       }
     } else {
       if(mMs.length) mainHTML = renderActualMainPyramidForDiv(tid,div,false);
@@ -23760,13 +23760,14 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     :`<span style="color:${BLUE};font-weight:900">━━ 승리팀 경로</span>　<span style="color:#94a3b8">━ 미진행/패자 경로</span>`;
 
   return `${resultBar}<div style="width:100%;padding:2px 4px;background:#fff">
-    <div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
+    <div class="pyramid-scroll-content" style="overflow:visible;width:${width}px;min-width:${width}px;margin:0 auto"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div>
     <div style="font-size:8px;text-align:center;color:#64748b;margin-top:3px">${legend}</div>
   </div>`;
 }
 function outputPreDrawPyramidSkeleton(tid,div){
+  setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const key=tid+'_'+div, draw=G.draws?.[key], t=G.tournaments.find(x=>x.id===tid), cfg=gDS(t,div);
   const groups=Array.isArray(draw?.groups)?draw.groups:[];
   if(!groups.length)return '';
@@ -23800,7 +23801,7 @@ function outputPreDrawPyramidSkeleton(tid,div){
   return `<div style="padding:8px 10px;border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff)">
     <div style="text-align:center;font-size:.84rem;font-weight:900;color:#10213d;margin-bottom:3px">🌳 본선 빈 대진표 · ${n}강</div>
     <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">예선 추첨 완료 · 본선 추첨 전에는 팀명과 조/순위 배정 위치를 공개하지 않습니다.${byeCount?` · 부전승 ${byeCount}자리만 표시`:''}</div>
-    ${resultBar}<div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${baseY+102}px;margin:0 auto">
+    ${resultBar}<div class="pyramid-scroll-content" style="overflow:visible;width:${width}px;min-width:${width}px;margin:0 auto"><div style="position:relative;width:${width}px;height:${baseY+102}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+102}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div></div>`;
 }
@@ -23825,14 +23826,42 @@ function outputMainTreeHtml(tid,div,blank=false){
     `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 팀 배치 · 승리팀은 굵은 가지선으로 위 단계까지 연결</div>${tree}`;
 }
 function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
+  setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const key=tid+'_'+div, allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length)return '';
   return `<div class="actual-main-pyramid" data-main-pyramid="${outputEsc(key)}">
     ${showSaveButton?`<div style="display:flex;justify-content:flex-end;gap:6px;margin:0 0 7px"><button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px" onclick="saveMainPyramidHighResImage('${outputEsc(tid)}','${outputEsc(div)}')">🖼️ 본선 고화질 이미지 저장</button></div>`:''}
-    <div class="actual-main-pyramid-body" style="overflow:auto;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
+    <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
   </div>`;
 }
+
+// Phase81: 모바일 피라미드 대진표는 페이지 스와이프 대신 대진표 자체 가로 스크롤을 우선한다.
+function initMobileBracketHorizontalScroll(root=document){
+  const targets=[...root.querySelectorAll('.mobile-bracket-hscroll,.actual-main-pyramid-body')];
+  targets.forEach(el=>{
+    if(el.dataset.mobileHscrollReady==='1') return;
+    el.dataset.mobileHscrollReady='1';
+    el.style.overflowX='auto'; el.style.overflowY='hidden';
+    el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-x pan-y';
+    let sx=0,sy=0,horizontal=false;
+    el.addEventListener('touchstart',ev=>{
+      const t=ev.touches&&ev.touches[0]; if(!t)return; sx=t.clientX; sy=t.clientY; horizontal=false;
+    },{passive:true});
+    el.addEventListener('touchmove',ev=>{
+      const t=ev.touches&&ev.touches[0]; if(!t)return;
+      const dx=Math.abs(t.clientX-sx),dy=Math.abs(t.clientY-sy);
+      if(dx>8 && dx>dy){ horizontal=true; ev.stopPropagation(); }
+    },{passive:true});
+    el.addEventListener('touchend',ev=>{ if(horizontal)ev.stopPropagation(); horizontal=false; },{passive:true});
+    // 모바일 최초 진입 시 전체 폭의 중앙부터 보여준다. 사용자가 이미 스크롤했다면 다시 이동시키지 않는다.
+    if(window.innerWidth<=768 && !el.dataset.mobileCentered){
+      el.dataset.mobileCentered='1';
+      requestAnimationFrame(()=>{ const max=Math.max(0,el.scrollWidth-el.clientWidth); if(max>0)el.scrollLeft=Math.round(max/2); });
+    }
+  });
+}
+
 function outputCenterBody(){
   const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.value||'prelim-current';
   if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
@@ -23902,7 +23931,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
