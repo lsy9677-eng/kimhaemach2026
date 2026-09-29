@@ -4014,7 +4014,7 @@ function ensureDirectorPasswordSettingsButton(){
   b.type='button';
   b.className='btn';
   b.style.cssText='display:inline-flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:800;padding:7px 11px;margin-left:4px;white-space:nowrap;background:#ffffff;color:#0f2a55;border:1.5px solid #cbd5e1;border-radius:10px;opacity:1;box-shadow:0 1px 2px rgba(0,0,0,.08)';
-  b.textContent='⚙️ 경기이사 설정';
+  b.textContent='⚙️ 클럽 비밀번호';
   b.onclick=openDirectorSettings;
   if(badge && badge.parentElement===host) badge.insertAdjacentElement('afterend',b);
   else if(toggle && toggle.parentElement===host) host.insertBefore(b,toggle);
@@ -4027,7 +4027,7 @@ function openDirectorSettings(){
   ge('changePw2').value='';
   ge('changePwMsg').textContent='';
   const title=ge('mChangePw')?.querySelector('.modal-title,h2,h3');
-  if(title) title.textContent=`⚙️ ${REG_CLUB} 경기이사 설정`;
+  if(title) title.textContent=`⚙️ ${REG_CLUB} 클럽 공용 비밀번호`;
   om('mChangePw');
   setTimeout(()=>ge('changePw1')?.focus(),200);
 }
@@ -4053,11 +4053,7 @@ function _ensureClubLoginRoleUI(){
 
 function showClubPasswordHelp(){
   const club=(ge('regClubLogin')?.value||'').trim();
-  if(CLUB_LOGIN_ROLE==='member'){
-    alert(`${club?club+' ':''}클럽 공용 비밀번호는 경기이사에게 문의해 주세요.\n경기이사 또는 관리자가 변경할 수 있습니다.`);
-  }else{
-    alert(`${club?club+' ':''}경기이사 비밀번호는 관리자에게 초기화를 요청해 주세요.\n관리자가 임시 비밀번호를 발급해 문자로 전달할 수 있습니다.`);
-  }
+  alert(`${club?club+' ':''}클럽 회원과 경기이사는 같은 공용 비밀번호를 사용합니다.\n비밀번호는 경기이사가 설정하며, 분실 시 관리자에게 초기화를 요청해 주세요.`);
 }
 
 function setClubLoginRole(role){
@@ -4069,9 +4065,7 @@ function setClubLoginRole(role){
   if(guide)guide.innerHTML=CLUB_LOGIN_ROLE==='member'
     ?'<b>클럽회원</b> · 내 클럽 경기조회 · 온라인 오더 · 경기결과 입력'
     :'<b>경기이사</b> · 클럽회원 기능 + 팀등록 · 출전명단/선수 관리';
-  if(hint)hint.textContent=CLUB_LOGIN_ROLE==='member'
-    ?'클럽 공용 비밀번호 · 내 클럽 경기조회와 온라인 오더용'
-    :'경기이사 비밀번호 · 팀등록/명단관리 등 클럽 관리용';
+  if(hint)hint.textContent='클럽 공용 비밀번호 · 클럽 회원/경기이사 동일 비밀번호 사용';
 }
 function canSubmitOnlineOrderByClub(key,m){
   if(AD||OP)return true;
@@ -4144,7 +4138,7 @@ function openRolePermissionCheck(){
     ${row(c.resultEntry,'경기결과 입력','자기 클럽 경기의 결과 입력')}
     ${row(c.teamRegistration,'팀 등록/수정','팀 등록과 등록정보 수정')}
     ${row(c.rosterManagement,'선수·출전명단 관리','선수 및 출전명단 관리')}
-    ${row(c.passwordAdmin,'전체 클럽 비밀번호 관리','클럽 공용/경기이사 비밀번호 확인·수정·임시발급')}
+    ${row(c.passwordAdmin,'전체 클럽 비밀번호 관리','클럽 공용 비밀번호 확인·수정·임시발급 (회원/경기이사 동일)')}
     <div style="font-size:.7rem;color:var(--text3,#667);padding-top:10px">※ 클럽회원/경기이사의 오더·결과 입력은 자기 클럽이 참가한 경기에만 허용됩니다.</div>`;
     m.style.display='flex';
   }catch(e){
@@ -4292,12 +4286,17 @@ async function saveForcedClubPassword(){
   sl(true);
   try{
     setClubPassword(G.meta,club,pw1,{custom:true});
+    if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+    if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+    G.meta.directorPasswords[club]=pw1;G.meta.directorPasswordCustom[club]=true;
+    _passwordAudit('club',club,'공용비밀번호 설정');
+    _passwordAudit('director',club,'공용비밀번호 동기화');
     await saveMeta();
     sl(false);
     cm('mForceClubPw');
     const _club=club; FORCE_PW_CLUB='';
     _completeRegLogin(_club);
-    toast('클럽 전용 비밀번호 설정 완료 ✅ 이제 이 비밀번호로 로그인합니다.','success');
+    toast('클럽 공용 비밀번호 설정 완료 ✅ 회원/경기이사 모두 같은 비밀번호로 로그인합니다.','success');
     renderAdminContactList();
   }catch(e){
     sl(false);
@@ -4310,8 +4309,10 @@ function doRegLogin(){
   if(!club){toast('클럽을 선택해주세요','error');return;}
   if(!pw){toast('비밀번호를 입력해주세요','error');return;}
   const role=CLUB_LOGIN_ROLE==='member'?'member':'director';
-  const valid=role==='member'?getClubLoginPassword(G.meta,club):getDirectorPassword(club);
-  if(pw!==valid){toast('비밀번호가 틀렸습니다','error');ge('regPwInput')?.select();return;}
+  // PHASE90: 클럽 회원/경기이사는 동일한 클럽 공용 비밀번호를 사용한다.
+  // 기존 데이터 호환을 위해 getDirectorPassword()가 미설정 시 기존 클럽 비밀번호로 fallback한다.
+  const valid=getDirectorPassword(club);
+  if(pw!==valid){toast('클럽 공용 비밀번호가 틀렸습니다','error');ge('regPwInput')?.select();return;}
   if(role==='member')_completeClubMemberLogin(club);else _completeRegLogin(club);
 }
 function _completeClubMemberLogin(club){
@@ -4438,13 +4439,16 @@ async function saveChangePw(){
     if(!G.meta.directorPasswords)G.meta.directorPasswords={};
     if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
     G.meta.directorPasswords[club]=pw1;G.meta.directorPasswordCustom[club]=true;
+    // PHASE90: 경기이사가 변경한 비밀번호를 클럽 회원 로그인에도 즉시 동일 적용
+    setClubPassword(G.meta,club,pw1,{custom:true});
     _passwordAudit('director',club,'경기이사');
+    _passwordAudit('club',club,'경기이사(공용비밀번호 동기화)');
     await saveMeta();
     sl(false);
     localStorage.removeItem('pw_skip_'+club);
     CHANGE_PW_CLUB='';
     cm('mChangePw');
-    toast(`경기이사 비밀번호 변경 완료 ✅`,'success');
+    toast(`클럽 공용 비밀번호 변경 완료 ✅ · 회원/경기이사 동일 적용`,'success');
     ensureDirectorPasswordSettingsButton();
     try{ renderAdminContactList(); }catch(e){}
   }catch(e){
@@ -5204,23 +5208,23 @@ function renderAdminContactList(){
   const sorted = [...withPhone, ...noPhone];
   if(!sorted.length){ el.innerHTML='<div style="font-size:.78rem;color:var(--text3)">등록된 클럽이 없습니다.</div>'; return; }
   const passwords = G.meta.clubPasswords||{};
-  const customMap = G.meta.clubPasswordCustom||{};
-  const directorPasswords=G.meta.directorPasswords||{};
+  const customMap = G.meta.directorPasswordCustom||{};
   const clubAudit=G.meta.clubPasswordAudit||{},directorAudit=G.meta.directorPasswordAudit||{};
-  const notChanged = sorted.filter(c=>!customMap[c]);
+  const notChanged = sorted.filter(c=>directorPasswordNeedsChange(c));
   const summary = notChanged.length
     ? `<div style="margin-bottom:12px;padding:10px 12px;background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1.5px solid #fca5a5;border-radius:10px;font-size:.82rem;color:#991b1b">
         <div style="font-weight:800;margin-bottom:4px">⚠️ 비밀번호 미변경 클럽: ${notChanged.length}개</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">${notChanged.map(c=>`<span style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:2px 8px;font-size:.76rem;font-weight:700">${c}</span>`).join('')}</div>
-        <div style="font-size:.72rem;margin-top:6px;color:#b91c1c">해당 클럽 경기이사가 로그인하면 비번 변경 안내가 자동으로 표시됩니다.</div>
+        <div style="font-size:.72rem;margin-top:6px;color:#b91c1c">해당 클럽 경기이사가 로그인하면 공용 비밀번호 변경 안내가 자동으로 표시됩니다.</div>
       </div>`
     : `<div style="margin-bottom:12px;padding:8px 12px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:.82rem;color:#166534;font-weight:700">✅ 전체 클럽 비밀번호 변경 완료</div>`;
   el.innerHTML = summary + sorted.map(club=>{
     const phone = contacts[club]||'';
     const email = emails[club]||'';
     const phone4 = phone.replace(/[^0-9]/g,'').slice(-4);
-    const pw = passwords[club]||(phone4.length===4?phone4:'');
-    const isCustom = !!((G.meta.clubPasswordCustom||{})[club]);
+    const legacyPw = passwords[club]||(phone4.length===4?phone4:'');
+    const pw = getDirectorPassword(club)||legacyPw;
+    const isCustom = !directorPasswordNeedsChange(club);
     const statusTxt = isCustom ? '✅ 전용 비번 설정' : '⚠️ 미변경';
     const statusColor = isCustom ? 'var(--success)' : '#dc2626';
     const statusBg = isCustom ? '' : 'background:linear-gradient(135deg,#fff1f2,#ffe4e6);border-radius:8px;padding:2px 0;';
@@ -5233,23 +5237,15 @@ function renderAdminContactList(){
         ${phone?`<a href="sms:${phone.replace(/[^0-9+]/g,'')}" style="text-decoration:none"><button class="btn btn-gray" style="font-size:.74rem;padding:3px 8px">📱</button></a>`:''}
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:${email?'4px':'0'}">
-        <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🔑 비밀번호</span>
-        <input class="form-input" value="${pw}" placeholder="뒷4자리 자동" id="cpw_${club}" maxlength="20"
+        <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🔑 공용 비번</span>
+        <input class="form-input" value="${pw}" placeholder="클럽 공용 비밀번호" id="cpw_${club}" maxlength="20"
           style="flex:1;min-width:100px;font-size:.8rem;padding:4px 8px" type="text">
         <span style="font-size:.72rem;font-weight:700;color:${statusColor};white-space:nowrap">${statusTxt}</span>
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap;color:#1565c0" onclick="saveClubPassword('${club}')">🔑저장</button>
-        <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetClubPassword('${club}')">초기화</button>
-        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="issueTemporaryPasswordAdmin('${club}','club')">임시발급</button>
-        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="sendCurrentPasswordSmsAdmin('${club}','club')">📱문자</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
-        <span style="min-width:65px;font-size:.72rem;color:var(--text3)">🏆 경기이사</span>
-        <input class="form-input" value="${directorPasswords[club]||pw}" placeholder="경기이사 비밀번호" id="dpw_${club}" maxlength="20" style="flex:1;min-width:100px;font-size:.8rem;padding:4px 8px" type="text">
-        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="saveDirectorPasswordAdmin('${club}')">💾저장</button>
-        <button class="btn btn-danger" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="resetDirectorPasswordAdmin('${club}')">임시발급</button>
+        <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="issueTemporaryPasswordAdmin('${club}','director')">임시발급</button>
         <button class="btn btn-outline" style="font-size:.74rem;padding:3px 8px;white-space:nowrap" onclick="sendCurrentPasswordSmsAdmin('${club}','director')">📱문자</button>
       </div>
-      <div style="font-size:.66rem;color:var(--text3);padding-left:71px;margin-top:2px">회원: ${clubAudit[club]?.changedAt?new Date(clubAudit[club].changedAt).toLocaleDateString()+' · '+esc(clubAudit[club].changedBy||''):'기록 없음'} / 경기이사: ${directorAudit[club]?.changedAt?new Date(directorAudit[club].changedAt).toLocaleDateString()+' · '+esc(directorAudit[club].changedBy||''):'기존 비번 호환중'}</div>
+      <div style="font-size:.66rem;color:var(--text3);padding-left:71px;margin-top:2px">※ 클럽 회원과 경기이사가 같은 비밀번호를 사용합니다. 최근 변경: ${directorAudit[club]?.changedAt?new Date(directorAudit[club].changedAt).toLocaleDateString()+' · '+esc(directorAudit[club].changedBy||''):(clubAudit[club]?.changedAt?new Date(clubAudit[club].changedAt).toLocaleDateString()+' · '+esc(clubAudit[club].changedBy||''):'기록 없음')}</div>
       ${email?`<div style="font-size:.72rem;color:#1a73e8;padding-left:2px">📧 ${email}</div>`:''}
     </div>`;
   }).join('');
@@ -5258,26 +5254,22 @@ function renderAdminContactList(){
 async function saveClubPassword(club){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const pw = (ge('cpw_'+club)?.value||'').trim();
-  if(!pw){ toast('비밀번호를 입력하세요','error'); return; }
+  if(!pw || pw.length<6){ toast('공용 비밀번호는 6자리 이상 입력하세요','error'); return; }
   setClubPassword(G.meta,club,pw,{custom:true});
+  if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+  if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+  G.meta.directorPasswords[club]=pw;G.meta.directorPasswordCustom[club]=true;
   _passwordAudit('club',club,'관리자');
+  _passwordAudit('director',club,'관리자(공용비밀번호)');
   try{
     await saveMeta();
-    toast(`${club} 비밀번호 저장 완료 ✅`,'success');
+    toast(`${club} 공용 비밀번호 저장 완료 ✅ · 회원/경기이사 동일 적용`,'success');
   }catch(e){ toast('저장 실패: '+e.message,'error'); }
 }
 
 async function resetClubPassword(club){
-  if(!AD){ toast('관리자 로그인 필요','info'); return; }
-  const tempPw = getClubTempPassword(club);
-  if(!confirm(`${club} 클럽 비밀번호를 임시 비밀번호로 초기화하시겠습니까?\n초기화 후에는 해당 클럽이 다시 로그인할 때 전용 비밀번호를 강제로 새로 설정해야 합니다.`)) return;
-  resetClubPasswordToTemporary(G.meta,club);
-  _passwordAudit('club',club,'관리자 초기화');
-  try{
-    await saveMeta();
-    renderAdminContactList();
-    toast(`${club} 비밀번호 초기화 완료 ✅ (임시 비밀번호로 복귀)`,'success');
-  }catch(e){ toast('초기화 실패: '+e.message,'error'); }
+  // PHASE90: 별도 회원 비밀번호 초기화는 사용하지 않고 공용 비밀번호 임시발급으로 통일
+  return issueTemporaryPasswordAdmin(club,'director');
 }
 
 
@@ -5298,7 +5290,7 @@ function getClubDirectorPhone(club){
   return String((G.meta.clubPhones||{})[club]||(G.meta.clubContacts||{})[club]||'').replace(/[^0-9]/g,'');
 }
 function buildPasswordResetSmsText(club,kind,tempPw){
-  const label=kind==='director'?'경기이사':'클럽 회원 공용';
+  const label='클럽 공용';
   return `[김해시 시합관리]\n${club} ${label} 비밀번호가 초기화되었습니다.\n임시 비밀번호: ${tempPw}\n로그인 후 새 비밀번호로 변경해 주세요.`;
 }
 function copyTextSafe(text){
@@ -5306,7 +5298,7 @@ function copyTextSafe(text){
   const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();return Promise.resolve();
 }
 async function showTemporaryPasswordResult(club,kind,tempPw){
-  const phone=getClubDirectorPhone(club),label=kind==='director'?'경기이사':'클럽 회원 공용';
+  const phone=getClubDirectorPhone(club),label='클럽 공용';
   const text=buildPasswordResetSmsText(club,kind,tempPw);
   try{await copyTextSafe(tempPw);}catch(e){}
   const send=confirm(`${club} ${label} 비밀번호 초기화 완료\n\n임시 비밀번호: ${tempPw}\n\n임시 비밀번호를 클립보드에 복사했습니다.${phone?'\n등록된 경기이사 번호로 문자앱을 열까요?':'\n등록된 경기이사 전화번호가 없습니다.'}`);
@@ -5318,18 +5310,16 @@ async function showTemporaryPasswordResult(club,kind,tempPw){
 }
 async function issueTemporaryPasswordAdmin(club,kind='director'){
   if(!AD){toast('관리자 로그인 필요','info');return;}
-  const isDirector=kind==='director',tempPw=generateTemporaryClubPassword(6);
-  const label=isDirector?'경기이사':'클럽 회원 공용';
+  const tempPw=generateTemporaryClubPassword(6);
+  const label='클럽 공용';
   if(!confirm(`${club} ${label} 비밀번호를 임시 비밀번호로 초기화할까요?\n기존 비밀번호는 즉시 사용할 수 없게 됩니다.`))return;
-  if(isDirector){
-    if(!G.meta.directorPasswords)G.meta.directorPasswords={};
-    if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
-    G.meta.directorPasswords[club]=tempPw;G.meta.directorPasswordCustom[club]=true;
-    _passwordAudit('director',club,'관리자 임시비밀번호 발급');
-  }else{
-    setClubPassword(G.meta,club,tempPw,{custom:true});
-    _passwordAudit('club',club,'관리자 임시비밀번호 발급');
-  }
+  // PHASE90: 임시 비밀번호도 회원/경기이사 공용으로 한 번에 변경
+  if(!G.meta.directorPasswords)G.meta.directorPasswords={};
+  if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
+  G.meta.directorPasswords[club]=tempPw;G.meta.directorPasswordCustom[club]=true;
+  setClubPassword(G.meta,club,tempPw,{custom:true});
+  _passwordAudit('director',club,'관리자 임시비밀번호 발급');
+  _passwordAudit('club',club,'관리자 임시비밀번호 발급(공용)');
   try{
     await saveMeta();renderAdminContactList();
     await showTemporaryPasswordResult(club,kind,tempPw);
@@ -5338,7 +5328,7 @@ async function issueTemporaryPasswordAdmin(club,kind='director'){
 }
 function sendCurrentPasswordSmsAdmin(club,kind='director'){
   if(!AD){toast('관리자 로그인 필요','info');return;}
-  const pw=kind==='director'?getDirectorPassword(club):getClubLoginPassword(G.meta,club);
+  const pw=getDirectorPassword(club);
   const phone=getClubDirectorPhone(club);
   if(!phone){toast(`${club} 경기이사 전화번호가 등록되어 있지 않습니다`,'error');return;}
   const body=encodeURIComponent(buildPasswordResetSmsText(club,kind,pw));
@@ -5351,8 +5341,10 @@ async function saveDirectorPasswordAdmin(club){
   if(!pw||pw.length<6){toast('경기이사 비밀번호는 6자리 이상 입력하세요','error');return;}
   if(!G.meta.directorPasswords)G.meta.directorPasswords={};
   if(!G.meta.directorPasswordCustom)G.meta.directorPasswordCustom={};
-  G.meta.directorPasswords[club]=pw;G.meta.directorPasswordCustom[club]=true;_passwordAudit('director',club,'관리자');
-  try{await saveMeta();renderAdminContactList();toast(`${club} 경기이사 비밀번호 저장 완료 ✅`,'success');}catch(e){toast('저장 실패: '+e.message,'error');}
+  G.meta.directorPasswords[club]=pw;G.meta.directorPasswordCustom[club]=true;
+  setClubPassword(G.meta,club,pw,{custom:true});
+  _passwordAudit('director',club,'관리자');_passwordAudit('club',club,'관리자(공용비밀번호)');
+  try{await saveMeta();renderAdminContactList();toast(`${club} 공용 비밀번호 저장 완료 ✅ · 회원/경기이사 동일 적용`,'success');}catch(e){toast('저장 실패: '+e.message,'error');}
 }
 async function resetDirectorPasswordAdmin(club){
   return issueTemporaryPasswordAdmin(club,'director');
