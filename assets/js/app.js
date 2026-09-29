@@ -3636,42 +3636,54 @@ function ensurePopupNoticeAdminButton(){
 function ensurePopupNoticeManager(){
   if(ge('popupNoticeManagerOverlay'))return;
   const o=document.createElement('div');o.id='popupNoticeManagerOverlay';
-  o.style.cssText='display:none;position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.58);align-items:center;justify-content:center;padding:14px';
-  o.innerHTML=`<div style="width:min(620px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.25)">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px"><b style="font-size:1.05rem">📢 팝업 공지 관리</b><button class="btn btn-outline" onclick="closePopupNoticeManager()">닫기</button></div>
-    <label style="display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:10px"><input id="popupNoticeEnabled" type="checkbox"> 게시 사용</label>
-    <div class="form-group"><label>제목</label><input id="popupNoticeTitle" type="text" maxlength="80" placeholder="예: 제45회 시장기 대회 안내"></div>
-    <div class="form-group"><label>공지 내용</label><textarea id="popupNoticeText" rows="5" maxlength="2000" placeholder="공지 내용을 입력하세요"></textarea></div>
-    <div class="form-group"><label>공지 사진</label><input id="popupNoticeImageFile" type="file" accept="image/*" onchange="previewPopupNoticeImage(this)"><div id="popupNoticeImagePreview" style="margin-top:8px"></div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="form-group"><label>게시 시작</label><input id="popupNoticeStart" type="datetime-local"></div><div class="form-group"><label>게시 종료</label><input id="popupNoticeEnd" type="datetime-local"></div></div>
-    <div style="font-size:.68rem;color:#64748b;margin:3px 0 12px">시작일을 비우면 즉시 게시 · 종료일을 비우면 종료일 없이 게시합니다.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-outline" onclick="previewPopupNotice()">👁 미리보기</button><button class="btn btn-primary" onclick="savePopupNotice()">💾 저장·게시</button></div>
-    <button class="btn" style="width:100%;margin-top:8px;background:#fee2e2;color:#b91c1c" onclick="disablePopupNotice()">⏹ 팝업 게시 중지</button>
-  </div>`;
+  o.style.cssText='display:none;position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.62);align-items:center;justify-content:center;padding:12px';
+  o.innerHTML=`<div style="width:min(680px,96vw);max-height:92vh;overflow:auto;background:#f8fafc;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:15px 17px;background:#fff;border-bottom:1px solid #e2e8f0"><div><div style="font-size:1.08rem;font-weight:900;color:#0f172a">📢 공지사항 통합 관리</div><div style="font-size:.7rem;color:#64748b;margin-top:2px">팝업 공지와 경기운영 떠다니는 공지를 한 곳에서 관리합니다.</div></div><button class="btn btn-outline" onclick="closePopupNoticeManager()">닫기</button></div>
+    <div style="padding:14px;display:grid;gap:13px">
+      <section style="background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px"><div><b style="font-size:.95rem;color:#0f172a">🖼️ 팝업 공지</b><div style="font-size:.68rem;color:#64748b;margin-top:2px">앱 접속 시 사진·텍스트를 큰 팝업으로 표시합니다.</div></div><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.78rem;background:#f1f5f9;padding:7px 10px;border-radius:999px"><input id="popupNoticeEnabled" type="checkbox" style="width:18px;height:18px"> 게시</label></div>
+        <label style="display:block;font-size:.74rem;font-weight:800;margin-bottom:5px">제목</label><input id="popupNoticeTitle" type="text" maxlength="80" placeholder="예: 제45회 시장기 대회 안내" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:.86rem;margin-bottom:11px">
+        <label style="display:block;font-size:.74rem;font-weight:800;margin-bottom:5px">공지 내용</label><textarea id="popupNoticeText" rows="5" maxlength="2000" placeholder="공지 내용을 입력하세요" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:.84rem;line-height:1.55;resize:vertical;margin-bottom:11px"></textarea>
+        <label style="display:block;font-size:.74rem;font-weight:800;margin-bottom:5px">공지 사진</label><input id="popupNoticeImageFile" type="file" accept="image/*" onchange="previewPopupNoticeImage(this)" style="width:100%;box-sizing:border-box;padding:9px;border:1px dashed #94a3b8;border-radius:10px;background:#f8fafc"><div id="popupNoticeImagePreview" style="margin-top:8px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px"><div><label style="display:block;font-size:.72rem;font-weight:800;margin-bottom:5px">게시 시작</label><input id="popupNoticeStart" type="datetime-local" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:9px"></div><div><label style="display:block;font-size:.72rem;font-weight:800;margin-bottom:5px">게시 종료</label><input id="popupNoticeEnd" type="datetime-local" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:9px"></div></div>
+        <div style="font-size:.67rem;color:#64748b;margin:7px 0 11px">시작을 비우면 즉시 게시 · 종료를 비우면 중지할 때까지 게시</div>
+        <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:8px"><button class="btn btn-outline" onclick="previewPopupNotice()">👁 미리보기</button><button class="btn btn-primary" onclick="savePopupNotice()">💾 저장 · 게시</button></div><button class="btn" style="width:100%;margin-top:8px;background:#fee2e2;color:#b91c1c;font-weight:800" onclick="disablePopupNotice()">■ 팝업 게시 중지</button>
+      </section>
+      <section style="background:#fff;border:1px solid #dbe3ee;border-radius:14px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><div><b style="font-size:.95rem;color:#0f172a">🏁 경기운영 떠다니는 공지</b><div style="font-size:.68rem;color:#64748b;margin-top:2px">화면 위에 계속 보이는 짧은 운영 안내입니다.</div></div><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.78rem;background:#f1f5f9;padding:7px 10px;border-radius:999px"><input id="unifiedFloatingNoticeEnabled" type="checkbox" style="width:18px;height:18px"> 표시</label></div>
+        <textarea id="unifiedFloatingNoticeText" rows="3" maxlength="300" placeholder="예: 금배부 8강 진행중 · 5번 코트 대기" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:.84rem;line-height:1.5;resize:vertical"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px"><button class="btn btn-primary" onclick="saveUnifiedFloatingNotice()">💾 떠다니는 공지 저장</button><button class="btn btn-outline" onclick="clearUnifiedFloatingNotice()">지우기</button></div>
+      </section>
+    </div></div>`;
   document.body.appendChild(o);
 }
 let _popupNoticePendingImageData='';
+let _popupNoticePendingImageFile=null;
 function openPopupNoticeManager(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   ensurePopupNoticeManager();
-  const n=getPopupNotice();_popupNoticePendingImageData=String(n.imageUrl||'');
+  const n=getPopupNotice();_popupNoticePendingImageData=String(n.imageUrl||'');_popupNoticePendingImageFile=null;
   ge('popupNoticeEnabled').checked=!!n.enabled;
   ge('popupNoticeTitle').value=n.title||'';
   ge('popupNoticeText').value=n.text||'';
   ge('popupNoticeStart').value=popupNoticeDateInputValue(n.startAt);
   ge('popupNoticeEnd').value=popupNoticeDateInputValue(n.endAt);
   renderPopupNoticeImagePreview(_popupNoticePendingImageData);
+  ge('unifiedFloatingNoticeText').value=G.meta.adminFloatingNotice||'';
+  ge('unifiedFloatingNoticeEnabled').checked=!!G.meta.adminFloatingNoticeEnabled;
   ge('popupNoticeManagerOverlay').style.display='flex';
 }
 function closePopupNoticeManager(){const o=ge('popupNoticeManagerOverlay');if(o)o.style.display='none';}
 function previewPopupNoticeImage(input){
   const f=input?.files?.[0];if(!f)return;
-  if(f.size>4*1024*1024){toast('사진은 4MB 이하로 선택해 주세요','error');input.value='';return;}
+  if(!/^image\//i.test(f.type||'')){toast('이미지 파일만 선택할 수 있습니다','error');input.value='';return;}
+  if(f.size>8*1024*1024){toast('사진은 8MB 이하로 선택해 주세요','error');input.value='';return;}
+  _popupNoticePendingImageFile=f;
   const r=new FileReader();r.onload=()=>{_popupNoticePendingImageData=String(r.result||'');renderPopupNoticeImagePreview(_popupNoticePendingImageData);};r.readAsDataURL(f);
 }
 function renderPopupNoticeImagePreview(src){
   const el=ge('popupNoticeImagePreview');if(!el)return;
-  el.innerHTML=src?`<img src="${src}" alt="공지 미리보기" style="display:block;max-width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0"><button type="button" class="btn btn-outline" style="margin-top:6px;font-size:.7rem" onclick="_popupNoticePendingImageData='';renderPopupNoticeImagePreview('')">사진 제거</button>`:'<div style="font-size:.7rem;color:#94a3b8">선택된 사진 없음</div>';
+  el.innerHTML=src?`<img src="${src}" alt="공지 미리보기" style="display:block;max-width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0"><button type="button" class="btn btn-outline" style="margin-top:6px;font-size:.7rem" onclick="_popupNoticePendingImageData='';_popupNoticePendingImageFile=null;renderPopupNoticeImagePreview('')">사진 제거</button>`:'<div style="font-size:.7rem;color:#94a3b8">선택된 사진 없음</div>';
 }
 function buildPopupNoticeView(n){
   return `<div style="width:min(520px,94vw);max-height:88vh;overflow:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 22px 60px rgba(0,0,0,.32)">
@@ -3692,14 +3704,45 @@ function previewPopupNotice(){
   const n={enabled:true,title:ge('popupNoticeTitle')?.value||'',text:ge('popupNoticeText')?.value||'',imageUrl:_popupNoticePendingImageData};
   showPopupNoticeView(n,true);
 }
+async function uploadPopupNoticeImageIfNeeded(){
+  if(!_popupNoticePendingImageFile) return _popupNoticePendingImageData||'';
+  const f=_popupNoticePendingImageFile;
+  const safe=String(f.name||'notice.jpg').replace(/[^a-zA-Z0-9._-]+/g,'_');
+  const fileRef=ref(storage,`notices/popup/${Date.now()}_${safe}`);
+  await uploadBytes(fileRef,f,{contentType:f.type||'image/jpeg'});
+  return await getDownloadURL(fileRef);
+}
+async function saveUnifiedFloatingNotice(){
+  if(!AD){toast('관리자 로그인 필요','error');return;}
+  G.meta.adminFloatingNotice=(ge('unifiedFloatingNoticeText')?.value||'').trim();
+  G.meta.adminFloatingNoticeEnabled=!!ge('unifiedFloatingNoticeEnabled')?.checked;
+  window.__hideFloatingNoticeOnce=false;
+  try{await saveMeta();renderFloatingNotice();toast('떠다니는 공지 저장 완료 ✅','success');}catch(e){toast('저장 실패: '+(e?.message||e),'error');}
+}
+async function clearUnifiedFloatingNotice(){
+  if(!AD)return;
+  G.meta.adminFloatingNotice='';G.meta.adminFloatingNoticeEnabled=false;window.__hideFloatingNoticeOnce=false;
+  if(ge('unifiedFloatingNoticeText'))ge('unifiedFloatingNoticeText').value='';
+  if(ge('unifiedFloatingNoticeEnabled'))ge('unifiedFloatingNoticeEnabled').checked=false;
+  try{await saveMeta();renderFloatingNotice();toast('떠다니는 공지를 지웠습니다','success');}catch(e){toast('저장 실패: '+(e?.message||e),'error');}
+}
+function hideLegacyFloatingNoticeAdminControls(){
+  const input=ge('adminFloatingNoticeInput');if(!input)return;
+  const saveBtn=document.querySelector('[onclick*="saveFloatingNoticeSettings"]');
+  let node=input;
+  while(node&&node!==document.body){
+    if(saveBtn&&node.contains(saveBtn)){node.style.display='none';node.dataset.movedToUnifiedNotice='1';return;}
+    node=node.parentElement;
+  }
+  input.style.display='none';const chk=ge('adminFloatingNoticeEnabled');if(chk)chk.style.display='none';
+}
 async function savePopupNotice(){
   if(!AD){toast('관리자 로그인 필요','error');return;}
   const start=ge('popupNoticeStart')?.value||'',end=ge('popupNoticeEnd')?.value||'';
   if(start&&end&&new Date(end)<=new Date(start)){toast('게시 종료는 시작 이후로 설정해 주세요','error');return;}
   const title=(ge('popupNoticeTitle')?.value||'').trim(),text=(ge('popupNoticeText')?.value||'').trim();
   if(!title&&!text&&!_popupNoticePendingImageData){toast('텍스트 또는 사진을 입력해 주세요','error');return;}
-  G.meta.popupNotice={enabled:!!ge('popupNoticeEnabled')?.checked,title,text,imageUrl:_popupNoticePendingImageData,startAt:start?new Date(start).toISOString():'',endAt:end?new Date(end).toISOString():'',updatedAt:new Date().toISOString()};
-  try{await saveMeta();closePopupNoticeManager();toast('팝업 공지 저장 완료 ✅','success');if(popupNoticeIsActive())showPopupNoticeView(getPopupNotice(),true);}catch(e){toast('팝업 공지 저장 실패: '+(e?.message||e),'error');}
+  try{const imageUrl=await uploadPopupNoticeImageIfNeeded();G.meta.popupNotice={enabled:!!ge('popupNoticeEnabled')?.checked,title,text,imageUrl,startAt:start?new Date(start).toISOString():'',endAt:end?new Date(end).toISOString():'',updatedAt:new Date().toISOString()};_popupNoticePendingImageData=imageUrl;_popupNoticePendingImageFile=null;await saveMeta();closePopupNoticeManager();toast('팝업 공지 저장 완료 ✅','success');if(popupNoticeIsActive())showPopupNoticeView(getPopupNotice(),true);}catch(e){console.error(e);toast('팝업 공지 저장 실패: '+(e?.message||e),'error');}
 }
 async function disablePopupNotice(){
   if(!AD)return;
@@ -4625,6 +4668,7 @@ function openAdminSettings(){
     ensurePendingDetailCenterButton();
     ensureAutoRestoreCenterButton();
     ensurePopupNoticeAdminButton();
+    hideLegacyFloatingNoticeAdminControls();
   },60);
 }
 
@@ -23211,7 +23255,7 @@ function closeReorderPopup() {
   ge('reorderOverlay')?.remove();
 }
 
-Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
