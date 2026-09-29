@@ -9806,66 +9806,19 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         ${s3 ? `
           <div style="display:flex;flex-wrap:wrap;gap:6px">${advT.map((at,i)=>`<span class="badge" style="font-size:.8rem;padding:5px 12px;background:${at.rk===1?'linear-gradient(135deg,#fff7dd,#f6d365)':'linear-gradient(135deg,#eef2f7,#d8e0ea)'};color:${at.rk===1?'#7a5600':'#425466'};border:1px solid ${at.rk===1?'#d4a017':'#b8c3d1'}">${at.rk===1?'👑':'🥈'} ${i+1}. ${at.nm} <small style="opacity:.8">(${grpLabel(at.gn-1)} ${at.rk}위)</small></span>`).join('')}</div>
         ` : `
-          <div style="font-size:.82rem;color:var(--text2);line-height:1.7">예선이 아직 진행 중이라 실제 진출팀은 확정되지 않았습니다. 아래 본선 대진표는 <b>미리보기</b>로 항상 표시되며, 본선 추첨 버튼을 누르면 A조 1위·B조 2위 같은 자리 기준으로도 바로 추첨할 수 있습니다.</div>
+          <div style="font-size:.82rem;color:var(--text2);line-height:1.7">예선 추첨이 완료되어 본선의 <b>빈 피라미드 구조</b>만 표시합니다. 본선 추첨 전에는 어느 조 몇 위가 어느 자리에 들어갈지 표시하지 않습니다.</div>
         `}
         ${canManageBracket()&&!mMs.length?`<div style="margin-top:12px"><button class="btn btn-primary" style="padding:8px 20px" onclick="buildMain('${tid}','${div}')">🎲 본선 추첨</button></div>`:''}
       </div>`;
       {
         const pvCfg = cfg.format==='group_knockout' ? cfg : {...cfg, format:'group_knockout'};
         const pv=buildPreviewMainSlots(draw, pvCfg);
-        const spec=pv.spec||computeMainBracketSpec((draw.advance||cfg.advance||2)*(draw.groups?.length||0));
-        // 조별 본선 배정 표
-        const slotAssignHtml=(()=>{
-          const slots=pv.matchSlots||[];
-          const playIns=pv.playInMatches||[];
-          const playInMap={};
-          playIns.forEach((pm,i)=>{
-            if(pm.t1) playInMap[pm.t1.nm]=`🪣 진출전(똥통) ${i+1}경기`;
-            if(pm.t2) playInMap[pm.t2.nm]=`🪣 진출전(똥통) ${i+1}경기`;
-          });
-          const mainMap={};
-          slots.forEach((ms,si)=>{
-            if(ms.t1) mainMap[ms.t1.nm]=`${spec.mainSize||pv.n}강 ${si+1}번`;
-            if(ms.t2) mainMap[ms.t2.nm]=`${spec.mainSize||pv.n}강 ${si+1}번`;
-          });
-          const rows=(draw.groups||[]).map((grp,gi)=>{
-            const grpSz=grp.teams?.length||0;
-            const advCount=grpSz<=2?grpSz:2;
-            const entries=[];
-            for(let rk=1;rk<=advCount;rk++){
-              const nm=`${grpLabel(gi)} ${rk}위`;
-              const dest=playInMap[nm]||mainMap[nm]||'—';
-              const isPlayIn=!!playInMap[nm];
-              const destClr=isPlayIn?'#92400e':'#166534';
-              const destBg=isPlayIn?'#fff8e6':'#f0fdf4';
-              entries.push(`<span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:5px;background:${destBg};color:${destClr}">${rk}위→${dest}</span>`);
-            }
-            return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:4px 8px;border-bottom:1px solid #f1f5f9">
-              <span style="font-size:.75rem;font-weight:800;color:#0f1e3a;min-width:28px">${grpLabel(gi)}</span>${entries.join('')}
-            </div>`;
-          }).join('');
-          return rows?`<div style="margin-top:10px;border:1px solid #e2e8f0;border-radius:9px;overflow:hidden">
-            <div style="padding:5px 9px;background:#f8fafc;font-size:.7rem;font-weight:700;color:#475569;border-bottom:1px solid #e2e8f0">📌 조별 본선 배정 위치</div>${rows}</div>`:'';
-        })();
         if(pv.n>=2 && !mMs.length){
-          const adv=draw.advance||cfg.advance||2;
-          const grpCount=draw.groups?.length||0;
-          const specLabel=spec.playInMatches>0?`${spec.mainSize}강+진출전${spec.playInMatches}경기`:`${pv.n}강`;
-          html+=`<div class="sec-title" id="mainPreviewTitle_${tid}_${div}" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-            <span>🏆 본선 토너먼트 대진표 <small style="font-size:.68rem;color:var(--text3);font-weight:600">· 경기 직접 운영</small></span>
-            <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${adv}팀 진출 × ${grpCount}조 → ${specLabel}</span>
+          html+=`<div class="sec-title" id="mainPreviewTitle_${tid}_${div}" style="margin-top:16px">
+            <span>🏆 본선 토너먼트 대진표 <small style="font-size:.68rem;color:var(--text3);font-weight:600">· 추첨 전 빈 구조</small></span>
           </div>`;
-          const isFixedPreview=((draw.mainMode||'fixed')==='fixed');
-          const redrawPreview=buildIndivRedrawPreviewData(draw.groups||[], draw.grpSize||2);
-          html+=`<div class="card" id="mainPreviewCard_${tid}_${div}" style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
-            <div style="font-weight:800;color:var(--primary-dark);margin-bottom:6px">${isFixedPreview?'📌 본선은 지금부터 계속 보입니다':'📌 본선은 예선 후 재추첨됩니다'}</div>
-            <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px;line-height:1.7">
-              ${isFixedPreview
-                ? '예선이 끝나기 전에는 <b>본선 구조 미리보기</b>로 표시되고, 예선 종료 후 본선 추첨을 하면 실제 팀으로 자동 배정됩니다. 진출전이 있으면 직행팀 수와 진출전 팀 수가 함께 표시됩니다.'
-                : '본선을 <b>재추첨</b>으로 설정한 경우에는 예선 단계에서 실제 본선 배정 위치를 미리 보여주지 않습니다. 아래에는 구조와 진출전 자리만 표시됩니다. 예: 66팀이면 직행 62팀, 진출전 4팀(2경기), 승자 2팀이 64강 합류.'}
-            </div>
-            ${isFixedPreview ? renderMainPreviewHTML(pv.matchSlots,pv.n,true,pv.playInMatches||[]) : renderMainPreviewHTML(redrawPreview.matchSlots,redrawPreview.spec.mainSize||pv.n,true,redrawPreview.playInMatches||[])}
-            ${isFixedPreview ? slotAssignHtml : ''}
+          html+=`<div class="card" id="mainPreviewCard_${tid}_${div}" style="padding:10px;background:#fff;border:1px solid var(--border)">
+            ${outputPreDrawPyramidSkeleton(tid,div)}
           </div>`;
         } else if(pv.n>=2 && mMs.length){
           html+=`<div style="margin-top:8px">
@@ -23714,11 +23667,11 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   first.forEach(m=>{
     if(m.bye){
       const byeTeam=(m.winner!==null&&m.winner!==undefined)?m.winner:(m.t1!==null&&m.t1!==undefined?m.t1:m.t2);
-      entrants.push({name:outputTeamName(key,byeTeam),team:byeTeam,byeWinner:true});
-      entrants.push({name:'부전승',team:null,byeSlot:true});
+      entrants.push({name:outputTeamName(key,byeTeam),team:byeTeam,byeWinner:true,sourceLabel:String(m.source1Label||m.source2Label||'').trim()});
+      entrants.push({name:'부전승',team:null,byeSlot:true,sourceLabel:''});
     }else{
-      entrants.push({name:outputTeamName(key,m.t1),team:m.t1});
-      entrants.push({name:outputTeamName(key,m.t2),team:m.t2});
+      entrants.push({name:outputTeamName(key,m.t1),team:m.t1,sourceLabel:String(m.source1Label||'').trim()});
+      entrants.push({name:outputTeamName(key,m.t2),team:m.t2,sourceLabel:String(m.source2Label||'').trim()});
     }
   });
   if(!entrants.length)return '';
@@ -23757,15 +23710,17 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   // writing-mode을 쓰지 않아 T-ONE, UDT-A 같은 영문도 옆으로 눕지 않는다.
   const verticalName=name=>{
     const chars=Array.from(String(name||''));
-    return chars.map(ch=>`<span style="display:block;line-height:1.02">${outputEsc(ch)}</span>`).join('');
+    return chars.map(ch=>`<span style="display:block;line-height:1.34;height:1.34em;overflow:visible">${outputEsc(ch)}</span>`).join('');
   };
   const boxes=entrants.map((e,i)=>{
     const xx=x(i), bw=Math.max(27,Math.min(42,width/n-3));
     const bg=e.byeSlot?'#fff8dc':(i%2?'#f8fbff':'#edf5ff');
     const border=e.byeSlot?'#e0a400':'#9fb4cf';
     const color=e.byeSlot?'#9a6700':'#10213d';
-    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid ${border};background:${bg};border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:3px 1px">
-      <div style="font-size:${n>=32?'8':'10'}px;font-weight:950;color:${color};letter-spacing:.1px;max-height:70px;overflow:hidden">${verticalName(e.name)}</div>
+    const src=String(e.sourceLabel||'').trim();
+    const srcBadge=src?`<div style="position:absolute;top:2px;left:2px;right:2px;border-radius:4px;background:#1565c0;color:#fff;font-size:${n>=32?'5.8':'6.8'}px;font-weight:900;line-height:1.25;padding:2px 1px;white-space:normal">${outputEsc(src)}</div>`:'';
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:1px solid ${border};background:${bg};border-radius:5px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px">
+      ${srcBadge}<div class="pyramid-team-name" style="font-size:${n>=32?'7.5':'9.5'}px;font-weight:800;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible">${verticalName(e.name)}</div>
     </div>`;
   }).join('');
 
@@ -23809,6 +23764,44 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     </div></div>
     <div style="font-size:8px;text-align:center;color:#64748b;margin-top:3px">${legend}</div>
   </div>`;
+}
+function outputPreDrawPyramidSkeleton(tid,div){
+  const key=tid+'_'+div, draw=G.draws?.[key], t=G.tournaments.find(x=>x.id===tid), cfg=gDS(t,div);
+  const groups=Array.isArray(draw?.groups)?draw.groups:[];
+  if(!groups.length)return '';
+  const advance=Math.max(1,Number(draw?.advance||cfg?.advance||2));
+  const entrants=Math.max(2,groups.length*advance);
+  let n=1;while(n<entrants)n*=2;
+  const byeCount=Math.max(0,n-entrants), width=Math.max(900,Math.min(1500,n*46));
+  const baseY=330,stepY=57,levels=Math.log2(n),x=i=>(i+.5)*width/n,THIN='#a9b8cc';
+  let paths='',labels='';
+  for(let level=0;level<levels;level++){
+    const group=2**(level+1),y0=baseY-level*stepY,y1=baseY-(level+1)*stepY;
+    for(let g=0;g<n;g+=group){
+      const left=x(g+group/4-.5),right=x(g+3*group/4-.5),mid=(left+right)/2;
+      paths+=`<path d="M ${left} ${y0} V ${y1} H ${mid}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+      paths+=`<path d="M ${right} ${y0} V ${y1} H ${mid}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+      paths+=`<path d="M ${mid} ${y1} V ${Math.max(28,y1-stepY)}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+    }
+    const teamsLeft=n/(2**level),roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
+    labels+=`<g><rect x="6" y="${y1-10}" width="40" height="18" rx="9" fill="#f3f7fc" stroke="#b9c8dc"/><text x="26" y="${y1+3}" text-anchor="middle" font-size="8" font-weight="900" fill="#64748b">${roundLabel}</text></g>`;
+  }
+  // 부전승은 구조상 필요한 자리 수만 공개한다. 어느 조/몇 위가 들어갈지는 본선 추첨 전에는 절대 표시하지 않는다.
+  const byeSlots=new Set();
+  for(let k=0;k<byeCount;k++) byeSlots.add(Math.min(n-1,Math.floor((k+.5)*n/Math.max(1,byeCount))));
+  const boxes=Array.from({length:n},(_,i)=>{
+    const bye=byeSlots.has(i),xx=x(i),bw=Math.max(27,Math.min(42,width/n-3));
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid ${bye?'#e0a400':'#b8c6d8'};background:${bye?'#fff8dc':'#f8fbff'};border-radius:5px;display:flex;align-items:center;justify-content:center;text-align:center;padding:3px 1px">
+      <div style="font-size:${n>=32?'7':'9'}px;font-weight:850;color:${bye?'#9a6700':'#94a3b8'}">${bye?'부<br>전<br>승':'　'}</div></div>`;
+  }).join('');
+  const resultCell=(title,accent)=>`<div style="border:1px solid #d6deea;border-top:3px solid ${accent};border-radius:8px;background:#fff;min-height:43px;padding:6px 10px;text-align:center"><div style="font-size:7.5px;font-weight:900;color:#64748b">${title}</div><div style="height:15px"></div></div>`;
+  const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">${resultCell('🏆 우승','#d59b00')}${resultCell('🥈 준우승','#7890ad')}${resultCell('🥉 3위','#b87333')}</div>`;
+  return `<div style="padding:8px 10px;border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff)">
+    <div style="text-align:center;font-size:.84rem;font-weight:900;color:#10213d;margin-bottom:3px">🌳 본선 빈 대진표 · ${n}강</div>
+    <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">예선 추첨 완료 · 본선 추첨 전에는 팀명과 조/순위 배정 위치를 공개하지 않습니다.${byeCount?` · 부전승 ${byeCount}자리만 표시`:''}</div>
+    ${resultBar}<div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${baseY+102}px;margin:0 auto">
+      <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+102}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
+    </div></div></div>`;
 }
 function outputMainTreeHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
@@ -23871,8 +23864,15 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
   toast('고화질 이미지 생성 중...','info');
   try{
     await ensureHtml2CanvasForExport();
+    try{if(document.fonts?.ready)await document.fonts.ready;}catch(_e){}
     const sw=Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.max(el.scrollHeight||0,el.clientHeight||0);
-    const canvas=await html2canvas(el,{scale:4,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0});
+    const canvas=await html2canvas(el,{scale:3.5,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0,
+      onclone:(doc)=>{
+        doc.querySelectorAll('.pyramid-team-name').forEach(n=>{
+          n.style.fontWeight='800';n.style.overflow='visible';
+          n.querySelectorAll('span').forEach(sp=>{sp.style.lineHeight='1.4';sp.style.height='1.4em';sp.style.overflow='visible';});
+        });
+      }});
     const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=filename;a.click();
     toast('고화질 이미지 저장 완료 🖼️','success');
   }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
