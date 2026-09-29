@@ -15442,6 +15442,20 @@ function openM3(key,mid,forceEdit=false){
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
   const body = ge('mM3B');
+  // PHASE92: 현장 간편결과 화면의 중복 상세입력 진입 버튼 정리.
+  // simple-result-ui에서 렌더되는 기존 '상세 명단·점수 입력(선택)'과
+  // 아래의 '상세 입력(선수·복식)'은 같은 상세기록 영역으로 이어져 중복 노출되므로
+  // 기존 상단 버튼만 표시 단계에서 제거하고 단일 진입 버튼만 유지한다.
+  if(body && simpleModeHere){
+    body.querySelectorAll('button').forEach(btn=>{
+      const label=String(btn.textContent||'').replace(/\s+/g,' ').trim();
+      if(label.includes('상세 명단') && label.includes('점수 입력')) btn.remove();
+    });
+    const hint=ge('offlineResultEntryHint');
+    if(hint){
+      hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 오더지 사진 보관/OCR 보조는 공식 결과와 별개입니다. 사진 없이도 상세 기록을 직접 입력할 수 있습니다.</div>');
+    }
+  }
   if(body && !simpleModeHere){
     const topInfo = document.createElement('div');
     topInfo.style.cssText = 'margin-bottom:12px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--border);background:linear-gradient(135deg,#f8fbff,#eef4ff)';
