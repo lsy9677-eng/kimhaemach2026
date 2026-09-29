@@ -21975,6 +21975,7 @@ async function renderRegistryTab(force){
   const selRegion=ge('regRegionSel')?.value||'';
   const selClub=ge('regClubSel')?.value||'';
   const showSubOnly=ge('regShowSubOnly')?.checked||false;
+  const showNewOnly=AD && !!ge('regShowNewOnly')?.checked;
   const keyword=(ge('regSearchInput')?.value||'').trim();
 
   const filtered=members.filter(m=>{
@@ -21999,7 +22000,12 @@ async function renderRegistryTab(force){
     return;
   }
 
-  const sortedFiltered=filtered.slice().sort((a,b)=>{
+  const displayFiltered=filtered.map(m=>{
+    if(!AD||!isNewlyAddedRegistryMember(m))return m;
+    const d=registryAddedDateLabel(m.addedAt);
+    return {...m,name:`${m.name}  🆕${d?` ${d}`:''}`};
+  });
+  const sortedFiltered=displayFiltered.slice().sort((a,b)=>{
     const cr=String(a.region||'소속 코트 미지정').localeCompare(String(b.region||'소속 코트 미지정'),'ko',{numeric:true});
     if(cr!==0) return cr;
     const cc=String(a.club||'소속 미상').localeCompare(String(b.club||'소속 미상'),'ko',{numeric:true});
@@ -22015,9 +22021,18 @@ async function renderRegistryTab(force){
     escapeAttr:escAttr
   });
   body.dataset.ready='1';
-  setTimeout(ensureRegistryRepairButton,0);
+  setTimeout(()=>{ensureRegistryRepairButton();ensureRegistryNewMemberAdminControls();},0);
 }
 
+function ensureRegistryNewMemberAdminControls(){
+  if(!AD||ge('regShowNewOnly'))return;
+  const search=ge('regSearchInput');if(!search)return;
+  const host=search.parentElement;if(!host)return;
+  const label=document.createElement('label');label.id='regNewMemberAdminFilter';
+  label.style.cssText='display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:7px 9px;margin:4px';
+  label.innerHTML='<input id="regShowNewOnly" type="checkbox" onchange="renderRegistryTab(true)"> 🆕 신규 추가만';
+  host.appendChild(label);
+}
 async function repairRegistryClubGroupsNow(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   sl(true);
@@ -22050,6 +22065,7 @@ async function exportRegistryFiltered(fmt){
     if(selRegion&&m.region!==selRegion) return false;
     if(selClub&&m.club!==selClub) return false;
     if(showSubOnly&&!m.subClub) return false;
+    if(showNewOnly&&!isNewlyAddedRegistryMember(m)) return false;
     if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)) return false;
     return true;
   });
@@ -22273,7 +22289,7 @@ async function registryTabQuickAdd(){
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}));
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}),'quick-add'));
   if(!window.G_REGISTRY) window.G_REGISTRY={};
   G_REGISTRY[year]=members;
   // G.players에도 추가
@@ -22311,6 +22327,7 @@ async function quickEditRegistryMember(year, idx){
   ge('rqemClub').innerHTML='<option value="">-- 클럽 선택 --</option>'+clubOptions.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
   ge('rqemClub').value=canonicalRegistryClub(m.club||'');
   ge('rqemSubClub').value=m.subClub||'';
+  const addedInfo=ge('rqemAddedInfo');if(addedInfo)addedInfo.textContent=m.addedAt?`추가 등록일: ${registryAddedDateLabel(m.addedAt)}`:'기존 등록선수';
   updateRegistryQuickEditRegionHint();
   ge('registryQuickEditOverlay').style.display='flex';
 }
@@ -22327,7 +22344,8 @@ function ensureRegistryQuickEditModal(){
     <select id="rqemClub" class="form-select" onchange="updateRegistryQuickEditRegionHint()" style="width:100%;box-sizing:border-box;margin-bottom:6px"></select>
     <div id="rqemRegionHint" style="font-size:.7rem;color:#64748b;margin-bottom:11px"></div>
     <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">부클럽 <span style="font-weight:500;color:#64748b">(선택)</span></label>
-    <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:14px">
+    <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <div id="rqemAddedInfo" style="font-size:.72rem;font-weight:800;color:#b45309;background:#fffbeb;border-radius:8px;padding:8px;margin-bottom:14px"></div>
     <button class="btn btn-primary" style="width:100%;font-weight:900" onclick="saveRegistryQuickEditModal()">💾 수정 저장</button>
   </div>`;
   document.body.appendChild(o);
@@ -22429,6 +22447,18 @@ async function removeOfficialRegistryPlayerIfUnused(name,club){
   if(hasHistory||hasStats)return; // 경기기록이 있는 선수 마스터는 보존
   try{await deleteDoc(doc(db,'players',key.replace(/[/.#$[\]]/g,'_')));delete G.players[key];savePlayersToLocalCache();}catch(e){console.warn('registry player cleanup skipped',e);}
 }
+function stampRegistryAddedMeta(row, source='manual'){
+  if(!row||typeof row!=='object')return row;
+  if(!row.addedAt)row.addedAt=new Date().toISOString();
+  if(!row.addedSource)row.addedSource=source;
+  return row;
+}
+function registryAddedDateLabel(v){
+  if(!v)return '';
+  const d=new Date(v);if(Number.isNaN(d.getTime()))return '';
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+function isNewlyAddedRegistryMember(m){return !!String(m?.addedAt||'').trim();}
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const name=(ge('rmgr_name')?.value||'').trim(); const club=canonicalRegistryClub(ge('rmgr_club')?.value||'');
@@ -22437,7 +22467,7 @@ async function addRegistryRow(){
   const members=await loadRegistry(year);
   if(!region) region=resolveClubRegionForRegistry(club,members);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(applyClubDefaultRegion(G.meta,{name,club,region,subClub})); sl(true);
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region,subClub}),'admin-manual')); sl(true);
   try{
     await saveRegistry(year);
     await syncOfficialRegistryRowsToPlayers([members[members.length-1]]);
@@ -23399,7 +23429,7 @@ Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,saveUnified
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  registryTabQuickAdd,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
+  registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
   toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,openDirectorSettings,ensureDirectorPasswordSettingsButton,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
