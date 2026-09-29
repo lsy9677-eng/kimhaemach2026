@@ -10163,7 +10163,7 @@ function openMatchOperationsEdit(key,mid){
     toast('결과 수정 권한이 없습니다','error');return;
   }
   cm('mSimpleMatchDetail');
-  openM3(key,mid);
+  openM3(key,mid,true);
 }
 
 function toggleCompactMatchDetail(id){
@@ -10196,7 +10196,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     done=st2.done; sc1=st2.sc1; sc2=st2.sc2;
     const canDirEdit=canEditMatchByDirector(key,m);
     const indivAuth=getIndividualResultAuthState(key,m);
-    const btn=(AD||canDirEdit||indivAuth.allowed)?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openM3('${key}','${m.id}')">${done?'✏️ 결과수정':'⚡ 결과입력'}</button>`:'';
+    const btn=(AD||canDirEdit||indivAuth.allowed)?`<button class="btn ${done?'btn-gray':'btn-accent'}" style="padding:5px 12px;font-size:.77rem;white-space:nowrap" onclick="openMatchOperations('${key}','${m.id}')">${done?'🔎 결과확인':'⚡ 결과입력'}</button>`:'';
     const sideLabel1=getIndividualSideLabel(key,m,m.t1)||'1번';
     const sideLabel2=getIndividualSideLabel(key,m,m.t2)||'2번';
     const grpCourts=(m.phase==='group' && m.group!=null)?((G.draws[key]?.groups?.[Number(m.group)]?.courts)||[]):[];
@@ -10325,7 +10325,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
       ? (_ost2.bothSubmitted ? '📝 오더/기록확인입력' : (_ost2.mySubmitted ? '📝 오더/기록확인입력' : '📝 오더 입력·제출'))
       : '⚡ 결과입력';
   const _btnStyle = done ? 'btn-gray' : (useOrderHere ? (_ost2.bothSubmitted||_ost2.mySubmitted ? 'btn-primary' : 'btn-accent') : 'btn-accent');
-  const _opsLabel = done ? '✏️ 결과수정' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
+  const _opsLabel = done ? '🔎 결과확인' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
   const _opsStyle = done ? 'btn-gray' : 'btn-accent';
   const btn=(AD||OP||canEditMatchByClubMember(key,m))?`<button class="btn ${_opsStyle}" style="padding:6px 12px;font-size:.77rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">${_opsLabel}</button>`:'';
   const memoBtn=canManageBracket()?`<button class="btn btn-outline" style="padding:5px 10px;font-size:.75rem;white-space:nowrap;background:#fff;color:${matchMemo?'#7a5600':'var(--primary-dark)'};border-color:${matchMemo?'#f6d365':'var(--border)'}" onclick="openMatchMemoModal('${key}','${m.id}')">📢 공지(경기)${matchMemo?' 수정':' 입력'}</button>`:'';
@@ -10342,7 +10342,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   if(done){
     const detailId='compactDetail_'+String(key+'_'+m.id).replace(/[^a-zA-Z0-9_-]/g,'_');
     const resultBtn=(AD||OP||canEditMatchByClubMember(key,m))
-      ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">✏️ 결과수정</button>`:'';
+      ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">🔎 결과확인</button>`:'';
     return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-status="done" style="margin-bottom:7px;border:1.5px solid #bbf7d0;background:#f7fff9">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:44px;flex-wrap:wrap">
         <span style="font-size:.72rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 8px">${label||'경기'}</span>
@@ -10838,7 +10838,7 @@ function renderBracketTree(key,mMs,teams){
       const canOperate = AD||OP||canEditMatchByClubMember(key,m);
       const hasTeams = m.t1!==null && m.t2!==null;
       const useOrderHere = isOnlineOrderMode(G.meta);
-      const opLabel = done ? '✏️ 결과수정' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
+      const opLabel = done ? '🔎 결과확인' : (useOrderHere ? '📝 오더·결과' : '⚡ 결과입력');
       const viewLabel = done ? '🔎 상세' : '🔎 경기';
       const assignedCourts=getMatchCourtsForStatusBoard(key,m)||[];
       const courtLabel=assignedCourts.length?`🎾 ${assignedCourts.join('/')}`:'🎾 코트';
@@ -15136,8 +15136,14 @@ function ensureM3AdminSubmitButtons(){
   return {homeBtn,awayBtn};
 }
 
-function openM3(key,mid){
-  const m=(G.matches[key]||[]).find(m=>m.id===mid);if(!m)return;
+function openM3(key,mid,forceEdit=false){
+  const m=(G.matches[key]||[]).find(m=>String(m.id)===String(mid));if(!m)return;
+  // PHASE91: 완료된 경기는 어떤 진입 경로에서도 결과 요약을 먼저 보여준다.
+  // 실제 편집은 경기 상세의 '결과 수정' 버튼(openMatchOperationsEdit)에서 forceEdit=true로만 진입한다.
+  if(!forceEdit){
+    const completedState=getMatchResultState(key,m);
+    if(completedState.done){ openSimpleMatchDetail(key,mid); return; }
+  }
   const indivAuth=getIndividualResultAuthState(key,m);
   const readOnlyView=!!window.__MATCH_READ_ONLY_VIEW;
   if(!readOnlyView && !(AD||canEditMatchByDirector(key,m)||indivAuth.allowed||isPublicResultEntryEnabled())){
@@ -23723,7 +23729,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
           const canEdit=!!(AD||OP||canEditMatchByClubMember(key,m));
           const canOperate=canEdit&&ready;
           const score=done?`${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}`:(ready?'입력':'대기');
-          const action=done?(canEdit?'결과수정':'결과확인'):(canOperate?'결과입력':'경기확인');
+          const action=done?'결과확인':(canOperate?'결과입력':'경기확인');
           const click=canOperate||done&&canEdit
             ? `openMatchOperations('${key}','${matchId}')`
             : `openSimpleMatchDetail('${key}','${matchId}')`;
