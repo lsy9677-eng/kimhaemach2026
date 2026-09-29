@@ -23709,8 +23709,9 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
 
   // 한글/영문 모두 글자 단위로 위→아래 세로 배열.
   // writing-mode을 쓰지 않아 T-ONE, UDT-A 같은 영문도 옆으로 눕지 않는다.
+  const pyramidDisplayTeamName=name=>String(name||'').replace(/-([A-C])$/i,'$1');
   const verticalName=name=>{
-    const chars=Array.from(String(name||'')).map(ch=>(ch==='-'||ch==='–'||ch==='—')?'│':ch);
+    const chars=Array.from(pyramidDisplayTeamName(name));
     return chars.map(ch=>`<span style="display:block;line-height:1.02;height:1.02em;overflow:visible">${outputEsc(ch)}</span>`).join('');
   };
   const boxes=entrants.map((e,i)=>{
@@ -23720,10 +23721,11 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     const color=e.byeSlot?'#9a6700':'#10213d';
     const src=String(e.sourceLabel||'').trim();
     const srcBadge=src?`<div style="position:absolute;top:2px;left:2px;right:2px;border-radius:4px;background:#1565c0;color:#fff;font-size:${n>=32?'5.8':'6.8'}px;font-weight:900;line-height:1.25;padding:2px 1px;white-space:normal">${outputEsc(src)}</div>`:'';
-    const nameLen=Array.from(String(e.name||'')).length;
-    const teamFont=nameLen<=3?(n>=32?18:24):nameLen<=5?(n>=32?15:20):(n>=32?12:16);
+    const nameLen=Array.from(pyramidDisplayTeamName(e.name)).length;
+    const teamFont=nameLen<=3?(n>=32?14:18):nameLen<=5?(n>=32?11.5:14.5):(n>=32?9.2:11.5);
+    const maxReadableFont=Math.max(24,Math.min(40,bw-2));
     return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:1px solid ${border};background:${bg};border-radius:5px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px">
-      ${srcBadge}<div class="pyramid-team-name" style="font-size:${teamFont}px;font-weight:1000;color:${color};letter-spacing:.12px;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
+      ${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
     </div>`;
   }).join('');
 
@@ -23750,7 +23752,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
       if(losers.length)third=losers.join(' · ');
     }
   }
-  const resultCell=(title,val,accent)=>`<div style="border:1px solid #c9d6e8;border-top:3px solid ${accent};border-radius:8px;background:#fff;min-height:47px;padding:6px 10px;text-align:center;box-shadow:0 1px 3px rgba(15,35,65,.07)"><div style="font-size:7.5px;font-weight:900;color:#64748b">${title}</div><div style="font-size:12px;font-weight:950;color:#10213d;margin-top:3px">${outputEsc(val)||'　　　　　　　　'}</div></div>`;
+  const resultCell=(title,val,accent)=>`<div style="border:1px solid #c9d6e8;border-top:3px solid ${accent};border-radius:8px;background:#fff;min-height:47px;padding:6px 10px;text-align:center;box-shadow:0 1px 3px rgba(15,35,65,.07)"><div style="font-size:7.5px;font-weight:900;color:#64748b">${title}</div><div style="font-size:12px;font-weight:950;color:#10213d;margin-top:3px">${outputEsc(pyramidDisplayTeamName(val))||'　　　　　　　　'}</div></div>`;
   const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">
     ${resultCell('🏆 우승',champion,'#d59b00')}
     ${resultCell('🥈 준우승',runner,'#7890ad')}
@@ -23834,18 +23836,18 @@ function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
   if(!ms.length)return '';
   return `<div class="actual-main-pyramid" data-main-pyramid="${outputEsc(key)}">
     ${showSaveButton?`<div style="display:flex;justify-content:flex-end;gap:6px;margin:0 0 7px"><button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px" onclick="saveMainPyramidHighResImage('${outputEsc(tid)}','${outputEsc(div)}')">🖼️ 본선 고화질 이미지 저장</button></div>`:''}
-    <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
+    <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
   </div>`;
 }
 
-// Phase82: 모바일 피라미드 대진표는 가로 스크롤 + 축소/확대/한눈에 맞춤을 함께 지원한다.
+// Phase87: 모바일 피라미드 대진표는 버튼 줌 + 영역 전용 핀치 줌 + 한손가락 가로 이동을 지원한다.
 function initMobileBracketHorizontalScroll(root=document){
   const targets=[...root.querySelectorAll('.mobile-bracket-hscroll,.actual-main-pyramid-body')];
   targets.forEach(el=>{
     if(el.dataset.mobileHscrollReady==='1') return;
     el.dataset.mobileHscrollReady='1';
     el.style.overflowX='auto'; el.style.overflowY='hidden';
-    el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-x pan-y';
+    el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-y';
 
     // 실제 본선 HTML의 첫 자식은 우승/준우승 결과판일 수 있다.
     // 확대/축소 대상은 반드시 피라미드 본체를 우선 선택한다.
@@ -23853,21 +23855,37 @@ function initMobileBracketHorizontalScroll(root=document){
     const isMobile=()=>window.innerWidth<=768;
     const clamp=v=>Math.max(.18,Math.min(1.6,v));
     const getZoom=()=>Number(el.dataset.bracketZoom||1);
-    const applyZoom=(z,keepCenter=true)=>{
+    const updateReadableTeamNames=z=>{
       if(!content)return;
-      const old=getZoom(), center=el.scrollLeft+el.clientWidth/2;
+      const names=[...content.querySelectorAll('.pyramid-team-name[data-base-font]')];
+      names.forEach(node=>{
+        const base=Number(node.dataset.baseFont||0)||12;
+        const maxFont=Number(node.dataset.maxReadableFont||0)||40;
+        // 전체맞춤으로 구조가 축소돼도 팀명은 화면상 약 9.5~12px를 확보한다.
+        // 논리 폰트 크기만 보정하므로 박스/가지선/DB 데이터는 전혀 변경하지 않는다.
+        const targetScreen=base>=17?12:base>=13?10.8:9.5;
+        const readable=Math.min(maxFont,Math.max(base,targetScreen/Math.max(z,.18)));
+        node.style.fontSize=readable.toFixed(2)+'px';
+      });
+    };
+    const applyZoom=(z,keepCenter=true,anchorClientX=null)=>{
+      if(!content)return;
+      const old=getZoom();
+      const rect=el.getBoundingClientRect();
+      const anchorX=anchorClientX==null?(el.clientWidth/2):Math.max(0,Math.min(el.clientWidth,anchorClientX-rect.left));
+      const anchorContent=old?((el.scrollLeft+anchorX)/old):0;
       z=clamp(z); el.dataset.bracketZoom=String(z);
       content.style.zoom=String(z);
+      updateReadableTeamNames(z);
       if(keepCenter) requestAnimationFrame(()=>{
-        const ratio=old?z/old:1;
-        el.scrollLeft=Math.max(0,center*ratio-el.clientWidth/2);
+        el.scrollLeft=Math.max(0,anchorContent*z-anchorX);
       });
       const label=el.previousElementSibling?.querySelector?.('[data-bracket-zoom-label]');
       if(label)label.textContent=Math.round(z*100)+'%';
     };
     const fitZoom=()=>{
       if(!content)return;
-      content.style.zoom='1'; el.dataset.bracketZoom='1';
+      content.style.zoom='1'; el.dataset.bracketZoom='1'; updateReadableTeamNames(1);
       requestAnimationFrame(()=>{
         const pyramid=content;
         const cssW=parseFloat(pyramid.style?.width||'')||0;
@@ -23875,9 +23893,7 @@ function initMobileBracketHorizontalScroll(root=document){
         const available=Math.max(1,el.clientWidth-12);
         const z=natural>available?clamp(available/natural):1;
         applyZoom(z,false);
-        requestAnimationFrame(()=>{
-          el.scrollLeft=0;
-        });
+        requestAnimationFrame(()=>{ el.scrollLeft=0; });
       });
     };
 
@@ -23892,19 +23908,48 @@ function initMobileBracketHorizontalScroll(root=document){
       tools.querySelector('[data-zfit]')?.addEventListener('click',fitZoom);
     }
 
-    let sx=0,sy=0,horizontal=false;
+    let sx=0,sy=0,lastX=0,horizontal=false,pinching=false,pinchStartDist=0,pinchStartZoom=1;
+    const touchDist=touches=>{
+      if(!touches||touches.length<2)return 0;
+      const dx=touches[0].clientX-touches[1].clientX,dy=touches[0].clientY-touches[1].clientY;
+      return Math.hypot(dx,dy);
+    };
+    const touchMidX=touches=>touches&&touches.length>=2?(touches[0].clientX+touches[1].clientX)/2:null;
     el.addEventListener('touchstart',ev=>{
-      const t=ev.touches&&ev.touches[0]; if(!t)return; sx=t.clientX; sy=t.clientY; horizontal=false;
-    },{passive:true});
-    el.addEventListener('touchmove',ev=>{
+      if(ev.touches?.length>=2){
+        pinching=true; horizontal=false; pinchStartDist=Math.max(1,touchDist(ev.touches)); pinchStartZoom=getZoom();
+        ev.preventDefault(); ev.stopPropagation(); return;
+      }
       const t=ev.touches&&ev.touches[0]; if(!t)return;
-      const dx=Math.abs(t.clientX-sx),dy=Math.abs(t.clientY-sy);
-      if(dx>8 && dx>dy){ horizontal=true; ev.stopPropagation(); }
-    },{passive:true});
-    el.addEventListener('touchend',ev=>{ if(horizontal)ev.stopPropagation(); horizontal=false; },{passive:true});
+      sx=lastX=t.clientX; sy=t.clientY; horizontal=false;
+      ev.stopPropagation();
+    },{passive:false});
+    el.addEventListener('touchmove',ev=>{
+      if(pinching && ev.touches?.length>=2){
+        const ratio=touchDist(ev.touches)/Math.max(1,pinchStartDist);
+        applyZoom(pinchStartZoom*ratio,true,touchMidX(ev.touches));
+        ev.preventDefault(); ev.stopPropagation(); return;
+      }
+      const t=ev.touches&&ev.touches[0]; if(!t)return;
+      const dx=t.clientX-sx,dy=t.clientY-sy;
+      if(horizontal || (Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy))){
+        horizontal=true;
+        el.scrollLeft-=t.clientX-lastX;
+        lastX=t.clientX;
+        ev.preventDefault(); ev.stopPropagation();
+      }
+    },{passive:false});
+    const endTouch=ev=>{
+      if(ev.touches?.length<2)pinching=false;
+      if(horizontal||pinching)ev.stopPropagation();
+      if(!ev.touches?.length){ horizontal=false; pinching=false; }
+    };
+    el.addEventListener('touchend',endTouch,{passive:false});
+    el.addEventListener('touchcancel',endTouch,{passive:false});
 
-    // 모바일은 처음 열 때 '한눈에' 배율로 자동 축소한다. 이후 확대하면 가로 스크롤로 세부 확인 가능하다.
+    // 모바일은 처음 열 때 '한눈에' 배율로 자동 축소한다. 이후 핀치/버튼 확대 시 가로 이동으로 세부 확인한다.
     if(isMobile() && !el.dataset.mobileFitDone){ el.dataset.mobileFitDone='1'; fitZoom(); }
+    else updateReadableTeamNames(getZoom());
   });
 }
 
