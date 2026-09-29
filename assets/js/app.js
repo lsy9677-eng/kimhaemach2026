@@ -21937,12 +21937,8 @@ async function renderRegistryTab(force){
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   let registryMembers = await loadRegistry(year);
-  try{
-    const grouped=await forceRegistryMembersIntoCanonicalClubGroups(year);
-    if(grouped.changed) registryMembers=await loadRegistry(year);
-    const repaired=await autoFillClubRegionDefaultsFromRegistry(year);
-    if(repaired.rowChanged) registryMembers=await loadRegistry(year);
-  }catch(e){console.warn('auto club/region repair skipped',e);}
+  // 중요: 현황 렌더링 중에는 Firestore 저장/보정 작업을 절대 실행하지 않는다.
+  // 데이터 보정은 관리자 수동 '중복 클럽 자동 통합'에서만 수행한다.
   const members = (registryMembers||[])
     .map((m, idx)=>({
       ...m,
@@ -22002,11 +21998,11 @@ async function renderRegistryTab(force){
 
   const displayFiltered=filtered.map(m=>{
     const club=canonicalRegistryClub(m.club||'');
-    const region=getAuthoritativeClubRegion(club,registryMembers)||normalizeRegionLabel(m.region||'');
-    const baseRow={...m,club,region};
-    if(!AD||!isNewlyAddedRegistryMember(m))return baseRow;
+    const region=getRegistryDisplayRegion(club,registryMembers)||normalizeRegionLabel(m.region||'');
+    const row={...m,club,region};
+    if(!AD||!isNewlyAddedRegistryMember(m))return row;
     const d=registryAddedDateLabel(m.addedAt);
-    return {...baseRow,name:`${m.name}  🆕${d?` ${d}`:''}`};
+    return {...row,name:`${m.name}  🆕${d?` ${d}`:''}`};
   });
   const sortedFiltered=displayFiltered.slice().sort((a,b)=>{
     const cr=String(a.region||'소속 코트 미지정').localeCompare(String(b.region||'소속 코트 미지정'),'ko',{numeric:true});
@@ -22174,24 +22170,24 @@ function canonicalizeRegistryMembers(members=[]){
 }
 function resolveClubRegionForRegistry(club, members=[]){
   const c=canonicalRegistryClub(club||''); if(!c)return '';
-  const authoritative=getAuthoritativeClubRegion(c,members);
-  if(authoritative)return authoritative;
+  const displayRegion=getRegistryDisplayRegion(c,members);
+  if(displayRegion)return displayRegion;
   const configured=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
   if(configured)return configured;
   const inferred=inferClubRegionFromMembers(members,c,normalizeClub);
   return normalizeRegionLabel(inferred?.region||'');
 }
-function getAuthoritativeClubRegion(club,members=[]){
+function getRegistryDisplayRegion(club,members=[]){
   const c=canonicalRegistryClub(club||'');if(!c)return '';
   const counts={};
   (members||[]).forEach(m=>{
     if(canonicalRegistryClub(m.club||'')!==c)return;
-    const r=normalizeRegionLabel(m.region||'');if(r)counts[r]=(counts[r]||0)+1;
+    const r=normalizeRegionLabel(m.region||'');
+    if(r)counts[r]=(counts[r]||0)+1;
   });
-  const ranked=Object.entries(counts).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0],'ko'));
+  const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'));
   const saved=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
   if(!ranked.length)return saved;
-  // 실제 기존 명단의 다수 배정값을 우선한다. 잘못 저장된 신규 소수 그룹이 기본코트를 오염시키지 못한다.
   if(ranked.length===1)return ranked[0][0];
   if(ranked[0][1]>ranked[1][1])return ranked[0][0];
   return saved||ranked[0][0];
@@ -22199,13 +22195,18 @@ function getAuthoritativeClubRegion(club,members=[]){
 async function forceRegistryMembersIntoCanonicalClubGroups(year=2026){
   const members=await loadRegistry(year);
   let changed=0,metaChanged=false;
-  const clubs=[...new Set(members.map(m=>canonicalRegistryClub(m.club||'')).filter(Boolean))];
-  for(const club of clubs){
-    const region=getAuthoritativeClubRegion(club,members);
-    const saved=normalizeRegionLabel(getClubDefaultRegion(G.meta,club)||'');
-    if(region&&saved!==region){setClubDefaultRegion(G.meta,club,region);metaChanged=true;}
-    members.forEach(m=>{
-      if(canonicalRegistryClub(m.club||'')!==club)return;
+  const clubNames=[...new Set((G.clubs||[]).map(c=>canonicalRegistryClub(c)).filter(Boolean))];
+  for(const club of clubNames){
+    const same=members.filter(m=>canonicalRegistryClub(m.club||'')===club);
+    if(!same.length)continue;
+    let region=normalizeRegionLabel(getClubDefaultRegion(G.meta,club)||'');
+    if(!region){
+      const counts={};
+      same.forEach(m=>{const r=normalizeRegionLabel(m.region||'');if(r)counts[r]=(counts[r]||0)+1;});
+      region=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'))[0]?.[0]||'';
+      if(region){setClubDefaultRegion(G.meta,club,region);metaChanged=true;}
+    }
+    same.forEach(m=>{
       if(m.club!==club){m.club=club;changed++;}
       if(region&&normalizeRegionLabel(m.region||'')!==region){m.region=region;changed++;}
     });
