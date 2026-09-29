@@ -23614,11 +23614,24 @@ function outputGeneratedTree(tid,div,blank=true){
   const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
   if(!regs.length)return '';
   let n=1;while(n<Math.max(2,regs.length))n*=2;
-  let cols=[],cur=Array.from({length:n},(_,i)=>outputEsc(regs[i]?.club||''));
-  cols.push(cur);
-  while(cur.length>1){cur=Array.from({length:Math.ceil(cur.length/2)},()=> '________________');cols.push(cur);}
-  const html=`<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:10px;align-items:stretch">`+cols.map((col,ci)=>`<div><div style="font-weight:900;text-align:center;margin-bottom:6px">${ci===0?n+'강':(Math.max(1,n/(2**ci))===1?'우승':Math.max(1,n/(2**ci))+'강')}</div>`+col.map(x=>`<div style="border:1px solid #334155;border-radius:4px;padding:6px 4px;margin:${Math.max(3,(2**ci)*4)}px 0;min-height:16px;text-align:center;font-size:8px">${x||'________________'}</div>`).join('')+`</div>`).join('')+`</div>`;
-  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 수기용 가지형 양식입니다.</div>`+html;
+  const width=Math.max(760,n*88), levels=Math.log2(n)+1, height=75+(levels-1)*70;
+  let nodes=[],cur=Array.from({length:n},(_,i)=>outputEsc(regs[i]?.club||''));
+  for(let li=0;li<levels;li++){
+    const count=cur.length,y=height-28-li*70;
+    cur.forEach((name,i)=>nodes.push({li,i,x:(i+.5)*width/count,y,name}));
+    cur=Array.from({length:Math.max(1,count/2)},()=> '');
+  }
+  let lines='';
+  for(let li=0;li<levels-1;li++){
+    const lower=nodes.filter(x=>x.li===li),upper=nodes.filter(x=>x.li===li+1);
+    upper.forEach((u,i)=>[lower[i*2],lower[i*2+1]].filter(Boolean).forEach(c=>{
+      const my=(c.y+u.y)/2;lines+=`<path d="M ${c.x} ${c.y-11} V ${my} H ${u.x} V ${u.y+11}" fill="none" stroke="#334155" stroke-width="1.3"/>`;
+    }));
+  }
+  const boxes=nodes.map(nod=>`<div style="position:absolute;left:${nod.x}px;top:${nod.y}px;transform:translate(-50%,-50%);width:${Math.max(64,width/(n/(2**nod.li))-12)}px;max-width:145px;height:27px;border:${nod.li===levels-1?'2':'1'}px solid ${nod.li===levels-1?'#b7791f':'#334155'};background:#fff;border-radius:4px;padding:5px 3px;text-align:center;font-size:8px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${nod.name||(blank?'________________':'')}</div>`).join('');
+  const html=`<div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto"><svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${lines}</svg>${boxes}</div></div>`;
+  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
+    `<div style="font-size:8px;margin-bottom:5px;color:#6b7280;text-align:center">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 양식입니다. 맨 아래 출전팀에서 위로 올라가 최상단이 우승입니다.</div>`+html;
 }
 function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   const t=(G.tournaments||[]).find(x=>x.id===tid);
@@ -23680,8 +23693,69 @@ function outputMainTableHtml(tid,div,blank=false){
   }).join('');
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
+function outputBottomUpTreeHtml(tid,div,blank=false){
+  const key=tid+'_'+div, teams=G.teams?.[key]||[];
+  const all=(G.matches?.[key]||[]).filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
+  if(!all.length)return '';
+  const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
+  const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+  const slots=[];
+  first.forEach(m=>{slots.push(outputTeamName(key,m.t1));slots.push(outputTeamName(key,m.t2));});
+  if(!slots.length)return '';
+  const n=slots.length;
+  const winnerOf=m=>{
+    if(blank)return '';
+    const rs=getMatchResultState(key,m);
+    if(!rs.done)return '';
+    if(m.winner!=null)return outputTeamName(key,m.winner);
+    const a=Number(rs.disp1),b=Number(rs.disp2);
+    return Number.isFinite(a)&&Number.isFinite(b)&&a!==b?outputTeamName(key,a>b?m.t1:m.t2):'';
+  };
+  const levels=[slots];
+  rounds.forEach((r,ri)=>{
+    const rm=all.filter(m=>Number(m.round||0)===r).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+    if(ri===0)levels.push(rm.map(winnerOf));
+    else levels.push(rm.map(winnerOf));
+  });
+  // remove duplicate/empty overrun levels while preserving championship level
+  const uniq=[levels[0]];
+  for(let i=1;i<levels.length;i++) if(levels[i].length<uniq[uniq.length-1].length) uniq.push(levels[i]);
+  const rowH=48, width=Math.max(760,n*92), height=70+(uniq.length-1)*72;
+  const nodes=[];
+  uniq.forEach((lv,li)=>{
+    const count=lv.length, y=height-28-li*72;
+    lv.forEach((name,i)=>{
+      const x=(i+.5)*width/count;
+      nodes.push({li,i,x,y,name:name||''});
+    });
+  });
+  let lines='';
+  for(let li=0;li<uniq.length-1;li++){
+    const lower=nodes.filter(n=>n.li===li), upper=nodes.filter(n=>n.li===li+1);
+    upper.forEach((u,i)=>{
+      const c1=lower[i*2],c2=lower[i*2+1];
+      [c1,c2].filter(Boolean).forEach(c=>{
+        const midY=(c.y+u.y)/2;
+        lines+=`<path d="M ${c.x} ${c.y-11} V ${midY} H ${u.x} V ${u.y+11}" fill="none" stroke="#334155" stroke-width="1.3"/>`;
+      });
+    });
+  }
+  const boxes=nodes.map(n=>{
+    const top=n.li===uniq.length-1;
+    const label=n.name||'';
+    return `<div style="position:absolute;left:${n.x}px;top:${n.y}px;transform:translate(-50%,-50%);width:${Math.max(68,width/(uniq[n.li].length||1)-12)}px;max-width:150px;height:27px;border:${top?'2':'1'}px solid ${top?'#b7791f':'#334155'};background:#fff;border-radius:4px;padding:5px 3px;text-align:center;font-size:8px;font-weight:${top?'900':'700'};overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${outputEsc(label)||(blank?'________________':'')}</div>`;
+  }).join('');
+  const labels=uniq.map((lv,li)=>{
+    const y=height-28-li*72-25;
+    const txt=li===0?`${lv.length}팀`:(li===uniq.length-1?'🏆 우승':`${lv.length*2}강 승자`);
+    return `<div style="position:absolute;left:5px;top:${y}px;font-size:7px;font-weight:800;color:#64748b">${txt}</div>`;
+  }).join('');
+  return `<div class="oc-pyramid-wrap" style="overflow:hidden;width:100%"><div class="oc-pyramid" style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
+    <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${lines}</svg>${labels}${boxes}
+  </div></div>`;
+}
 function outputMainTreeHtml(tid,div,blank=false){
-  const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),teams=G.teams?.[key]||[];
+  const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length){
@@ -23689,9 +23763,9 @@ function outputMainTreeHtml(tid,div,blank=false){
     const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
     return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   }
-  const tree=renderBracketTree(key,ms,teams);
+  const tree=outputBottomUpTreeHtml(tid,div,blank);
   return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
-    `<div class="oc-tree ${blank?'oc-tree-blank':''}">${tree}</div>`;
+    `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 최초 출전팀 → 위로 승자 진출 → 최상단 우승</div>${tree}`;
 }
 function outputCenterBody(){
   const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.value||'prelim-current';
