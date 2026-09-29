@@ -11485,12 +11485,33 @@ function buildHybridMainSlots(entries, n){
   return {matchSlots, n, byeCount, byeIdxs, normalIdxs};
 }
 
-function computeMainBracketSpec(total){
+function computeMainBracketSpec(total, mode='auto'){
   const t=Math.max(0, Number(total||0));
-  if(t<2) return {mainSize:0, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true};
+  const requestedMode=String(mode||'auto');
+  if(t<2) return {mainSize:0, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true, mode:requestedMode};
   let lower=1;
   while(lower*2 <= t) lower*=2;
-  if(lower===t) return {mainSize:t, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true};
+  if(lower===t) return {mainSize:t, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true, mode:requestedMode};
+
+  // PHASE97: 기본 본선은 항상 상위 정규 드로 + 부전승 방식이다.
+  // 예: 6팀 → 8강 본선 + 부전승 2자리.
+  // 관리자/진행자가 명시적으로 'playin'을 선택한 경우에만 진출전 구조를 사용한다.
+  if(requestedMode==='full' || requestedMode==='auto'){
+    const mainSize=lower*2;
+    return {
+      mainSize,
+      playInTeams:0,
+      playInMatches:0,
+      winnersNeeded:0,
+      directCount:t,
+      exact:false,
+      forcedFull:true,
+      defaultFull:requestedMode==='auto',
+      mode:requestedMode==='auto'?'auto':'full',
+      baseMainSize:lower
+    };
+  }
+
   const winnersNeeded=t-lower;
   const playInTeams=Math.min(t, winnersNeeded*2);
   const playInMatches=Math.floor(playInTeams/2);
@@ -11507,7 +11528,8 @@ function computeMainBracketSpec(total){
       directCount: t,
       exact: false,
       promotedBracket: true,
-      baseMainSize: lower
+      baseMainSize: lower,
+      mode: requestedMode
     };
   }
 
@@ -11517,7 +11539,8 @@ function computeMainBracketSpec(total){
     playInMatches,
     winnersNeeded,
     directCount: t-playInTeams,
-    exact:false
+    exact:false,
+    mode: requestedMode==='playin'?'playin':'auto'
   };
 }
 
@@ -11525,6 +11548,9 @@ function formatMainSpecSummary(spec){
   if(!spec || !spec.mainSize) return '';
   if(spec.playInMatches>0){
     return `직행 ${spec.directCount}팀 + 진출전 ${spec.playInTeams}팀(${spec.playInMatches}경기) → 승자 ${spec.winnersNeeded}팀이 ${spec.mainSize}강 합류`;
+  }
+  if(spec.forcedFull){
+    return `${spec.mainSize}강 본선 · 부전승 ${Math.max(0, Number(spec.mainSize||0)-Number(spec.directCount||0))}자리`;
   }
   if(spec.promotedBracket && spec.baseMainSize){
     return `진출전 ${Math.max(0, Math.floor((Number(spec.directCount||0)-Number(spec.baseMainSize||0))/2))}경기 구간은 상위 드로로 승격 → ${spec.mainSize}강 본선 (부전승 ${Math.max(0, spec.mainSize - spec.directCount)}팀)`;
@@ -13947,11 +13973,11 @@ function computeExternalSeed(method){
   const sec=now.getSeconds();
   return {seed:(sec%10)+1, sourceLabel:'현재 시각 초', snapshotLabel:`현재 시각 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(sec).padStart(2,'0')} 기준 확정`, rawValue:String(sec)};
 }
-function buildNthMainPlan(entries, n, baseSeed, nth, tid, div){
+function buildNthMainPlan(entries, n, baseSeed, nth, tid, div, bracketMode='auto'){
   const candidates=[];
   for(let i=1;i<=10;i++){
     const candidateSeed=((baseSeed-1 + ((i-1)*7)) % 10) + 1;
-    const plan=buildSeededMainSlots(entries, n, candidateSeed, tid, div);
+    const plan=buildSeededMainSlots(entries, n, candidateSeed, tid, div, bracketMode);
     candidates.push({index:i, seed:candidateSeed, plan});
   }
   const chosen=candidates[Math.max(0, Math.min(candidates.length-1, nth-1))];
@@ -13996,7 +14022,7 @@ function prepareMainExternalDraw(forceNew=false){
     setMainSeed(ext.seed);
   }
   MD.nthPick=nth;
-  const nthPlan=buildNthMainPlan(MD.advT, MD.bracketSize, MD.seed, nth, MD.tid, MD.div);
+  const nthPlan=buildNthMainPlan(MD.advT, MD.bracketSize, MD.seed, nth, MD.tid, MD.div, MD.mainBracketMode||'auto');
   MD.candidates=nthPlan.candidates;
   MD.plan=nthPlan.chosen?.plan||null;
   if(MD.plan) renderMainSeedSummary(MD.plan, MD.seed);
@@ -14148,9 +14174,9 @@ function chooseBestMainLeaf(positions, entry, leaves, n, rnd){
   });
   return bestPos;
 }
-function buildSeededMainSlots(entries, n, seed, tid, div){
+function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   const total=(entries||[]).length;
-  const spec=computeMainBracketSpec(total);
+  const spec=computeMainBracketSpec(total, bracketMode);
   if(total<2 || !spec.mainSize) return {matchSlots:[], n:0, byeCount:0, byeIdxs:[], normalIdxs:[], revealOrder:[], playInMatches:[], spec};
 
   const rnd=seededMainRng(seed, tid, div, total);
@@ -14387,7 +14413,7 @@ function renderMainSeedSummary(plan, seed){
   if(el){
     const prepared = MD.seedPreparedAt ? new Date(MD.seedPreparedAt) : null;
     const preparedTxt = prepared ? `${String(prepared.getHours()).padStart(2,'0')}:${String(prepared.getMinutes()).padStart(2,'0')}:${String(prepared.getSeconds()).padStart(2,'0')}` : '-';
-    el.innerHTML=`${MD.seedSourceLabel||'외부값'} · <b>${MD.nthPick||1}번째 결과</b> · 본선 ${MD.bracketSize}강 · 확정시각 ${preparedTxt}`;
+    el.innerHTML=`${MD.seedSourceLabel||'외부값'} · <b>${MD.nthPick||1}번째 결과</b> · 본선 ${plan?.n||MD.bracketSize}강 · 확정시각 ${preparedTxt}`;
   }
 }
 function updateMainSeedPreview(){
@@ -14474,6 +14500,55 @@ async function saveMainDrawHistoryEntry(opts={}){
   return entry;
 }
 
+function getMainBracketModeOptions(total){
+  const t=Math.max(0,Number(total||0));
+  const defaultSpec=computeMainBracketSpec(t,'auto');
+  const playInSpec=computeMainBracketSpec(t,'playin');
+  const out=[{value:'auto',label:`기본(부전승 포함) · ${formatMainSpecSummary(defaultSpec)}`}];
+  if(playInSpec.playInMatches>0){
+    out.push({value:'playin',label:`진출전 방식 · ${formatMainSpecSummary(playInSpec)}`});
+  }
+  return out;
+}
+function refreshMainBracketModeUI(){
+  if(!MD?.advT?.length) return;
+  const mode=String(MD.mainBracketMode||'auto');
+  const spec=computeMainBracketSpec(MD.advT.length,mode);
+  MD.spec=spec;
+  MD.bracketSize=spec.mainSize;
+  MD.byeCount=Math.max(0,Number(spec.mainSize||0)-Number(MD.advT.length||0));
+  MD.plan=null;
+  const info=ge('mainBracketInfo');
+  if(info){
+    const byeCount=Math.max(0,Number(spec.mainSize||0)-Number(MD.advT.length||0));
+    info.innerHTML=`<div class="main-info-grid">
+      <div class="main-info-item">진출팀 <b>${MD.advT.length}팀</b>${MD.previewOnly?` <span style="font-size:.72rem;color:var(--text3)">(자리 추첨)</span>`:''}</div>
+      <div class="main-info-item">본선 <b>${spec.mainSize}강</b></div>
+      ${spec.playInMatches>0?`<div class="main-info-item" style="grid-column:1/-1"><b>직행 ${spec.directCount}팀</b> · <b>진출전 ${spec.playInTeams}팀 (${spec.playInMatches}경기)</b> · 승자 ${spec.winnersNeeded}팀 본선 합류</div>`:(byeCount>0?`<div class="main-info-item" style="grid-column:1/-1">부전승 <b>${byeCount}자리</b> · 진출전 없이 ${spec.mainSize}강 본선</div>`:'')}
+      <div class="main-info-item" style="grid-column:1/-1">현재 방식: <b>${formatMainSpecSummary(spec)}</b></div>
+    </div>`;
+  }
+  const modeNote=ge('mainBracketModeNote');
+  if(modeNote) modeNote.innerHTML=`현재 선택: <b>${formatMainSpecSummary(spec)}</b>`;
+  updateMainSeedPreview();
+}
+function onMainBracketModeChange(){
+  if(!canManageBracket()){ toast('본선 방식 설정은 관리자 또는 경기진행자만 가능합니다','error'); return; }
+  const sel=ge('mainBracketModeSelect');
+  if(!sel || !MD) return;
+  const next=String(sel.value||'auto');
+  const old=String(MD.mainBracketMode||'auto');
+  if(next===old) return;
+  const hasExisting=(G.matches?.[MD.key]||[]).some(m=>m.phase==='main'||m.phase==='playin');
+  if(hasExisting && !confirm('이미 생성된 본선 경기 데이터가 있습니다.\n방식을 변경하면 다음 본선 추첨에서 기존 본선/진출전이 새 구조로 다시 생성됩니다.\n\n계속하시겠습니까?')){
+    sel.value=old;
+    return;
+  }
+  MD.mainBracketMode=next;
+  refreshMainBracketModeUI();
+}
+window.onMainBracketModeChange=onMainBracketModeChange;
+
 function openMainDraw(tid,div){
   if(!canManageBracket()){ toast('본선 추첨은 관리자 또는 경기진행자만 실행할 수 있습니다','error'); return; }
   const key=tid+'_'+div, t=G.tournaments.find(t=>t.id===tid),
@@ -14487,7 +14562,8 @@ function openMainDraw(tid,div){
   }
   if(advT.length<2){toast('진출 자리 2개 이상 필요','error');return;}
 
-  const spec=computeMainBracketSpec(advT.length);
+  const savedBracketMode=String(draw?.mainBracketMode||'auto');
+  const spec=computeMainBracketSpec(advT.length, savedBracketMode);
   const n=spec.mainSize;
   const byeCount=Math.max(0, n-advT.length);
   const rank1=advT.filter(a=>a.rk===1);
@@ -14495,7 +14571,7 @@ function openMainDraw(tid,div){
 
   const savedMainSeedMap=(draw && typeof draw.mainSeedMap==='object' && draw.mainSeedMap) ? draw.mainSeedMap : {};
   const savedMainSeedRaw=String(draw?.mainSeedRaw||'').trim();
-  MD={key,tid,div,advT,previewOnly,bracketSize:n,byeCount,rank1,rank2,spec,isRunning:false,seed:1,plan:null,seedHash:'',manualSeedMap:savedMainSeedMap,manualSeedRaw:savedMainSeedRaw};
+  MD={key,tid,div,advT,previewOnly,bracketSize:n,byeCount,rank1,rank2,spec,mainBracketMode:savedBracketMode,isRunning:false,seed:1,plan:null,seedHash:'',manualSeedMap:savedMainSeedMap,manualSeedRaw:savedMainSeedRaw};
 
   ge('mainAdvTeams').innerHTML=`
     <div style="padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#dce8fb);border-radius:var(--radius-lg);border:1.5px solid var(--success);margin-bottom:10px">
@@ -14525,7 +14601,16 @@ function openMainDraw(tid,div){
   MD.nthPick=1;
   updateMainSeedPreview();
 
+  const modeOptions=getMainBracketModeOptions(advT.length);
+  if(!modeOptions.some(o=>o.value===MD.mainBracketMode)) MD.mainBracketMode='auto';
   const metaRow = `
+    <div style="padding:12px 14px;margin-bottom:12px;border:1.5px solid #7aa7df;border-radius:12px;background:linear-gradient(135deg,#f7fbff,#eef5ff)">
+      <label class="form-label" style="font-weight:900;color:#153b6b">🏆 본선 방식 설정 <span style="font-size:.72rem;color:#64748b">(기본: 부전승 포함 · 관리자·진행자 변경 가능)</span></label>
+      <select class="form-select" id="mainBracketModeSelect" onchange="onMainBracketModeChange()" style="margin-top:6px;font-weight:800">
+        ${modeOptions.map(o=>`<option value="${o.value}" ${o.value===MD.mainBracketMode?'selected':''}>${o.label}</option>`).join('')}
+      </select>
+      <div id="mainBracketModeNote" style="font-size:.72rem;color:#53657b;line-height:1.55;margin-top:7px">현재 선택: <b>${formatMainSpecSummary(MD.spec)}</b></div>
+    </div>
     <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
       <div style="flex:1;min-width:220px">
         <label class="form-label">추첨 제목</label>
@@ -14706,7 +14791,9 @@ async function startMainDraw(){
     baseSeed: MD.seed,
     chosenSeed: (MD.candidates||[])[Math.max(0,(MD.nthPick||1)-1)]?.seed || MD.seed,
     preparedAt: MD.preparedAt||new Date().toISOString(),
-    isTest: !!meta.isTest
+    isTest: !!meta.isTest,
+    bracketMode: String(MD.mainBracketMode||'auto'),
+    bracketSummary: formatMainSpecSummary(MD.spec||computeMainBracketSpec(MD.advT?.length||0,MD.mainBracketMode||'auto'))
   };
 
   try{
@@ -14723,6 +14810,7 @@ async function startMainDraw(){
         ...(G.draws[key]||{}),
         mainPlan:getMainDrawPlanStorageValue(plan,false),
         mainAudit:audit,
+        mainBracketMode:String(MD.mainBracketMode||'auto'),
         mainUpdatedAt:new Date().toISOString()
       };
       await stD(key);
