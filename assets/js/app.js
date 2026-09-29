@@ -10502,20 +10502,20 @@ function renderCombinedBracketSection(tid, div){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <div>
         <div style="font-size:1rem;font-weight:900;color:#1565c0">${t.name} · ${dl(div)}</div>
-        <div style="font-size:.74rem;color:#64748b">예선 + 본선을 한 화면에서 함께 보는 통합 대진표</div>
+        <div style="font-size:.74rem;color:#64748b">예선 현황 아래에 본선 피라미드를 이어서 보는 통합 대진표</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span style="background:#1565c0;color:white;padding:4px 10px;border-radius:999px;font-size:.68rem;font-weight:700">예선 ${draw.groups?.length||0}조</span>
         <span style="background:#e67e22;color:white;padding:4px 10px;border-radius:999px;font-size:.68rem;font-weight:700">${mMs.length?'본선 진행':'본선 미리보기'}</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:minmax(320px,1.1fr) 44px minmax(360px,1.4fr);gap:12px;align-items:start">
-      <div>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div style="width:100%;min-width:0">
         <div style="font-size:.84rem;font-weight:800;color:#1565c0;margin-bottom:8px">📋 예선 조별 현황</div>
         ${groupsHTML}
       </div>
-      <div style="display:flex;align-items:center;justify-content:center;min-height:220px;color:#94a3b8;font-size:1.6rem;font-weight:900">➜</div>
-      <div>
+      <div style="height:1px;background:linear-gradient(90deg,transparent,#dbeafe 12%,#dbeafe 88%,transparent);margin:0 4px"></div>
+      <div style="width:100%;min-width:0;overflow:visible">
         <div style="font-size:.84rem;font-weight:800;color:#e67e22;margin-bottom:8px">${rightTitle}</div>
         ${mainHTML}
       </div>
