@@ -3841,6 +3841,7 @@ function handleAppPopState(ev){
 window.addEventListener('popstate', handleAppPopState);
 
 function showPage(n){
+  if(n==='output') installPublicOutputCenter();
   if(isOperatorMode() && ['tournament','register','players'].includes(n)){
     toast('경기진행자 권한에서는 대진표/시합결과만 운영할 수 있습니다','info');
     n='bracket';
@@ -9907,7 +9908,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     const filteredMainMs=mMs.filter(m=>isMainMatchVisibleByFilter(key,m) && isMatchVisibleByCourtFilter(key,m));
     const hasMainOpFilter=(getDisplayMainBlockFilters(key).length>0);
     html+=`<div id="${mainToggleId}" style="display:${mainCollapsed?'none':'block'}">`;
-    html+= `<div id="mainStage_${tid}_${div}">`+(filteredMainMs.length?renderBracketTree(key,filteredMainMs,teams):`<div style="padding:14px 12px;border:1px dashed #bfdbfe;border-radius:12px;background:#fff;font-size:.82rem;color:var(--text2)">선택한 본선 구간에 표시할 대진이 없습니다.</div>`)+`</div>`;
+    html+= `<div id="mainStage_${tid}_${div}">`+(filteredMainMs.length?renderActualMainPyramidForDiv(tid,div):`<div style="padding:14px 12px;border:1px dashed #bfdbfe;border-radius:12px;background:#fff;font-size:.82rem;color:var(--text2)">선택한 본선 구간에 표시할 대진이 없습니다.</div>`)+`</div>`;
     html+=`</div>`;
     if(mainCollapsed){
       html += `<div style="margin:6px 0 10px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,#fff7ed,#fff1e6);border:1px solid #fed7aa;font-size:.82rem;font-weight:700;color:#c2410c">📌 가지형 본선 대진표만 접혀 있습니다. 아래 <b>본선 경기 현황</b>과 결과는 그대로 볼 수 있습니다.</div>`;
@@ -23423,7 +23424,16 @@ function closeReorderPopup() {
 // ─────────────────────────────────────────────────────────────
 function outputEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function installPublicOutputCenter(){
-  if(document.getElementById('page-output'))return;
+  const existing=document.getElementById('page-output');
+  const existingTab=document.querySelector('.nav-tab[data-page="output"]');
+  if(existing){
+    // 페이지가 이미 있어도 탭이 유실된 경우 복구한다.
+    if(!existingTab){
+      const nav=document.querySelector('.nav-tabs'), bracketTab=nav?.querySelector('[data-page="bracket"]');
+      if(nav&&bracketTab){const tab=document.createElement('div');tab.className='nav-tab';tab.dataset.page='output';tab.onclick=()=>showPage('output');tab.textContent='🖨️ 출력센터';bracketTab.insertAdjacentElement('afterend',tab);}
+    }
+    return;
+  }
   const nav=document.querySelector('.nav-tabs');
   const bracketTab=nav?.querySelector('[data-page="bracket"]');
   if(nav&&bracketTab){
@@ -23452,6 +23462,7 @@ function installPublicOutputCenter(){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
         <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ A4 가로 인쇄 · PDF</button>
+        <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 고화질 이미지 저장</button>
         <button class="btn btn-outline" onclick="renderOutputPreview()">↻ 현재상황 새로고침</button>
         <span style="font-size:.73rem;color:var(--text3)">출력센터는 읽기 전용이며 경기 데이터는 변경하지 않습니다.</span>
       </div>
@@ -23812,6 +23823,17 @@ function outputMainTreeHtml(tid,div,blank=false){
   return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
     `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 팀 배치 · 승리팀은 굵은 가지선으로 위 단계까지 연결</div>${tree}`;
 }
+function renderActualMainPyramidForDiv(tid,div){
+  const key=tid+'_'+div, allMs=G.matches?.[key]||[];
+  const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
+  if(!ms.length)return '';
+  return `<div class="actual-main-pyramid" data-main-pyramid="${outputEsc(key)}">
+    <div style="display:flex;justify-content:flex-end;gap:6px;margin:0 0 7px">
+      <button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px" onclick="saveMainPyramidHighResImage('${outputEsc(tid)}','${outputEsc(div)}')">🖼️ 본선 고화질 이미지 저장</button>
+    </div>
+    <div class="actual-main-pyramid-body" style="overflow:auto;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
+  </div>`;
+}
 function outputCenterBody(){
   const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.value||'prelim-current';
   if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
@@ -23837,6 +23859,35 @@ function renderOutputPreview(){
   try{box.innerHTML=`<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
 }
+async function ensureHtml2CanvasForExport(){
+  if(window.html2canvas)return;
+  await new Promise((res,rej)=>{
+    const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);
+  });
+}
+async function saveHighResElement(el,filename,bg='#ffffff'){
+  if(!el){toast('저장할 화면을 찾지 못했습니다','error');return;}
+  toast('고화질 이미지 생성 중...','info');
+  try{
+    await ensureHtml2CanvasForExport();
+    const sw=Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.max(el.scrollHeight||0,el.clientHeight||0);
+    const canvas=await html2canvas(el,{scale:4,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0});
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=filename;a.click();
+    toast('고화질 이미지 저장 완료 🖼️','success');
+  }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
+}
+async function saveOutputCenterHighResImage(){
+  const el=ge('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
+  const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
+  const t=G.tournaments.find(x=>x.id===tid);
+  await saveHighResElement(el,`출력센터_${t?.name||'대회'}_${dl(div)}_${type}_${new Date().toISOString().slice(0,10)}.png`);
+}
+async function saveMainPyramidHighResImage(tid,div){
+  const key=tid+'_'+div,wrap=document.querySelector(`[data-main-pyramid="${CSS.escape(key)}"] .actual-main-pyramid-body`);
+  const t=G.tournaments.find(x=>x.id===tid);
+  await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
+}
 function printOutputCenter(){
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
@@ -23845,7 +23896,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
