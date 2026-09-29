@@ -21937,12 +21937,7 @@ async function renderRegistryTab(force){
   // ✅ 선수등록 현황은 "현재 대회 참가자"가 아니라, 해당 연도 memberRegistries/{year}의 공식 등록명단만 표시한다.
   //    기존에는 collectLiveParticipantEntries()를 병합해서 대회 참가자가 섞이고, 클럽별 현황도 깨져 보였다.
   let registryMembers = await loadRegistry(year);
-  try{
-    const grouped=await forceRegistryMembersIntoCanonicalClubGroups(year);
-    if(grouped.changed) registryMembers=await loadRegistry(year);
-    const repaired=await autoFillClubRegionDefaultsFromRegistry(year);
-    if(repaired.rowChanged) registryMembers=await loadRegistry(year);
-  }catch(e){console.warn('auto club/region repair skipped',e);}
+  // 현황 조회는 읽기 전용. 실제 DB 통합은 관리자가 "중복 클럽 자동 통합"을 눌렀을 때만 수행한다.
   const members = (registryMembers||[])
     .map((m, idx)=>({
       ...m,
@@ -21975,12 +21970,14 @@ async function renderRegistryTab(force){
   const selRegion=ge('regRegionSel')?.value||'';
   const selClub=ge('regClubSel')?.value||'';
   const showSubOnly=ge('regShowSubOnly')?.checked||false;
+  const showNewOnly=AD&&!!ge('regShowNewOnly')?.checked;
   const keyword=(ge('regSearchInput')?.value||'').trim();
 
   const filtered=members.filter(m=>{
     if(selRegion&&m.region!==selRegion) return false;
     if(selClub&&m.club!==selClub) return false;
     if(showSubOnly&&!m.subClub) return false;
+    if(showNewOnly&&!m.addedAt) return false;
     if(keyword&&!(m.name||'').includes(keyword)&&!(m.club||'').includes(keyword)&&!(m.subClub||'').includes(keyword)&&!(m.region||'').includes(keyword)) return false;
     return true;
   });
@@ -21999,7 +21996,14 @@ async function renderRegistryTab(force){
     return;
   }
 
-  const sortedFiltered=filtered.slice().sort((a,b)=>{
+  const regionMap=buildRegistryClubRegionMap(registryMembers);
+  const displayFiltered=filtered.map(m=>{
+    const club=canonicalRegistryClub(m.club||'');
+    const region=regionMap.get(club)||normalizeRegionLabel(m.region||'');
+    const added=(AD&&m.addedAt)?` 🆕 ${registryAddedDateLabel(m.addedAt)}`:'';
+    return {...m,club,region,name:`${m.name}${added}`};
+  });
+  const sortedFiltered=displayFiltered.slice().sort((a,b)=>{
     const cr=String(a.region||'소속 코트 미지정').localeCompare(String(b.region||'소속 코트 미지정'),'ko',{numeric:true});
     if(cr!==0) return cr;
     const cc=String(a.club||'소속 미상').localeCompare(String(b.club||'소속 미상'),'ko',{numeric:true});
@@ -22015,9 +22019,17 @@ async function renderRegistryTab(force){
     escapeAttr:escAttr
   });
   body.dataset.ready='1';
-  setTimeout(ensureRegistryRepairButton,0);
+  setTimeout(()=>{ensureRegistryRepairButton();ensureRegistryNewMemberAdminControls();},0);
 }
 
+function ensureRegistryNewMemberAdminControls(){
+  if(!AD||ge('regShowNewOnly'))return;
+  const search=ge('regSearchInput'); if(!search||!search.parentElement)return;
+  const label=document.createElement('label'); label.id='regNewMemberAdminFilter';
+  label.style.cssText='display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:7px 9px;margin-left:6px';
+  label.innerHTML='<input id="regShowNewOnly" type="checkbox" onchange="renderRegistryTab(true)"> 🆕 신규 추가만';
+  search.parentElement.appendChild(label);
+}
 async function repairRegistryClubGroupsNow(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   sl(true);
@@ -22140,6 +22152,33 @@ async function saveClubDefaultRegionSetting(){
   return saveAllClubDefaultRegions();
 }
 
+function registryAddedDateLabel(v){
+  if(!v)return ''; const d=new Date(v); if(Number.isNaN(d.getTime()))return '';
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+function stampRegistryAddedMeta(row,source='manual'){
+  if(!row||typeof row!=='object')return row;
+  if(!row.addedAt)row.addedAt=new Date().toISOString();
+  if(!row.addedSource)row.addedSource=source;
+  return row;
+}
+function buildRegistryClubRegionMap(members=[]){
+  const counts=new Map();
+  for(const m of members){
+    const c=canonicalRegistryClub(m.club||''); if(!c)continue;
+    const r=normalizeRegionLabel(m.region||''); if(!r)continue;
+    if(!counts.has(c))counts.set(c,new Map());
+    const cm=counts.get(c); cm.set(r,(cm.get(r)||0)+1);
+  }
+  const out=new Map();
+  for(const [c,cm] of counts){
+    const ranked=[...cm.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'));
+    const saved=normalizeRegionLabel(getClubDefaultRegion(G.meta,c)||'');
+    const region=!ranked.length?saved:(ranked.length===1||ranked[0][1]>ranked[1][1]?ranked[0][0]:(saved||ranked[0][0]));
+    if(region)out.set(c,region);
+  }
+  return out;
+}
 function canonicalRegistryClub(club){
   const raw=normalizeClub(club||''); if(!raw)return '';
   const compact=v=>String(v||'').replace(/\s+/g,'').toLowerCase();
@@ -22162,22 +22201,14 @@ function resolveClubRegionForRegistry(club, members=[]){
 }
 async function forceRegistryMembersIntoCanonicalClubGroups(year=2026){
   const members=await loadRegistry(year);
+  const regionMap=buildRegistryClubRegionMap(members);
   let changed=0,metaChanged=false;
-  const clubNames=[...new Set((G.clubs||[]).map(c=>canonicalRegistryClub(c)).filter(Boolean))];
-  for(const club of clubNames){
-    const same=members.filter(m=>canonicalRegistryClub(m.club||'')===club);
-    if(!same.length)continue;
-    let region=normalizeRegionLabel(getClubDefaultRegion(G.meta,club)||'');
-    if(!region){
-      const counts={};
-      same.forEach(m=>{const r=normalizeRegionLabel(m.region||'');if(r)counts[r]=(counts[r]||0)+1;});
-      region=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'))[0]?.[0]||'';
-      if(region){setClubDefaultRegion(G.meta,club,region);metaChanged=true;}
-    }
-    same.forEach(m=>{
-      if(m.club!==club){m.club=club;changed++;}
-      if(region&&normalizeRegionLabel(m.region||'')!==region){m.region=region;changed++;}
-    });
+  for(const m of members){
+    const club=canonicalRegistryClub(m.club||'');
+    const region=regionMap.get(club)||'';
+    if(club&&m.club!==club){m.club=club;changed++;}
+    if(region&&normalizeRegionLabel(m.region||'')!==region){m.region=region;changed++;}
+    if(club&&region&&normalizeRegionLabel(getClubDefaultRegion(G.meta,club)||'')!==region){setClubDefaultRegion(G.meta,club,region);metaChanged=true;}
   }
   if(metaChanged)await saveMeta();
   if(changed){G_REGISTRY[year]=members;await saveRegistry(year);}
@@ -22273,7 +22304,7 @@ async function registryTabQuickAdd(){
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}));
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}),'quick-add'));
   if(!window.G_REGISTRY) window.G_REGISTRY={};
   G_REGISTRY[year]=members;
   // G.players에도 추가
@@ -22437,7 +22468,7 @@ async function addRegistryRow(){
   const members=await loadRegistry(year);
   if(!region) region=resolveClubRegionForRegistry(club,members);
   if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(applyClubDefaultRegion(G.meta,{name,club,region,subClub})); sl(true);
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region,subClub}),'admin-manual')); sl(true);
   try{
     await saveRegistry(year);
     await syncOfficialRegistryRowsToPlayers([members[members.length-1]]);
@@ -23399,7 +23430,7 @@ Object.assign(window,{openPopupNoticeManager,closePopupNoticeManager,saveUnified
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
-  registryTabQuickAdd,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
+  registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
   toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,openDirectorSettings,ensureDirectorPasswordSettingsButton,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
