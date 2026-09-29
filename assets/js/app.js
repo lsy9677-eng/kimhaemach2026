@@ -10445,7 +10445,7 @@ function renderCombinedBracketSection(tid, div){
         if(playInMs.length){
           mainHTML += `<div class="card" style="margin-bottom:10px"><div class="card-title">🪣 진출전(똥통)</div>${playInMs.map((pm,idx)=>`<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:#fff8df;font-size:.82rem">${pm.source1Label || 'TBD'} vs ${pm.source2Label || 'TBD'}<div style="font-size:.72rem;color:var(--text3);margin-top:4px">승자 → ${pm.winnerLabel||'64강 합류'}</div></div>`).join('')}</div>`;
         }
-        mainHTML += renderBracketTree(key,mMs,teams);
+        mainHTML += renderActualMainPyramidForDiv(tid,div);
         if(bronzeMode==='match' && bronzeMatch){ const bst=getMatchResultState(key,bronzeMatch); const b1=bronzeMatch.t1!==null?teams[bronzeMatch.t1]:null; const b2=bronzeMatch.t2!==null?teams[bronzeMatch.t2]:null; mainHTML += `<div class="card" style="margin-top:10px"><div class="card-title">🥉 3·4위전</div>${mCard(bronzeMatch,key,b1?tdn(b1,key,bronzeMatch.t1):(bronzeMatch.t1===null?'TBD':'?'),b2?tdn(b2,key,bronzeMatch.t2):(bronzeMatch.t2===null?'TBD':'?'),bst.done,bst.sc1,bst.sc2,'3·4위전')}</div>`; }
         // 본선 확정 후에도 조별 연결구조 토글로 제공
         mainHTML += `<div style="margin-top:10px">
@@ -10458,32 +10458,15 @@ function renderCombinedBracketSection(tid, div){
           </div>
         </div>`;
       } else {
-        const isFixedPreview = ((draw.mainMode||'fixed')==='fixed');
-        const redrawPreview = buildIndivRedrawPreviewData(draw.groups||[], draw.grpSize||2);
-        const previewSlots = isFixedPreview ? (pv.matchSlots||[]) : (redrawPreview.matchSlots||[]);
-        const previewPlayIns = isFixedPreview ? (pv.playInMatches||[]) : (redrawPreview.playInMatches||[]);
-        const previewN = isFixedPreview ? (pv.n||0) : (redrawPreview.spec?.mainSize || pv.n || 0);
-        const previewBadge = isFixedPreview
-          ? `${adv}팀 진출 × ${grpCount}조 → ${pv.n}강`
-          : `${adv}팀 진출 × ${grpCount}조 → 재추첨 후 확정`;
-        const previewDesc = isFixedPreview
-          ? '📌 본선 대진표는 예선 중에도 계속 보입니다. 지금은 구조 미리보기이고, 실제 배정은 본선 추첨 후 확정됩니다.'
-          : '📌 본선을 재추첨으로 설정한 경우 예선 추첨 직후에는 본선 자리 배정을 미리 확정해서 보여주지 않습니다. 아래는 구조 미리보기만 표시되고, 실제 본선 배정은 본선 추첨 버튼을 눌렀을 때 확정됩니다.';
-        mainHTML = `<div class="card" style="margin:0;background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent)">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-            <div class="card-title" style="color:var(--primary-dark);margin:0">🌳 ${isFixedPreview ? '미리보기' : '재추첨 구조 미리보기'}</div>
-            <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">${previewBadge}</span>
-          </div>
-          <div style="font-size:.75rem;color:var(--text2);margin-bottom:10px;line-height:1.6">${previewDesc}</div>
-          ${renderMainPreviewHTML(previewSlots,previewN,true,previewPlayIns)}
-        </div>`;
+        // 본선 추첨 전: 팀/조순위 위치는 숨기고 구조와 부전승 자리만 공개
+        mainHTML = outputPreDrawPyramidSkeleton(tid,div) || `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`;
       }
     } else {
-      if(mMs.length) mainHTML = renderBracketTree(key,mMs,teams);
+      if(mMs.length) mainHTML = renderActualMainPyramidForDiv(tid,div);
       else mainHTML = `<div class="card" style="margin:0"><div class="empty-state" style="padding:28px"><p>본선 대진표 데이터가 없습니다</p></div></div>`;
     }
   } else if(mMs.length){
-    mainHTML = renderBracketTree(key,mMs,teams);
+    mainHTML = renderActualMainPyramidForDiv(tid,div);
     if(bronzeMode==='match' && bronzeMatch){ const bst=getMatchResultState(key,bronzeMatch); const b1=bronzeMatch.t1!==null?teams[bronzeMatch.t1]:null; const b2=bronzeMatch.t2!==null?teams[bronzeMatch.t2]:null; mainHTML += `<div class="card" style="margin-top:10px"><div class="card-title">🥉 3·4위전</div>${mCard(bronzeMatch,key,b1?tdn(b1,key,bronzeMatch.t1):(bronzeMatch.t1===null?'TBD':'?'),b2?tdn(b2,key,bronzeMatch.t2):(bronzeMatch.t2===null?'TBD':'?'),bst.done,bst.sc1,bst.sc2,'3·4위전')}</div>`; }
   }
 
@@ -10530,7 +10513,7 @@ function renderCombinedBracketSection(tid, div){
     groupsHTML = `<div class="card" style="margin:0"><div class="empty-state" style="padding:24px"><p>예선 조별 데이터가 없습니다</p></div></div>`;
   }
 
-  const rightTitle = mMs.length ? '🏆 본선 나무가지 대진표' : '🏆 본선 나무가지 미리보기';
+  const rightTitle = mMs.length ? '🏆 본선 피라미드 대진표' : '🏆 본선 빈 피라미드';
 
   return `<div style="background:linear-gradient(180deg,#f8fbff,#ffffff);border-radius:18px;padding:16px;border:1px solid #dbeafe;box-shadow:0 8px 24px rgba(0,0,0,.07);margin-bottom:18px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -12754,6 +12737,46 @@ async function saveDrawHistoryEntry(entry){
     console.warn('draw history save failed', e);
   }
 }
+function renderSavedPrelimNeutralPyramid(mainSize, savedSlots=[]){
+  let n=Number(mainSize||0);
+  if(n<2){n=2;while(n<Math.max(2,(savedSlots||[]).length*2))n*=2;}
+  if((n&(n-1))!==0){let p=1;while(p<n)p*=2;n=p;}
+  const width=Math.max(760,Math.min(1420,n*44)),baseY=292,stepY=52,levels=Math.log2(n),THIN='#a9b8cc';
+  const x=i=>(i+.5)*width/n;
+  let paths='',labels='';
+  for(let level=0;level<levels;level++){
+    const group=2**(level+1),y0=baseY-level*stepY,y1=baseY-(level+1)*stepY;
+    for(let g=0;g<n;g+=group){
+      const left=x(g+group/4-.5),right=x(g+3*group/4-.5),mid=(left+right)/2;
+      paths+=`<path d="M ${left} ${y0} V ${y1} H ${mid}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+      paths+=`<path d="M ${right} ${y0} V ${y1} H ${mid}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+      paths+=`<path d="M ${mid} ${y1} V ${Math.max(24,y1-stepY)}" fill="none" stroke="${THIN}" stroke-width="1.25"/>`;
+    }
+    const left=n/(2**level),roundLabel=left===2?'결승':`${left}강`;
+    labels+=`<g><rect x="5" y="${y1-9}" width="38" height="17" rx="8.5" fill="#f3f7fc" stroke="#b9c8dc"/><text x="24" y="${y1+3}" text-anchor="middle" font-size="7.5" font-weight="900" fill="#64748b">${roundLabel}</text></g>`;
+  }
+  // 저장된 예선 추첨의 본선 미리보기에서는 BYE 위치만 허용한다.
+  // 팀명/조/순위(source label)는 본선 추첨 전 절대 사용하지 않는다.
+  const byeLeaves=new Set();
+  (savedSlots||[]).slice(0,n/2).forEach((slot,mi)=>{
+    if(!slot?.bye)return;
+    const has1=!!slot?.t1,has2=!!slot?.t2;
+    if(has1&&!has2)byeLeaves.add(mi*2+1);
+    else if(!has1&&has2)byeLeaves.add(mi*2);
+    else byeLeaves.add(mi*2+1);
+  });
+  const boxes=Array.from({length:n},(_,i)=>{
+    const bye=byeLeaves.has(i),xx=x(i),bw=Math.max(25,Math.min(40,width/n-3));
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:72px;border:1px solid ${bye?'#e0a400':'#b8c6d8'};background:${bye?'#fff8dc':'#f8fbff'};border-radius:5px;display:flex;align-items:center;justify-content:center;text-align:center">
+      <div style="font-size:${n>=32?'6.5':'8.5'}px;font-weight:900;color:${bye?'#9a6700':'#cbd5e1'}">${bye?'부<br>전<br>승':'　'}</div></div>`;
+  }).join('');
+  return `<div style="border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff);padding:8px">
+    <div style="text-align:center;font-size:.78rem;font-weight:900;color:#10213d">본선 빈 피라미드 · ${n}강</div>
+    <div style="text-align:center;font-size:.68rem;color:#64748b;margin:3px 0 7px">본선 추첨 전 · 팀명 및 조/순위 배정 위치 비공개 · 부전승 자리만 표시</div>
+    <div style="overflow-x:auto"><div style="position:relative;width:${width}px;height:${baseY+86}px;margin:0 auto">
+      <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+86}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
+    </div></div></div>`;
+}
 function renderSavedDrawView(entry){
   const norm=normalizeDrawHistoryEntry(entry);
   const body=ge('drawHistoryViewBody');
@@ -12764,9 +12787,13 @@ function renderSavedDrawView(entry){
     ? norm.mainPreviewSlots
     : (Array.isArray(norm.plan?.matchSlots) && norm.plan.matchSlots.length ? norm.plan.matchSlots : []);
   const savedMainSize = Number(norm.mainSize || norm.plan?.n || 0);
-  const mainHtml = (savedMainSlots.length && savedMainSize>=2)
-    ? renderMainPreviewHTML(savedMainSlots, savedMainSize, !isMainMode)
-    : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>';
+  const mainHtml = isMainMode
+    ? ((savedMainSlots.length && savedMainSize>=2)
+        ? renderMainPreviewHTML(savedMainSlots, savedMainSize, false)
+        : '<div style="font-size:.8rem;color:var(--text3)">본선 추첨 정보 없음</div>')
+    : (savedMainSize>=2
+        ? renderSavedPrelimNeutralPyramid(savedMainSize, savedMainSlots)
+        : '<div style="font-size:.8rem;color:var(--text3)">본선 구조 정보 없음</div>');
   const groupsHtml = (norm.groups||[]).length ? (norm.groups||[]).map((g,gi)=>`<div class="draw-group-row" style="margin-bottom:8px">
             <div class="draw-group-label">${g.label||grpLabel(gi)}</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -12806,7 +12833,7 @@ function renderSavedDrawView(entry){
         ${leftHtml}
       </div>
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${isMainMode ? '본선 추첨 결과' : '본선 구조 미리보기'}</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${isMainMode ? '본선 추첨 결과' : '본선 빈 피라미드'}</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
