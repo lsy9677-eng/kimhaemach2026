@@ -23476,26 +23476,44 @@ async function outputTournamentChanged(){
   const ds=ge('outDS');if(!ds)return;
   const old=ds.value;
   const t=(G.tournaments||[]).find(x=>x.id===tid);
-  ds.innerHTML='<option value="">⏳ 부서/대진 데이터 불러오는 중...</option>';
+  ds.innerHTML='<option value="">⏳ 실제 저장 데이터 확인 중...</option>';
   if(!tid){renderOutputPreview();return;}
+  let bundle=null;
   try{
-    await syncTournamentDataForPage('output',tid,false);
-  }catch(e){ console.warn('[OutputCenter] tournament bundle load failed',e); }
-  const divs=outputAvailableDivisions(tid,t);
+    // 출력센터는 과거 대회 선택이 핵심이므로 10분 로컬 캐시를 믿지 않고 실제 Firestore를 다시 읽는다.
+    bundle=await fetchTournamentBundle(tid,{force:true,acceptStale:true});
+  }catch(e){ console.warn('[OutputCenter] forced bundle load failed',e); }
+  // registrations는 과거대회 부서 판별의 원본이다. bundle 적용과 별개로 직접 한 번 더 확인한다.
+  let rawRegs=Array.isArray(bundle?.regs)?bundle.regs:[];
+  if(!rawRegs.length){
+    try{
+      const snap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+      rawRegs=snap.docs.map(d=>({_id:d.id,...(d.data()||{})}));
+    }catch(e){ console.warn('[OutputCenter] registration fallback failed',e); }
+  }
+  window.__OUTPUT_RAW_REGS=window.__OUTPUT_RAW_REGS||{};
+  window.__OUTPUT_RAW_REGS[tid]=rawRegs;
+  const divs=outputAvailableDivisions(tid,t,rawRegs,bundle);
   ds.innerHTML=divs.map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
   if(!divs.length)ds.innerHTML='<option value="">저장된 부서 없음</option>';
   if(old&&divs.includes(old))ds.value=old;
   else if(divs.length)ds.value=divs[0];
   renderOutputPreview();
 }
-function outputAvailableDivisions(tid,t=null){
+function outputAvailableDivisions(tid,t=null,rawRegs=[],bundle=null){
   const found=[];
   const add=v=>{v=String(v||'').trim();if(v&&!found.includes(v))found.push(v);};
   (t?.divisions||[]).forEach(add);
+  (rawRegs||[]).forEach(x=>add(x?.division||x?.div));
+  (bundle?.matches||[]).forEach(x=>add(x?.division||x?.div));
+  (bundle?.draws||[]).forEach(x=>{
+    const id=String(x?.id||'');
+    if(id.startsWith(tid+'_')) add(id.slice(tid.length+1));
+    add(x?.division||x?.div);
+  });
   Object.keys(G.teams||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
   Object.keys(G.matches||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
   Object.keys(G.draws||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
-  // 과거 데이터에서 divisions 메타가 누락/축약돼도 실제 저장된 registration/match/draw 부서를 우선 살린다.
   return found;
 }
 function outputTeamName(key,idx){
@@ -23517,12 +23535,28 @@ function outputScoreText(key,m,blank=false){
   if(!rs.started&&!rs.done)return '　 : 　';
   return `${rs.disp1} : ${rs.disp2}`;
 }
+function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  const regs=((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>String(x?.division||x?.div||'')===String(div));
+  if(!regs.length)return '';
+  const rows=regs.map((r,i)=>{
+    const rank=(typeof r.rank==='number'&&r.rank>0&&r.rank<90)?`${r.rank}위`:'';
+    return `<tr><td>${i+1}</td><td>${outputEsc(r.club||r.teamName||'')}</td><td>${blank?'':outputEsc(rank)}</td><td class="oc-write"></td></tr>`;
+  }).join('');
+  return outputHeader(t,div,label)+`<div style="font-size:9px;padding:5px 7px;margin-bottom:6px;background:#fff7d6;border:1px solid #e5c65b">
+    이 과거대회에는 팀/선수 및 순위 기록은 있으나 당시 조편성·본선 대진 자체가 저장되어 있지 않습니다. 아래는 저장된 참가팀 기록입니다.
+  </div><section class="oc-round"><div class="oc-round-title">저장된 참가팀 / 결과</div>
+  <table><thead><tr><th>No</th><th>팀</th><th>${blank?'수기 결과':'저장 결과'}</th><th>기록</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+}
 function outputPrelimHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),draw=G.draws?.[key]||{};
   const groups=Array.isArray(draw.groups)?draw.groups:[];
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='group'||m.phase==='prelim'||m.stage==='group'||m.stage==='prelim'||m.group!=null);
-  if(!groups.length)return outputHeader(t,div,blank?'예선 현장 수기용':'예선 현재상황')+'<div class="oc-empty">예선 조편성이 아직 없습니다.</div>';
+  if(!groups.length){
+    const hist=outputHistoricalRegistrationFallback(tid,div,blank?'예선 현장 수기용':'예선 현재상황',blank);
+    return hist||outputHeader(t,div,blank?'예선 현장 수기용':'예선 현재상황')+'<div class="oc-empty">예선 조편성이 아직 없습니다.</div>';
+  }
   const cards=groups.map((g,gi)=>{
     const ids=Array.isArray(g?.teams)?g.teams:(Array.isArray(g)?g:[]);
     const names=ids.map(i=>outputTeamName(key,i));
@@ -23545,7 +23579,10 @@ function outputMainTableHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null)).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
-  if(!ms.length)return outputHeader(t,div,blank?'본선 현장 수기용':'본선 현재상황')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
+  if(!ms.length){
+    const hist=outputHistoricalRegistrationFallback(tid,div,blank?'본선 현장 수기용':'본선 현재상황',blank);
+    return hist||outputHeader(t,div,blank?'본선 현장 수기용':'본선 현재상황')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
+  }
   const rounds=[...new Set(ms.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const body=rounds.map((r,ri)=>{
     const rm=ms.filter(m=>Number(m.round||0)===r);
@@ -23560,7 +23597,10 @@ function outputMainTreeHtml(tid,div){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),teams=G.teams?.[key]||[];
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
-  if(!ms.length)return outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
+  if(!ms.length){
+    const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
+    return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
+  }
   return outputHeader(t,div,'가지형 본선 대진표')+`<div class="oc-tree">${renderBracketTree(key,ms,teams)}</div>`;
 }
 function outputCenterBody(){
