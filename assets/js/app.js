@@ -23721,7 +23721,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
     const src=String(e.sourceLabel||'').trim();
     const srcBadge=src?`<div style="position:absolute;top:2px;left:2px;right:2px;border-radius:4px;background:#1565c0;color:#fff;font-size:${n>=32?'5.8':'6.8'}px;font-weight:900;line-height:1.25;padding:2px 1px;white-space:normal">${outputEsc(src)}</div>`:'';
     return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:1px solid ${border};background:${bg};border-radius:5px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px">
-      ${srcBadge}<div class="pyramid-team-name" style="font-size:${n>=32?'7.5':'9.5'}px;font-weight:800;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible">${verticalName(e.name)}</div>
+      ${srcBadge}<div class="pyramid-team-name" style="font-size:${n>=32?'9':'11.5'}px;font-weight:950;color:${color};letter-spacing:.08px;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name)}</div>
     </div>`;
   }).join('');
 
