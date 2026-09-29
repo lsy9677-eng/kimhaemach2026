@@ -23492,6 +23492,22 @@ async function outputTournamentChanged(){
     }catch(e){ console.warn('[OutputCenter] registration fallback failed',e); }
   }
   window.__OUTPUT_RAW_REGS=window.__OUTPUT_RAW_REGS||{};
+  // registrations에 빠진 과거 팀/부서는 players.history에서도 복구한다.
+  const histMap=new Map();
+  Object.values(G.players||{}).forEach(pl=>{
+    (pl?.history||[]).forEach(h=>{
+      if(String(h?.tid||'')!==String(tid))return;
+      const div=outputNormalizeDiv(h?.div||h?.division), club=String(h?.club||h?.baseClub||pl?.club||'').trim();
+      if(!div||!club)return;
+      const hk=div+'||'+club;
+      if(!histMap.has(hk))histMap.set(hk,{division:div,club,players:[],rank:(typeof h?.rank==='number'?h.rank:null),_historyRecovered:true});
+      const rr=histMap.get(hk), nm=String(pl?.name||'').trim();
+      if(nm&&!rr.players.includes(nm))rr.players.push(nm);
+      if(rr.rank==null&&typeof h?.rank==='number')rr.rank=h.rank;
+    });
+  });
+  const regKeys=new Set(rawRegs.map(r=>outputNormalizeDiv(r?.division||r?.div)+'||'+String(r?.club||'').trim()));
+  histMap.forEach((r,k)=>{if(!regKeys.has(k))rawRegs.push(r);});
   window.__OUTPUT_RAW_REGS[tid]=rawRegs;
   const divs=outputAvailableDivisions(tid,t,rawRegs,bundle);
   ds.innerHTML=divs.map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
@@ -23500,9 +23516,14 @@ async function outputTournamentChanged(){
   else if(divs.length)ds.value=divs[0];
   renderOutputPreview();
 }
+function outputNormalizeDiv(v){
+  v=String(v||'').trim();
+  const m={'금배':'금','금배부':'금','금':'금','은배':'은','은배부':'은','은':'은','동배':'동','동배부':'동','동':'동','테린이부':'테린이','테린이':'테린이','여성':'여성부','여성부':'여성부'};
+  return m[v]||v;
+}
 function outputAvailableDivisions(tid,t=null,rawRegs=[],bundle=null){
   const found=[];
-  const add=v=>{v=String(v||'').trim();if(v&&!found.includes(v))found.push(v);};
+  const add=v=>{v=outputNormalizeDiv(v);if(v&&!found.includes(v))found.push(v);};
   (t?.divisions||[]).forEach(add);
   (rawRegs||[]).forEach(x=>add(x?.division||x?.div));
   (bundle?.matches||[]).forEach(x=>add(x?.division||x?.div));
@@ -23514,7 +23535,10 @@ function outputAvailableDivisions(tid,t=null,rawRegs=[],bundle=null){
   Object.keys(G.teams||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
   Object.keys(G.matches||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
   Object.keys(G.draws||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
-  return found;
+  // 과거 업로드에서 registrations가 일부 누락된 경우 players.history가 마지막 복구 근거다.
+  Object.values(G.players||{}).forEach(pl=>(pl?.history||[]).forEach(h=>{if(String(h?.tid||'')===String(tid))add(h?.div||h?.division);}));
+  const order={'금':1,'은':2,'동':3,'테린이':4,'여성부':5};
+  return found.sort((x,y)=>(order[x]||99)-(order[y]||99)||String(x).localeCompare(String(y),'ko'));
 }
 function outputTeamName(key,idx){
   const teams=G.teams?.[key]||[];
@@ -23535,9 +23559,42 @@ function outputScoreText(key,m,blank=false){
   if(!rs.started&&!rs.done)return '　 : 　';
   return `${rs.disp1} : ${rs.disp2}`;
 }
+function outputHistoricalRegs(tid,div){
+  return (((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>outputNormalizeDiv(x?.division||x?.div||'')===outputNormalizeDiv(div)));
+}
+function outputGeneratedPrelimSheet(tid,div){
+  const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
+  if(!regs.length)return '';
+  const size=Math.max(2,Math.min(4,Number(t?.divSettings?.[div]?.grpSize||t?.grpSize||4)||4));
+  const groups=[]; for(let i=0;i<regs.length;i+=size)groups.push(regs.slice(i,i+size));
+  const body=groups.map((g,gi)=>{
+    const names=g.map((r,i)=>`${i+1}. ${outputEsc(r.club||r.teamName||'')}`).join('<br>');
+    const pairs=[];for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++)pairs.push(`<tr><td>${outputEsc(g[i].club||'')}</td><td>vs</td><td>${outputEsc(g[j].club||'')}</td><td class="oc-write"></td><td class="oc-write"></td></tr>`);
+    return `<section class="oc-round" style="break-inside:avoid"><div class="oc-round-title">${gi+1}조</div><div style="padding:5px 7px;font-size:9px;line-height:1.5">${names}</div><table><thead><tr><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${pairs.join('')}</tbody></table></section>`;
+  }).join('');
+  return outputHeader(t,div,'예선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 과거 대진이 없어 참가팀 기준으로 만든 수기용 새 양식입니다. 당시 실제 조편성 복원본은 아닙니다.</div>`+body;
+}
+function outputGeneratedMainTable(tid,div){
+  const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
+  if(!regs.length)return '';
+  let n=1;while(n<Math.max(2,regs.length))n*=2;
+  const slots=Array.from({length:n},(_,i)=>regs[i]?.club||'');
+  const rows=[];for(let i=0;i<n;i+=2)rows.push(`<tr><td>${i+1}</td><td>${outputEsc(slots[i]||'')}</td><td>vs</td><td>${outputEsc(slots[i+1]||'')}</td><td class="oc-write"></td><td class="oc-write"></td></tr>`);
+  return outputHeader(t,div,'본선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 참가팀을 기준으로 만든 ${n}강 수기용 빈 대진표입니다. 당시 실제 본선 대진 복원본은 아닙니다.</div><section class="oc-round"><div class="oc-round-title">${n}강</div><table><thead><tr><th>No</th><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${rows.join('')}</tbody></table></section>`;
+}
+function outputGeneratedTree(tid,div){
+  const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
+  if(!regs.length)return '';
+  let n=1;while(n<Math.max(2,regs.length))n*=2;
+  let cols=[],cur=Array.from({length:n},(_,i)=>outputEsc(regs[i]?.club||''));
+  cols.push(cur);
+  while(cur.length>1){cur=Array.from({length:Math.ceil(cur.length/2)},()=> '________________');cols.push(cur);}
+  const html=`<div style="display:grid;grid-template-columns:repeat(${cols.length},1fr);gap:10px;align-items:stretch">`+cols.map((col,ci)=>`<div><div style="font-weight:900;text-align:center;margin-bottom:6px">${ci===0?n+'강':(Math.max(1,n/(2**ci))===1?'우승':Math.max(1,n/(2**ci))+'강')}</div>`+col.map(x=>`<div style="border:1px solid #334155;border-radius:4px;padding:6px 4px;margin:${Math.max(3,(2**ci)*4)}px 0;min-height:16px;text-align:center;font-size:8px">${x||'________________'}</div>`).join('')+`</div>`).join('')+`</div>`;
+  return outputHeader(t,div,'가지형 본선 대진표 · 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 수기용 가지형 양식입니다.</div>`+html;
+}
 function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   const t=(G.tournaments||[]).find(x=>x.id===tid);
-  const regs=((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>String(x?.division||x?.div||'')===String(div));
+  const regs=((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>outputNormalizeDiv(x?.division||x?.div||'')===outputNormalizeDiv(div));
   if(!regs.length)return '';
   const rows=regs.map((r,i)=>{
     const rank=(typeof r.rank==='number'&&r.rank>0&&r.rank<90)?`${r.rank}위`:'';
@@ -23554,6 +23611,7 @@ function outputPrelimHtml(tid,div,blank=false){
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='group'||m.phase==='prelim'||m.stage==='group'||m.stage==='prelim'||m.group!=null);
   if(!groups.length){
+    if(blank){const gen=outputGeneratedPrelimSheet(tid,div);if(gen)return gen;}
     const hist=outputHistoricalRegistrationFallback(tid,div,blank?'예선 현장 수기용':'예선 현재상황',blank);
     return hist||outputHeader(t,div,blank?'예선 현장 수기용':'예선 현재상황')+'<div class="oc-empty">예선 조편성이 아직 없습니다.</div>';
   }
@@ -23580,6 +23638,7 @@ function outputMainTableHtml(tid,div,blank=false){
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null)).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
   if(!ms.length){
+    if(blank){const gen=outputGeneratedMainTable(tid,div);if(gen)return gen;}
     const hist=outputHistoricalRegistrationFallback(tid,div,blank?'본선 현장 수기용':'본선 현재상황',blank);
     return hist||outputHeader(t,div,blank?'본선 현장 수기용':'본선 현재상황')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   }
@@ -23598,6 +23657,7 @@ function outputMainTreeHtml(tid,div){
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length){
+    const gen=outputGeneratedTree(tid,div);if(gen)return gen;
     const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
     return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   }
