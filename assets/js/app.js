@@ -3623,7 +3623,8 @@ function popupNoticeDateInputValue(v){
 }
 function ensurePopupNoticeAdminButton(){
   if(!AD)return;
-  const host=ge('adminSettingsBody')||ge('adminSettings')||document.querySelector('#mAdminSettings .modal-content');
+  const modal=ge('mAdminSettings');
+  const host=modal?.querySelector('.modal-body')||modal?.querySelector('.modal-content')||ge('adminSettingsBody')||ge('adminSettings');
   if(!host||ge('popupNoticeAdminBox'))return;
   const box=document.createElement('div');box.id='popupNoticeAdminBox';
   box.style.cssText='margin:12px 0;padding:12px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb';
@@ -3966,8 +3967,8 @@ function ensureDirectorPasswordSettingsButton(){
   const b=document.createElement('button');
   b.id='directorPasswordSettingsBtn';
   b.type='button';
-  b.className='btn btn-outline';
-  b.style.cssText='display:inline-flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;padding:5px 10px;margin-left:4px;white-space:nowrap';
+  b.className='btn';
+  b.style.cssText='display:inline-flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:800;padding:7px 11px;margin-left:4px;white-space:nowrap;background:#ffffff;color:#0f2a55;border:1.5px solid #cbd5e1;border-radius:10px;opacity:1;box-shadow:0 1px 2px rgba(0,0,0,.08)';
   b.textContent='⚙️ 경기이사 설정';
   b.onclick=openDirectorSettings;
   if(badge && badge.parentElement===host) badge.insertAdjacentElement('afterend',b);
@@ -4619,6 +4620,12 @@ function openAdminSettings(){
   renderAdminDirectorEmailSection();
   renderAdminNoticeSection();
   om('mAdminSettings');
+  // 동적으로 추가되는 관리자 메뉴는 모달이 실제 열린 뒤 삽입해야 확실히 보인다.
+  setTimeout(()=>{
+    ensurePendingDetailCenterButton();
+    ensureAutoRestoreCenterButton();
+    ensurePopupNoticeAdminButton();
+  },60);
 }
 
 function _updateIndivLockStatusDisplay(){
