@@ -3825,6 +3825,40 @@ function getDirectorPassword(club){
   const d=String((G.meta.directorPasswords||{})[club]||'').trim();
   return d || getClubLoginPassword(G.meta,club);
 }
+const DIRECTOR_INITIAL_PASSWORD='261018';
+function directorPasswordNeedsChange(club){
+  if(!club) return false;
+  const pw=String(getDirectorPassword(club)||'').trim();
+  const custom=!!((G.meta.directorPasswordCustom||{})[club]);
+  // 전체 초기화 비밀번호 또는 아직 경기이사 전용 비밀번호를 설정하지 않은 클럽
+  return pw===DIRECTOR_INITIAL_PASSWORD || !custom;
+}
+function ensureDirectorPasswordSettingsButton(){
+  const old=ge('directorPasswordSettingsBtn');
+  if(!(REG && !AD && REG_CLUB)){ if(old) old.remove(); return; }
+  if(old) return;
+  const host=ge('regLoginStatusBar') || ge('regLoginBadge')?.parentElement || ge('regToggleBtn')?.parentElement;
+  if(!host) return;
+  const b=document.createElement('button');
+  b.id='directorPasswordSettingsBtn';
+  b.type='button';
+  b.className='btn btn-outline';
+  b.style.cssText='font-size:.74rem;padding:5px 10px;white-space:nowrap';
+  b.textContent='⚙️ 경기이사 설정';
+  b.onclick=openDirectorSettings;
+  host.appendChild(b);
+}
+function openDirectorSettings(){
+  if(!(REG && !AD && REG_CLUB)){toast('경기이사 로그인 후 사용할 수 있습니다','info');return;}
+  CHANGE_PW_CLUB=REG_CLUB;
+  ge('changePw1').value='';
+  ge('changePw2').value='';
+  ge('changePwMsg').textContent='';
+  const title=ge('mChangePw')?.querySelector('.modal-title,h2,h3');
+  if(title) title.textContent=`⚙️ ${REG_CLUB} 경기이사 설정`;
+  om('mChangePw');
+  setTimeout(()=>ge('changePw1')?.focus(),200);
+}
 function _passwordAudit(kind,club,actor){
   const key=kind==='director'?'directorPasswordAudit':'clubPasswordAudit';
   if(!G.meta[key]||typeof G.meta[key]!=='object')G.meta[key]={};
@@ -4151,7 +4185,7 @@ function _completeRegLogin(club){
     showPage('home');
     upDash();
     updateMyClubUI();
-    // 비번 미변경 클럽이면 변경 권장 팝업
+    // 초기/초기화 비밀번호(261018) 또는 미설정 상태면 새 비밀번호 설정 팝업을 반드시 표시
     const pwNeeded = openChangePwIfNeeded(club);
     // ▼▼▼ [이용안내] 비번 변경 팝업이 안 뜰 때만 이용안내 자동 표시 ▼▼▼
     if(!pwNeeded){
@@ -4171,8 +4205,9 @@ let CHANGE_PW_CLUB = '';
 Object.defineProperty(window,'CHANGE_PW_CLUB',{get:()=>CHANGE_PW_CLUB,set:(v)=>{CHANGE_PW_CLUB=v;}});
 
 function shouldPromptPwChange(club){
-  const skipped = Number(localStorage.getItem('pw_skip_'+club)||0);
-  return shouldPromptClubPasswordChange(G.meta,club,skipped,Date.now());
+  // 경기이사 초기/초기화 비밀번호는 반드시 변경한다. '나중에' 건너뛰기 대상이 아니다.
+  if(directorPasswordNeedsChange(club)) return true;
+  return false;
 }
 
 function openChangePwIfNeeded(club){
@@ -4197,11 +4232,12 @@ function openChangePwDirect(){
 }
 
 function skipChangePw(){
-  // 3일간 건너뛰기
-  localStorage.setItem('pw_skip_'+CHANGE_PW_CLUB, String(Date.now()));
+  if(directorPasswordNeedsChange(CHANGE_PW_CLUB)){
+    toast('초기 비밀번호로 로그인한 경우 새 비밀번호 설정이 필요합니다','info');
+    return;
+  }
   CHANGE_PW_CLUB='';
   cm('mChangePw');
-  toast('나중에 변경할 수 있습니다. 보안을 위해 변경을 권장합니다 🔒','info');
 }
 
 async function saveChangePw(){
@@ -4236,6 +4272,7 @@ async function saveChangePw(){
     CHANGE_PW_CLUB='';
     cm('mChangePw');
     toast(`경기이사 비밀번호 변경 완료 ✅`,'success');
+    ensureDirectorPasswordSettingsButton();
     try{ renderAdminContactList(); }catch(e){}
   }catch(e){
     sl(false);
@@ -4283,6 +4320,7 @@ async function saveFirstLoginPhone(){
 
 function applyRegLoginUI(){
   const loggedIn = REG || AD;
+  setTimeout(()=>ensureDirectorPasswordSettingsButton(),0);
   // 로그인 안내 카드 / 팀등록 폼 표시 제어
   const prompt = ge('regLoginPrompt');
   if(prompt){ const freeReg=(currentRegTournament()?.status==='open') && (currentRegIsIndividual() || isPublicTeamRegistrationEnabled()); prompt.style.display = (loggedIn || freeReg) ? 'none' : 'block'; }
@@ -23056,7 +23094,7 @@ Object.assign(window,{openAutoRestoreCenter,closeAutoRestoreCenter,manualTournam
   registryTabQuickAdd,quickEditRegistryMember,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
-  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
+  toggleOperator,doOperatorLogin,saveOperatorPw,toggleShowOperatorPw,toggleReg,doRegLogin,setClubLoginRole,saveDirectorPasswordAdmin,resetDirectorPasswordAdmin,canEditMatchByClubMember,applyClubRoleVisibility,hideLegacyTeamRegistrationPasswordUI,openRolePermissionCheck,closeRolePermissionCheck,getCurrentClubRoleInfo,getCurrentRoleCapabilities,issueTemporaryPasswordAdmin,sendCurrentPasswordSmsAdmin,showClubPasswordHelp,runPhase57SafetyCheck,applyRegLoginUI,saveRegPw,forceDirectorReLoginAll,toggleShowRegPw,onRegLoginClubChange,getRegSessionVersion,openChangePwIfNeeded,openChangePwDirect,openDirectorSettings,ensureDirectorPasswordSettingsButton,skipChangePw,saveChangePw,saveOnlineOrderSettings,saveMainWinnerOnly,saveSimpleMatchResult,setOfflineResultEntryMode,toggleSimpleResultDetail,submitOnlineOrder,unlockOnlineOrder,confirmSubmitOrder,confirmUnlockOrder,openOrderPhotoViewer,openTapOrderModal,closeTapOrderModal,renderTapOrderModal,tapOrderFocus,tapOrderPick,tapOrderBack,tapOrderClear,tapOrderReset,tapOrderGhost,applyTapOrderSelections,setGhostOrder,clearGhostOrder,canEditMatchByDirector,
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
