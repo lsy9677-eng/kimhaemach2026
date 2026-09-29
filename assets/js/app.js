@@ -23659,7 +23659,7 @@ function outputMainTableHtml(tid,div,blank=false){
   }).join('');
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
-function outputBottomUpTreeHtml(tid,div,blank=false){
+function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
   const key=tid+'_'+div, all=(G.matches?.[key]||[]).filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
@@ -23691,7 +23691,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   };
   const byRS=new Map(); all.forEach(m=>byRS.set(Number(m.round||0)+'|'+Number(m.slot||0),m));
 
-  let paths='',labels='';
+  let paths='',labels='',ops='';
   for(let level=0;level<levels;level++){
     const group=2**(level+1), y0=baseY-level*stepY, y1=baseY-(level+1)*stepY, round=rounds[Math.min(level,rounds.length-1)];
     for(let g=0;g<n;g+=group){
@@ -23699,6 +23699,31 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
       const m=byRS.get(Number(round)+'|'+slot), wt=blank?null:winnerTeam(m);
       let lw=wt!=null&&m&&String(wt)===String(m.t1), rw=wt!=null&&m&&String(wt)===String(m.t2);
       if(m?.bye&&wt!=null){ lw=true; rw=false; }
+
+      // PHASE88: 피라미드 자체에서 본선 경기 결과 입력/확인/수정을 다시 수행한다.
+      // 경기/결과 저장 로직은 기존 openMatchOperations/openSimpleMatchDetail을 그대로 사용하고
+      // 여기서는 가지 교차점에 조작 UI만 연결한다. 출력센터/저장용 피라미드에는 표시하지 않는다.
+      if(interactive && !blank && m && !m.bye){
+        const matchId=String(m.id||m._id||'');
+        if(matchId){
+          const st=getMatchResultState(key,m);
+          const done=!!st.done;
+          const ready=m.t1!==null&&m.t1!==undefined&&m.t2!==null&&m.t2!==undefined;
+          const canEdit=!!(AD||OP||canEditMatchByClubMember(key,m));
+          const canOperate=canEdit&&ready;
+          const score=done?`${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}`:(ready?'입력':'대기');
+          const action=done?(canEdit?'결과수정':'결과확인'):(canOperate?'결과입력':'경기확인');
+          const click=canOperate||done&&canEdit
+            ? `openMatchOperations('${key}','${matchId}')`
+            : `openSimpleMatchDetail('${key}','${matchId}')`;
+          const chipW=n>=32?38:n>=16?44:52;
+          const chipFs=n>=32?6.4:n>=16?7.1:8;
+          const chipBg=done?'#eaf8ef':(canOperate?'#eaf2ff':'#f3f6fa');
+          const chipBd=done?'#4caf75':(canOperate?'#4b83d1':'#b8c6d8');
+          const chipFg=done?'#146c38':(canOperate?'#114a91':'#64748b');
+          ops+=`<button type="button" data-pyramid-op="1" title="${action}" aria-label="${action}" onclick="event.stopPropagation();${click}" style="position:absolute;left:${mid}px;top:${y1-10}px;transform:translate(-50%,-50%);z-index:6;width:${chipW}px;min-width:${chipW}px;height:${n>=32?20:22}px;padding:1px 2px;border:1.5px solid ${chipBd};border-radius:999px;background:${chipBg};color:${chipFg};font-size:${chipFs}px;font-weight:950;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(15,35,65,.16);white-space:nowrap">${outputEsc(score)}</button>`;
+        }
+      }
       const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.4:1.25}" stroke-linecap="round" stroke-linejoin="round"/>`;
       paths+=seg(left,lw)+seg(right,rw);
       paths+=`<path d="M ${mid} ${y1} V ${Math.max(28,y1-stepY)}" fill="none" stroke="${(!blank&&wt!=null)?BLUE:THIN}" stroke-width="${(!blank&&wt!=null)?4.4:1.25}" stroke-linecap="round"/>`;
@@ -23765,7 +23790,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
 
   return `${resultBar}<div style="width:100%;padding:2px 4px;background:#fff">
     <div class="pyramid-scroll-content" style="overflow:visible;width:${width}px;min-width:${width}px;margin:0 auto"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
-      <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
+      <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${ops}${boxes}
     </div></div>
     <div style="font-size:8px;text-align:center;color:#64748b;margin-top:3px">${legend}</div>
   </div>`;
@@ -23836,7 +23861,8 @@ function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
   if(!ms.length)return '';
   return `<div class="actual-main-pyramid" data-main-pyramid="${outputEsc(key)}">
     ${showSaveButton?`<div style="display:flex;justify-content:flex-end;gap:6px;margin:0 0 7px"><button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px" onclick="saveMainPyramidHighResImage('${outputEsc(tid)}','${outputEsc(div)}')">🖼️ 본선 고화질 이미지 저장</button></div>`:''}
-    <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false)}</div>
+    <div style="font-size:.7rem;color:#64748b;text-align:center;margin:0 0 6px">가지 교차점의 <b>입력/점수</b> 버튼을 누르면 결과 입력 · 확인 · 수정이 가능합니다.</div>
+    <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false,true)}</div>
   </div>`;
 }
 
@@ -23994,6 +24020,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
     const sw=Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.max(el.scrollHeight||0,el.clientHeight||0);
     const canvas=await html2canvas(el,{scale:3.5,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0,
       onclone:(doc)=>{
+        doc.querySelectorAll('[data-pyramid-op]').forEach(n=>{ n.style.display='none'; });
         doc.querySelectorAll('.pyramid-team-name').forEach(n=>{
           n.style.fontWeight='800';n.style.overflow='visible';
           n.querySelectorAll('span').forEach(sp=>{sp.style.lineHeight='1.4';sp.style.height='1.4em';sp.style.overflow='visible';});
