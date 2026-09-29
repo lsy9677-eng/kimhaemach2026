@@ -21869,6 +21869,22 @@ async function getRegistryYears(){
 
 // 탭 전환
 const REGISTRY_TAB_CACHE={ yearsLoaded:false, yearsKey:'', filterKey:'' };
+function mergeRegistryIntoPlayersMemory(rows){
+  let changed=false;
+  for(const raw of (rows||[])){
+    const name=cleanName(raw?.name||''),club=normalizeClub(raw?.club||'');
+    if(!name||!club)continue;
+    const key=pKey(name,club),prev=G.players[key]||{};
+    if(!G.players[key]){
+      G.players[key]={key,name,club,clubs:[club],phone:String(raw?.phone||'').trim(),history:[],wins:0,losses:0};
+      changed=true;
+    }else{
+      const clubs=[...new Set([club,...(Array.isArray(prev.clubs)?prev.clubs:[])].filter(Boolean))];
+      G.players[key]={...prev,key,name,club,clubs,phone:String(prev.phone||raw?.phone||'').trim()};
+    }
+  }
+  if(changed)savePlayersToLocalCache();
+}
 function switchPlayersTab(tab){
   ['records','registry'].forEach(t=>{
     const btn=ge('ptab-'+t); if(btn) btn.classList.toggle('active',t===tab);
@@ -21883,7 +21899,7 @@ function switchPlayersTab(tab){
     setTimeout(()=>initRegistryTab(),0);
   }
   if(tab==='records'){
-    Promise.all([loadRegistry(2026), ensurePlayersLoaded(), ensureAllParticipationDataLoaded()]).then(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); }).catch(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
+    Promise.all([loadRegistry(2026), ensurePlayersLoaded(), ensureAllParticipationDataLoaded()]).then(([registryRows])=>{ mergeRegistryIntoPlayersMemory(registryRows); renderAllP(); popCF(); updatePlayersAdminControls(); }).catch(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
   }
 }
 
@@ -22307,6 +22323,31 @@ async function quickDeleteRegistryMember(year, idx){
   }catch(e){ sl(false); toast('삭제 실패: '+e.message,'error'); }
 }
 
+async function syncOfficialRegistryRowsToPlayers(rows){
+  const touched=[];
+  for(const raw of (rows||[])){
+    const name=cleanName(raw?.name||'');
+    const club=normalizeClub(raw?.club||'');
+    if(!name||!club) continue;
+    const key=pKey(name,club);
+    const prev=G.players[key]||{};
+    const clubs=[...new Set([club,...(Array.isArray(prev.clubs)?prev.clubs:[]),...(String(raw?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean))].filter(Boolean))];
+    G.players[key]={...prev,key,name,club,clubs,phone:String(raw?.phone||prev.phone||'').trim(),history:Array.isArray(prev.history)?prev.history:[],wins:Number(prev.wins||0),losses:Number(prev.losses||0)};
+    await stP(key);
+    touched.push(key);
+  }
+  if(touched.length) savePlayersToLocalCache();
+  return touched;
+}
+async function removeOfficialRegistryPlayerIfUnused(name,club){
+  const key=pKey(cleanName(name||''),normalizeClub(club||''));
+  const p=G.players[key];
+  if(!p)return;
+  const hasHistory=Array.isArray(p.history)&&p.history.length>0;
+  const hasStats=Number(p.wins||0)>0||Number(p.losses||0)>0;
+  if(hasHistory||hasStats)return; // 경기기록이 있는 선수 마스터는 보존
+  try{await deleteDoc(doc(db,'players',key.replace(/[/.#$[\]]/g,'_')));delete G.players[key];savePlayersToLocalCache();}catch(e){console.warn('registry player cleanup skipped',e);}
+}
 async function addRegistryRow(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const name=(ge('rmgr_name')?.value||'').trim(); const club=ge('rmgr_club')?.value||'';
@@ -22317,6 +22358,7 @@ async function addRegistryRow(){
   members.push(applyClubDefaultRegion(G.meta,{name,club,region,subClub})); sl(true);
   try{
     await saveRegistry(year);
+    await syncOfficialRegistryRowsToPlayers([members[members.length-1]]);
     ['rmgr_name','rmgr_region','rmgr_subclub'].forEach(id=>{const el=ge(id);if(el)el.value='';});
     try{ await renderRegistryMgr(); }catch(uiErr){ console.warn('renderRegistryMgr failed after addRegistryRow', uiErr); }
     try{ await renderRegistryTab(); }catch(uiErr){ console.warn('renderRegistryTab failed after addRegistryRow', uiErr); }
@@ -22328,11 +22370,14 @@ async function addRegistryRow(){
 }
 async function saveRegistryRow(year,idx){
   const members=await loadRegistry(year); if(!members[idx]) return;
+  const oldIdentity={name:members[idx].name,club:members[idx].club};
   members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=ge(`rmgr_c_${idx}`)?.value||'';
   members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim(); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
   sl(true);
   try{
     await saveRegistry(year);
+    await syncOfficialRegistryRowsToPlayers([members[idx]]);
+    if(pKey(cleanName(oldIdentity.name||''),normalizeClub(oldIdentity.club||''))!==pKey(cleanName(members[idx].name||''),normalizeClub(members[idx].club||''))) await removeOfficialRegistryPlayerIfUnused(oldIdentity.name,oldIdentity.club);
     toast('수정 완료','success');
     try{ await renderRegistryTab(); }catch(uiErr){ console.warn('renderRegistryTab failed after saveRegistryRow', uiErr); }
   } catch(e){
@@ -22342,9 +22387,10 @@ async function saveRegistryRow(year,idx){
 }
 async function deleteRegistryRow(year,idx){
   if(!confirm('이 선수를 삭제하시겠습니까?')) return;
-  const members=await loadRegistry(year); members.splice(idx,1); sl(true);
+  const members=await loadRegistry(year); const removed=members[idx]?{...members[idx]}:null; members.splice(idx,1); sl(true);
   try{
     await saveRegistry(year);
+    if(removed) await removeOfficialRegistryPlayerIfUnused(removed.name,removed.club);
     try{ await renderRegistryMgr(); }catch(uiErr){ console.warn('renderRegistryMgr failed after deleteRegistryRow', uiErr); }
     try{ await renderRegistryTab(); }catch(uiErr){ console.warn('renderRegistryTab failed after deleteRegistryRow', uiErr); }
     toast('삭제 완료','success');
@@ -22382,6 +22428,7 @@ async function importRegistryFromFile(input){
   G_REGISTRY[year]=newRows; sl(true);
   try{
     await saveRegistry(year);
+    await syncOfficialRegistryRowsToPlayers(newRows);
     try{ await renderRegistryMgr(); }catch(uiErr){ console.warn('renderRegistryMgr failed after importRegistryFromFile', uiErr); }
     try{ await renderRegistryTab(); }catch(uiErr){ console.warn('renderRegistryTab failed after importRegistryFromFile', uiErr); }
     toast(`${newRows.length}명 업로드 완료`,'success');
