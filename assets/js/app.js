@@ -2324,6 +2324,11 @@ async function saveMeta(){
     clubEmails:(G.meta.clubEmails||{}),
     clubPasswords:(G.meta.clubPasswords||{}),
     clubPasswordCustom:(G.meta.clubPasswordCustom||{}),
+    // PHASE94: 공용 비밀번호 통합 상태를 재접속 후에도 유지
+    directorPasswords:(G.meta.directorPasswords||{}),
+    directorPasswordCustom:(G.meta.directorPasswordCustom||{}),
+    clubPasswordAudit:(G.meta.clubPasswordAudit||{}),
+    directorPasswordAudit:(G.meta.directorPasswordAudit||{}),
     clubDefaultRegions:(G.meta.clubDefaultRegions||{}),
     regDeadlineDt:(G.meta.regDeadlineDt||''),
     adminFloatingNotice:(G.meta.adminFloatingNotice||''),
@@ -3993,8 +3998,10 @@ const DIRECTOR_INITIAL_PASSWORD='261018';
 function directorPasswordNeedsChange(club){
   if(!club) return false;
   const pw=String(getDirectorPassword(club)||'').trim();
-  const custom=!!((G.meta.directorPasswordCustom||{})[club]);
-  // 전체 초기화 비밀번호 또는 아직 경기이사 전용 비밀번호를 설정하지 않은 클럽
+  // PHASE94: 회원/경기이사 공용 비밀번호이므로 어느 쪽의 사용자 설정 완료 기록이든 인정한다.
+  const clubCustom=!!((G.meta.clubPasswordCustom||{})[club]);
+  const directorCustom=!!((G.meta.directorPasswordCustom||{})[club]);
+  const custom=clubCustom || directorCustom;
   return pw===DIRECTOR_INITIAL_PASSWORD || !custom;
 }
 function ensureDirectorPasswordSettingsButton(){
@@ -4496,7 +4503,8 @@ async function saveFirstLoginPhone(){
 }
 
 function applyRegLoginUI(){
-  const loggedIn = REG || AD;
+  // PHASE94: 클럽 회원 로그인도 정상적인 클럽 로그인 상태로 취급
+  const loggedIn = REG || CLUB_MEMBER || AD;
   if(AD)setTimeout(()=>ensurePopupNoticeAdminButton(),0);
   setTimeout(()=>ensureDirectorPasswordSettingsButton(),0);
   // 로그인 안내 카드 / 팀등록 폼 표시 제어
@@ -4505,7 +4513,7 @@ function applyRegLoginUI(){
   // 로그인 상태 바
   const bar = ge('regLoginStatusBar');
   if(bar){
-    bar.style.display = (REG && !AD) ? 'flex' : 'none';
+    bar.style.display = ((REG || CLUB_MEMBER) && !AD) ? 'flex' : 'none';
   }
   // 홈 2026 명단 버튼: 항상 표시
   const regCard = ge('homeRegViewerCard');
@@ -4523,8 +4531,10 @@ function isDirectorSessionValid(){
 function forceDirectorLogoutLocal(message='경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.'){
   try{
     REG=false;
+    CLUB_MEMBER=false;
     REG_CLUB='';
     localStorage.removeItem('reg');
+    localStorage.removeItem('club_member');
     localStorage.removeItem('reg_club');
     localStorage.removeItem('reg_session_version');
   }catch(e){}
@@ -16351,7 +16361,9 @@ loadMyClubFilterState();
 // 로그인/로그아웃 시 내 클럽 UI 갱신
 function updateMyClubUI(){
   const club = REG_CLUB;
-  const isReg = REG && !AD && club;
+  // PHASE94: 경기이사와 클럽 회원 모두 '내 클럽' 전용 조회 화면을 사용한다.
+  const isReg = (REG || CLUB_MEMBER) && !AD && club;
+  const isDirector = REG && !CLUB_MEMBER && !AD && !!club;
 
   // 각 탭 버튼 표시/숨김
   const regBar = ge('myClubRegBar');
@@ -16369,9 +16381,9 @@ function updateMyClubUI(){
     updateFilterBtnUI('register', MY_CLUB_FILTER);
     updateFilterBtnUI('bracket', MY_CLUB_FILTER);
     updateMyClubHomeCard();
-    // 팀등록 탭: 내 클럽 자동 선택
+    // 팀등록 탭: 경기이사에게만 내 클럽 자동 선택 (클럽회원은 팀등록 권한 없음)
     const regClubSel = ge('regClub');
-    if(regClubSel && regClubSel.value !== club){
+    if(isDirector && regClubSel && regClubSel.value !== club){
       // 옵션이 로드된 후 선택
       setTimeout(()=>{
         const regClubSel2 = ge('regClub');
@@ -16415,9 +16427,10 @@ function updateMyClubHomeCard(){
   });
 
   if(!myTeams.length){
-    body.innerHTML = `<div>📋 <b>${at.name}</b>에 등록된 팀이 없습니다.</div>
-      <button class="btn" style="margin-top:8px;font-size:.8rem;padding:5px 12px;background:#166534;color:white;border-radius:8px"
-        onclick="showPage('register')">📝 팀 등록하러 가기</button>`;
+    const regCta = (REG && !CLUB_MEMBER)
+      ? `<button class="btn" style="margin-top:8px;font-size:.8rem;padding:5px 12px;background:#166534;color:white;border-radius:8px" onclick="showPage('register')">📝 팀 등록하러 가기</button>`
+      : `<div style="margin-top:6px;font-size:.76rem;color:var(--text3)">경기이사가 팀 등록을 완료하면 이곳에 경기 현황이 표시됩니다.</div>`;
+    body.innerHTML = `<div>📋 <b>${at.name}</b>에 등록된 팀이 없습니다.</div>${regCta}`;
     return;
   }
 
