@@ -19095,7 +19095,99 @@ window.mShowTab=function(n){
     }
   });
 };
-function om(id){document.getElementById(id)?.classList.add('open');}
+
+
+// PHASE96: 현재 운영방식(온라인 오더 사용/미사용)에 맞춘 최신 매뉴얼.
+// 기존 index.html의 오래된 안내문을 런타임에서 교체하므로 경기/저장 로직에는 영향이 없다.
+function _manualStep(no,title,body,color='#2e7d32'){
+  return `<div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:13px"><div style="flex:0 0 25px;height:25px;border-radius:50%;background:${color};color:#fff;font-size:.75rem;font-weight:900;display:flex;align-items:center;justify-content:center">${no}</div><div style="min-width:0"><div style="font-weight:900;font-size:.86rem;color:#172033;margin-bottom:3px">${title}</div><div style="font-size:.76rem;color:#526173;line-height:1.62">${body}</div></div></div>`;
+}
+function _manualNote(html,bg='#f8fafc',bd='#d6dfeb',fg='#334155'){
+  return `<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:10px 12px;margin:9px 0 13px;font-size:.75rem;color:${fg};line-height:1.6">${html}</div>`;
+}
+function _manualModeBadge(){
+  const simple=isSimpleResultMode(G.meta);
+  return simple
+    ? `<div style="display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.75rem;font-weight:900">📷 현재: 온라인 오더 미사용 · 현장 간편결과 + 사진/OCR</div>`
+    : `<div style="display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;font-size:.75rem;font-weight:900">📱 현재: 온라인 오더 사용</div>`;
+}
+function refreshCurrentManualContent(){
+  const simple=isSimpleResultMode(G.meta);
+  const dm=ge('mDirectorManual');
+  if(dm){
+    const h=dm.querySelector('.modal-header h3'); if(h)h.textContent='📖 클럽 운영 매뉴얼';
+    const t1=ge('mTab1'),t2=ge('mTab2'),t3=ge('mTab3');
+    if(t1)t1.textContent='① 시작·권한';
+    if(t2)t2.textContent='② 온라인 오더 사용';
+    if(t3)t3.textContent='③ 온라인 오더 미사용';
+    const c1=ge('mTabC1'),c2=ge('mTabC2'),c3=ge('mTabC3');
+    if(c1)c1.innerHTML=`<div style="padding:16px">
+      <div style="margin-bottom:12px">${_manualModeBadge()}</div>
+      ${_manualNote('<b>클럽 회원과 경기이사는 같은 클럽 공용 비밀번호</b>를 사용합니다. 로그인할 때 역할만 선택하며, 경기이사만 팀등록·출전명단·선수관리·비밀번호 변경 권한이 추가됩니다.','#ecfdf5','#86efac','#166534')}
+      ${_manualStep(1,'클럽 로그인','오른쪽 위 <b>클럽 로그인</b> → 클럽 선택 → <b>클럽 회원 / 경기이사</b> 역할 선택 → 공용 비밀번호 입력.')}
+      ${_manualStep(2,'경기이사 최초 설정','초기 비밀번호로 처음 로그인하면 새 공용 비밀번호를 설정합니다. 한 번 정상 변경하면 다음 로그인부터 변경 팝업이 다시 뜨지 않습니다.')}
+      ${_manualStep(3,'클럽 전용 화면','클럽 회원과 경기이사 모두 내 클럽의 대진·경기·결과·오더 화면을 볼 수 있습니다. 경기이사는 팀등록과 출전명단 관리까지 가능합니다.')}
+      ${_manualStep(4,'대회 당일 기본 흐름','<b>예선 확인 → 본선 추첨 → 오더/경기 진행 → 결과 입력 → 결과 확인·수정 → 최종 순위 확인</b> 순서로 사용합니다.')}
+      ${_manualNote('💡 완료된 경기는 바로 수정창이 열리지 않습니다. 먼저 <b>경기 상세 결과</b>를 확인하고, 필요한 경우에만 <b>결과 수정</b>을 누릅니다.','#eef6ff','#bfdbfe','#1e3a8a')}
+    </div>`;
+    if(c2)c2.innerHTML=`<div style="padding:16px">
+      ${simple?_manualNote('현재 대회는 <b>온라인 오더 미사용</b>으로 설정되어 있습니다. 아래 내용은 온라인 오더를 켰을 때의 운영 방법입니다.','#fff7ed','#fdba74','#9a3412'):_manualNote('현재 대회가 <b>온라인 오더 사용</b>으로 설정되어 있습니다. 이 절차를 따르면 됩니다.','#eff6ff','#93c5fd','#1d4ed8')}
+      ${_manualStep(1,'경기 전 온라인 오더 제출','클럽 화면에서 해당 경기를 열고 실제 출전 선수와 복식 순서를 선택한 뒤 오더를 제출합니다.','#1565c0')}
+      ${_manualStep(2,'양팀 제출 확인','진행자 화면에서 제출 여부를 확인합니다. 상대팀 오더는 정해진 공개 조건에 따라 확인합니다.','#1565c0')}
+      ${_manualStep(3,'경기 결과 입력','경기 종료 후 승리팀과 점수를 입력합니다. 선수·복식 상세 기록은 이미 제출된 오더와 연결해 확인할 수 있습니다.','#1565c0')}
+      ${_manualStep(4,'완료 경기 확인·수정','완료 경기 클릭 → 결과 상세 확인 → 잘못된 경우에만 <b>결과 수정</b>. 수정 전 현재 결과를 먼저 확인하는 구조입니다.','#1565c0')}
+      ${_manualNote('온라인 오더를 사용하면 종이 오더 사진/OCR은 필수가 아닙니다. 다만 기록 보관을 위해 사진을 추가로 남길 수 있습니다.','#f8fafc','#cbd5e1','#475569')}
+    </div>`;
+    if(c3)c3.innerHTML=`<div style="padding:16px">
+      ${!simple?_manualNote('현재 대회는 <b>온라인 오더 사용</b>으로 설정되어 있습니다. 아래 내용은 온라인 오더를 끄고 종이 오더로 운영할 때의 방법입니다.','#eff6ff','#93c5fd','#1d4ed8'):_manualNote('현재 대회가 <b>온라인 오더 미사용</b>으로 설정되어 있습니다. 현장에서는 이 절차가 기본입니다.','#fff7ed','#fdba74','#9a3412')}
+      ${_manualStep(1,'현장에서는 결과부터 빠르게','경기가 끝나면 승리팀만 확정하거나 <b>3:0 · 3:1 · 3:2</b> 같은 간편 점수로 먼저 결과를 저장합니다.','#b45309')}
+      ${_manualStep(2,'종이 오더지 사진 저장','결과 입력 화면에서 양팀 오더지를 촬영·첨부합니다. 사진은 원본 기록 보관용으로 남습니다.','#b45309')}
+      ${_manualStep(3,'사진 저장 즉시 OCR 초안','사진이 저장되면 OCR이 자동 실행되어 <b>해당 팀 등록명단 안에서만</b> 선수 이름을 매칭합니다. 확신 있는 선수만 자동 선택하고 애매한 자리는 비워둡니다.','#b45309')}
+      ${_manualStep(4,'상세기록 최종 확인','나중에 <b>상세 입력(선수·복식)</b>을 열면 OCR 초안이 채워져 있습니다. 선수·복식·점수를 확인하고 최종 저장하면 됩니다.','#b45309')}
+      ${_manualNote('<b>중요:</b> OCR은 기록 입력을 돕는 초안 기능입니다. OCR이 틀려도 공식 승패·본선 진행 결과는 바뀌지 않으며, 사람이 이미 입력한 상세기록을 자동으로 덮어쓰지 않습니다.','#fff1f2','#fecdd3','#9f1239')}
+      ${_manualNote('📌 <b>간편 결과</b>, <b>선수·복식 상세기록</b>, <b>사진/OCR</b>은 서로 별개입니다. 현장에서는 결과만 먼저 확정하고 상세기록은 나중에 정리해도 됩니다.','#f8fafc','#cbd5e1','#334155')}
+    </div>`;
+  }
+
+  const omd=ge('mOperatorManual');
+  if(omd){
+    const h=omd.querySelector('.modal-header h3'); if(h)h.textContent='🎾 경기진행자 운영 매뉴얼';
+    const t1=ge('opTab1'),t2=ge('opTab2'),t3=ge('opTab3');
+    if(t1)t1.textContent='① 운영방식';
+    if(t2)t2.textContent='② 결과·오더';
+    if(t3)t3.textContent='③ 본선 운영';
+    const c1=ge('opTabC1'),c2=ge('opTabC2'),c3=ge('opTabC3');
+    if(c1)c1.innerHTML=`<div style="padding:16px">
+      <div style="margin-bottom:12px">${_manualModeBadge()}</div>
+      ${_manualStep(1,'대회 운영방식 먼저 확인','대회 설정에서 온라인 오더 사용 여부를 확인합니다. 같은 결과 입력 화면이라도 오더 처리 방식이 달라집니다.','#1565c0')}
+      ${_manualStep(2,'온라인 오더 사용','클럽이 앱에서 오더 제출 → 진행자는 제출현황 확인 → 경기 후 결과 입력 → 필요 시 상세기록 수정.','#1565c0')}
+      ${_manualStep(3,'온라인 오더 미사용','종이 오더 사용 → 경기 후 간편결과 저장 + 오더 사진 촬영 → OCR 자동초안 → 나중에 상세기록 확인·확정.','#b45309')}
+      ${_manualNote('현장에서 가장 중요한 원칙은 <b>승패와 본선 진행 결과를 먼저 정확히 확정</b>하는 것입니다. 선수별 상세기록은 사진/OCR을 이용해 경기 후 보완할 수 있습니다.','#ecfdf5','#86efac','#166534')}
+    </div>`;
+    if(c2)c2.innerHTML=`<div style="padding:16px">
+      ${_manualStep(1,'미입력 경기','대진표의 <b>입력</b> 또는 경기 버튼을 눌러 결과를 입력합니다.','#1565c0')}
+      ${_manualStep(2,'완료 경기','스코어가 표시된 경기를 누르면 먼저 <b>경기 상세</b>가 열립니다. 현재 결과를 확인한 뒤 수정이 필요할 때만 <b>결과 수정</b>으로 들어갑니다.','#1565c0')}
+      ${_manualStep(3,'온라인 오더 사용 시','양팀 오더 제출 여부를 확인하고 미제출 팀은 안내합니다. 상세 선수 기록은 제출된 오더와 경기 기록을 기준으로 확인합니다.','#1565c0')}
+      ${_manualStep(4,'온라인 오더 미사용 시','간편결과를 먼저 저장하고 오더지 사진을 남깁니다. OCR 초안의 <b>확인 필요</b> 경기만 추려서 상세기록을 보완하면 중복 작업을 줄일 수 있습니다.','#b45309')}
+      ${_manualNote('결과 수정은 다음 라운드 진출과 연결될 수 있으므로 <b>현재 결과를 먼저 확인한 뒤 수정</b>하는 방식으로 운영합니다.','#fff7ed','#fdba74','#9a3412')}
+    </div>`;
+    if(c3)c3.innerHTML=`<div style="padding:16px">
+      ${_manualStep(1,'본선 추첨 완료','본선 추첨 전에는 빈 피라미드와 부전승 위치만 보이고 팀명은 공개되지 않습니다. 추첨 완료 후 확정 팀이 표시됩니다.','#1565c0')}
+      ${_manualStep(2,'피라미드에서 바로 운영','각 가지의 스코어/입력 버튼을 눌러 경기 결과 확인·입력·수정을 합니다. <b>굵은 파란선</b>은 승리팀 진행 경로입니다.','#1565c0')}
+      ${_manualStep(3,'모바일 조작','기본은 전체맞춤으로 보고, 필요한 부분만 핀치 확대합니다. 확대 상태에서는 좌우 스크롤하고, 다시 <b>전체맞춤</b>을 누르면 전체 대진으로 복귀합니다.','#1565c0')}
+      ${_manualStep(4,'최종 결과','상단 카드에서 우승·준우승·공동3위(또는 3위)를 확인합니다. 출력센터와 고화질 이미지 저장도 같은 피라미드 구조를 사용합니다.','#1565c0')}
+      ${_manualNote('부전승은 경기 결과를 직접 입력하는 대상이 아닙니다. 실제 경기의 스코어 버튼만 조작합니다.','#f8fafc','#cbd5e1','#475569')}
+    </div>`;
+  }
+
+  document.querySelectorAll('#mMobileQuickMenu button').forEach(b=>{
+    const oc=String(b.getAttribute('onclick')||'');
+    if(oc.includes("mDirectorManual"))b.textContent='🏆 클럽 운영 매뉴얼';
+    if(oc.includes("mOperatorManual"))b.textContent='🎾 경기진행자 운영 매뉴얼';
+  });
+}
+window.refreshCurrentManualContent=refreshCurrentManualContent;
+function om(id){if(id==='mDirectorManual'||id==='mOperatorManual'){try{refreshCurrentManualContent();}catch(e){console.warn('[PHASE96 manual refresh]',e);}}document.getElementById(id)?.classList.add('open');}
 function cm(id){const el=document.getElementById(id);if(!el)return;el.classList.remove('open');const box=el.querySelector('.modal-box');if(box)box.classList.remove('fullscreen');el.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent='⛶');}
 function toggleModalFullscreen(id,btn){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;const isFull=box.classList.toggle('fullscreen');if(btn)btn.textContent=isFull?'🗗':'⛶';}
 function setModalFullscreenState(id,on=true){const overlay=document.getElementById(id);if(!overlay)return;const box=overlay.querySelector('.modal-box');if(!box)return;box.classList.toggle('fullscreen',!!on);overlay.querySelectorAll('.modal-close[title="전체화면"]').forEach(b=>b.textContent=on?'🗗':'⛶');}
