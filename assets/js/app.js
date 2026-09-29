@@ -23845,7 +23845,9 @@ function initMobileBracketHorizontalScroll(root=document){
     el.style.overflowX='auto'; el.style.overflowY='hidden';
     el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-x pan-y';
 
-    const content=el.firstElementChild;
+    // 실제 본선 HTML의 첫 자식은 우승/준우승 결과판일 수 있다.
+    // 확대/축소 대상은 반드시 피라미드 본체를 우선 선택한다.
+    const content=el.querySelector('.pyramid-scroll-content')||el.firstElementChild;
     const isMobile=()=>window.innerWidth<=768;
     const clamp=v=>Math.max(.18,Math.min(1.6,v));
     const getZoom=()=>Number(el.dataset.bracketZoom||1);
@@ -23865,14 +23867,14 @@ function initMobileBracketHorizontalScroll(root=document){
       if(!content)return;
       content.style.zoom='1'; el.dataset.bracketZoom='1';
       requestAnimationFrame(()=>{
-        const pyramid=content.querySelector?.('.pyramid-scroll-content')||content;
+        const pyramid=content;
         const cssW=parseFloat(pyramid.style?.width||'')||0;
-        const natural=Math.max(cssW,pyramid.scrollWidth||0,pyramid.getBoundingClientRect().width||0,content.scrollWidth||0);
+        const natural=Math.max(cssW,pyramid.scrollWidth||0,pyramid.getBoundingClientRect().width||0);
         const available=Math.max(1,el.clientWidth-12);
         const z=natural>available?clamp(available/natural):1;
         applyZoom(z,false);
         requestAnimationFrame(()=>{
-          el.scrollLeft=Math.max(0,(el.scrollWidth-el.clientWidth)/2);
+          el.scrollLeft=0;
         });
       });
     };
@@ -23881,7 +23883,7 @@ function initMobileBracketHorizontalScroll(root=document){
       const tools=document.createElement('div');
       tools.className='mobile-bracket-zoom-tools';
       tools.style.cssText='display:flex;justify-content:center;align-items:center;gap:6px;margin:5px 0 7px;position:sticky;left:0;z-index:3';
-      tools.innerHTML='<button type="button" class="btn btn-outline" data-zout style="padding:5px 11px;font-size:.78rem">− 축소</button><button type="button" class="btn btn-outline" data-zfit style="padding:5px 10px;font-size:.78rem">▣ 전체보기</button><span data-bracket-zoom-label style="min-width:42px;text-align:center;font-size:.72rem;font-weight:800;color:#475569">100%</span><button type="button" class="btn btn-outline" data-zin style="padding:5px 11px;font-size:.78rem">＋ 확대</button>';
+      tools.innerHTML='<button type="button" class="btn btn-outline" data-zout style="padding:5px 11px;font-size:.78rem">− 축소</button><button type="button" class="btn btn-outline" data-zfit style="padding:5px 10px;font-size:.78rem">▣ 전체맞춤</button><span data-bracket-zoom-label style="min-width:42px;text-align:center;font-size:.72rem;font-weight:800;color:#475569">100%</span><button type="button" class="btn btn-outline" data-zin style="padding:5px 11px;font-size:.78rem">＋ 확대</button>';
       el.parentNode?.insertBefore(tools,el);
       tools.querySelector('[data-zout]')?.addEventListener('click',()=>applyZoom(getZoom()-.08));
       tools.querySelector('[data-zin]')?.addEventListener('click',()=>applyZoom(getZoom()+.08));
