@@ -23845,12 +23845,17 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
           const click=canOperate||done&&canEdit
             ? `openMatchOperations('${key}','${matchId}')`
             : `openSimpleMatchDetail('${key}','${matchId}')`;
-          const chipW=n>=32?38:n>=16?44:52;
-          const chipFs=n>=32?6.4:n>=16?7.1:8;
-          const chipBg=done?'#eaf8ef':(canOperate?'#eaf2ff':'#f3f6fa');
-          const chipBd=done?'#4caf75':(canOperate?'#4b83d1':'#b8c6d8');
-          const chipFg=done?'#146c38':(canOperate?'#114a91':'#64748b');
-          ops+=`<button type="button" data-pyramid-op="1" title="${action}" aria-label="${action}" onclick="event.stopPropagation();${click}" style="position:absolute;left:${mid}px;top:${y1-10}px;transform:translate(-50%,-50%);z-index:6;width:${chipW}px;min-width:${chipW}px;height:${n>=32?20:22}px;padding:1px 2px;border:1.5px solid ${chipBd};border-radius:999px;background:${chipBg};color:${chipFg};font-size:${chipFs}px;font-weight:950;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(15,35,65,.16);white-space:nowrap">${outputEsc(score)}</button>`;
+          const chipW=n>=32?46:n>=16?56:66;
+          const chipH=n>=32?24:n>=16?26:30;
+          const chipFs=n>=32?8.2:n>=16?9.6:12;
+          const chipBg=done
+            ? 'linear-gradient(180deg,#f6fff8 0%,#dcfce7 55%,#c4f1d0 100%)'
+            : (canOperate
+              ? 'linear-gradient(180deg,#ffffff 0%,#eef5ff 52%,#dbeafe 100%)'
+              : 'linear-gradient(180deg,#ffffff 0%,#f8fafc 55%,#edf2f7 100%)');
+          const chipBd=done?'#3fa96a':(canOperate?'#3f78c8':'#b8c6d8');
+          const chipFg=done?'#0f6b38':(canOperate?'#0f3f7d':'#64748b');
+          ops+=`<button type="button" data-pyramid-op="1" title="${action}" aria-label="${action}" onclick="event.stopPropagation();${click}" style="position:absolute;left:${mid}px;top:${y1-11}px;transform:translate(-50%,-50%);z-index:6;width:${chipW}px;min-width:${chipW}px;height:${chipH}px;padding:1px 4px;border:2px solid ${chipBd};border-radius:999px;background:${chipBg};color:${chipFg};font-size:${chipFs}px;font-weight:1000;letter-spacing:-0.2px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(15,35,65,.18), inset 0 1px 0 rgba(255,255,255,.95);text-shadow:0 .25px 0 rgba(255,255,255,.55);white-space:nowrap">${outputEsc(score)}</button>`;
         }
       }
       const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.4:1.25}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -23906,11 +23911,21 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
       if(losers.length)third=losers.join(' · ');
     }
   }
-  const resultCell=(title,val,accent)=>`<div style="border:1px solid #c9d6e8;border-top:3px solid ${accent};border-radius:8px;background:#fff;min-height:47px;padding:6px 10px;text-align:center;box-shadow:0 1px 3px rgba(15,35,65,.07)"><div style="font-size:7.5px;font-weight:900;color:#64748b">${title}</div><div style="font-size:12px;font-weight:950;color:#10213d;margin-top:3px">${outputEsc(pyramidDisplayTeamName(val))||'　　　　　　　　'}</div></div>`;
-  const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">
-    ${resultCell('🏆 우승',champion,'#d59b00')}
-    ${resultCell('🥈 준우승',runner,'#7890ad')}
-    ${resultCell(thirdLabel,third,'#b87333')}
+  const resultCell=(title,val,opts={})=>{
+    const accent=opts.accent||'#94a3b8';
+    const bg=opts.bg||'linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)';
+    const nameColor=opts.nameColor||'#10213d';
+    const titleColor=opts.titleColor||'#5b6b80';
+    return `<div style="position:relative;border:1px solid rgba(148,163,184,.42);border-top:4px solid ${accent};border-radius:12px;background:${bg};min-height:58px;padding:8px 12px;text-align:center;box-shadow:0 8px 18px rgba(15,35,65,.10), inset 0 1px 0 rgba(255,255,255,.92), inset 0 -10px 16px rgba(255,255,255,.20);overflow:hidden">
+      <div style="position:absolute;left:10px;right:10px;top:0;height:44%;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none"></div>
+      <div style="position:relative;font-size:8px;font-weight:1000;letter-spacing:.2px;color:${titleColor}">${title}</div>
+      <div style="position:relative;font-size:14px;font-weight:1000;color:${nameColor};margin-top:4px;text-shadow:0 1px 0 rgba(255,255,255,.45)">${outputEsc(pyramidDisplayTeamName(val))||'　　　　　　　　'}</div>
+    </div>`;
+  };
+  const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:10px;max-width:700px;margin:0 auto 12px">
+    ${resultCell('🏆 우승',champion,{accent:'#d89b00',bg:'linear-gradient(180deg,#fff9dd 0%,#ffeeb1 52%,#f4d368 100%)',nameColor:'#6b4700',titleColor:'#8a5a00'})}
+    ${resultCell('🥈 준우승',runner,{accent:'#7b91b4',bg:'linear-gradient(180deg,#fbfdff 0%,#edf3fb 52%,#d7e2ef 100%)',nameColor:'#23364d',titleColor:'#5f7288'})}
+    ${resultCell(thirdLabel,third,{accent:'#b77435',bg:'linear-gradient(180deg,#fff4ec 0%,#ffe1cc 52%,#f2bc96 100%)',nameColor:'#6d3718',titleColor:'#96522c'})}
   </div>`;
 
   const legend=blank
