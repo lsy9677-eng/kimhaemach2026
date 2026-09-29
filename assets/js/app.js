@@ -23698,47 +23698,91 @@ function outputBottomUpTreeHtml(tid,div,blank=false){
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
-  const entrants=[];first.forEach(m=>{entrants.push({name:outputTeamName(key,m.t1),team:m.t1});entrants.push({name:outputTeamName(key,m.t2),team:m.t2});});
+  const entrants=[]; first.forEach(m=>{entrants.push({name:outputTeamName(key,m.t1),team:m.t1});entrants.push({name:outputTeamName(key,m.t2),team:m.t2});});
   if(!entrants.length)return '';
   let n=1;while(n<entrants.length)n*=2;while(entrants.length<n)entrants.push({name:'',team:null});
-  const width=Math.max(900,n*84), baseY=360, stepY=62, levels=Math.log2(n), height=baseY+72;
-  const x=i=>(i+.5)*width/n;
+
+  // A4 가로 폭 최적화: 8/16/32팀 모두 한 장 폭에 맞도록 슬롯 폭을 제한
+  const width=Math.max(900,Math.min(1500,n*46)), baseY=352, stepY=57, levels=Math.log2(n), height=baseY+112;
+  const x=i=>(i+.5)*width/n, BLUE='#1565c0', THIN='#a9b8cc';
+
   const winnerTeam=m=>{
-    if(blank||!m)return null;
+    if(!m)return null;
     if(m.winner!=null)return m.winner;
-    const rs=getMatchResultState(key,m);if(!rs.done)return null;
+    const rs=getMatchResultState(key,m); if(!rs.done)return null;
     const a=Number(rs.disp1),b=Number(rs.disp2);
     return Number.isFinite(a)&&Number.isFinite(b)&&a!==b?(a>b?m.t1:m.t2):null;
   };
-  const byRS=new Map();all.forEach(m=>byRS.set(Number(m.round||0)+'|'+Number(m.slot||0),m));
+  const byRS=new Map(); all.forEach(m=>byRS.set(Number(m.round||0)+'|'+Number(m.slot||0),m));
+
   let paths='',labels='';
-  const BLUE='#1565c0', THIN='#94a3b8';
   for(let level=0;level<levels;level++){
-    const group=2**(level+1),y0=baseY-level*stepY,y1=baseY-(level+1)*stepY,round=rounds[Math.min(level,rounds.length-1)];
+    const group=2**(level+1), y0=baseY-level*stepY, y1=baseY-(level+1)*stepY, round=rounds[Math.min(level,rounds.length-1)];
     for(let g=0;g<n;g+=group){
-      const li=g+group/4-.5,ri=g+3*group/4-.5,left=x(li),right=x(ri),mid=(left+right)/2,slot=Math.floor(g/group);
-      const m=byRS.get(Number(round)+'|'+slot),wt=winnerTeam(m);
-      const lw=(!blank&&wt!=null&&m&&String(wt)===String(m.t1)),rw=(!blank&&wt!=null&&m&&String(wt)===String(m.t2));
-      const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.2:1.35}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      const left=x(g+group/4-.5), right=x(g+3*group/4-.5), mid=(left+right)/2, slot=Math.floor(g/group);
+      const m=byRS.get(Number(round)+'|'+slot), wt=blank?null:winnerTeam(m);
+      const lw=wt!=null&&m&&String(wt)===String(m.t1), rw=wt!=null&&m&&String(wt)===String(m.t2);
+      const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.4:1.25}" stroke-linecap="round" stroke-linejoin="round"/>`;
       paths+=seg(left,lw)+seg(right,rw);
-      const trunkWin=!blank&&wt!=null;
-      paths+=`<path d="M ${mid} ${y1} V ${Math.max(30,y1-stepY)}" fill="none" stroke="${trunkWin?BLUE:THIN}" stroke-width="${trunkWin?4.2:1.35}" stroke-linecap="round"/>`;
+      paths+=`<path d="M ${mid} ${y1} V ${Math.max(28,y1-stepY)}" fill="none" stroke="${(!blank&&wt!=null)?BLUE:THIN}" stroke-width="${(!blank&&wt!=null)?4.4:1.25}" stroke-linecap="round"/>`;
     }
-    const teamsLeft=n/(2**level),roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
-    labels+=`<g><rect x="7" y="${y1-11}" width="40" height="18" rx="9" fill="#eff6ff" stroke="#bfdbfe"/><text x="27" y="${y1+2}" text-anchor="middle" font-size="8" font-weight="900" fill="#1d4ed8">${roundLabel}</text></g>`;
+    const teamsLeft=n/(2**level), roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
+    labels+=`<g><rect x="6" y="${y1-10}" width="40" height="18" rx="9" fill="#e8f1ff" stroke="#93c5fd"/><text x="26" y="${y1+3}" text-anchor="middle" font-size="8" font-weight="900" fill="#1565c0">${roundLabel}</text></g>`;
   }
+
+  // 한글/영문 모두 글자 단위로 위→아래 세로 배열.
+  // writing-mode을 쓰지 않아 T-ONE, UDT-A 같은 영문도 옆으로 눕지 않는다.
+  const verticalName=name=>{
+    const chars=Array.from(String(name||''));
+    return chars.map(ch=>`<span style="display:block;line-height:1.02">${outputEsc(ch)}</span>`).join('');
+  };
   const boxes=entrants.map((e,i)=>{
-    const xx=x(i),bw=Math.max(66,width/n-8),name=outputEsc(e.name||'');
-    return `<div style="position:absolute;left:${xx}px;top:${baseY+5}px;transform:translateX(-50%);width:${bw}px;height:44px;border:1.2px solid #b7c5d8;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;font-weight:900;line-height:1.15;padding:4px;overflow:hidden;word-break:keep-all">${name}</div>
-      <div style="position:absolute;left:${xx}px;top:${baseY-7}px;transform:translateX(-50%);font-size:6.5px;font-weight:700;color:#64748b">${i+1}</div>`;
+    const xx=x(i), bw=Math.max(27,Math.min(42,width/n-3));
+    return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid #9fb4cf;background:${i%2?'#f8fbff':'#edf5ff'};border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:3px 1px">
+      <div style="font-size:${n>=32?'8':'10'}px;font-weight:950;color:#10213d;letter-spacing:.1px;max-height:70px;overflow:hidden">${verticalName(e.name)}</div>
+    </div>`;
   }).join('');
+
+  // 상단 결과판: 현재형은 결과 반영, 수기형은 빈 칸.
+  const finalMatch=all.filter(m=>Number(m.round||0)===rounds[rounds.length-1]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0))[0];
+  let champion='', runner='', third='', thirdLabel='🥉 공동 3위';
+  if(!blank&&finalMatch){
+    const fw=winnerTeam(finalMatch);
+    if(fw!=null){
+      champion=outputTeamName(key,fw);
+      runner=outputTeamName(key,String(fw)===String(finalMatch.t1)?finalMatch.t2:finalMatch.t1);
+    }
+    const bronze=all.find(m=>m.isThirdPlace===true||m.thirdPlace===true||String(m.roundName||m.label||'').includes('3위'));
+    if(bronze){
+      const bw=winnerTeam(bronze);
+      if(bw!=null){third=outputTeamName(key,bw);thirdLabel='🥉 3위';}
+    }
+    if(!third&&rounds.length>=2){
+      const semi=all.filter(m=>Number(m.round||0)===rounds[rounds.length-2]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+      const losers=semi.map(m=>{
+        const w=winnerTeam(m); if(w==null)return '';
+        return outputTeamName(key,String(w)===String(m.t1)?m.t2:m.t1);
+      }).filter(Boolean);
+      if(losers.length)third=losers.join(' · ');
+    }
+  }
+  const resultCell=(title,val,accent)=>`<div style="border:1px solid #c9d6e8;border-top:3px solid ${accent};border-radius:8px;background:#fff;min-height:47px;padding:6px 10px;text-align:center;box-shadow:0 1px 3px rgba(15,35,65,.07)"><div style="font-size:7.5px;font-weight:900;color:#64748b">${title}</div><div style="font-size:12px;font-weight:950;color:#10213d;margin-top:3px">${outputEsc(val)||'　　　　　　　　'}</div></div>`;
+  const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">
+    ${resultCell('🏆 우승',champion,'#d59b00')}
+    ${resultCell('🥈 준우승',runner,'#7890ad')}
+    ${resultCell(thirdLabel,third,'#b87333')}
+  </div>`;
+
   const legend=blank
-    ?`<div style="font-size:7.5px;color:#64748b;text-align:center;margin-top:2px">수기용 · 승리팀의 가지선을 펜으로 굵게 따라 표시하세요.</div>`
-    :`<div style="display:flex;justify-content:center;gap:14px;align-items:center;font-size:7.5px;color:#64748b;margin-top:2px"><span><i style="display:inline-block;width:24px;border-top:4px solid ${BLUE};vertical-align:middle;margin-right:4px"></i>승리팀 경로</span><span><i style="display:inline-block;width:24px;border-top:1px solid ${THIN};vertical-align:middle;margin-right:4px"></i>미진행/패자 경로</span></div>`;
-  return `<div class="oc-bracket-frame" style="width:100%;padding:8px 4px 2px;background:#fff">
+    ?`수기용 · 승리팀의 가지선을 펜으로 굵게 따라 표시하세요.`
+    :`<span style="color:${BLUE};font-weight:900">━━ 승리팀 경로</span>　<span style="color:#94a3b8">━ 미진행/패자 경로</span>`;
+
+  return `${resultBar}<div style="width:100%;padding:2px 4px;background:#fff">
     <div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
-    </div></div>${legend}</div>`;
+    </div></div>
+    <div style="font-size:8px;text-align:center;color:#64748b;margin-top:3px">${legend}</div>
+  </div>`;
 }
 function outputMainTreeHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
