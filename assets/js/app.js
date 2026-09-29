@@ -23471,14 +23471,32 @@ function initOutputCenter(){
   ts.value=(prev&&(G.tournaments||[]).some(t=>t.id===prev))?prev:outputDefaultTournamentId();
   outputTournamentChanged();
 }
-function outputTournamentChanged(){
+async function outputTournamentChanged(){
   const tid=ge('outTS')?.value||'';
-  const t=(G.tournaments||[]).find(x=>x.id===tid);
   const ds=ge('outDS');if(!ds)return;
   const old=ds.value;
-  ds.innerHTML=(t?.divisions||[]).map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
-  if(old&&(t?.divisions||[]).includes(old))ds.value=old;
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  ds.innerHTML='<option value="">⏳ 부서/대진 데이터 불러오는 중...</option>';
+  if(!tid){renderOutputPreview();return;}
+  try{
+    await syncTournamentDataForPage('output',tid,false);
+  }catch(e){ console.warn('[OutputCenter] tournament bundle load failed',e); }
+  const divs=outputAvailableDivisions(tid,t);
+  ds.innerHTML=divs.map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
+  if(!divs.length)ds.innerHTML='<option value="">저장된 부서 없음</option>';
+  if(old&&divs.includes(old))ds.value=old;
+  else if(divs.length)ds.value=divs[0];
   renderOutputPreview();
+}
+function outputAvailableDivisions(tid,t=null){
+  const found=[];
+  const add=v=>{v=String(v||'').trim();if(v&&!found.includes(v))found.push(v);};
+  (t?.divisions||[]).forEach(add);
+  Object.keys(G.teams||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
+  Object.keys(G.matches||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
+  Object.keys(G.draws||{}).forEach(k=>{if(k.startsWith(tid+'_'))add(k.slice(tid.length+1));});
+  // 과거 데이터에서 divisions 메타가 누락/축약돼도 실제 저장된 registration/match/draw 부서를 우선 살린다.
+  return found;
 }
 function outputTeamName(key,idx){
   const teams=G.teams?.[key]||[];
@@ -23502,7 +23520,8 @@ function outputScoreText(key,m,blank=false){
 function outputPrelimHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),draw=G.draws?.[key]||{};
   const groups=Array.isArray(draw.groups)?draw.groups:[];
-  const ms=(G.matches?.[key]||[]).filter(m=>m.phase==='group');
+  const allMs=G.matches?.[key]||[];
+  const ms=allMs.filter(m=>m.phase==='group'||m.phase==='prelim'||m.stage==='group'||m.stage==='prelim'||m.group!=null);
   if(!groups.length)return outputHeader(t,div,blank?'예선 현장 수기용':'예선 현재상황')+'<div class="oc-empty">예선 조편성이 아직 없습니다.</div>';
   const cards=groups.map((g,gi)=>{
     const ids=Array.isArray(g?.teams)?g.teams:(Array.isArray(g)?g:[]);
@@ -23524,7 +23543,8 @@ function outputPrelimHtml(tid,div,blank=false){
 }
 function outputMainTableHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
-  const ms=(G.matches?.[key]||[]).filter(m=>m.phase==='main').sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
+  const allMs=G.matches?.[key]||[];
+  const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null)).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
   if(!ms.length)return outputHeader(t,div,blank?'본선 현장 수기용':'본선 현재상황')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   const rounds=[...new Set(ms.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const body=rounds.map((r,ri)=>{
@@ -23538,7 +23558,8 @@ function outputMainTableHtml(tid,div,blank=false){
 }
 function outputMainTreeHtml(tid,div){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),teams=G.teams?.[key]||[];
-  const ms=(G.matches?.[key]||[]).filter(m=>m.phase==='main');
+  const allMs=G.matches?.[key]||[];
+  const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!ms.length)return outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
   return outputHeader(t,div,'가지형 본선 대진표')+`<div class="oc-tree">${renderBracketTree(key,ms,teams)}</div>`;
 }
