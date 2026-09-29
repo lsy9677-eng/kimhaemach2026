@@ -2664,6 +2664,7 @@ function onDU(){
   if(!REG && localStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=localStorage.getItem('reg_club')||'';}
   if((REG||CLUB_MEMBER) && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
   applyClubRoleVisibility();
+  ensureDirectorPasswordSettingsButton();
   runPhase57SafetyCheck();
 
   try{ upDash(); }catch(e){ console.warn('onDU upDash failed', e); }
@@ -3836,17 +3837,25 @@ function directorPasswordNeedsChange(club){
 function ensureDirectorPasswordSettingsButton(){
   const old=ge('directorPasswordSettingsBtn');
   if(!(REG && !AD && REG_CLUB)){ if(old) old.remove(); return; }
-  if(old) return;
-  const host=ge('regLoginStatusBar') || ge('regLoginBadge')?.parentElement || ge('regToggleBtn')?.parentElement;
+  if(old){ old.style.display='inline-flex'; return; }
+
+  // regLoginStatusBar는 일부 화면에서 숨겨지는 컨테이너이므로 사용하지 않는다.
+  // 실제로 항상 보이는 로그인 배지/로그아웃 버튼과 같은 헤더에 고정한다.
+  const badge=ge('regLoginBadge');
+  const toggle=ge('regToggleBtn');
+  const host=badge?.parentElement || toggle?.parentElement;
   if(!host) return;
+
   const b=document.createElement('button');
   b.id='directorPasswordSettingsBtn';
   b.type='button';
   b.className='btn btn-outline';
-  b.style.cssText='font-size:.74rem;padding:5px 10px;white-space:nowrap';
+  b.style.cssText='display:inline-flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;padding:5px 10px;margin-left:4px;white-space:nowrap';
   b.textContent='⚙️ 경기이사 설정';
   b.onclick=openDirectorSettings;
-  host.appendChild(b);
+  if(badge && badge.parentElement===host) badge.insertAdjacentElement('afterend',b);
+  else if(toggle && toggle.parentElement===host) host.insertBefore(b,toggle);
+  else host.appendChild(b);
 }
 function openDirectorSettings(){
   if(!(REG && !AD && REG_CLUB)){toast('경기이사 로그인 후 사용할 수 있습니다','info');return;}
@@ -4180,6 +4189,7 @@ function _completeRegLogin(club){
 
   // ── 팀등록 탭으로 자동 이동 ──
   applyClubRoleVisibility();
+  ensureDirectorPasswordSettingsButton();
   toast(`${club} 경기이사 로그인 ✅`,'success');
   setTimeout(()=>{
     showPage('home');
