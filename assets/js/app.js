@@ -24402,8 +24402,32 @@ function ensureMobileBottomMore(){
   }
   more.style.display='';
 }
+function ensurePhase117MobileHeaderLayout(){
+  if(!isMobileOutputCenter()) return;
+  let st=document.getElementById('phase117MobileHeaderStyle');
+  if(!st){
+    st=document.createElement('style');
+    st.id='phase117MobileHeaderStyle';
+    st.textContent=`@media (max-width: 760px){
+      /* PHASE117: 설정 기능은 퀵메뉴/더보기에서 제공하므로 헤더 폭을 차지하지 않는다. */
+      #directorPasswordSettingsBtn{display:none!important;}
+      .app-header .header-top{display:flex!important;align-items:center!important;gap:6px!important;}
+      .app-header .logo{display:flex!important;align-items:center!important;gap:6px!important;min-width:0!important;flex:1 1 auto!important;}
+      .app-header .logo img{width:34px!important;height:34px!important;flex:0 0 34px!important;}
+      .app-header .logo-text{min-width:0!important;flex:1 1 auto!important;}
+      .app-header .logo-text h1{margin:0!important;font-size:.76rem!important;line-height:1.15!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;}
+      .app-header .logo-text p{display:none!important;}
+      .app-header .header-actions{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:4px!important;flex:0 0 auto!important;min-width:0!important;flex-wrap:nowrap!important;}
+      .app-header .header-actions .btn-sm{white-space:nowrap!important;}
+    }`;
+    document.head.appendChild(st);
+  }
+  const pwBtn=ge('directorPasswordSettingsBtn');
+  if(pwBtn) pwBtn.style.display='none';
+}
 function ensureKimhaeMobileNavigation(){
   if(!isMobileOutputCenter()) return;
+  ensurePhase117MobileHeaderLayout();
   ensureMobileHomeQuickMenu();
   ensureMobileBottomMore();
   ensureMobileMoreMenu();
