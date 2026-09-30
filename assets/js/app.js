@@ -3558,6 +3558,7 @@ function refreshRoleUI(){
   // 카드류 잠금은 applyIndivLock에서 별도 처리
   try{ ensureViewerBracketPolling(getCurrentPageName(), getSelectedTournamentIdForPage(getCurrentPageName()) || getRealtimeTargetTournamentId() || null); }catch(e){}
   try{ applyIndivLock(); }catch(e){}
+  try{ ensureKimhaeMobileNavigation(); }catch(e){}
 }
 function applyOperatorUI(){
   OP=true;
@@ -16819,6 +16820,7 @@ function updateMyClubUI(){
     updateFilterBtnUI('register', false);
     updateFilterBtnUI('bracket', false);
   }
+  try{ ensureKimhaeMobileNavigation(); }catch(e){}
 }
 
 // 홈 내 클럽 카드 내용 갱신
@@ -24184,12 +24186,138 @@ function openMobileOutputCenter(){
 function closeMobileOutputCenter(){
   document.getElementById('mMobileOutputCenter')?.classList.remove('open');
 }
+
+// ─────────────────────────────────────────────────────────────
+// PHASE115 · 모바일 핵심 바로가기 + 하단 '더보기'
+// PC 네비게이션/경기 데이터 로직은 건드리지 않는다.
+// ─────────────────────────────────────────────────────────────
+function mobileClubStatusLabel(){
+  const club=String(REG_CLUB||'').trim();
+  return club ? `${club} 클럽경기현황` : '클럽경기현황';
+}
+function openMobileClubStatus(){
+  const club=String(REG_CLUB||'').trim();
+  if(!(REG||CLUB_MEMBER) || !club){
+    toast('클럽 로그인 후 내 클럽 경기현황을 확인할 수 있습니다','info');
+    try{ toggleReg(); }catch(e){}
+    return;
+  }
+  showPage('home');
+  setTimeout(()=>{
+    try{ updateMyClubUI(); updateMyClubHomeCard(); }catch(e){}
+    const card=ge('myClubHomeCard');
+    if(card){
+      card.style.display='block';
+      card.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+  },80);
+}
+function openRoleAwareSettings(){
+  closeMobileMoreMenu();
+  if(AD){ openAdminSettings(); return; }
+  if((REG||CLUB_MEMBER) && REG_CLUB){
+    // 경기이사/클럽 사용자에게는 클럽 공용 비밀번호 등 본인 클럽 설정을 보여 준다.
+    if(typeof openDirectorSettings==='function' && REG){ openDirectorSettings(); return; }
+  }
+  if(typeof window.openMyProfileModal==='function'){
+    window.openMyProfileModal();
+    return;
+  }
+  if(typeof window.toggleLoginMenu==='function'){
+    toast('개인 설정은 로그인 메뉴에서 확인할 수 있습니다','info');
+    window.toggleLoginMenu();
+    return;
+  }
+  toast('현재 계정에서 변경할 수 있는 설정이 없습니다','info');
+}
+function openKimhaeManual(){
+  closeMobileMoreMenu();
+  if((REG||CLUB_MEMBER) && !AD){
+    if(ge('mDirectorManual')){ om('mDirectorManual'); return; }
+  }
+  if(OP && ge('mOperatorManual')){ om('mOperatorManual'); return; }
+  if(ge('mDirectorManual')){ om('mDirectorManual'); return; }
+  toast('현재 표시할 매뉴얼이 없습니다','info');
+}
+function ensureMobileMoreMenu(){
+  let modal=ge('mKimhaeMobileMore');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.className='modal-overlay';
+    modal.id='mKimhaeMobileMore';
+    modal.innerHTML=`<div class="modal-box" style="max-width:360px;width:calc(100% - 28px)">
+      <div class="modal-header" style="background:#0f1e3a"><h3>••• 더보기</h3><button class="modal-close" onclick="closeMobileMoreMenu()">✕</button></div>
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
+        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
+        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>설정</span></button>
+        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('bracket')"><span style="font-size:1.25rem">🎲</span><span>대진표</span></button>
+        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  return modal;
+}
+function openMobileMoreMenu(){ ensureMobileMoreMenu().classList.add('open'); }
+function closeMobileMoreMenu(){ ge('mKimhaeMobileMore')?.classList.remove('open'); }
+function ensureMobileHomeQuickMenu(){
+  if(!isMobileOutputCenter()) return;
+  const page=ge('page-home');
+  if(!page) return;
+  let panel=ge('kimhaeMobileHomeQuick');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='kimhaeMobileHomeQuick';
+    panel.style.cssText='margin:10px 0 12px;padding:8px 7px;background:#fff;border:1px solid #dbe4f0;border-radius:16px;box-shadow:0 5px 16px rgba(15,30,58,.08);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;';
+    const hero=page.querySelector('.hero');
+    if(hero) hero.insertAdjacentElement('afterend',panel); else page.prepend(panel);
+  }
+  const settingsLabel = AD ? '관리자 설정' : ((REG||CLUB_MEMBER)&&REG_CLUB ? '클럽 설정' : '설정');
+  panel.innerHTML=`
+    <button type="button" onclick="openMobileClubStatus()" style="border:0;background:transparent;padding:7px 2px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">🏆</span><span id="kimhaeClubStatusQuickLabel" style="font-size:.66rem;font-weight:900;line-height:1.2;text-align:center;word-break:keep-all">${outputEsc(mobileClubStatusLabel())}</span></button>
+    <button type="button" onclick="showPage('bracket')" style="border:0;background:transparent;padding:7px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">🎲</span><span style="font-size:.7rem;font-weight:900">대진표</span></button>
+    <button type="button" onclick="openMobileOutputCenter()" style="border:0;background:transparent;padding:7px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">🖨️</span><span style="font-size:.7rem;font-weight:900">출력센터</span></button>
+    <button type="button" onclick="openRoleAwareSettings()" style="border:0;background:transparent;padding:7px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">⚙️</span><span style="font-size:.7rem;font-weight:900">${outputEsc(settingsLabel)}</span></button>`;
+}
+function ensureMobileBottomMore(){
+  if(!isMobileOutputCenter()) return;
+  const nav=document.querySelector('.nav-tabs');
+  if(!nav) return;
+  // PHASE114에서 만든 모바일 출력 탭은 사용하지 않는다.
+  nav.querySelector('.nav-tab[data-page="output"]')?.remove();
+  let more=nav.querySelector('.nav-tab[data-mobile-more="1"]');
+  if(!more){
+    more=document.createElement('div');
+    more.className='nav-tab';
+    more.dataset.mobileMore='1';
+    more.innerHTML='<span style="font-weight:900">•••</span> 더보기';
+    more.onclick=(e)=>{e.preventDefault();e.stopPropagation();openMobileMoreMenu();};
+    nav.appendChild(more);
+  }
+  more.style.display='';
+}
+function ensureKimhaeMobileNavigation(){
+  if(!isMobileOutputCenter()) return;
+  ensureMobileHomeQuickMenu();
+  ensureMobileBottomMore();
+  ensureMobileMoreMenu();
+  // PHASE113/114의 헤더 출력 버튼은 새 구조에서는 중복이므로 제거한다.
+  ge('mobileOutputCenterHeaderBtn')?.remove();
+}
 function installPublicOutputCenter(){
   const mobile=isMobileOutputCenter();
-  // 네비게이션 탭은 PC/모바일 공통으로 보장하되, 모바일에서는 전용 팝업을 연다.
   let existingTab=document.querySelector('.nav-tab[data-page="output"]');
   const nav=document.querySelector('.nav-tabs');
   const bracketTab=nav?.querySelector('[data-page="bracket"]');
+  if(mobile){
+    // PHASE115: 모바일 하단 네비에는 출력센터를 직접 끼워 넣지 않고 '더보기'에서 연다.
+    // 동적 page도 만들지 않아 슬라이더/하단메뉴와 충돌하지 않게 한다.
+    existingTab?.remove();
+    document.getElementById('page-output')?.remove();
+    ensureMobileOutputCenter();
+    ensureKimhaeMobileNavigation();
+    return;
+  }
   if(!existingTab&&nav&&bracketTab){
     const tab=document.createElement('div');
     tab.className='nav-tab';tab.dataset.page='output';
@@ -24197,16 +24325,6 @@ function installPublicOutputCenter(){
     tab.textContent='🖨️ 출력센터';
     bracketTab.insertAdjacentElement('afterend',tab);
     existingTab=tab;
-  }
-  if(mobile){
-    // 모바일에서는 동적 page를 main-content 끝에 붙이지 않는다. 페이지 슬라이더와 충돌하기 때문.
-    document.getElementById('page-output')?.remove();
-    ensureMobileOutputCenter();
-    ensureMobileOutputEntryPoints();
-    // 일부 모바일 브라우저/PWA에서 헤더가 늦게 구성되는 경우를 대비해 재확인한다.
-    setTimeout(ensureMobileOutputEntryPoints,120);
-    setTimeout(ensureMobileOutputEntryPoints,600);
-    return;
   }
   const existing=document.getElementById('page-output');
   if(existing)return;
@@ -24867,7 +24985,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,ensureMobileHomeQuickMenu,ensureMobileBottomMore,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
@@ -24906,9 +25024,9 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
   if(isMobileOutputCenter()){
-    ensureMobileOutputEntryPoints();
-    setTimeout(ensureMobileOutputEntryPoints,200);
-    setTimeout(ensureMobileOutputEntryPoints,900);
+    ensureKimhaeMobileNavigation();
+    setTimeout(ensureKimhaeMobileNavigation,200);
+    setTimeout(ensureKimhaeMobileNavigation,900);
   }
   installRegSaveMenu44();
   setTimeout(installRegSaveMenu44,300);
