@@ -7091,6 +7091,149 @@ function isFirstAppearancePlayer(name, club, currentTid){
   return true;
 }
 
+function normalizeCareerValue(v){
+  return String(v==null?'':v).trim();
+}
+function findIndividualPlayerMeta(name, club=''){
+  try{
+    const nn=String(name||'').trim();
+    const cc=String(club||'').trim();
+    if(!nn) return null;
+    for(const list of Object.values(G.teams||{})){
+      for(const team of (list||[])){
+        for(const p of (team?.individualPlayers||[])){
+          const pName=String(p?.name||'').trim();
+          if(pName!==nn) continue;
+          const pClub=String(p?.clubsRaw||team?.club||'').trim();
+          const clubOk=!cc || pClub===cc || baseClub(pClub)===baseClub(cc) || parseClubAliases(pClub).includes(baseClub(cc));
+          if(!clubOk) continue;
+          return {
+            name: pName,
+            club: pClub,
+            phone: formatPhoneLoose(String(p?.phone||'')),
+            career: normalizeCareerValue(p?.career||''),
+            note: String(team?.note||'').trim()
+          };
+        }
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+function getPlayerContactInfo(name, club='', phone='', career=''){
+  try{
+    const nn=String(name||'').trim();
+    const cc=String(club||'').trim();
+    const info={phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:cc,note:''};
+    const fromTeam=findIndividualPlayerMeta(nn, cc);
+    if(fromTeam){
+      if(!info.phone && fromTeam.phone) info.phone=fromTeam.phone;
+      if(!info.career && fromTeam.career) info.career=fromTeam.career;
+      if(!info.club && fromTeam.club) info.club=fromTeam.club;
+      if(fromTeam.note) info.note=fromTeam.note;
+    }
+    const candidates=[];
+    if(cc){
+      candidates.push(pKey(nn, cc));
+      const bc=baseClub(cc);
+      if(bc && bc!==cc) candidates.push(pKey(nn, bc));
+    }
+    for(const key of candidates){
+      const p=G.players?.[key];
+      if(!p) continue;
+      if(!info.phone && p.phone) info.phone=formatPhoneLoose(String(p.phone));
+      if(!info.career && p.career) info.career=normalizeCareerValue(p.career);
+      if(!info.club && (p.club || pKeyParse(key).club)) info.club=String(p.club||pKeyParse(key).club||'').trim();
+    }
+    for(const [key,p] of Object.entries(G.players||{})){
+      const parsed=pKeyParse(key);
+      if(String(p?.name||parsed.name||'').trim()!==nn) continue;
+      if(cc){
+        const pClub=String(p?.club||parsed.club||'').trim();
+        const pBase=baseClub(pClub);
+        const clubBase=baseClub(cc);
+        const clubs=[pClub,pBase].filter(Boolean);
+        if(!clubs.includes(cc) && !(clubBase && clubs.includes(clubBase))) continue;
+      }
+      if(!info.phone && p?.phone) info.phone=formatPhoneLoose(String(p.phone));
+      if(!info.career && p?.career) info.career=normalizeCareerValue(p.career);
+      if(!info.club && (p?.club||parsed.club)) info.club=String(p?.club||parsed.club||'').trim();
+      break;
+    }
+    return info;
+  }catch(e){
+    return {phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:String(club||'').trim(),note:''};
+  }
+}
+function getPlayerPhone(name, club=''){
+  return getPlayerContactInfo(name, club).phone||'';
+}
+function getPlayerCareer(name, club=''){
+  return getPlayerContactInfo(name, club).career||'';
+}
+function renderClickablePlayerName(name, club='', phone='', style='', career=''){
+  const nm=String(name||'').trim();
+  if(!nm) return '-';
+  const info=getPlayerContactInfo(nm, club, phone, career);
+  const baseStyle=`cursor:pointer;${style||''}`;
+  return `<span onclick="openPlayerContact('${esc(nm)}','${esc(info.club||club||'')}','${esc(info.phone||'')}','${esc(info.career||'')}')" style="${baseStyle}">${nm}</span>`;
+}
+function renderClickablePlayerNames(names=[], club='', phones=[], careers=[]){
+  try{
+    return (names||[]).map((nm,idx)=>renderClickablePlayerName(nm, club, Array.isArray(phones)?phones[idx]:'', '', Array.isArray(careers)?careers[idx]:'')).join(' / ');
+  }catch(e){ return (names||[]).join(' / '); }
+}
+function openPlayerContact(name, club='', phone='', career=''){
+  try{
+    const nm=String(name||'').trim()||'선수';
+    const info=getPlayerContactInfo(nm, club, phone, career);
+    const raw=String(info.phone||'').trim();
+    const clean=raw.replace(/[^0-9+]/g,'');
+    const body=ge('mPlayerQuickContactBody');
+    const title=ge('mPlayerQuickContactTitle');
+    const callBtn=ge('mPlayerQuickContactCall');
+    const smsBtn=ge('mPlayerQuickContactSms');
+    const copyBtn=ge('mPlayerQuickContactCopy');
+    if(title) title.textContent=`📱 ${nm}`;
+    if(body){
+      body.innerHTML=`<div style="display:grid;gap:10px">
+        <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+          <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">전화번호</div>
+          <div style="font-size:1rem;font-weight:900;color:var(--text)">${raw||'미등록'}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">구력</div>
+            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.career||'미입력'}</div>
+          </div>
+          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">소속</div>
+            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.club||club||'-'}</div>
+          </div>
+        </div>
+        ${info.note?`<div style="padding:10px 12px;background:#fff8df;border:1px solid #f6d365;border-radius:12px;font-size:.82rem;line-height:1.6;color:#7a5600"><b>비고</b><br>${info.note}</div>`:''}
+      </div>`;
+    }
+    if(callBtn){
+      callBtn.disabled=!clean;
+      callBtn.onclick=()=>{ if(clean) location.href=`tel:${clean}`; };
+    }
+    if(smsBtn){
+      smsBtn.disabled=!clean;
+      smsBtn.onclick=()=>{ if(clean) location.href=`sms:${clean}`; };
+    }
+    if(copyBtn){
+      copyBtn.onclick=async ()=>{
+        if(!raw){ toast('전화번호가 등록되지 않았습니다','info'); return; }
+        const copied=await copyTextSafe(raw);
+        toast(copied?'번호 복사 완료 ✅':'번호를 수동으로 복사해 주세요','success');
+      };
+    }
+    om('mPlayerQuickContact');
+  }catch(e){
+    console.warn('openPlayerContact error', e);
+  }
+}
 function rosterPlayerHTML(name, club, tid){
   const mark=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
