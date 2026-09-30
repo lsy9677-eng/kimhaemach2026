@@ -7422,6 +7422,11 @@ async function persistIndividualPlayerMeta(individualPlayers=[]){
     }
   }catch(e){ console.warn('persistIndividualPlayerMeta failed', e); }
 }
+let REGISTER_DIVISION_FILTER='all';
+function setRegisterDivisionFilter(div){
+  REGISTER_DIVISION_FILTER=String(div||'all');
+  renderRegisterDivisionOverview();
+}
 function renderRegisterDivisionOverview(){
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
@@ -7437,31 +7442,48 @@ function renderRegisterDivisionOverview(){
   const isOpen=t.status==='open';
   const selected=ge('regDS')?.value||'';
   const divisions=(t.divisions||[]).slice().sort((a,b)=>{
-    const order={'금':1,'은':2,'동':3,'테린이':4};
+    const order={'금':1,'은':2,'동':3,'테린이':4,'여성부':5};
     return (order[a]||99)-(order[b]||99);
   });
-  // 필터 안내 배너
+  if(REGISTER_DIVISION_FILTER!=='all' && !divisions.includes(REGISTER_DIVISION_FILTER)) REGISTER_DIVISION_FILTER='all';
+  const visibleDivisions=REGISTER_DIVISION_FILTER==='all' ? divisions : divisions.filter(d=>d===REGISTER_DIVISION_FILTER);
+
+  // 내 클럽 필터 안내 배너
   const _filterBanner = (MY_CLUB_FILTER && REG_CLUB)
     ? `<div style="padding:8px 12px;background:#dcfce7;border:1.5px solid #16a34a;border-radius:10px;font-size:.8rem;color:#166534;font-weight:600;margin-bottom:10px">
         🏆 ${REG_CLUB} 팀만 표시 중 (같은 클럽 다른 팀은 숨김) &nbsp;<button onclick="toggleMyClubFilter('register')" style="font-size:.74rem;padding:2px 8px;border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
       </div>` : '';
-  box.innerHTML=_filterBanner+divisions.map(div=>{
+
+  // PHASE103: 스크롤 바로가기 대신 부서 필터. 전체/부서 버튼을 누르면 해당 부서 카드만 표시한다.
+  const isIndiv=isIndividualTournament(t);
+  const filterButtons=[
+    {value:'all',label:'전체',count:divisions.reduce((sum,d)=>sum+(G.teams[tid+'_'+d]||[]).length,0)},
+    ...divisions.map(d=>({value:d,label:dl(d),count:(G.teams[tid+'_'+d]||[]).length}))
+  ];
+  const _divisionFilterBar = divisions.length
+    ? `<div style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
+        <div style="font-size:.7rem;font-weight:900;color:#64748b;margin:0 4px 7px">📂 부서별 보기</div>
+        <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
+          ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
+        </div>
+      </div>`
+    : '';
+
+  box.innerHTML=_filterBanner+_divisionFilterBar+visibleDivisions.map((div)=>{
     const key=tid+'_'+div;
     const allTeams=G.teams[key]||[];
-    // 내 클럽 필터 ON 시 내 클럽 팀만 표시
     const bc = REG_CLUB ? baseClub(REG_CLUB) : '';
     const teams = (MY_CLUB_FILTER && bc)
       ? allTeams
           .map((tm,origIdx)=>({...tm,_origIdx:origIdx}))
           .filter(tm=>baseClub(tm.club||'')===bc || tm.club===REG_CLUB)
       : allTeams.map((tm,origIdx)=>({...tm,_origIdx:origIdx}));
-    const totalPlayers=teams.reduce((s,tm)=>s+((tm.players||[]).length),0);
+    const totalPlayers=teams.reduce((sum,tm)=>sum+((tm.players||[]).length),0);
     const isSel=selected===div;
     const canRegister=isIndividualTournament(t) ? isOpen : ((AD||REG||isPublicTeamRegistrationEnabled()) && (AD||isOpen) && (AD||!isRegDeadlinePassed()));
-    // 내 클럽 필터 ON 시 내 클럽이 있는 부서만 강조
     const hasMyTeam = bc && allTeams.some(tm=>baseClub(tm.club||'')===bc||tm.club===REG_CLUB);
     const borderColor = MY_CLUB_FILTER && hasMyTeam ? '#16a34a' : isSel ? '#d4a017' : '#dbe4f0';
-    return `<div class="card" style="margin-bottom:14px;border-top:3px solid ${borderColor}">
+    return `<div class="card" data-reg-division="${esc(div)}" style="margin-bottom:14px;border-top:3px solid ${borderColor}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="dpill ${dc(div)}">${dl(div)}</span>
@@ -7481,6 +7503,7 @@ function renderRegisterDivisionOverview(){
 }
 
 function selectRegDivision(div){
+  REGISTER_DIVISION_FILTER=String(div||'all');
   const tid=ge('regTS')?.value||'';
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t){ toast('대회를 먼저 선택하세요','info'); return; }
@@ -24536,7 +24559,7 @@ function printOutputCenter(){
 Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
-  onRegTC,renderRL,renderRegisterDivisionOverview,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
+  onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
   onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetPrelimDrawOnly,resetMainDrawOnly,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,openPyramidSlotQuickEdit,savePyramidSlotQuickEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,setOperationViewMode,
