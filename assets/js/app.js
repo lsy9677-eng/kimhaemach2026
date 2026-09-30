@@ -24142,8 +24142,41 @@ function ensureMobileOutputCenter(){
   }
   return overlay;
 }
+function ensureMobileOutputEntryPoints(){
+  if(!isMobileOutputCenter()) return;
+
+  // 1) 모바일 헤더에 항상 보이는 출력센터 바로가기
+  const quickBtn=document.getElementById('mobileQuickMenuBtn');
+  const headerActions=quickBtn?.parentElement || document.querySelector('.header-actions');
+  if(headerActions && !document.getElementById('mobileOutputCenterHeaderBtn')){
+    const btn=document.createElement('button');
+    btn.id='mobileOutputCenterHeaderBtn';
+    btn.type='button';
+    btn.className='btn-sm';
+    btn.textContent='🖨️ 출력';
+    btn.setAttribute('aria-label','출력센터 열기');
+    btn.style.cssText='display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#0f1e3a;border:1.5px solid rgba(255,255,255,.72);font-weight:900;white-space:nowrap;padding:5px 8px;font-size:.72rem;border-radius:8px;';
+    btn.onclick=(e)=>{e.preventDefault();e.stopPropagation();openMobileOutputCenter();};
+    if(quickBtn) quickBtn.insertAdjacentElement('beforebegin',btn); else headerActions.appendChild(btn);
+  }
+
+  // 2) ☰ 빠른 메뉴 안에도 출력센터 항목을 항상 보장
+  const quickBody=document.querySelector('#mMobileQuickMenu .modal-body');
+  if(quickBody && !quickBody.querySelector('[data-mobile-output-center]')){
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='btn btn-outline';
+    btn.dataset.mobileOutputCenter='1';
+    btn.style.justifyContent='flex-start';
+    btn.textContent='🖨️ 출력센터';
+    btn.onclick=()=>{cm('mMobileQuickMenu');openMobileOutputCenter();};
+    const firstShortcut=[...quickBody.querySelectorAll('button')].find(b=>/대진표|시합결과/.test(b.textContent||''));
+    if(firstShortcut) firstShortcut.insertAdjacentElement('beforebegin',btn); else quickBody.appendChild(btn);
+  }
+}
 function openMobileOutputCenter(){
   ensureMobileOutputCenter();
+  ensureMobileOutputEntryPoints();
   const overlay=document.getElementById('mMobileOutputCenter');
   if(overlay)overlay.classList.add('open');
   setTimeout(()=>initOutputCenter(),0);
@@ -24166,9 +24199,13 @@ function installPublicOutputCenter(){
     existingTab=tab;
   }
   if(mobile){
-    // 모바일에서 동적 page를 main-content 끝에 붙이지 않는다. 페이지 슬라이더와 충돌하기 때문.
+    // 모바일에서는 동적 page를 main-content 끝에 붙이지 않는다. 페이지 슬라이더와 충돌하기 때문.
     document.getElementById('page-output')?.remove();
     ensureMobileOutputCenter();
+    ensureMobileOutputEntryPoints();
+    // 일부 모바일 브라우저/PWA에서 헤더가 늦게 구성되는 경우를 대비해 재확인한다.
+    setTimeout(ensureMobileOutputEntryPoints,120);
+    setTimeout(ensureMobileOutputEntryPoints,600);
     return;
   }
   const existing=document.getElementById('page-output');
@@ -24830,7 +24867,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,openMobileOutputCenter,closeMobileOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
@@ -24868,6 +24905,11 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
 
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
+  if(isMobileOutputCenter()){
+    ensureMobileOutputEntryPoints();
+    setTimeout(ensureMobileOutputEntryPoints,200);
+    setTimeout(ensureMobileOutputEntryPoints,900);
+  }
   installRegSaveMenu44();
   setTimeout(installRegSaveMenu44,300);
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
