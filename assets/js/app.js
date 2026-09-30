@@ -7207,7 +7207,7 @@ function openPlayerContact(name, club='', phone='', career=''){
   }
 }
 function rosterPlayerHTML(name, club, tid){
-  const mark=isFirstAppearancePlayer(name, club, tid);
+  const mark=!!AD && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
   const clickable=renderClickablePlayerName(name, club, info.phone||'', 'color:var(--primary);font-weight:700', info.career||'');
   return `${mark?'<span title="첫 출전자" aria-label="첫 출전자" style="color:#f59e0b;font-weight:1000;margin-right:3px;text-shadow:0 1px 0 #fff">★</span>':''}${clickable}`;
@@ -7367,7 +7367,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
     <div style="padding:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <div style="font-size:.72rem;color:#64748b;font-weight:800">${memberLabel}</div>
-        ${(!isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)))?'<div style="font-size:.68rem;color:#b45309;font-weight:800">★ 첫 출전자</div>':''}
+        ${(AD && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)))?'<div style="font-size:.68rem;color:#b45309;font-weight:800">★ 첫 출전자</div>':''}
       </div>
       ${buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual})}
     </div>
@@ -18840,8 +18840,8 @@ function openRoster(tid,div){
   const unitLabel=isIndividual?'조':'팀';
   let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:8px 14px;background:var(--primary);color:white;border-radius:var(--radius-lg)"><b style="font-size:1.2rem">${teams.length}</b><span style="opacity:.8">${unitLabel}</span><span style="opacity:.4">|</span><b style="font-size:1.2rem">${total}</b><span style="opacity:.8">명</span></div>`;
   // 팀전만 첫 출전 안내 표시
-  if(!isIndividual){
-    html+=`<div style="margin:-2px 0 12px;padding:8px 12px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:var(--radius);font-size:.82rem;font-weight:700;color:#92400e">🟠 주황 배경 표시는 이 대회 첫 출전 선수입니다.</div>`;
+  if(AD && !isIndividual){
+    html+=`<div style="margin:-2px 0 12px;padding:8px 12px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:var(--radius);font-size:.82rem;font-weight:700;color:#92400e">★ 표시는 이 대회 첫 출전 선수입니다. (관리자 전용)</div>`;
   }
   teams.forEach((team,i)=>{
     if(isIndividual){
@@ -18853,7 +18853,7 @@ function openRoster(tid,div){
     }else{
       const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
       html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-      <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
+      <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=!!AD && isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
     }
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
@@ -20115,7 +20115,7 @@ async function _buildRegListEl44(){
       html+=`<div style="font-size:.78rem;color:#888;padding:4px 6px">등록된 팀 없음</div>`;
     }else{
       // 첫 출전 선수 안내 문구
-      html+=`<div style="margin-bottom:8px;padding:5px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:8px;font-size:.76rem;font-weight:700;color:#92400e">🟠 주황 배경은 이 대회 첫 출전 선수입니다.</div>`;
+      if(AD) html+=`<div style="margin-bottom:8px;padding:5px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:8px;font-size:.76rem;font-weight:700;color:#92400e">★ 첫 출전자 표시는 관리자에게만 보입니다.</div>`;
       sorted.forEach(({team,i})=>{
         const teamName=tdn(team,key,i);
         const players=(team.players||[]).filter(Boolean);
@@ -20129,11 +20129,11 @@ async function _buildRegListEl44(){
           </div>
           <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px">
             ${main.map((p,idx)=>{
-              const isD=isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=!!AD && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f0f4fa'};border:${isD?'1.5px solid #f59e0b':'1px solid #cdd5e0'};border-radius:6px;padding:3px 9px;font-size:.82rem;font-weight:${isD?'800':'600'};color:${isD?'#92400e':'inherit'};display:inline-flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'#0f1e3a'};color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${p}</span>`;
             }).join('')}
             ${sub.map(p=>{
-              const isD=isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=!!AD && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f8f9fa'};border:${isD?'1.5px solid #f59e0b':'1px dashed #b0b8c8'};border-radius:6px;padding:3px 9px;font-size:.78rem;color:${isD?'#92400e':'#666'};font-weight:${isD?'800':'400'}">후보. ${p}</span>`;
             }).join('')}
           </div>
