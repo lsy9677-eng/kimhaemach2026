@@ -9637,7 +9637,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     </div>
     `}
     <div class="sf-flow" style="margin-top:12px">
-      <div class="sf-step"><div class="sf-dot ${s1?'sf-done':'sf-pend'}">${s1?'✓':1}</div><div class="sf-lbl">${isIndivKey?'접수':'팀등록'}<br>${teams.length}${isIndivKey?'조':'팀'}</div></div>
+      <div class="sf-step"><div class="sf-dot ${s1?'sf-done':'sf-pend'}">${s1?'✓':'👥'}</div><div class="sf-lbl">${isIndivKey?'접수':'팀등록'}<br><span style="white-space:nowrap">${teams.length}${isIndivKey?'조':'팀'}</span></div></div>
       <div class="sf-step"><div class="sf-dot ${s2?'sf-done':'sf-pend'}">${s2?'✓':2}</div><div class="sf-lbl">추첨<br>${s2?'완료':'대기'}</div></div>
       <div class="sf-step"><div class="sf-dot ${s3?'sf-done':s2?'sf-active':'sf-pend'}">${s3?'✓':3}</div><div class="sf-lbl">예선<br>${gMs.length?gDone+'/'+gMs.length:'미시작'}</div></div>
       ${isGroupKO?`<div class="sf-step" style="cursor:pointer" onclick="jumpToMainBracketSection('${tid}','${div}')"><div class="sf-dot ${s4?'sf-done':s3?'sf-active':'sf-pend'}">${s4?'🏆':4}</div><div class="sf-lbl">본선<br>${shownMainTotal?shownMainDone+'/'+shownMainTotal:'미시작'}</div></div>`:''}
