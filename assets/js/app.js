@@ -20010,6 +20010,48 @@ async function bracketToPDF(){
   }catch(e){toast('PDF 저장 실패: '+e.message,'error');}
 }
 
+
+// PHASE104: 팀 등록 내보내기 버튼을 하나의 저장 메뉴로 통합
+function installRegSaveMenu44(){
+  const buttons=[...document.querySelectorAll('button[onclick]')].filter(b=>{
+    const oc=String(b.getAttribute('onclick')||'');
+    return /saveRegList(Image|Excel|PDF)44/.test(oc);
+  });
+  if(!buttons.length) return;
+  const first=buttons[0];
+  const parent=first.parentElement;
+  if(!parent) return;
+  if(document.getElementById('regUnifiedSaveBtn44')){
+    buttons.forEach(b=>b.style.display='none');
+    return;
+  }
+  buttons.forEach(b=>b.style.display='none');
+  const wrap=document.createElement('div');
+  wrap.id='regUnifiedSaveWrap44';
+  wrap.style.cssText='position:relative;display:inline-flex;flex:0 0 auto';
+  wrap.innerHTML=`<button id="regUnifiedSaveBtn44" class="btn btn-outline" type="button" onclick="toggleRegSaveMenu44(event)" style="white-space:nowrap;padding:8px 14px;font-size:.82rem;font-weight:800">💾 저장 ▾</button>
+    <div id="regUnifiedSaveMenu44" style="display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:178px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:6px;box-shadow:0 12px 28px rgba(15,23,42,.18);z-index:5000">
+      <button type="button" onclick="closeRegSaveMenu44();saveRegListImage44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">🖼 이미지 저장</button>
+      <button type="button" onclick="closeRegSaveMenu44();saveRegListExcel44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">📊 엑셀 저장</button>
+      <button type="button" onclick="closeRegSaveMenu44();saveRegListPDF44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">📄 PDF 저장</button>
+    </div>`;
+  parent.insertBefore(wrap, first);
+}
+function toggleRegSaveMenu44(ev){
+  ev?.stopPropagation?.();
+  const menu=ge('regUnifiedSaveMenu44');
+  if(!menu) return;
+  menu.style.display=menu.style.display==='none'||!menu.style.display?'block':'none';
+}
+function closeRegSaveMenu44(){
+  const menu=ge('regUnifiedSaveMenu44');
+  if(menu) menu.style.display='none';
+}
+document.addEventListener('click',e=>{
+  const wrap=ge('regUnifiedSaveWrap44');
+  if(wrap && !wrap.contains(e.target)) closeRegSaveMenu44();
+});
+
 // ── 팀 등록 명단 내보내기 (로그인 불필요) ────────────────────────────────
 async function _buildRegListEl44(){
   const tid=ge('regTS')?.value||'';
@@ -24578,7 +24620,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   onRegClubChange,onRegContactInput,saveRegContact,
   renderAdminContactList,saveContactFromAdmin,renderAdminDirectorEmailSection,renderAdminNoticeSection,toggleContactList,saveFloatingNoticeSettings,clearFloatingNotice,hideFloatingNoticeForNow,
   prefillNoticeMsg,renderNoticeContactBtns,captureAndShareBracket,
-  saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,saveRegistryFilteredImageHQ,
+  saveRegListImage44,saveRegListExcel44,saveRegListKakao44,saveRegListPDF44,toggleRegSaveMenu44,closeRegSaveMenu44,saveRegistryFilteredImageHQ,
   toggleClubSel,selAllClubs,sendSmsSelected,sendSmsAll,sendKakaoSelected,sendKakaoAll,copyMsgOnly,openKakaoApp,triggerOrderPhoto,triggerSimpleOrderPhoto,openPendingDetailCenter,openPendingDetailMatch,openPendingDetailPhoto,openManualPrelimDraw,saveManualPrelimDraw,openManualMainDraw,setManualMainByeMode,saveManualMainDraw,syncManualDrawSelections,clearManualDraw,swapManualDrawSlots,
   gDS,om,cm,toast,ge,esc,setRbSc,togglePlayerDropdown,choosePlayerFromDropdown,removeSelectedPlayerFromDropdown,
   buildDrawPresets,updateAdvPresets,updateMainSizeDisplay,calcGroupPresets,updateDrawAllowedCourtsSummary,toggleAllDrawAllowedCourts,
@@ -24594,6 +24636,8 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
 
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
+  installRegSaveMenu44();
+  setTimeout(installRegSaveMenu44,300);
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
   const yr = new Date().getFullYear();
   document.querySelectorAll('.reg-year-label').forEach(el=>{
