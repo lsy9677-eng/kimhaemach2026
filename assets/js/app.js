@@ -7525,6 +7525,98 @@ function _dedupePastRosterEntries(entries=[]){
     return String(b.tid||'').localeCompare(String(a.tid||''));
   });
 }
+function _pastRosterCurrentContext(){
+  const tid=ge('regTS')?.value||'';
+  const div=ge('regDS')?.value||'';
+  const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid||''))||null;
+  return {tid,div,t};
+}
+function _pastRosterVisibleSlots(){
+  const out=[];
+  for(let i=1;i<=12;i++){
+    const el=ge('p'+i);
+    if(!el) continue;
+    const slot=el.closest('.pslot');
+    const hidden=slot && (slot.style.display==='none' || getComputedStyle(slot).display==='none');
+    if(!hidden) out.push(el);
+  }
+  return out;
+}
+function _pastRosterExistingNames(){
+  return _pastRosterVisibleSlots().map(el=>String(el.value||'').trim()).filter(Boolean);
+}
+function _pastRosterMemberState(name,club){
+  const {t}= _pastRosterCurrentContext();
+  if(!name) return {ok:false,required:false};
+  const required=!!(t && shouldUsePlayerRegistry(t));
+  if(!required) return {ok:true,required:false};
+  return {ok:!!findMemberRegistry2026(name,club),required:true};
+}
+function _pastRosterAddNames(names=[],club='',mode='append'){
+  const clean=[...new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+  if(!clean.length){ toast('선택한 선수가 없습니다','info'); return false; }
+  const {tid,div,t}=_pastRosterCurrentContext();
+  if(!tid||!div){ toast('현재 대회와 부서를 먼저 선택하세요','error'); return false; }
+  if(isIndividualTournament(t)){ toast('지난대회 단체전 명단 불러오기는 단체전 팀등록에서 사용할 수 있습니다','info'); return false; }
+  updateRegisterSlots();
+  const slots=_pastRosterVisibleSlots();
+  if(!slots.length){ toast('현재 부서의 선수 입력칸을 찾을 수 없습니다','error'); return false; }
+
+  const existing=mode==='replace' ? [] : _pastRosterExistingNames();
+  const existingNorm=new Set(existing.map(normName));
+  const add=clean.filter(n=>!existingNorm.has(normName(n)));
+  if(mode==='append' && !add.length){ toast('선택한 선수는 이미 현재 명단에 있습니다','info'); return false; }
+
+  const missing=missingMembers2026(mode==='replace'?clean:add, REG_CLUB||club, t);
+  if(missing.length){
+    const proceed=confirm(`${REG_YEAR}년 등록선수 명단에 없는 선수가 있습니다.\n\n미등록: ${missing.join(', ')}\n\n현재 입력칸에 불러오기는 가능하지만 최종 팀 등록 시 제한될 수 있습니다. 계속할까요?`);
+    if(!proceed) return false;
+  }
+
+  if(mode==='replace'){
+    slots.forEach(el=>{ el.value=''; try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} });
+    clean.slice(0,slots.length).forEach((name,i)=>{ slots[i].value=name; try{ slots[i].dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} });
+    if(clean.length>slots.length) toast(`현재 부서 입력칸은 ${slots.length}명까지라 ${clean.length-slots.length}명은 넣지 못했습니다`,'info');
+    else toast(`${Math.min(clean.length,slots.length)}명을 현재 명단에 불러왔습니다`,'success');
+  }else{
+    const empty=slots.filter(el=>!String(el.value||'').trim());
+    add.slice(0,empty.length).forEach((name,i)=>{ empty[i].value=name; try{ empty[i].dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} });
+    if(add.length>empty.length) toast(`빈 입력칸이 ${empty.length}개라 ${add.length-empty.length}명은 추가하지 못했습니다`,'info');
+    else toast(`${Math.min(add.length,empty.length)}명을 현재 명단에 추가했습니다`,'success');
+  }
+  try{ renderRegistrationRosterPreview(REG_CLUB||club, ge('regNo')?.value||'', _pastRosterExistingNames(), ''); }catch(e){}
+  return true;
+}
+function _pastRosterTogglePlayer(rowIdx,playerIdx){
+  const cb=ge(`pastRosterCb_${rowIdx}_${playerIdx}`);
+  if(!cb) return;
+  cb.checked=!cb.checked;
+  const card=cb.closest('[data-past-player]');
+  if(card){
+    card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0';
+    card.style.background=cb.checked?'#eff6ff':'#f8fafc';
+  }
+}
+function _pastRosterSelectAll(rowIdx,checked=true){
+  document.querySelectorAll(`input[data-past-row="${rowIdx}"]`).forEach(cb=>{
+    cb.checked=!!checked;
+    const card=cb.closest('[data-past-player]');
+    if(card){ card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0'; card.style.background=cb.checked?'#eff6ff':'#f8fafc'; }
+  });
+}
+function _pastRosterApplySelected(rowIdx,club=''){
+  const names=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]:checked`)].map(cb=>cb.dataset.name||'').filter(Boolean);
+  if(_pastRosterAddNames(names,club,'append')) cm('mPastClubRoster');
+}
+function _pastRosterApplyAll(rowIdx,club=''){
+  const names=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]`)].map(cb=>cb.dataset.name||'').filter(Boolean);
+  if(!names.length){ toast('불러올 명단이 없습니다','info'); return; }
+  const existing=_pastRosterExistingNames();
+  if(existing.length){
+    if(!confirm(`현재 입력 중인 명단 ${existing.length}명이 있습니다.\n지난대회 명단 전체로 교체할까요?`)) return;
+  }
+  if(_pastRosterAddNames(names,club,'replace')) cm('mPastClubRoster');
+}
 function _renderPastClubRosterModal(club,entries=[]){
   let modal=ge('mPastClubRoster');
   if(!modal){
@@ -7533,23 +7625,37 @@ function _renderPastClubRosterModal(club,entries=[]){
     modal.className='modal-overlay';
     document.body.appendChild(modal);
   }
+  const {div:currentDiv}= _pastRosterCurrentContext();
   const rows=_dedupePastRosterEntries(entries).slice(0,30);
   const body=rows.length ? rows.map((x,i)=>{
     const players=Array.isArray(x.players)?x.players:[];
     const mainCount=Number(x.mainPlayerCount||0)>0?Math.min(players.length,Number(x.mainPlayerCount)):players.length;
     const main=players.slice(0,mainCount),subs=players.slice(mainCount);
-    const playerGrid=main.length?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${main.map((n,pi)=>`<div style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:#10213d;color:#fff;font-size:.62rem;margin-right:5px">${pi+1}</span>${esc(n)}</div>`).join('')}</div>`:'<div style="font-size:.76rem;color:#94a3b8">선수 명단 없음</div>';
-    const subsHtml=subs.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0;font-size:.73rem;color:#64748b"><b>후보</b> · ${subs.map(esc).join(' · ')}</div>`:'';
+    const renderPlayer=(n,pi,isSub=false)=>{
+      const st=_pastRosterMemberState(n,club);
+      const idx=isSub?main.length+pi:pi;
+      const badge=st.required ? (st.ok?'<span style="font-size:.6rem;color:#15803d;font-weight:900">등록</span>':'<span style="font-size:.6rem;color:#dc2626;font-weight:900">미등록</span>') : '';
+      return `<label data-past-player style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="event.preventDefault();_pastRosterTogglePlayer(${i},${idx})"><input id="pastRosterCb_${i}_${idx}" data-past-row="${i}" data-name="${esc(n)}" type="checkbox" style="width:17px;height:17px;accent-color:#2563eb;flex:0 0 auto"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:${isSub?'#64748b':'#10213d'};color:#fff;font-size:.62rem;flex:0 0 auto">${idx+1}</span><span style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n)}</span>${badge}</label>`;
+    };
+    const playerGrid=main.length?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${main.map((n,pi)=>renderPlayer(n,pi,false)).join('')}</div>`:'<div style="font-size:.76rem;color:#94a3b8">선수 명단 없음</div>';
+    const subsHtml=subs.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.7rem;color:#64748b;font-weight:900;margin-bottom:5px">후보</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${subs.map((n,pi)=>renderPlayer(n,pi,true)).join('')}</div></div>`:'';
+    const divDiff=currentDiv && x.div && String(currentDiv)!==String(x.div);
     return `<div style="padding:12px;border:1px solid #dbe4f0;border-radius:14px;background:#fff;box-shadow:0 3px 10px rgba(15,23,42,.05)">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
-        <div style="min-width:0"><div style="font-size:.84rem;font-weight:900;color:#0f172a;line-height:1.35">${esc(x.tournamentName||'과거 대회')}</div><div style="font-size:.7rem;color:#64748b;margin-top:2px">${x.date?`📅 ${esc(x.date)}`:''}</div></div>
+        <div style="min-width:0"><div style="font-size:.84rem;font-weight:900;color:#0f172a;line-height:1.35">${esc(x.tournamentName||'과거 대회')}</div><div style="font-size:.7rem;color:#64748b;margin-top:2px">${x.date?`📅 ${esc(x.date)}`:''}${divDiff?' · <span style="color:#b45309;font-weight:800">현재 부서와 다름</span>':''}</div></div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><span class="dpill ${dc(x.div||'')}" style="font-size:.7rem">${esc(dl(x.div||''))}</span><span class="badge bg-blue" style="font-size:.68rem">${esc(x.teamLabel||x.club||'')}</span></div>
       </div>${playerGrid}${subsHtml}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center">
+        <button type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem" onclick="_pastRosterSelectAll(${i},true)">☑ 전체선택</button>
+        <button type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem" onclick="_pastRosterSelectAll(${i},false)">선택해제</button>
+        <button type="button" class="btn btn-primary" style="padding:6px 10px;font-size:.7rem" onclick="_pastRosterApplySelected(${i},'${esc(club)}')">➕ 선택 선수 추가</button>
+        <button type="button" class="btn" style="padding:6px 10px;font-size:.7rem;background:#166534;color:#fff" onclick="_pastRosterApplyAll(${i},'${esc(club)}')">📋 전체 명단 넣기</button>
+      </div>
     </div>`;
   }).join('') : `<div style="padding:28px 12px;text-align:center;color:#64748b;font-size:.82rem">확인 가능한 지난대회 명단이 없습니다.</div>`;
   modal.innerHTML=`<div class="modal-box" style="max-width:620px;width:min(94vw,620px);max-height:88vh;display:flex;flex-direction:column">
     <div class="modal-header" style="background:#10213d"><h3>📋 ${esc(club)} 지난대회 명단</h3><button class="modal-close" onclick="cm('mPastClubRoster')">✕</button></div>
-    <div style="padding:10px 14px;background:#fff8dc;border-bottom:1px solid #f2dda0;font-size:.76rem;color:#7a5200;line-height:1.5"><b>참고용 조회</b>입니다. 현재 팀 등록 명단에는 자동으로 반영되지 않습니다.</div>
+    <div style="padding:10px 14px;background:#eef6ff;border-bottom:1px solid #cfe0f5;font-size:.76rem;color:#244a73;line-height:1.5"><b>선택해서 현재 명단에 추가</b>하거나 <b>전체 명단을 한 번에 넣기</b>가 가능합니다. 입력칸에 넣은 뒤 최종 <b>팀 등록</b>을 눌러 저장하세요.</div>
     <div class="modal-body" style="padding:12px;overflow:auto;display:grid;gap:10px">${body}</div>
     <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPastClubRoster')">닫기</button></div>
   </div>`;
@@ -24988,7 +25094,7 @@ function printOutputCenter(){
 Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,ensureMobileHomeQuickMenu,ensureMobileBottomMore,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
-  onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
+  onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
   onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetPrelimDrawOnly,resetMainDrawOnly,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,openPyramidSlotQuickEdit,savePyramidSlotQuickEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,setOperationViewMode,
