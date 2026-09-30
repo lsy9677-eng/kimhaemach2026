@@ -7207,7 +7207,7 @@ function openPlayerContact(name, club='', phone='', career=''){
   }
 }
 function rosterPlayerHTML(name, club, tid){
-  const mark=!!AD && isFirstAppearancePlayer(name, club, tid);
+  const mark=!!AD && !!PLAYERS_LOADED && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
   const clickable=renderClickablePlayerName(name, club, info.phone||'', 'color:var(--primary);font-weight:700', info.career||'');
   return `${mark?'<span title="첫 출전자" aria-label="첫 출전자" style="color:#f59e0b;font-weight:1000;margin-right:3px;text-shadow:0 1px 0 #fff">★</span>':''}${clickable}`;
@@ -7342,32 +7342,30 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
   const canManage=!!(AD||REG);
   const titleBadge=isIndividual ? `${idx+1}` : `${origIdx+1}`;
   const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
-  const subText=isIndividual ? '' : `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:.72rem;font-weight:800;color:#dbeafe;white-space:nowrap">${teamCount}명</span>`;
+  const hasFirst=!!(AD && PLAYERS_LOADED && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)));
   const headerRight=canManage
-    ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
-         <button class="btn btn-outline" style="height:32px;padding:4px 9px;font-size:.72rem;font-weight:850;border-radius:9px;background:#fff;color:#1e293b;white-space:nowrap;min-width:60px;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
-         <button class="btn btn-danger" style="height:32px;padding:4px 9px;font-size:.72rem;font-weight:850;border-radius:9px;white-space:nowrap;min-width:60px;line-height:1" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
+    ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
+         <button class="btn btn-outline" style="height:28px;padding:3px 7px;font-size:.68rem;font-weight:850;border-radius:8px;background:#fff;color:#1e293b;white-space:nowrap;min-width:52px;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
+         <button class="btn btn-danger" style="height:28px;padding:3px 7px;font-size:.68rem;font-weight:850;border-radius:8px;white-space:nowrap;min-width:52px;line-height:1" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
        </div>`
     : '';
-  return `<div style="border:1px solid #d9e2ef;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 6px 18px rgba(15,23,42,.06)">
-    <div style="background:linear-gradient(180deg,#0f1f4a 0%,#0b1738 100%);padding:11px 12px 10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 170px">
-          <span style="width:24px;height:24px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:900;flex:0 0 auto;margin-top:1px">${titleBadge}</span>
-          <div style="min-width:0;flex:1 1 auto">
-            <div style="font-size:1.08rem;font-weight:950;color:#fff;line-height:1.18;letter-spacing:-.15px;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px">
-              ${subText}
-            </div>
+  return `<div style="border:1px solid #d9e2ef;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.055)">
+    <div style="background:linear-gradient(180deg,#0f1f4a 0%,#0b1738 100%);padding:9px 10px">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span style="width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:900;flex:0 0 auto">${titleBadge}</span>
+          <div style="min-width:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <div style="font-size:1rem;font-weight:950;color:#fff;line-height:1.15;letter-spacing:-.15px;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
+            ${!isIndividual?`<span style="display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:.66rem;font-weight:800;color:#dbeafe;white-space:nowrap">${teamCount}명</span>`:''}
           </div>
         </div>
         ${headerRight}
       </div>
     </div>
-    <div style="padding:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <div style="font-size:.72rem;color:#64748b;font-weight:800">${memberLabel}</div>
-        ${(AD && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)))?'<div style="font-size:.68rem;color:#b45309;font-weight:800">★ 첫 출전자</div>':''}
+    <div style="padding:10px 11px 11px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:7px">
+        <div style="font-size:.7rem;color:#64748b;font-weight:800">${memberLabel}</div>
+        ${hasFirst?'<div style="font-size:.66rem;color:#b45309;font-weight:850">★ 첫 출전자</div>':''}
       </div>
       ${buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual})}
     </div>
@@ -7377,10 +7375,10 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
 function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const list=Array.isArray(players)?players:[];
   if(!list.length){
-    return `<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.76rem;color:#64748b;text-align:center">등록된 선수가 없습니다.</div>`;
+    return `<div style="padding:10px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;font-size:.74rem;color:#64748b;text-align:center">등록된 선수가 없습니다.</div>`;
   }
   if(isIndividual){
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${list.map((name,pi)=>`<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${esc(name||'')}</span></div>`).join('')}</div>`;
+    return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${list.map((name,pi)=>`<div style="display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:36px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name||'')}</span></div>`).join('')}</div>`;
   }
   const p=Array.isArray(team?.players)?team.players:[];
   const isWV=(div==='여성부');
@@ -7391,8 +7389,8 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const mainCount=savedMainCount||(isWV?6:dbl*2);
   const mainP=p.slice(0,mainCount);
   const subP=p.slice(mainCount);
-  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`).join('')}</div>`;
-  const subHtml=subP.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #dbe4f0"><div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:6px">후보</div><div style="display:flex;flex-wrap:wrap;gap:6px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.78rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:36px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`).join('')}</div>`;
+  const subHtml=subP.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.69rem;color:#64748b;font-weight:800;margin-bottom:5px">후보</div><div style="display:flex;flex-wrap:wrap;gap:5px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.75rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
   return mainHtml+subHtml;
 }
 
@@ -7437,6 +7435,11 @@ function renderRegisterDivisionOverview(){
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
   if(!box) return;
+  // 관리자용 첫 출전자 표시는 선수 마스터 로딩 완료 후에만 판정한다.
+  // 로딩 전에는 별표를 표시하지 않아 조회 직후 잘못된 별표가 생겼다가 사라지는 현상을 막는다.
+  if(AD && !PLAYERS_LOADED && !PLAYERS_LOADING_PROMISE){
+    ensurePlayersLoaded().then(()=>{ try{ renderRegisterDivisionOverview(); }catch(e){} }).catch(()=>{});
+  }
 
   // ✅ innerHTML 갱신 전에 aoReg 폼을 body로 피신시켜 DOM 소실 방지
   const form=ge('aoReg');
