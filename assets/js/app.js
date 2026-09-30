@@ -7341,18 +7341,18 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
   const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
   const subText=isIndividual ? '' : `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:.72rem;font-weight:800;color:#dbeafe;white-space:nowrap">${teamCount}명</span>`;
   const headerRight=canManage
-    ? `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">
-         <button class="btn btn-outline" style="padding:6px 12px;font-size:.74rem;font-weight:800;border-radius:10px;background:#fff;color:#1e293b;white-space:nowrap;min-width:72px" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
-         <button class="btn btn-danger" style="padding:6px 12px;font-size:.74rem;font-weight:800;border-radius:10px;white-space:nowrap;min-width:72px" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
+    ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
+         <button class="btn btn-outline" style="height:32px;padding:4px 9px;font-size:.72rem;font-weight:850;border-radius:9px;background:#fff;color:#1e293b;white-space:nowrap;min-width:60px;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
+         <button class="btn btn-danger" style="height:32px;padding:4px 9px;font-size:.72rem;font-weight:850;border-radius:9px;white-space:nowrap;min-width:60px;line-height:1" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
        </div>`
     : '';
   return `<div style="border:1px solid #d9e2ef;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 6px 18px rgba(15,23,42,.06)">
     <div style="background:linear-gradient(180deg,#0f1f4a 0%,#0b1738 100%);padding:11px 12px 10px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1 1 180px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 170px">
           <span style="width:24px;height:24px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:900;flex:0 0 auto;margin-top:1px">${titleBadge}</span>
           <div style="min-width:0;flex:1 1 auto">
-            <div style="font-size:1rem;font-weight:900;color:#fff;line-height:1.15;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
+            <div style="font-size:1.08rem;font-weight:950;color:#fff;line-height:1.18;letter-spacing:-.15px;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px">
               ${subText}
             </div>
@@ -7374,7 +7374,7 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
     return `<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.76rem;color:#64748b;text-align:center">등록된 선수가 없습니다.</div>`;
   }
   if(isIndividual){
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">${list.map((name,pi)=>`<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${esc(name||'')}</span></div>`).join('')}</div>`;
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${list.map((name,pi)=>`<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${esc(name||'')}</span></div>`).join('')}</div>`;
   }
   const p=Array.isArray(team?.players)?team.players:[];
   const isWV=(div==='여성부');
@@ -7385,7 +7385,7 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const mainCount=savedMainCount||(isWV?6:dbl*2);
   const mainP=p.slice(0,mainCount);
   const subP=p.slice(mainCount);
-  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px">${mainP.map((n,pi)=>{const isD=isFirstAppearancePlayer(n,team?.club||'',tid);return `<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;border:1px solid ${isD?'#f59e0b':'#dbe4f0'};background:${isD?'linear-gradient(135deg,#fff8e1,#fff3cd)':'#f8fafc'};min-width:0"><span style="width:22px;height:22px;border-radius:999px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`;}).join('')}</div>`;
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${mainP.map((n,pi)=>{const isD=isFirstAppearancePlayer(n,team?.club||'',tid);return `<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid ${isD?'#f59e0b':'#dbe4f0'};background:${isD?'linear-gradient(135deg,#fff8e1,#fff3cd)':'#f8fafc'};min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`;}).join('')}</div>`;
   const subHtml=subP.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #dbe4f0"><div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:6px">후보</div><div style="display:flex;flex-wrap:wrap;gap:6px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.78rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
   return mainHtml+subHtml;
 }
