@@ -3891,7 +3891,13 @@ function handleAppPopState(ev){
 window.addEventListener('popstate', handleAppPopState);
 
 function showPage(n){
-  if(n==='output') installPublicOutputCenter();
+  if(n==='output'){
+    installPublicOutputCenter();
+    if(isMobileOutputCenter()){
+      openMobileOutputCenter();
+      return;
+    }
+  }
   if(isOperatorMode() && ['tournament','register','players'].includes(n)){
     toast('경기진행자 권한에서는 대진표/시합결과만 운영할 수 있습니다','info');
     n='bracket';
@@ -7454,6 +7460,126 @@ async function persistIndividualPlayerMeta(individualPlayers=[]){
     }
   }catch(e){ console.warn('persistIndividualPlayerMeta failed', e); }
 }
+
+// ── 경기이사 참고용: 지난대회 명단 빠른 조회 ─────────────────────────────
+function _pastRosterTournamentMeta(tid=''){
+  const id=String(tid||'');
+  return (G.tournaments||[]).find(t=>String(t?.id||'')===id) || (HIST_DATA||[]).find(t=>String(t?.id||'')===id) || null;
+}
+function _pastRosterDateValue(v=''){
+  const raw=String(v||'').trim();
+  if(!raw) return 0;
+  const m=raw.match(/(20\d{2})[^0-9]?(\d{1,2})?[^0-9]?(\d{1,2})?/);
+  if(!m) return 0;
+  return new Date(Number(m[1]),Math.max(0,Number(m[2]||1)-1),Number(m[3]||1)).getTime()||0;
+}
+function _pastRosterTeamLabel(club='', sameIndex=0, sameCount=1){
+  const c=String(club||'').trim();
+  if(sameCount<=1) return c||'팀';
+  return `${c}${String.fromCharCode(65+Math.max(0,sameIndex))}`;
+}
+function _collectPastRosterLocal(club,currentTid=''){
+  const targetBase=baseClub(club)||String(club||'').trim();
+  const out=[];
+  (HIST_DATA||[]).forEach(t=>{
+    const tid=String(t?.id||'');
+    if(!tid || tid===String(currentTid||'')) return;
+    const teams=Array.isArray(t?.teams)?t.teams:[];
+    const matched=teams.filter(tm=>(baseClub(tm?.club||'')||tm?.club||'')===targetBase);
+    matched.forEach((tm,mi)=>out.push({
+      source:'hist',tid, tournamentName:t?.name||'과거 대회', date:t?.date||'',
+      div:tm?.div||tm?.division||'', club:tm?.club||club,
+      teamLabel:_pastRosterTeamLabel(tm?.club||club,mi,matched.length),
+      players:Array.isArray(tm?.players)?tm.players.filter(Boolean):[],
+      mainPlayerCount:Number(tm?.mainPlayerCount||0)||0
+    }));
+  });
+  Object.entries(G.teams||{}).forEach(([key,arr])=>{
+    const td=_k2td(key);
+    const tid=String(td?.tid||'');
+    if(!tid || tid===String(currentTid||'')) return;
+    const meta=_pastRosterTournamentMeta(tid);
+    const teams=Array.isArray(arr)?arr:[];
+    const matched=teams.filter(tm=>(baseClub(tm?.club||'')||tm?.club||'')===targetBase);
+    matched.forEach((tm,mi)=>out.push({
+      source:'memory',tid,tournamentName:meta?.name||'과거 대회',date:meta?.date||'',
+      div:td?.div||tm?.division||'',club:tm?.club||club,
+      teamLabel:_pastRosterTeamLabel(tm?.club||club,mi,matched.length),
+      players:Array.isArray(tm?.players)?tm.players.filter(Boolean):[],
+      mainPlayerCount:Number(tm?.mainPlayerCount||0)||0
+    }));
+  });
+  return out;
+}
+function _dedupePastRosterEntries(entries=[]){
+  const seen=new Set(),out=[];
+  (entries||[]).forEach(x=>{
+    const key=[x.tid,x.div,baseClub(x.club||'')||x.club,(x.players||[]).map(normName).join('|')].join('::');
+    if(seen.has(key)) return;
+    seen.add(key);out.push(x);
+  });
+  return out.sort((a,b)=>{
+    const d=_pastRosterDateValue(b.date)-_pastRosterDateValue(a.date);
+    if(d) return d;
+    return String(b.tid||'').localeCompare(String(a.tid||''));
+  });
+}
+function _renderPastClubRosterModal(club,entries=[]){
+  let modal=ge('mPastClubRoster');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='mPastClubRoster';
+    modal.className='modal-overlay';
+    document.body.appendChild(modal);
+  }
+  const rows=_dedupePastRosterEntries(entries).slice(0,30);
+  const body=rows.length ? rows.map((x,i)=>{
+    const players=Array.isArray(x.players)?x.players:[];
+    const mainCount=Number(x.mainPlayerCount||0)>0?Math.min(players.length,Number(x.mainPlayerCount)):players.length;
+    const main=players.slice(0,mainCount),subs=players.slice(mainCount);
+    const playerGrid=main.length?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${main.map((n,pi)=>`<div style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:#10213d;color:#fff;font-size:.62rem;margin-right:5px">${pi+1}</span>${esc(n)}</div>`).join('')}</div>`:'<div style="font-size:.76rem;color:#94a3b8">선수 명단 없음</div>';
+    const subsHtml=subs.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0;font-size:.73rem;color:#64748b"><b>후보</b> · ${subs.map(esc).join(' · ')}</div>`:'';
+    return `<div style="padding:12px;border:1px solid #dbe4f0;border-radius:14px;background:#fff;box-shadow:0 3px 10px rgba(15,23,42,.05)">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
+        <div style="min-width:0"><div style="font-size:.84rem;font-weight:900;color:#0f172a;line-height:1.35">${esc(x.tournamentName||'과거 대회')}</div><div style="font-size:.7rem;color:#64748b;margin-top:2px">${x.date?`📅 ${esc(x.date)}`:''}</div></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><span class="dpill ${dc(x.div||'')}" style="font-size:.7rem">${esc(dl(x.div||''))}</span><span class="badge bg-blue" style="font-size:.68rem">${esc(x.teamLabel||x.club||'')}</span></div>
+      </div>${playerGrid}${subsHtml}
+    </div>`;
+  }).join('') : `<div style="padding:28px 12px;text-align:center;color:#64748b;font-size:.82rem">확인 가능한 지난대회 명단이 없습니다.</div>`;
+  modal.innerHTML=`<div class="modal-box" style="max-width:620px;width:min(94vw,620px);max-height:88vh;display:flex;flex-direction:column">
+    <div class="modal-header" style="background:#10213d"><h3>📋 ${esc(club)} 지난대회 명단</h3><button class="modal-close" onclick="cm('mPastClubRoster')">✕</button></div>
+    <div style="padding:10px 14px;background:#fff8dc;border-bottom:1px solid #f2dda0;font-size:.76rem;color:#7a5200;line-height:1.5"><b>참고용 조회</b>입니다. 현재 팀 등록 명단에는 자동으로 반영되지 않습니다.</div>
+    <div class="modal-body" style="padding:12px;overflow:auto;display:grid;gap:10px">${body}</div>
+    <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPastClubRoster')">닫기</button></div>
+  </div>`;
+  om('mPastClubRoster');
+}
+async function openPastClubRosterReference(){
+  if(!(REG&&REG_CLUB) && !AD){ toast('경기이사 로그인 후 사용할 수 있습니다','info'); return; }
+  let club=REG_CLUB||'';
+  if(AD && !club){
+    const v=String(prompt('조회할 클럽명을 입력하세요')||'').trim();
+    if(!v) return;
+    club=v;
+  }
+  const currentTid=ge('regTS')?.value||'';
+  const entries=_collectPastRosterLocal(club,currentTid);
+  try{
+    const exact=String(club||'').trim();
+    if(exact){
+      const snap=await getDocs(query(collection(db,'registrations'),where('club','==',exact)));
+      snap.forEach(d=>{
+        const x=d.data()||{};
+        const tid=String(x.tournamentId||x.tid||'');
+        if(!tid || tid===String(currentTid||'')) return;
+        const meta=_pastRosterTournamentMeta(tid);
+        entries.push({source:'firebase',tid,tournamentName:meta?.name||x.tournamentName||'과거 대회',date:meta?.date||x.tournamentDate||'',div:x.division||x.div||'',club:x.club||club,teamLabel:x.teamName||x.entryLabel||x.club||club,players:Array.isArray(x.players)?x.players.filter(Boolean):[],mainPlayerCount:Number(x.mainPlayerCount||0)||0});
+      });
+    }
+  }catch(e){ console.warn('지난대회 명단 조회 일부 실패',e); }
+  _renderPastClubRosterModal(club,entries);
+}
+
 let REGISTER_DIVISION_FILTER='all';
 function setRegisterDivisionFilter(div){
   REGISTER_DIVISION_FILTER=String(div||'all');
@@ -7499,7 +7625,7 @@ function renderRegisterDivisionOverview(){
   ];
   const _divisionFilterBar = divisions.length
     ? `<div style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
-        <div style="font-size:.7rem;font-weight:900;color:#64748b;margin:0 4px 7px">📂 부서별 보기</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${(REG&&REG_CLUB&&!isIndiv)?`<button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:.7rem;font-weight:900;white-space:nowrap" onclick="openPastClubRosterReference()">📋 지난대회 명단 보기</button>`:''}</div>
         <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
           ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
         </div>
@@ -23961,29 +24087,11 @@ function closeReorderPopup() {
 // 화면 조회/인쇄 전용. 대회·대진·결과 데이터를 수정하지 않는다.
 // ─────────────────────────────────────────────────────────────
 function outputEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function installPublicOutputCenter(){
-  const existing=document.getElementById('page-output');
-  const existingTab=document.querySelector('.nav-tab[data-page="output"]');
-  if(existing){
-    // 페이지가 이미 있어도 탭이 유실된 경우 복구한다.
-    if(!existingTab){
-      const nav=document.querySelector('.nav-tabs'), bracketTab=nav?.querySelector('[data-page="bracket"]');
-      if(nav&&bracketTab){const tab=document.createElement('div');tab.className='nav-tab';tab.dataset.page='output';tab.onclick=()=>showPage('output');tab.textContent='🖨️ 출력센터';bracketTab.insertAdjacentElement('afterend',tab);}
-    }
-    return;
-  }
-  const nav=document.querySelector('.nav-tabs');
-  const bracketTab=nav?.querySelector('[data-page="bracket"]');
-  if(nav&&bracketTab){
-    const tab=document.createElement('div');
-    tab.className='nav-tab';tab.dataset.page='output';tab.onclick=()=>showPage('output');
-    tab.textContent='🖨️ 출력센터';
-    bracketTab.insertAdjacentElement('afterend',tab);
-  }
-  const main=document.querySelector('.main-content');
-  if(!main)return;
-  const page=document.createElement('div');page.className='page';page.id='page-output';
-  page.innerHTML=`
+function isMobileOutputCenter(){
+  try{return window.matchMedia('(max-width: 768px)').matches;}catch(e){return window.innerWidth<=768;}
+}
+function outputCenterInnerHtml(){
+  return `
     <div class="sec-title">🖨️ 출력센터 <span style="font-size:.72rem;font-weight:500;color:var(--text2)">— 일반 회원도 조회·인쇄 가능</span></div>
     <div class="card" style="border-top:3px solid #d4a017">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
@@ -24005,9 +24113,70 @@ function installPublicOutputCenter(){
         <span style="font-size:.73rem;color:var(--text3)">출력센터는 읽기 전용이며 경기 데이터는 변경하지 않습니다.</span>
       </div>
     </div>
-    <div id="outputPreview" class="card" style="padding:12px;overflow:auto">
+    <div id="outputPreview" class="card" style="padding:12px;overflow:auto;-webkit-overflow-scrolling:touch">
       <div class="empty-state"><p>대회와 부서를 선택하세요.</p></div>
     </div>`;
+}
+function ensureMobileOutputCenter(){
+  let overlay=document.getElementById('mMobileOutputCenter');
+  if(!overlay){
+    overlay=document.createElement('div');
+    overlay.className='modal-overlay';
+    overlay.id='mMobileOutputCenter';
+    overlay.innerHTML=`<div class="modal-box fullscreen" style="max-width:none;width:100%;height:100%;max-height:none;border-radius:0;display:flex;flex-direction:column">
+      <div class="modal-header" style="background:#0f1e3a;flex:0 0 auto"><h3>🖨️ 출력센터</h3><button class="modal-close" onclick="closeMobileOutputCenter()">✕</button></div>
+      <div class="modal-body" style="padding:12px;overflow:auto;flex:1 1 auto;-webkit-overflow-scrolling:touch">${outputCenterInnerHtml()}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+  // 모바일 빠른 메뉴에도 항상 출력센터 항목을 보장한다.
+  const quick=document.querySelector('#mMobileQuickMenu .modal-body');
+  if(quick&&!quick.querySelector('[data-mobile-output-center]')){
+    const btn=document.createElement('button');
+    btn.className='btn btn-outline';
+    btn.dataset.mobileOutputCenter='1';
+    btn.style.justifyContent='flex-start';
+    btn.textContent='🖨️ 출력센터';
+    btn.onclick=()=>{cm('mMobileQuickMenu');openMobileOutputCenter();};
+    quick.appendChild(btn);
+  }
+  return overlay;
+}
+function openMobileOutputCenter(){
+  ensureMobileOutputCenter();
+  const overlay=document.getElementById('mMobileOutputCenter');
+  if(overlay)overlay.classList.add('open');
+  setTimeout(()=>initOutputCenter(),0);
+}
+function closeMobileOutputCenter(){
+  document.getElementById('mMobileOutputCenter')?.classList.remove('open');
+}
+function installPublicOutputCenter(){
+  const mobile=isMobileOutputCenter();
+  // 네비게이션 탭은 PC/모바일 공통으로 보장하되, 모바일에서는 전용 팝업을 연다.
+  let existingTab=document.querySelector('.nav-tab[data-page="output"]');
+  const nav=document.querySelector('.nav-tabs');
+  const bracketTab=nav?.querySelector('[data-page="bracket"]');
+  if(!existingTab&&nav&&bracketTab){
+    const tab=document.createElement('div');
+    tab.className='nav-tab';tab.dataset.page='output';
+    tab.onclick=()=>showPage('output');
+    tab.textContent='🖨️ 출력센터';
+    bracketTab.insertAdjacentElement('afterend',tab);
+    existingTab=tab;
+  }
+  if(mobile){
+    // 모바일에서 동적 page를 main-content 끝에 붙이지 않는다. 페이지 슬라이더와 충돌하기 때문.
+    document.getElementById('page-output')?.remove();
+    ensureMobileOutputCenter();
+    return;
+  }
+  const existing=document.getElementById('page-output');
+  if(existing)return;
+  const main=document.querySelector('.main-content');
+  if(!main)return;
+  const page=document.createElement('div');page.className='page';page.id='page-output';
+  page.innerHTML=outputCenterInnerHtml();
   main.appendChild(page);
 }
 function outputTournamentYear(t){
@@ -24661,10 +24830,10 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,openMobileOutputCenter,closeMobileOutputCenter,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
-  onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
+  onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
   onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetPrelimDrawOnly,resetMainDrawOnly,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,
   openManualEdit,saveManualEdit,toggleByeEdit,openPyramidSlotQuickEdit,savePyramidSlotQuickEdit,
   openM3,saveM3,tC,setCourt,toggleGroupCourtUI,onGroupCourtChange,openGroupCourtModal,saveGroupCourtModal,setOperationViewMode,
