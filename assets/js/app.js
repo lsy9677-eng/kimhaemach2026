@@ -24294,7 +24294,7 @@ function closeMobileOutputCenter(){
 }
 
 // ─────────────────────────────────────────────────────────────
-// PHASE118 · 모바일 핵심 바로가기 + 하단 고정 퀵메뉴/더보기
+// PHASE119 · 모바일 핵심 바로가기 + 하단 고정 퀵메뉴/더보기 · 기존 하단바 중복 제거
 // PC 네비게이션/경기 데이터 로직은 건드리지 않는다.
 // ─────────────────────────────────────────────────────────────
 function mobileClubStatusLabel(){
@@ -24426,9 +24426,13 @@ function ensureMobileBottomMore(){
     st=document.createElement('style');
     st.id='phase118MobileBottomNavStyle';
     st.textContent=`@media (max-width:760px){
-      body{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))!important;}
+      /* PHASE119: 기존 모바일 하단 nav-tabs와 새 퀵메뉴의 이중 노출/겹침 제거 */
+      .app-header > .nav-tabs,
+      .nav-tabs{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;}
+      #swipeDots,.swipe-indicator{display:none!important;}
+      body{padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))!important;}
       #kimhaeMobileBottomNav{
-        position:fixed;left:8px;right:8px;bottom:calc(7px + env(safe-area-inset-bottom,0px));z-index:9998;
+        position:fixed;left:8px;right:8px;bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:11000;
         display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch;
         min-height:64px;padding:6px 5px;border-radius:22px;background:#10234a;
         box-shadow:0 8px 28px rgba(2,13,35,.28);border:1px solid rgba(255,255,255,.16);
