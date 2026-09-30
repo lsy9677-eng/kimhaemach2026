@@ -880,6 +880,51 @@ const VIEWER_BRACKET_POLL_MS=20000;
 let _bundleFetchSeq=0;
 let PLAYERS_LOADED=false;
 let PLAYERS_LOADING_PROMISE=null;
+// 첫 출전자 표시는 관리자 전용이며, 과거 등록 데이터를 모두 확인한 뒤에만 활성화한다.
+// 조회 직후 임시 별표가 보였다가 사라지는 현상을 막기 위한 별도 준비 상태.
+let FIRST_APPEARANCE_READY=false;
+let FIRST_APPEARANCE_LOADING_PROMISE=null;
+let FIRST_APPEARANCE_TIDS_BY_NAME=new Map();
+async function ensureFirstAppearanceDataReady(force=false){
+  if(force){
+    FIRST_APPEARANCE_READY=false;
+    FIRST_APPEARANCE_LOADING_PROMISE=null;
+    FIRST_APPEARANCE_TIDS_BY_NAME=new Map();
+  }
+  if(FIRST_APPEARANCE_READY && !force) return FIRST_APPEARANCE_TIDS_BY_NAME;
+  if(FIRST_APPEARANCE_LOADING_PROMISE && !force) return FIRST_APPEARANCE_LOADING_PROMISE;
+  FIRST_APPEARANCE_LOADING_PROMISE=(async()=>{
+    // 선수 마스터와 전체 팀등록 기록을 모두 확인한 뒤에만 신규 판정을 허용한다.
+    await ensurePlayersLoaded();
+    const snap=await getDocs(collection(db,'registrations'));
+    const byName=new Map();
+    const add=(name,tid)=>{
+      const nn=normName(name);
+      if(!nn||!tid) return;
+      if(!byName.has(nn)) byName.set(nn,new Set());
+      byName.get(nn).add(String(tid));
+    };
+    snap.forEach(d=>{
+      const x=d.data()||{};
+      const tid=String(x.tournamentId||x.tid||'');
+      (Array.isArray(x.players)?x.players:[]).forEach(n=>add(n,tid));
+      (Array.isArray(x.individualPlayers)?x.individualPlayers:[]).forEach(ip=>add(ip?.name,tid));
+    });
+    // 과거 엑셀/히스토리 데이터도 함께 반영한다.
+    (HIST_DATA||[]).forEach(t=>{
+      const tid=String(t?.id||'');
+      (t?.teams||[]).forEach(tm=>(tm?.players||[]).forEach(n=>add(n,tid)));
+    });
+    FIRST_APPEARANCE_TIDS_BY_NAME=byName;
+    FIRST_APPEARANCE_READY=true;
+    return byName;
+  })().catch(err=>{
+    console.warn('ensureFirstAppearanceDataReady failed',err);
+    FIRST_APPEARANCE_READY=false;
+    throw err;
+  }).finally(()=>{ FIRST_APPEARANCE_LOADING_PROMISE=null; });
+  return FIRST_APPEARANCE_LOADING_PROMISE;
+}
 function _playerDocId(k){ return String(k||'').replace(/[\/\.#\$\[\]]/g,'_'); }
 function loadPlayersFromLocalCache(){
   try{
@@ -7026,188 +7071,28 @@ function renderMemberRegistry2026Status(){
   if(window.renderHomeReg) window.renderHomeReg();
 }
 function isFirstAppearancePlayer(name, club, currentTid){
-  const nn = normName(name);
-  if(!nn) return false;
+  const nn=normName(name);
+  if(!nn || !AD || !FIRST_APPEARANCE_READY) return false;
 
-  // 첫 출전은 "현재 대회 이전에 실제 출전 기록이 전혀 없는 경우"만 인정한다.
-  // 이름만 등록돼 있거나 임시 승/패 값이 있는 정도로는 첫 출전을 지우지 않는다.
+  // 전체 registrations 원본에서 현재 대회 외 출전 여부를 우선 확인한다.
+  const tids=FIRST_APPEARANCE_TIDS_BY_NAME.get(nn);
+  if(tids && [...tids].some(tid=>String(tid)!==String(currentTid||''))) return false;
 
-  // 1) 과거 엑셀/히스토리 대회
-  for(const t of (HIST_DATA||[])){
-    if((t?.id||'') === currentTid) continue;
-    if((t?.teams||[]).some(tm => (tm?.players||[]).some(pn => normName(pn) === nn))) return false;
-  }
-
-  // 2) players 마스터의 실제 출전 흔적 확인
-  // 일부 과거 데이터는 history가 비어 있어도 wins/losses가 남아 있으므로
-  // 승/패 기록이 하나라도 있으면 기존 출전자로 본다.
+  // players 마스터에 과거 실제 경기 흔적이 있으면 기존 출전자다.
   for(const k of Object.keys(G.players||{})){
-    const p = G.players[k] || {};
-    const playerName = normName(p.name || pKeyParse(k).name || '');
-    if(playerName !== nn) continue;
-    const hist = Array.isArray(p.history) ? p.history.filter(h => h && h.tid && h.tid !== currentTid) : [];
-    if(hist.length > 0) return false;
-    if(Number(p.wins||0) > 0 || Number(p.losses||0) > 0) return false;
-  }
-
-  // 3) 현재 시스템에 저장된 다른 대회 팀등록 데이터
-  for(const key of Object.keys(G.teams||{})){
-    const idx = key.lastIndexOf('_');
-    const tid = idx>0 ? key.slice(0, idx) : '';
-    if(tid && tid === currentTid) continue;
-    const teams = G.teams[key] || [];
-    for(const tm of teams){
-      if((tm?.players||[]).some(pn => normName(pn) === nn)) return false;
-    }
+    const p=G.players[k]||{};
+    const playerName=normName(p.name||pKeyParse(k).name||'');
+    if(playerName!==nn) continue;
+    const hist=Array.isArray(p.history)?p.history.filter(h=>h&&h.tid&&String(h.tid)!==String(currentTid||'')):[];
+    if(hist.length>0) return false;
+    if(Number(p.wins||0)>0 || Number(p.losses||0)>0) return false;
   }
 
   return true;
 }
-function normalizeCareerValue(v){
-  return String(v==null?'':v).trim();
-}
-function findIndividualPlayerMeta(name, club=''){
-  try{
-    const nn=String(name||'').trim();
-    const cc=String(club||'').trim();
-    if(!nn) return null;
-    for(const list of Object.values(G.teams||{})){
-      for(const team of (list||[])){
-        for(const p of (team?.individualPlayers||[])){
-          const pName=String(p?.name||'').trim();
-          if(pName!==nn) continue;
-          const pClub=String(p?.clubsRaw||team?.club||'').trim();
-          const clubOk=!cc || pClub===cc || baseClub(pClub)===baseClub(cc) || parseClubAliases(pClub).includes(baseClub(cc));
-          if(!clubOk) continue;
-          return {
-            name: pName,
-            club: pClub,
-            phone: formatPhoneLoose(String(p?.phone||'')),
-            career: normalizeCareerValue(p?.career||''),
-            note: String(team?.note||'').trim()
-          };
-        }
-      }
-    }
-    return null;
-  }catch(e){ return null; }
-}
-function getPlayerContactInfo(name, club='', phone='', career=''){
-  try{
-    const nn=String(name||'').trim();
-    const cc=String(club||'').trim();
-    const info={phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:cc,note:''};
-    const fromTeam=findIndividualPlayerMeta(nn, cc);
-    if(fromTeam){
-      if(!info.phone && fromTeam.phone) info.phone=fromTeam.phone;
-      if(!info.career && fromTeam.career) info.career=fromTeam.career;
-      if(!info.club && fromTeam.club) info.club=fromTeam.club;
-      if(fromTeam.note) info.note=fromTeam.note;
-    }
-    const candidates=[];
-    if(cc){
-      candidates.push(pKey(nn, cc));
-      const bc=baseClub(cc);
-      if(bc && bc!==cc) candidates.push(pKey(nn, bc));
-    }
-    for(const key of candidates){
-      const p=G.players?.[key];
-      if(!p) continue;
-      if(!info.phone && p.phone) info.phone=formatPhoneLoose(String(p.phone));
-      if(!info.career && p.career) info.career=normalizeCareerValue(p.career);
-      if(!info.club && (p.club || pKeyParse(key).club)) info.club=String(p.club||pKeyParse(key).club||'').trim();
-    }
-    for(const [key,p] of Object.entries(G.players||{})){
-      const parsed=pKeyParse(key);
-      if(String(p?.name||parsed.name||'').trim()!==nn) continue;
-      if(cc){
-        const pClub=String(p?.club||parsed.club||'').trim();
-        const pBase=baseClub(pClub);
-        const clubBase=baseClub(cc);
-        const clubs=[pClub,pBase].filter(Boolean);
-        if(!clubs.includes(cc) && !(clubBase && clubs.includes(clubBase))) continue;
-      }
-      if(!info.phone && p?.phone) info.phone=formatPhoneLoose(String(p.phone));
-      if(!info.career && p?.career) info.career=normalizeCareerValue(p.career);
-      if(!info.club && (p?.club||parsed.club)) info.club=String(p?.club||parsed.club||'').trim();
-      break;
-    }
-    return info;
-  }catch(e){
-    return {phone:formatPhoneLoose(String(phone||'')),career:normalizeCareerValue(career),club:String(club||'').trim(),note:''};
-  }
-}
-function getPlayerPhone(name, club=''){
-  return getPlayerContactInfo(name, club).phone||'';
-}
-function getPlayerCareer(name, club=''){
-  return getPlayerContactInfo(name, club).career||'';
-}
-function renderClickablePlayerName(name, club='', phone='', style='', career=''){
-  const nm=String(name||'').trim();
-  if(!nm) return '-';
-  const info=getPlayerContactInfo(nm, club, phone, career);
-  const baseStyle=`cursor:pointer;${style||''}`;
-  return `<span onclick="openPlayerContact('${esc(nm)}','${esc(info.club||club||'')}','${esc(info.phone||'')}','${esc(info.career||'')}')" style="${baseStyle}">${nm}</span>`;
-}
-function renderClickablePlayerNames(names=[], club='', phones=[], careers=[]){
-  try{
-    return (names||[]).map((nm,idx)=>renderClickablePlayerName(nm, club, Array.isArray(phones)?phones[idx]:'', '', Array.isArray(careers)?careers[idx]:'')).join(' / ');
-  }catch(e){ return (names||[]).join(' / '); }
-}
-function openPlayerContact(name, club='', phone='', career=''){
-  try{
-    const nm=String(name||'').trim()||'선수';
-    const info=getPlayerContactInfo(nm, club, phone, career);
-    const raw=String(info.phone||'').trim();
-    const clean=raw.replace(/[^0-9+]/g,'');
-    const body=ge('mPlayerQuickContactBody');
-    const title=ge('mPlayerQuickContactTitle');
-    const callBtn=ge('mPlayerQuickContactCall');
-    const smsBtn=ge('mPlayerQuickContactSms');
-    const copyBtn=ge('mPlayerQuickContactCopy');
-    if(title) title.textContent=`📱 ${nm}`;
-    if(body){
-      body.innerHTML=`<div style="display:grid;gap:10px">
-        <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
-          <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">전화번호</div>
-          <div style="font-size:1rem;font-weight:900;color:var(--text)">${raw||'미등록'}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
-            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">구력</div>
-            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.career||'미입력'}</div>
-          </div>
-          <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:12px">
-            <div style="font-size:.78rem;color:var(--text3);margin-bottom:6px">소속</div>
-            <div style="font-size:.96rem;font-weight:800;color:var(--text)">${info.club||club||'-'}</div>
-          </div>
-        </div>
-        ${info.note?`<div style="padding:10px 12px;background:#fff8df;border:1px solid #f6d365;border-radius:12px;font-size:.82rem;line-height:1.6;color:#7a5600"><b>비고</b><br>${info.note}</div>`:''}
-      </div>`;
-    }
-    if(callBtn){
-      callBtn.disabled=!clean;
-      callBtn.onclick=()=>{ if(clean) location.href=`tel:${clean}`; };
-    }
-    if(smsBtn){
-      smsBtn.disabled=!clean;
-      smsBtn.onclick=()=>{ if(clean) location.href=`sms:${clean}`; };
-    }
-    if(copyBtn){
-      copyBtn.onclick=async ()=>{
-        if(!raw){ toast('전화번호가 등록되지 않았습니다','info'); return; }
-        const copied=await copyTextSafe(raw);
-        toast(copied?'번호 복사 완료 ✅':'번호를 수동으로 복사해 주세요','success');
-      };
-    }
-    om('mPlayerQuickContact');
-  }catch(e){
-    console.warn('openPlayerContact error', e);
-  }
-}
+
 function rosterPlayerHTML(name, club, tid){
-  const mark=!!AD && !!PLAYERS_LOADED && isFirstAppearancePlayer(name, club, tid);
+  const mark=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
   const clickable=renderClickablePlayerName(name, club, info.phone||'', 'color:var(--primary);font-weight:700', info.career||'');
   return `${mark?'<span title="첫 출전자" aria-label="첫 출전자" style="color:#f59e0b;font-weight:1000;margin-right:3px;text-shadow:0 1px 0 #fff">★</span>':''}${clickable}`;
@@ -7342,7 +7227,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
   const canManage=!!(AD||REG);
   const titleBadge=isIndividual ? `${idx+1}` : `${origIdx+1}`;
   const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
-  const hasFirst=!!(AD && PLAYERS_LOADED && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)));
+  const hasFirst=!!(AD && FIRST_APPEARANCE_READY && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)));
   const headerRight=canManage
     ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
          <button class="btn btn-outline" style="height:28px;padding:3px 7px;font-size:.68rem;font-weight:850;border-radius:8px;background:#fff;color:#1e293b;white-space:nowrap;min-width:52px;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
@@ -7435,10 +7320,10 @@ function renderRegisterDivisionOverview(){
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
   if(!box) return;
-  // 관리자용 첫 출전자 표시는 선수 마스터 로딩 완료 후에만 판정한다.
-  // 로딩 전에는 별표를 표시하지 않아 조회 직후 잘못된 별표가 생겼다가 사라지는 현상을 막는다.
-  if(AD && !PLAYERS_LOADED && !PLAYERS_LOADING_PROMISE){
-    ensurePlayersLoaded().then(()=>{ try{ renderRegisterDivisionOverview(); }catch(e){} }).catch(()=>{});
+  // 관리자용 첫 출전자 표시는 전체 과거 팀등록 원본까지 확인한 뒤에만 판정한다.
+  // 준비 전에는 별표를 전혀 렌더링하지 않아 잘못된 별표가 먼저 보이는 현상을 없앤다.
+  if(AD && !FIRST_APPEARANCE_READY && !FIRST_APPEARANCE_LOADING_PROMISE){
+    ensureFirstAppearanceDataReady().then(()=>{ try{ renderRegisterDivisionOverview(); }catch(e){} }).catch(()=>{});
   }
 
   // ✅ innerHTML 갱신 전에 aoReg 폼을 body로 피신시켜 DOM 소실 방지
@@ -18856,7 +18741,7 @@ function openRoster(tid,div){
     }else{
       const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
       html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
-      <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=!!AD && isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
+      <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const mainP=p.slice(0,mainCount);const subP=p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
     }
   });
   ge('mRosterB').innerHTML=html;om('mRoster');
@@ -20132,11 +20017,11 @@ async function _buildRegListEl44(){
           </div>
           <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px">
             ${main.map((p,idx)=>{
-              const isD=!!AD && isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f0f4fa'};border:${isD?'1.5px solid #f59e0b':'1px solid #cdd5e0'};border-radius:6px;padding:3px 9px;font-size:.82rem;font-weight:${isD?'800':'600'};color:${isD?'#92400e':'inherit'};display:inline-flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'#0f1e3a'};color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${p}</span>`;
             }).join('')}
             ${sub.map(p=>{
-              const isD=!!AD && isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f8f9fa'};border:${isD?'1.5px solid #f59e0b':'1px dashed #b0b8c8'};border-radius:6px;padding:3px 9px;font-size:.78rem;color:${isD?'#92400e':'#666'};font-weight:${isD?'800':'400'}">후보. ${p}</span>`;
             }).join('')}
           </div>
