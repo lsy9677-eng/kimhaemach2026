@@ -7206,8 +7206,8 @@ function openPlayerContact(name, club='', phone='', career=''){
 function rosterPlayerHTML(name, club, tid){
   const mark=isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
-  const style=`color:${mark?'#92400e':'var(--primary)'};font-weight:${mark?'800':'700'}`;
-  return renderClickablePlayerName(name, club, info.phone||'', style, info.career||'');
+  const clickable=renderClickablePlayerName(name, club, info.phone||'', 'color:var(--primary);font-weight:700', info.career||'');
+  return `${mark?'<span title="첫 출전자" aria-label="첫 출전자" style="color:#f59e0b;font-weight:1000;margin-right:3px;text-shadow:0 1px 0 #fff">★</span>':''}${clickable}`;
 }
 
 function onRegTC(){
@@ -7362,7 +7362,10 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
       </div>
     </div>
     <div style="padding:12px">
-      <div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:8px">${memberLabel}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-size:.72rem;color:#64748b;font-weight:800">${memberLabel}</div>
+        ${(!isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)))?'<div style="font-size:.68rem;color:#b45309;font-weight:800">★ 첫 출전자</div>':''}
+      </div>
       ${buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual})}
     </div>
   </div>`;
@@ -7385,7 +7388,7 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const mainCount=savedMainCount||(isWV?6:dbl*2);
   const mainP=p.slice(0,mainCount);
   const subP=p.slice(mainCount);
-  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${mainP.map((n,pi)=>{const isD=isFirstAppearancePlayer(n,team?.club||'',tid);return `<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid ${isD?'#f59e0b':'#dbe4f0'};background:${isD?'linear-gradient(135deg,#fff8e1,#fff3cd)':'#f8fafc'};min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`;}).join('')}</div>`;
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:8px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:42px;box-sizing:border-box"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`).join('')}</div>`;
   const subHtml=subP.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #dbe4f0"><div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:6px">후보</div><div style="display:flex;flex-wrap:wrap;gap:6px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.78rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
   return mainHtml+subHtml;
 }
@@ -20011,75 +20014,72 @@ async function bracketToPDF(){
 }
 
 
-// PHASE104: 팀 등록 내보내기 버튼을 하나의 저장 메뉴로 통합
+// PHASE106: 팀 등록 저장 메뉴 — 드롭다운 대신 확실한 모달 선택창
+function ensureRegSaveModal44(){
+  let modal=ge('regUnifiedSaveModal44');
+  if(modal) return modal;
+  modal=document.createElement('div');
+  modal.id='regUnifiedSaveModal44';
+  modal.style.cssText='display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.46);align-items:center;justify-content:center;padding:18px;box-sizing:border-box';
+  modal.innerHTML=`<div role="dialog" aria-modal="true" aria-label="팀 등록 저장" style="width:min(92vw,360px);background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.32);overflow:hidden;border:1px solid #dbe4f0">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:#0f1e3a;color:#fff">
+      <div style="font-size:.98rem;font-weight:900">💾 팀 등록 저장</div>
+      <button type="button" id="regSaveModalClose44" aria-label="닫기" style="width:32px;height:32px;border:0;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-size:1rem;font-weight:900;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:14px;display:grid;gap:10px">
+      <button type="button" id="regSaveImage44" style="width:100%;padding:13px 14px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;text-align:left;font-size:.9rem;font-weight:900;color:#0f172a;cursor:pointer">🖼 이미지 저장</button>
+      <button type="button" id="regSaveExcel44" style="width:100%;padding:13px 14px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;text-align:left;font-size:.9rem;font-weight:900;color:#0f172a;cursor:pointer">📊 엑셀 저장</button>
+      <button type="button" id="regSavePDF44" style="width:100%;padding:13px 14px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;text-align:left;font-size:.9rem;font-weight:900;color:#0f172a;cursor:pointer">📄 PDF 저장</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  const close=()=>closeRegSaveMenu44();
+  ge('regSaveModalClose44')?.addEventListener('click',close);
+  modal.addEventListener('click',e=>{ if(e.target===modal) close(); });
+  ge('regSaveImage44')?.addEventListener('click',()=>{ close(); saveRegListImage44(); });
+  ge('regSaveExcel44')?.addEventListener('click',()=>{ close(); saveRegListExcel44(); });
+  ge('regSavePDF44')?.addEventListener('click',()=>{ close(); saveRegListPDF44(); });
+  return modal;
+}
 function installRegSaveMenu44(){
   const buttons=[...document.querySelectorAll('button[onclick]')].filter(b=>{
     const oc=String(b.getAttribute('onclick')||'');
     return /saveRegList(Image|Excel|PDF)44/.test(oc);
   });
+  const existing=ge('regUnifiedSaveBtn44');
+  if(existing){ buttons.forEach(b=>b.style.display='none'); ensureRegSaveModal44(); return; }
   if(!buttons.length) return;
-  const first=buttons[0];
-  const parent=first.parentElement;
+  const first=buttons[0], parent=first.parentElement;
   if(!parent) return;
-  if(document.getElementById('regUnifiedSaveBtn44')){
-    buttons.forEach(b=>b.style.display='none');
-    return;
-  }
   buttons.forEach(b=>b.style.display='none');
-  const wrap=document.createElement('div');
-  wrap.id='regUnifiedSaveWrap44';
-  wrap.style.cssText='position:relative;display:inline-flex;flex:0 0 auto';
-  wrap.innerHTML=`<button id="regUnifiedSaveBtn44" class="btn btn-outline" type="button" onclick="toggleRegSaveMenu44(event)" aria-haspopup="menu" aria-expanded="false" style="white-space:nowrap;padding:8px 14px;font-size:.82rem;font-weight:800">💾 저장 ▾</button>`;
-  if(!document.getElementById('regUnifiedSaveMenu44')){
-    const menu=document.createElement('div');
-    menu.id='regUnifiedSaveMenu44';
-    menu.setAttribute('role','menu');
-    menu.style.cssText='display:none;position:fixed;min-width:188px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:6px;box-shadow:0 16px 36px rgba(15,23,42,.24);z-index:2147483000';
-    menu.innerHTML=`
-      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListImage44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">🖼 이미지 저장</button>
-      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListExcel44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">📊 엑셀 저장</button>
-      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListPDF44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">📄 PDF 저장</button>`;
-    document.body.appendChild(menu);
-  }
-  parent.insertBefore(wrap, first);
+  const btn=document.createElement('button');
+  btn.id='regUnifiedSaveBtn44';
+  btn.type='button';
+  btn.className='btn btn-outline';
+  btn.style.cssText='white-space:nowrap;padding:8px 14px;font-size:.82rem;font-weight:800;flex:0 0 auto';
+  btn.textContent='💾 저장 ▾';
+  btn.addEventListener('click',e=>toggleRegSaveMenu44(e));
+  parent.insertBefore(btn, first);
+  ensureRegSaveModal44();
 }
-function positionRegSaveMenu44(){
-  const btn=ge('regUnifiedSaveBtn44'),menu=ge('regUnifiedSaveMenu44');
-  if(!btn||!menu||menu.style.display==='none') return;
-  const r=btn.getBoundingClientRect();
-  const gap=7;
-  const menuW=Math.max(188,menu.offsetWidth||188);
-  const menuH=Math.max(140,menu.offsetHeight||140);
-  let left=r.right-menuW;
-  left=Math.max(8,Math.min(left,window.innerWidth-menuW-8));
-  let top=r.bottom+gap;
-  if(top+menuH>window.innerHeight-8 && r.top-menuH-gap>=8) top=r.top-menuH-gap;
-  menu.style.left=Math.round(left)+'px';
-  menu.style.top=Math.round(top)+'px';
-}
+function positionRegSaveMenu44(){ /* 모달 방식에서는 위치 보정 불필요 */ }
 function toggleRegSaveMenu44(ev){
   ev?.preventDefault?.();
   ev?.stopPropagation?.();
-  const menu=ge('regUnifiedSaveMenu44'),btn=ge('regUnifiedSaveBtn44');
-  if(!menu||!btn) return;
-  const willOpen=menu.style.display==='none'||!menu.style.display;
-  if(!willOpen){ closeRegSaveMenu44(); return; }
-  menu.style.display='block';
-  btn.setAttribute('aria-expanded','true');
-  requestAnimationFrame(positionRegSaveMenu44);
+  const modal=ensureRegSaveModal44();
+  const btn=ge('regUnifiedSaveBtn44');
+  if(!modal) return;
+  const opening=modal.style.display!=='flex';
+  modal.style.display=opening?'flex':'none';
+  document.body.style.overflow=opening?'hidden':'';
+  if(btn) btn.setAttribute('aria-expanded',opening?'true':'false');
 }
 function closeRegSaveMenu44(){
-  const menu=ge('regUnifiedSaveMenu44'),btn=ge('regUnifiedSaveBtn44');
-  if(menu) menu.style.display='none';
+  const modal=ge('regUnifiedSaveModal44'),btn=ge('regUnifiedSaveBtn44');
+  if(modal) modal.style.display='none';
+  document.body.style.overflow='';
   if(btn) btn.setAttribute('aria-expanded','false');
 }
-document.addEventListener('click',e=>{
-  const wrap=ge('regUnifiedSaveWrap44'),menu=ge('regUnifiedSaveMenu44');
-  if((wrap&&wrap.contains(e.target))||(menu&&menu.contains(e.target))) return;
-  closeRegSaveMenu44();
-});
-window.addEventListener('resize',positionRegSaveMenu44);
-window.addEventListener('scroll',()=>{ if(ge('regUnifiedSaveMenu44')?.style.display==='block') positionRegSaveMenu44(); },true);
 
 // ── 팀 등록 명단 내보내기 (로그인 불필요) ────────────────────────────────
 async function _buildRegListEl44(){
