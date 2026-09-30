@@ -20029,28 +20029,57 @@ function installRegSaveMenu44(){
   const wrap=document.createElement('div');
   wrap.id='regUnifiedSaveWrap44';
   wrap.style.cssText='position:relative;display:inline-flex;flex:0 0 auto';
-  wrap.innerHTML=`<button id="regUnifiedSaveBtn44" class="btn btn-outline" type="button" onclick="toggleRegSaveMenu44(event)" style="white-space:nowrap;padding:8px 14px;font-size:.82rem;font-weight:800">💾 저장 ▾</button>
-    <div id="regUnifiedSaveMenu44" style="display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:178px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:6px;box-shadow:0 12px 28px rgba(15,23,42,.18);z-index:5000">
-      <button type="button" onclick="closeRegSaveMenu44();saveRegListImage44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">🖼 이미지 저장</button>
-      <button type="button" onclick="closeRegSaveMenu44();saveRegListExcel44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">📊 엑셀 저장</button>
-      <button type="button" onclick="closeRegSaveMenu44();saveRegListPDF44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:10px 12px;text-align:left;font-size:.82rem;font-weight:800;cursor:pointer">📄 PDF 저장</button>
-    </div>`;
+  wrap.innerHTML=`<button id="regUnifiedSaveBtn44" class="btn btn-outline" type="button" onclick="toggleRegSaveMenu44(event)" aria-haspopup="menu" aria-expanded="false" style="white-space:nowrap;padding:8px 14px;font-size:.82rem;font-weight:800">💾 저장 ▾</button>`;
+  if(!document.getElementById('regUnifiedSaveMenu44')){
+    const menu=document.createElement('div');
+    menu.id='regUnifiedSaveMenu44';
+    menu.setAttribute('role','menu');
+    menu.style.cssText='display:none;position:fixed;min-width:188px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:6px;box-shadow:0 16px 36px rgba(15,23,42,.24);z-index:2147483000';
+    menu.innerHTML=`
+      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListImage44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">🖼 이미지 저장</button>
+      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListExcel44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">📊 엑셀 저장</button>
+      <button type="button" role="menuitem" onclick="closeRegSaveMenu44();saveRegListPDF44()" style="width:100%;border:0;background:#fff;border-radius:9px;padding:11px 12px;text-align:left;font-size:.84rem;font-weight:800;cursor:pointer">📄 PDF 저장</button>`;
+    document.body.appendChild(menu);
+  }
   parent.insertBefore(wrap, first);
 }
+function positionRegSaveMenu44(){
+  const btn=ge('regUnifiedSaveBtn44'),menu=ge('regUnifiedSaveMenu44');
+  if(!btn||!menu||menu.style.display==='none') return;
+  const r=btn.getBoundingClientRect();
+  const gap=7;
+  const menuW=Math.max(188,menu.offsetWidth||188);
+  const menuH=Math.max(140,menu.offsetHeight||140);
+  let left=r.right-menuW;
+  left=Math.max(8,Math.min(left,window.innerWidth-menuW-8));
+  let top=r.bottom+gap;
+  if(top+menuH>window.innerHeight-8 && r.top-menuH-gap>=8) top=r.top-menuH-gap;
+  menu.style.left=Math.round(left)+'px';
+  menu.style.top=Math.round(top)+'px';
+}
 function toggleRegSaveMenu44(ev){
+  ev?.preventDefault?.();
   ev?.stopPropagation?.();
-  const menu=ge('regUnifiedSaveMenu44');
-  if(!menu) return;
-  menu.style.display=menu.style.display==='none'||!menu.style.display?'block':'none';
+  const menu=ge('regUnifiedSaveMenu44'),btn=ge('regUnifiedSaveBtn44');
+  if(!menu||!btn) return;
+  const willOpen=menu.style.display==='none'||!menu.style.display;
+  if(!willOpen){ closeRegSaveMenu44(); return; }
+  menu.style.display='block';
+  btn.setAttribute('aria-expanded','true');
+  requestAnimationFrame(positionRegSaveMenu44);
 }
 function closeRegSaveMenu44(){
-  const menu=ge('regUnifiedSaveMenu44');
+  const menu=ge('regUnifiedSaveMenu44'),btn=ge('regUnifiedSaveBtn44');
   if(menu) menu.style.display='none';
+  if(btn) btn.setAttribute('aria-expanded','false');
 }
 document.addEventListener('click',e=>{
-  const wrap=ge('regUnifiedSaveWrap44');
-  if(wrap && !wrap.contains(e.target)) closeRegSaveMenu44();
+  const wrap=ge('regUnifiedSaveWrap44'),menu=ge('regUnifiedSaveMenu44');
+  if((wrap&&wrap.contains(e.target))||(menu&&menu.contains(e.target))) return;
+  closeRegSaveMenu44();
 });
+window.addEventListener('resize',positionRegSaveMenu44);
+window.addEventListener('scroll',()=>{ if(ge('regUnifiedSaveMenu44')?.style.display==='block') positionRegSaveMenu44(); },true);
 
 // ── 팀 등록 명단 내보내기 (로그인 불필요) ────────────────────────────────
 async function _buildRegListEl44(){
