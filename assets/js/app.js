@@ -7323,26 +7323,72 @@ function updateRegisterSlots(){
 
 function buildRegisterRosterGrid(tid,div,teams,key){
   const tournament=(G.tournaments||[]).find(x=>x.id===tid);
-  return buildRegistrationRosterGrid({
-    tid,
-    div,
-    teams,
-    key,
-    tournament,
-    isIndividual:isIndividualTournament(tournament),
-    regClub:REG_CLUB,
-    isAdmin:AD,
-    isDirector:REG,
-    deadlinePassed:(!AD && isRegDeadlinePassed()),
-    baseClub,
-    getIndividualDisplayLine,
-    teamDisplayName:tdn,
-    isFirstAppearancePlayer,
-    rosterPlayerHTML,
-    escapeHtml:esc
-  });
+  const isIndividual=isIndividualTournament(tournament);
+  const list=Array.isArray(teams)?teams:[];
+  if(!list.length){
+    return `<div style="padding:16px 14px;border:1px dashed #cbd5e1;border-radius:16px;background:#f8fafc;font-size:.82rem;color:var(--text3);text-align:center">등록된 ${isIndividual?'참가팀':'팀'}이 없습니다.</div>`;
+  }
+  return `<div style="display:grid;gap:12px">${list.map((team,idx)=>buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual})).join('')}</div>`;
 }
 
+function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
+  const origIdx=Number.isInteger(Number(team?._origIdx))?Number(team._origIdx):idx;
+  const teamName=isIndividual ? getIndividualDisplayLine(team) : tdn(team,key,origIdx);
+  const players=isIndividual ? getIndividualPlayers(team).map(p=>String(p?.name||'').trim()).filter(Boolean) : (Array.isArray(team?.players)?team.players:[]);
+  const teamCount=players.length;
+  const canManage=!!(AD||REG);
+  const titleBadge=isIndividual ? `${idx+1}` : `${origIdx+1}`;
+  const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
+  const subText=isIndividual ? '' : `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:.72rem;font-weight:800;color:#dbeafe;white-space:nowrap">${teamCount}명</span>`;
+  const headerRight=canManage
+    ? `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end">
+         <button class="btn btn-outline" style="padding:6px 12px;font-size:.74rem;font-weight:800;border-radius:10px;background:#fff;color:#1e293b;white-space:nowrap;min-width:72px" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
+         <button class="btn btn-danger" style="padding:6px 12px;font-size:.74rem;font-weight:800;border-radius:10px;white-space:nowrap;min-width:72px" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
+       </div>`
+    : '';
+  return `<div style="border:1px solid #d9e2ef;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 6px 18px rgba(15,23,42,.06)">
+    <div style="background:linear-gradient(180deg,#0f1f4a 0%,#0b1738 100%);padding:11px 12px 10px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1 1 180px">
+          <span style="width:24px;height:24px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:900;flex:0 0 auto;margin-top:1px">${titleBadge}</span>
+          <div style="min-width:0;flex:1 1 auto">
+            <div style="font-size:1rem;font-weight:900;color:#fff;line-height:1.15;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px">
+              ${subText}
+            </div>
+          </div>
+        </div>
+        ${headerRight}
+      </div>
+    </div>
+    <div style="padding:12px">
+      <div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:8px">${memberLabel}</div>
+      ${buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual})}
+    </div>
+  </div>`;
+}
+
+function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
+  const list=Array.isArray(players)?players:[];
+  if(!list.length){
+    return `<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#f8fafc;font-size:.76rem;color:#64748b;text-align:center">등록된 선수가 없습니다.</div>`;
+  }
+  if(isIndividual){
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">${list.map((name,pi)=>`<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0"><span style="width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${esc(name||'')}</span></div>`).join('')}</div>`;
+  }
+  const p=Array.isArray(team?.players)?team.players:[];
+  const isWV=(div==='여성부');
+  const isTV=(div==='테린이'||div==='terinee');
+  const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);
+  const dbl=Number(team?.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));
+  const savedMainCount=Number.isFinite(Number(team?.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;
+  const mainCount=savedMainCount||(isWV?6:dbl*2);
+  const mainP=p.slice(0,mainCount);
+  const subP=p.slice(mainCount);
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px">${mainP.map((n,pi)=>{const isD=isFirstAppearancePlayer(n,team?.club||'',tid);return `<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;border:1px solid ${isD?'#f59e0b':'#dbe4f0'};background:${isD?'linear-gradient(135deg,#fff8e1,#fff3cd)':'#f8fafc'};min-width:0"><span style="width:22px;height:22px;border-radius:999px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.84rem;font-weight:800;color:#0f172a;line-height:1.2;word-break:keep-all;overflow-wrap:anywhere">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`;}).join('')}</div>`;
+  const subHtml=subP.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #dbe4f0"><div style="font-size:.72rem;color:#64748b;font-weight:800;margin-bottom:6px">후보</div><div style="display:flex;flex-wrap:wrap;gap:6px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.78rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
+  return mainHtml+subHtml;
+}
 
 
 function upsertIndividualPlayerMetaRecords(individualPlayers=[]){
