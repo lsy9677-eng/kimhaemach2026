@@ -24294,7 +24294,7 @@ function closeMobileOutputCenter(){
 }
 
 // ─────────────────────────────────────────────────────────────
-// PHASE115 · 모바일 핵심 바로가기 + 하단 '더보기'
+// PHASE118 · 모바일 핵심 바로가기 + 하단 고정 퀵메뉴/더보기
 // PC 네비게이션/경기 데이터 로직은 건드리지 않는다.
 // ─────────────────────────────────────────────────────────────
 function mobileClubStatusLabel(){
@@ -24385,22 +24385,71 @@ function ensureMobileHomeQuickMenu(){
     <button type="button" onclick="openMobileOutputCenter()" style="border:0;background:transparent;padding:7px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">🖨️</span><span style="font-size:.7rem;font-weight:900">출력센터</span></button>
     <button type="button" onclick="openRoleAwareSettings()" style="border:0;background:transparent;padding:7px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#0f1e3a;font-family:inherit"><span style="font-size:1.22rem">⚙️</span><span style="font-size:.7rem;font-weight:900">${outputEsc(settingsLabel)}</span></button>`;
 }
+function setKimhaeBottomActive(page){
+  const bar=ge('kimhaeMobileBottomNav');
+  if(!bar)return;
+  bar.querySelectorAll('[data-kmb-page]').forEach(btn=>{
+    const active=btn.dataset.kmbPage===page;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-current',active?'page':'false');
+  });
+}
+function mobileBottomGo(page){
+  try{ showPage(page); }catch(e){ console.error(e); }
+  setKimhaeBottomActive(page);
+}
 function ensureMobileBottomMore(){
   if(!isMobileOutputCenter()) return;
-  const nav=document.querySelector('.nav-tabs');
-  if(!nav) return;
-  // PHASE114에서 만든 모바일 출력 탭은 사용하지 않는다.
-  nav.querySelector('.nav-tab[data-page="output"]')?.remove();
-  let more=nav.querySelector('.nav-tab[data-mobile-more="1"]');
-  if(!more){
-    more=document.createElement('div');
-    more.className='nav-tab';
-    more.dataset.mobileMore='1';
-    more.innerHTML='<span style="font-weight:900">•••</span> 더보기';
-    more.onclick=(e)=>{e.preventDefault();e.stopPropagation();openMobileMoreMenu();};
-    nav.appendChild(more);
+
+  // 기존 상단 nav-tabs에 더보기 항목을 끼우는 방식은 실제 모바일에서 보이지 않는 경우가 있어 사용하지 않는다.
+  const legacyNav=document.querySelector('.nav-tabs');
+  legacyNav?.querySelector('.nav-tab[data-page="output"]')?.remove();
+  legacyNav?.querySelector('.nav-tab[data-mobile-more="1"]')?.remove();
+
+  let bar=ge('kimhaeMobileBottomNav');
+  if(!bar){
+    bar=document.createElement('nav');
+    bar.id='kimhaeMobileBottomNav';
+    bar.setAttribute('aria-label','모바일 바로가기');
+    bar.innerHTML=`
+      <button type="button" data-kmb-page="home" onclick="mobileBottomGo('home')"><span>🏠</span><b>홈</b></button>
+      <button type="button" data-kmb-page="tournament" onclick="mobileBottomGo('tournament')"><span>🏆</span><b>대회목록</b></button>
+      <button type="button" data-kmb-page="register" onclick="mobileBottomGo('register')"><span>📋</span><b>팀등록</b></button>
+      <button type="button" data-kmb-page="bracket" onclick="mobileBottomGo('bracket')"><span>🎲</span><b>대진표</b></button>
+      <button type="button" data-kmb-page="ranking" onclick="mobileBottomGo('ranking')"><span>📊</span><b>시합결과</b></button>
+      <button type="button" data-kmb-more="1" onclick="openMobileMoreMenu()"><span>•••</span><b>더보기</b></button>`;
+    document.body.appendChild(bar);
   }
-  more.style.display='';
+
+  let st=ge('phase118MobileBottomNavStyle');
+  if(!st){
+    st=document.createElement('style');
+    st.id='phase118MobileBottomNavStyle';
+    st.textContent=`@media (max-width:760px){
+      body{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))!important;}
+      #kimhaeMobileBottomNav{
+        position:fixed;left:8px;right:8px;bottom:calc(7px + env(safe-area-inset-bottom,0px));z-index:9998;
+        display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch;
+        min-height:64px;padding:6px 5px;border-radius:22px;background:#10234a;
+        box-shadow:0 8px 28px rgba(2,13,35,.28);border:1px solid rgba(255,255,255,.16);
+      }
+      #kimhaeMobileBottomNav button{
+        min-width:0;border:0;background:transparent;color:#fff;padding:4px 1px;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+        border-radius:15px;font-family:inherit;line-height:1;cursor:pointer;
+      }
+      #kimhaeMobileBottomNav button span{font-size:1.06rem;line-height:1.05;font-weight:900;}
+      #kimhaeMobileBottomNav button b{font-size:.58rem;line-height:1.15;white-space:nowrap;font-weight:800;}
+      #kimhaeMobileBottomNav button.active{background:#2d61de;color:#fff;}
+      #kimhaeMobileBottomNav button[data-kmb-more="1"]{background:rgba(255,255,255,.08);}
+    }
+    @media (min-width:761px){#kimhaeMobileBottomNav{display:none!important;}}`;
+    document.head.appendChild(st);
+  }
+
+  // 최초 진입은 현재 활성 페이지를 따라간다.
+  const current=document.querySelector('.page.active')?.id?.replace(/^page-/,'')||'home';
+  setKimhaeBottomActive(current);
 }
 function ensurePhase117MobileHeaderLayout(){
   if(!isMobileOutputCenter()) return;
@@ -25115,7 +25164,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,ensureMobileHomeQuickMenu,ensureMobileBottomMore,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,ensureMobileHomeQuickMenu,ensureMobileBottomMore,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
