@@ -7038,13 +7038,16 @@ function isFirstAppearancePlayer(name, club, currentTid){
     if((t?.teams||[]).some(tm => (tm?.players||[]).some(pn => normName(pn) === nn))) return false;
   }
 
-  // 2) players 마스터의 명시적 history만 인정
+  // 2) players 마스터의 실제 출전 흔적 확인
+  // 일부 과거 데이터는 history가 비어 있어도 wins/losses가 남아 있으므로
+  // 승/패 기록이 하나라도 있으면 기존 출전자로 본다.
   for(const k of Object.keys(G.players||{})){
     const p = G.players[k] || {};
     const playerName = normName(p.name || pKeyParse(k).name || '');
     if(playerName !== nn) continue;
     const hist = Array.isArray(p.history) ? p.history.filter(h => h && h.tid && h.tid !== currentTid) : [];
     if(hist.length > 0) return false;
+    if(Number(p.wins||0) > 0 || Number(p.losses||0) > 0) return false;
   }
 
   // 3) 현재 시스템에 저장된 다른 대회 팀등록 데이터
