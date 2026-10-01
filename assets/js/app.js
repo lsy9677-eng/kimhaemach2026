@@ -24382,11 +24382,20 @@ function ensureMobileMoreMenu(){
         <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
       </div>
     </div>`;
+    // PHASE124: 배경(overlay) 터치 시 닫기. 팝업 내부 터치는 유지한다.
+    modal.addEventListener('click', (ev)=>{
+      if(ev.target === modal) closeMobileMoreMenu();
+    });
     document.body.appendChild(modal);
   }
   return modal;
 }
-function openMobileMoreMenu(){ ensureMobileMoreMenu().classList.add('open'); }
+function openMobileMoreMenu(){
+  const modal=ensureMobileMoreMenu();
+  // PHASE124: 하단 '더보기' 버튼을 다시 누르면 토글로 닫힌다.
+  if(modal.classList.contains('open')){ modal.classList.remove('open'); return; }
+  modal.classList.add('open');
+}
 function closeMobileMoreMenu(){ ge('mKimhaeMobileMore')?.classList.remove('open'); }
 function ensureMobileHomeQuickMenu(){
   if(!isMobileOutputCenter()) return;
