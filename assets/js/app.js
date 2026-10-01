@@ -831,14 +831,22 @@ function startTournamentListSync(){
   },e=>logSnapshotError('tournaments',e));
 }
 
-let _firestoreLastVisibleAt=Date.now();
+let _firestoreLastHiddenAt=0;
+let _firestoreOfflineAt=0;
 let _firestoreRecoveryBusy=false;
 let _firestoreRecoveryTimer=null;
-async function recoverFirestoreAfterResume(reason='resume'){
+let _firestoreLastRecoveryAt=0;
+const FIRESTORE_RECOVERY_COOLDOWN_MS=90*1000;
+const FIRESTORE_BACKGROUND_RECOVERY_MS=90*1000;
+async function recoverFirestoreAfterResume(reason='resume',force=false){
   if(_firestoreRecoveryBusy || !_firebaseInitDone || !navigator.onLine) return;
+  const now=Date.now();
+  if(!force && now-_firestoreLastRecoveryAt<FIRESTORE_RECOVERY_COOLDOWN_MS) return;
   _firestoreRecoveryBusy=true;
+  _firestoreLastRecoveryAt=now;
   try{
-    // 오래 열린 탭/절전 복귀 시 기존 WebChannel을 정리하고 listener를 새로 만든다.
+    // Firestore SDK의 자동 재연결을 우선하고, 실제 장시간 절전/네트워크 복구 때만
+    // 기존 WebChannel listener를 한 차례 정리하여 중복 재시작을 막는다.
     const tid=getRealtimeTargetTournamentId()||'';
     stopRealtimeTournamentSync();
     startTournamentListSync();
@@ -852,27 +860,37 @@ async function recoverFirestoreAfterResume(reason='resume'){
     _firestoreRecoveryBusy=false;
   }
 }
-function scheduleFirestoreResumeRecovery(reason='resume',delay=500){
+function scheduleFirestoreResumeRecovery(reason='resume',delay=1200,force=false){
   clearTimeout(_firestoreRecoveryTimer);
-  _firestoreRecoveryTimer=setTimeout(()=>recoverFirestoreAfterResume(reason),Math.max(0,delay||0));
+  _firestoreRecoveryTimer=setTimeout(()=>recoverFirestoreAfterResume(reason,force),Math.max(0,delay||0));
 }
 function installFirestoreLifecycleRecovery(){
   if(window.__firestoreLifecycleRecoveryInstalled) return;
   window.__firestoreLifecycleRecoveryInstalled=true;
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden'){
-      _firestoreLastVisibleAt=Date.now();
+      _firestoreLastHiddenAt=Date.now();
       return;
     }
-    const sleptFor=Date.now()-Number(_firestoreLastVisibleAt||Date.now());
-    _firestoreLastVisibleAt=Date.now();
-    if(sleptFor>=60000) scheduleFirestoreResumeRecovery('절전/백그라운드 복귀',350);
+    const hiddenFor=_firestoreLastHiddenAt ? Date.now()-_firestoreLastHiddenAt : 0;
+    _firestoreLastHiddenAt=0;
+    // 짧은 앱 전환/화면 잠금은 SDK 자동 재연결에 맡긴다.
+    if(hiddenFor>=FIRESTORE_BACKGROUND_RECOVERY_MS){
+      scheduleFirestoreResumeRecovery('절전/백그라운드 복귀',1200);
+    }
   });
-  window.addEventListener('online',()=>scheduleFirestoreResumeRecovery('네트워크 복구',250));
-  window.addEventListener('focus',()=>{
-    const sleptFor=Date.now()-Number(_firestoreLastVisibleAt||Date.now());
-    if(sleptFor>=5*60*1000) scheduleFirestoreResumeRecovery('장시간 탭 복귀',500);
+  window.addEventListener('offline',()=>{
+    _firestoreOfflineAt=Date.now();
+    clearTimeout(_firestoreRecoveryTimer);
   });
+  window.addEventListener('online',()=>{
+    // 실제 offline 이벤트가 선행된 경우에만 수동 복구한다.
+    if(!_firestoreOfflineAt) return;
+    const offlineFor=Date.now()-_firestoreOfflineAt;
+    _firestoreOfflineAt=0;
+    if(offlineFor>=1500) scheduleFirestoreResumeRecovery('네트워크 복구',1800);
+  });
+  // focus 이벤트는 visibilitychange와 중복되므로 별도 Firestore 재시작을 하지 않는다.
 }
 let _viewerBracketPoller=null;
 let _viewerBracketPollTid='';
