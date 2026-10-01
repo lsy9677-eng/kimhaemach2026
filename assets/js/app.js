@@ -4215,6 +4215,28 @@ function ensureRoleCheckButton(){
   b.onclick=()=>window.openRolePermissionCheck();host.appendChild(b);
 }
 
+function forceMobileRoleCheckContrast(){
+  if(!isMobileOutputCenter()) return;
+  const candidates=[...document.querySelectorAll('#roleCheck58Btn, .app-header button, .header-actions button')];
+  candidates.forEach(b=>{
+    const txt=String(b.textContent||'').replace(/\s+/g,'');
+    if(b.id!=='roleCheck58Btn' && !txt.includes('권한확인')) return;
+    try{
+      b.style.setProperty('display','inline-flex','important');
+      b.style.setProperty('align-items','center','important');
+      b.style.setProperty('justify-content','center','important');
+      b.style.setProperty('background','#ffffff','important');
+      b.style.setProperty('background-color','#ffffff','important');
+      b.style.setProperty('color','#0f1e3a','important');
+      b.style.setProperty('border','1.5px solid #cbd8ea','important');
+      b.style.setProperty('box-shadow','0 1px 5px rgba(0,0,0,.16)','important');
+      b.style.setProperty('opacity','1','important');
+      b.style.setProperty('filter','none','important');
+      b.style.setProperty('-webkit-text-fill-color','#0f1e3a','important');
+    }catch(e){}
+  });
+}
+
 function runPhase57SafetyCheck(){
   const checks=[
     ['운영방식 호환', !Object.prototype.hasOwnProperty.call(G.meta||{},'matchOperationMode') || ['online_order','simple_result'].includes(String(G.meta.matchOperationMode))],
@@ -24408,7 +24430,7 @@ function suppressLegacyMobileBottomNav(){
     const parent=tab.closest('nav,.nav-tabs') || tab.parentElement;
     if(parent && parent.id!=='kimhaeMobileBottomNav') parents.add(parent);
   });
-  document.querySelectorAll('.nav-tabs').forEach(el=>{
+  document.querySelectorAll('.nav-tabs, #bottomTabBar, .bottom-tab-bar, .mobile-bottom-nav').forEach(el=>{
     if(el.id!=='kimhaeMobileBottomNav') parents.add(el);
   });
   parents.forEach(el=>{
@@ -24459,6 +24481,9 @@ function ensureMobileBottomMore(){
       /* PHASE119: 기존 모바일 하단 nav-tabs와 새 퀵메뉴의 이중 노출/겹침 제거 */
       .app-header > .nav-tabs,
       .nav-tabs,
+      #bottomTabBar,
+      .bottom-tab-bar,
+      .mobile-bottom-nav,
       [data-kimhae-legacy-mobile-nav=\"1\"]{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;max-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;}
       #swipeDots,.swipe-indicator{display:none!important;}
       body{padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))!important;}
@@ -24536,6 +24561,9 @@ function ensurePhase117MobileHeaderLayout(){
 function ensureKimhaeMobileNavigation(){
   if(!isMobileOutputCenter()) return;
   ensurePhase117MobileHeaderLayout();
+  forceMobileRoleCheckContrast();
+  setTimeout(forceMobileRoleCheckContrast,120);
+  setTimeout(forceMobileRoleCheckContrast,700);
   ensureMobileHomeQuickMenu();
   ensureMobileBottomMore();
   ensureMobileMoreMenu();
