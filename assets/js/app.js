@@ -3660,6 +3660,20 @@ async function saveOperatorPw(){
   }
 }
 
+function ensureRegistryManagerButton(){
+  const existing=ge('registryManagerBtn');
+  if(!AD){ if(existing) existing.remove(); return; }
+  const host=ge('registryActionBtns');
+  if(!host || existing) return;
+  const btn=document.createElement('button');
+  btn.type='button';
+  btn.id='registryManagerBtn';
+  btn.className='btn btn-outline';
+  btn.style.cssText='font-size:.78rem;padding:7px 10px;white-space:nowrap';
+  btn.textContent='🧾 명단 관리';
+  btn.onclick=openRegistryMgr;
+  host.appendChild(btn);
+}
 function updatePlayersAdminControls(){
   const recBtns=ge('playerPageBtns');
   const regBtns=ge('registryActionBtns');
@@ -3667,6 +3681,7 @@ function updatePlayersAdminControls(){
   const regActive=!!ge('ptab-registry')?.classList.contains('active');
   if(recBtns) recBtns.style.display=(AD && recActive)?'flex':'none';
   if(regBtns) regBtns.style.display=(AD && regActive)?'flex':'none';
+  ensureRegistryManagerButton();
 }
 
 
@@ -22758,7 +22773,7 @@ async function renderRegistryTab(force){
     escapeAttr:escAttr
   });
   body.dataset.ready='1';
-  setTimeout(()=>{ensureRegistryRepairButton();ensureRegistryNewMemberAdminControls();},0);
+  setTimeout(()=>{ensureRegistryManagerButton();ensureRegistryRepairButton();ensureRegistryNewMemberAdminControls();},0);
 }
 
 function ensureRegistryNewMemberAdminControls(){
