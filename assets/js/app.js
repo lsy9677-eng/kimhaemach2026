@@ -23020,17 +23020,80 @@ async function bulkChangeRegion(){
   toast(`✅ ${club} 소속 ${cnt}명의 지역을 "${region}"으로 변경했습니다`,'success');
   await renderRegistryMgr();
 }
+function ensureRegistryMgrSearchUI(){
+  const list=ge('rmgr_list');
+  if(!list||ge('rmgrSearchWrap')) return;
+  const wrap=document.createElement('div');
+  wrap.id='rmgrSearchWrap';
+  wrap.style.cssText='display:flex;gap:8px;align-items:center;margin:10px 0 12px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;position:sticky;top:0;z-index:4';
+  wrap.innerHTML=`<span style="font-size:1.05rem;flex:0 0 auto">🔎</span>
+    <input id="rmgrSearchInput" type="search" autocomplete="off" placeholder="이름 · 주클럽 · 지역 · 부클럽 검색" style="min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:.9rem;font-weight:700;color:#0f172a;padding:7px 2px">
+    <span id="rmgrSearchCount" style="font-size:.72rem;font-weight:800;color:#475569;white-space:nowrap"></span>
+    <button type="button" id="rmgrSearchClear" aria-label="검색 지우기" style="display:none;border:0;background:#e2e8f0;color:#334155;width:30px;height:30px;border-radius:999px;font-size:1rem;font-weight:900;cursor:pointer">×</button>`;
+  list.parentElement?.insertBefore(wrap,list);
+  const input=ge('rmgrSearchInput');
+  const clear=ge('rmgrSearchClear');
+  input?.addEventListener('input',()=>applyRegistryMgrSearch());
+  input?.addEventListener('search',()=>applyRegistryMgrSearch());
+  clear?.addEventListener('click',()=>{ if(input){ input.value=''; input.focus(); } applyRegistryMgrSearch(); });
+}
+function getRegistryMgrSearchRows(){
+  const list=ge('rmgr_list');
+  if(!list) return [];
+  const tableRows=[...list.querySelectorAll('tbody tr')];
+  if(tableRows.length) return tableRows;
+  const marked=[...list.querySelectorAll('[data-registry-row],.registry-row,.registry-member-row')];
+  if(marked.length) return marked;
+  return [...list.children].filter(el=>el.nodeType===1);
+}
+function applyRegistryMgrSearch(){
+  const input=ge('rmgrSearchInput');
+  const clear=ge('rmgrSearchClear');
+  const count=ge('rmgrSearchCount');
+  const q=String(input?.value||'').trim().toLocaleLowerCase('ko-KR').replace(/\s+/g,' ');
+  if(clear) clear.style.display=q?'inline-flex':'none';
+  const rows=getRegistryMgrSearchRows();
+  let visible=0,total=0;
+  rows.forEach(row=>{
+    // 표 머리글/안내행은 검색 대상에서 제외하고 항상 유지한다.
+    if(row.querySelector('th')){ row.style.display=''; return; }
+    const controls=[...row.querySelectorAll('input,select,textarea')].map(el=>String(el.value||''));
+    const hay=[String(row.textContent||''),...controls].join(' ').toLocaleLowerCase('ko-KR').replace(/\s+/g,' ');
+    const isMember=hay.trim().length>0;
+    if(!isMember){ row.style.display=''; return; }
+    total++;
+    const show=!q||hay.includes(q);
+    row.style.display=show?'':'none';
+    if(show) visible++;
+  });
+  if(count) count.textContent=q?`${visible}명`:'전체';
+  const empty=ge('rmgrSearchEmpty');
+  if(empty) empty.remove();
+  if(q&&total>0&&visible===0){
+    const list=ge('rmgr_list');
+    if(list){
+      const div=document.createElement('div'); div.id='rmgrSearchEmpty';
+      div.style.cssText='padding:18px 10px;text-align:center;color:#64748b;font-size:.82rem;font-weight:700';
+      div.textContent=`“${input?.value||''}” 검색 결과가 없습니다.`;
+      list.parentElement?.insertBefore(div,list.nextSibling);
+    }
+  }
+}
 async function renderRegistryMgr(){
   const year=parseInt(ge('rmgrYearSel')?.value||2026);
   const members=await loadRegistry(year);
   const stat=ge('rmgrStat'); if(stat) stat.textContent=`총 ${members.length}명 (부클럽 ${members.filter(m=>m.subClub).length}명)`;
   const list=ge('rmgr_list'); if(!list) return;
+  const searchValue=ge('rmgrSearchInput')?.value||'';
   list.innerHTML=buildRegistryManagerTable({
     members,
     clubs:G.clubs||[],
     year,
     escapeHtml:esc
   });
+  ensureRegistryMgrSearchUI();
+  if(ge('rmgrSearchInput')) ge('rmgrSearchInput').value=searchValue;
+  applyRegistryMgrSearch();
 }
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
