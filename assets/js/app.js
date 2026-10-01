@@ -24373,26 +24373,35 @@ function ensureMobileMoreMenu(){
     modal=document.createElement('div');
     modal.className='modal-overlay';
     modal.id='mKimhaeMobileMore';
-    modal.innerHTML=`<div class="modal-box" style="max-width:360px;width:calc(100% - 28px)">
-      <div class="modal-header" style="background:#0f1e3a"><h3>••• 더보기</h3><button class="modal-close" onclick="closeMobileMoreMenu()">✕</button></div>
-      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
-        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
-        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>설정</span></button>
-        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openRolePermissionCheck()"><span style="font-size:1.25rem">🔎</span><span>권한확인</span></button>
-        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
-      </div>
-    </div>`;
-    // PHASE124: 배경(overlay) 터치 시 닫기. 팝업 내부 터치는 유지한다.
-    modal.addEventListener('click', (ev)=>{
-      if(ev.target === modal) closeMobileMoreMenu();
-    });
+    // 배경(overlay) 터치 시 닫기. 팝업 내부 터치는 유지한다.
+    modal.addEventListener('click', (ev)=>{ if(ev.target === modal) closeMobileMoreMenu(); });
     document.body.appendChild(modal);
   }
+
+  // PHASE125: 권한이 바뀌어도 오래된 더보기 DOM을 재사용하지 않고 현재 권한으로 매번 동기화한다.
+  const settingsLabel = AD ? '관리자 설정' : ((REG||CLUB_MEMBER)&&REG_CLUB ? '클럽 설정' : '개인 설정');
+  const extra=[];
+  if(AD){
+    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('register')"><span style="font-size:1.25rem">📋</span><span>팀등록</span></button>`);
+    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('players')"><span style="font-size:1.25rem">👥</span><span>선수현황</span></button>`);
+  }else if(REG && !CLUB_MEMBER){
+    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('register')"><span style="font-size:1.25rem">📋</span><span>팀등록</span></button>`);
+  }
+
+  modal.innerHTML=`<div class="modal-box" style="max-width:360px;width:calc(100% - 28px)">
+    <div class="modal-header" style="background:#0f1e3a"><h3>••• 더보기</h3><button class="modal-close" onclick="closeMobileMoreMenu()">✕</button></div>
+    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
+      <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
+      <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>${outputEsc(settingsLabel)}</span></button>
+      ${extra.join('')}
+      <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openRolePermissionCheck()"><span style="font-size:1.25rem">🔎</span><span>권한확인</span></button>
+      <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
+    </div>
+  </div>`;
   return modal;
 }
 function openMobileMoreMenu(){
   const modal=ensureMobileMoreMenu();
-  // PHASE124: 하단 '더보기' 버튼을 다시 누르면 토글로 닫힌다.
   if(modal.classList.contains('open')){ modal.classList.remove('open'); return; }
   modal.classList.add('open');
 }
@@ -24472,15 +24481,25 @@ function ensureMobileBottomMore(){
     bar=document.createElement('nav');
     bar.id='kimhaeMobileBottomNav';
     bar.setAttribute('aria-label','모바일 바로가기');
-    bar.innerHTML=`
-      <button type="button" data-kmb-page="home" onclick="mobileBottomGo('home')"><span>🏠</span><b>홈</b></button>
-      <button type="button" data-kmb-page="tournament" onclick="mobileBottomGo('tournament')"><span>🏆</span><b>대회목록</b></button>
-      <button type="button" data-kmb-page="register" onclick="mobileBottomGo('register')"><span>📋</span><b>팀등록</b></button>
-      <button type="button" data-kmb-page="bracket" onclick="mobileBottomGo('bracket')"><span>🎲</span><b>대진표</b></button>
-      <button type="button" data-kmb-page="ranking" onclick="mobileBottomGo('ranking')"><span>📊</span><b>시합결과</b></button>
-      <button type="button" data-kmb-more="1" onclick="openMobileMoreMenu()"><span>•••</span><b>더보기</b></button>`;
     document.body.appendChild(bar);
   }
+  // PHASE125: 예전 5개 메뉴 DOM이 남아도 현재 권한 기준으로 항상 다시 구성한다.
+  const bottomItems = isOperatorMode()
+    ? [
+        ['home','🏠','홈'],
+        ['bracket','🎲','대진표'],
+        ['ranking','📊','시합결과']
+      ]
+    : [
+        ['home','🏠','홈'],
+        ['tournament','🏆','대회목록'],
+        ['register','📋','팀등록'],
+        ['bracket','🎲','대진표'],
+        ['ranking','📊','시합결과']
+      ];
+  bar.innerHTML = bottomItems.map(([page,icon,label])=>`<button type="button" data-kmb-page="${page}" onclick="mobileBottomGo('${page}')"><span>${icon}</span><b>${label}</b></button>`).join('')
+    + `<button type="button" data-kmb-more="1" onclick="openMobileMoreMenu()"><span>•••</span><b>더보기</b></button>`;
+  bar.style.setProperty('--kmb-count', String(bottomItems.length+1));
 
   let st=ge('phase123MobileBottomNavStyle');
   if(!st){
@@ -24499,7 +24518,7 @@ function ensureMobileBottomMore(){
       .main-content{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))!important;}
       #kimhaeMobileBottomNav{
         position:fixed!important;left:10px!important;right:10px!important;bottom:calc(18px + env(safe-area-inset-bottom,0px))!important;z-index:2147482000!important;
-        display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch;
+        display:grid;grid-template-columns:repeat(var(--kmb-count,6),minmax(0,1fr));align-items:stretch;
         min-height:64px;padding:6px 5px;border-radius:22px;background:#10234a;
         box-shadow:0 10px 28px rgba(2,13,35,.32),0 0 0 1px rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
         transform:translateZ(0);
