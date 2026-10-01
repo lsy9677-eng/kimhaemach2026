@@ -2733,6 +2733,7 @@ function onDU(){
   refreshAppBranding();
   updateOperationSticky();
   try{ applyIndivLock(); }catch(e){}
+  try{ scheduleKimhaeMobileNavigationSync(); }catch(e){}
 }
 function sl(s){let el=ge('gLd');if(!el){el=document.createElement('div');el.id='gLd';el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;height:3px;background:linear-gradient(90deg,#1565c0,#f5a623);animation:ldA 1.2s ease-in-out infinite;';document.head.insertAdjacentHTML('beforeend',``);document.body.appendChild(el);}el.style.display=s?'block':'none';}
 
@@ -24484,9 +24485,13 @@ function ensureMobileBottomMore(){
     document.body.appendChild(bar);
   }
   // PHASE125: 예전 5개 메뉴 DOM이 남아도 현재 권한 기준으로 항상 다시 구성한다.
-  const bottomItems = isOperatorMode()
+  // PHASE126: 초기 로딩 중 임시 OP/권한 상태 때문에 '팀등록'이 빠진 메뉴가 먼저 굳는 현상 방지.
+  // 명시적인 경기진행자 전용 모드일 때만 팀등록을 제외한다.
+  const operatorOnly = !!(OP && !AD && !REG && !CLUB_MEMBER);
+  const bottomItems = operatorOnly
     ? [
         ['home','🏠','홈'],
+        ['tournament','🏆','대회목록'],
         ['bracket','🎲','대진표'],
         ['ranking','📊','시합결과']
       ]
@@ -24587,6 +24592,16 @@ function ensurePhase117MobileHeaderLayout(){
   }
   const pwBtn=ge('directorPasswordSettingsBtn');
   if(pwBtn) pwBtn.style.display='none';
+}
+// PHASE126: 새로고침 직후 권한/세션 복원이 이어져도 하단 메뉴를 최종 상태로 재동기화한다.
+let __kimhaeMobileNavSyncTimers=[];
+function scheduleKimhaeMobileNavigationSync(){
+  if(!isMobileOutputCenter()) return;
+  try{ __kimhaeMobileNavSyncTimers.forEach(t=>clearTimeout(t)); }catch(e){}
+  __kimhaeMobileNavSyncTimers=[];
+  const run=()=>{ try{ ensureKimhaeMobileNavigation(); }catch(e){ console.warn('mobile nav sync failed',e); } };
+  try{ requestAnimationFrame(run); }catch(e){ run(); }
+  [80,250,700,1500,3000].forEach(ms=>{ __kimhaeMobileNavSyncTimers.push(setTimeout(run,ms)); });
 }
 function ensureKimhaeMobileNavigation(){
   if(!isMobileOutputCenter()) return;
@@ -25281,7 +25296,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
@@ -25317,12 +25332,13 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   updateMainManualSeeds,
   toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchOperationsEdit,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
 
+window.addEventListener('pageshow',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
+window.addEventListener('load',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
+
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
   if(isMobileOutputCenter()){
-    ensureKimhaeMobileNavigation();
-    setTimeout(ensureKimhaeMobileNavigation,200);
-    setTimeout(ensureKimhaeMobileNavigation,900);
+    scheduleKimhaeMobileNavigationSync();
   }
   installRegSaveMenu44();
   setTimeout(installRegSaveMenu44,300);
