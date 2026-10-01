@@ -24316,7 +24316,7 @@ function closeMobileOutputCenter(){
 }
 
 // ─────────────────────────────────────────────────────────────
-// PHASE119 · 모바일 핵심 바로가기 + 하단 고정 퀵메뉴/더보기 · 기존 하단바 중복 제거
+// PHASE123 · 모바일 핵심 바로가기 + 하단 플로팅 퀵메뉴/더보기 · 시스템바 분리
 // PC 네비게이션/경기 데이터 로직은 건드리지 않는다.
 // ─────────────────────────────────────────────────────────────
 function mobileClubStatusLabel(){
@@ -24378,7 +24378,7 @@ function ensureMobileMoreMenu(){
       <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
         <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
         <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>설정</span></button>
-        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('bracket')"><span style="font-size:1.25rem">🎲</span><span>대진표</span></button>
+        <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openRolePermissionCheck()"><span style="font-size:1.25rem">🔎</span><span>권한확인</span></button>
         <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
       </div>
     </div>`;
@@ -24473,10 +24473,10 @@ function ensureMobileBottomMore(){
     document.body.appendChild(bar);
   }
 
-  let st=ge('phase120MobileBottomNavStyle');
+  let st=ge('phase123MobileBottomNavStyle');
   if(!st){
     st=document.createElement('style');
-    st.id='phase120MobileBottomNavStyle';
+    st.id='phase123MobileBottomNavStyle';
     st.textContent=`@media (max-width:760px){
       /* PHASE119: 기존 모바일 하단 nav-tabs와 새 퀵메뉴의 이중 노출/겹침 제거 */
       .app-header > .nav-tabs,
@@ -24486,12 +24486,14 @@ function ensureMobileBottomMore(){
       .mobile-bottom-nav,
       [data-kimhae-legacy-mobile-nav=\"1\"]{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;max-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;}
       #swipeDots,.swipe-indicator{display:none!important;}
-      body{padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))!important;}
+      body{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important;}
+      .main-content{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))!important;}
       #kimhaeMobileBottomNav{
-        position:fixed!important;left:8px!important;right:8px!important;bottom:max(8px,env(safe-area-inset-bottom,0px))!important;z-index:2147482000!important;
+        position:fixed!important;left:10px!important;right:10px!important;bottom:calc(18px + env(safe-area-inset-bottom,0px))!important;z-index:2147482000!important;
         display:grid;grid-template-columns:repeat(6,minmax(0,1fr));align-items:stretch;
         min-height:64px;padding:6px 5px;border-radius:22px;background:#10234a;
-        box-shadow:0 8px 28px rgba(2,13,35,.28);border:1px solid rgba(255,255,255,.16);
+        box-shadow:0 10px 28px rgba(2,13,35,.32),0 0 0 1px rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
+        transform:translateZ(0);
       }
       #kimhaeMobileBottomNav button{
         min-width:0;border:0;background:transparent;color:#fff;padding:4px 1px;
