@@ -3668,7 +3668,7 @@ function ensureRegistryActionToolbarLayout(){
     st.id='registryActionToolbarStyle';
     st.textContent=`
       #registryActionBtns{align-items:stretch!important;gap:7px!important;flex-wrap:wrap!important}
-      #registryActionBtns .registry-tool-btn{min-height:38px!important;padding:7px 10px!important;font-size:.76rem!important;font-weight:800!important;line-height:1.15!important;white-space:nowrap!important;word-break:keep-all!important;overflow:hidden!important;text-overflow:ellipsis!important;justify-content:center!important}
+      #registryActionBtns .registry-tool-btn{min-height:38px!important;padding:7px 9px!important;font-size:.76rem!important;font-weight:800!important;line-height:1.15!important;white-space:nowrap!important;word-break:keep-all!important;overflow:hidden!important;text-overflow:ellipsis!important;justify-content:center!important}
       @media (max-width:640px){
         #registryActionBtns{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;width:100%!important;gap:7px!important}
         #registryActionBtns .registry-tool-export{grid-column:span 2!important;width:100%!important;min-width:0!important}
@@ -3687,7 +3687,7 @@ function ensureRegistryActionToolbarLayout(){
     btn.classList.remove('registry-tool-export','registry-tool-admin');
     if(t.includes('이미지')){
       btn.classList.add('registry-tool-export');
-      btn.textContent='🖼️ 이미지 저장';
+      btn.textContent='🖼️ 이미지';
     }else if(t.includes('엑셀')){
       btn.classList.add('registry-tool-export');
       btn.textContent='📊 엑셀';
@@ -3697,26 +3697,30 @@ function ensureRegistryActionToolbarLayout(){
     }else if(t.includes('중복 클럽') || t.includes('중복클럽')){
       btn.classList.add('registry-tool-admin');
       btn.textContent='🔗 중복클럽 통합';
-    }else if(t.includes('명단 관리')){
+    }else if(t.includes('명단 관리') || t.includes('명단관리')){
       btn.classList.add('registry-tool-admin');
       btn.textContent='🧾 명단 관리';
     }
   });
 }
 function ensureRegistryManagerButton(){
-  const existing=ge('registryManagerBtn');
-  if(!AD){ if(existing) existing.remove(); return; }
   const host=ge('registryActionBtns');
   if(!host) return;
-  if(!existing){
-    const btn=document.createElement('button');
-    btn.type='button';
-    btn.id='registryManagerBtn';
-    btn.className='btn btn-outline';
-    btn.textContent='🧾 명단 관리';
-    btn.onclick=openRegistryMgr;
-    host.appendChild(btn);
+  const managerBtns=[...host.querySelectorAll('button')].filter(b=>String(b.textContent||'').replace(/\s+/g,'').includes('명단관리'));
+  if(!AD){ managerBtns.forEach(b=>b.remove()); return; }
+
+  let keep=ge('registryManagerBtn') || managerBtns[0] || null;
+  managerBtns.forEach(b=>{ if(b!==keep) b.remove(); });
+  if(!keep){
+    keep=document.createElement('button');
+    keep.type='button';
+    keep.className='btn btn-outline';
+    host.appendChild(keep);
   }
+  keep.id='registryManagerBtn';
+  keep.textContent='🧾 명단 관리';
+  keep.onclick=openRegistryMgr;
+  keep.classList.add('registry-tool-btn','registry-tool-admin');
   ensureRegistryActionToolbarLayout();
 }
 function updatePlayersAdminControls(){
@@ -22842,15 +22846,26 @@ async function repairRegistryClubGroupsNow(){
   }catch(e){sl(false);console.error(e);toast('클럽 통합 실패: '+e.message,'error');}
 }
 function ensureRegistryRepairButton(){
-  if(!AD){ ge('registryRepairGroupsBtn')?.remove(); return; }
-  const existing=ge('registryRepairGroupsBtn');
-  if(!existing){
-    const mgr=ge('registryManagerBtn')||[...document.querySelectorAll('button')].find(b=>String(b.textContent||'').includes('명단 관리'));
-    if(!mgr)return;
-    const b=document.createElement('button');b.id='registryRepairGroupsBtn';b.className='btn btn-outline';
-    b.textContent='🔗 중복클럽 통합';b.onclick=repairRegistryClubGroupsNow;
-    mgr.parentElement?.insertBefore(b,mgr);
+  const host=ge('registryActionBtns');
+  if(!host) return;
+  const repairBtns=[...host.querySelectorAll('button')].filter(b=>{
+    const t=String(b.textContent||'').replace(/\s+/g,'');
+    return t.includes('중복클럽') || t.includes('중복클럽자동통합');
+  });
+  if(!AD){ repairBtns.forEach(b=>b.remove()); return; }
+  let keep=ge('registryRepairGroupsBtn') || repairBtns[0] || null;
+  repairBtns.forEach(b=>{ if(b!==keep) b.remove(); });
+  if(!keep){
+    const mgr=ge('registryManagerBtn');
+    if(!mgr) return;
+    keep=document.createElement('button');
+    keep.className='btn btn-outline';
+    mgr.parentElement?.insertBefore(keep,mgr);
   }
+  keep.id='registryRepairGroupsBtn';
+  keep.textContent='🔗 중복클럽 통합';
+  keep.onclick=repairRegistryClubGroupsNow;
+  keep.classList.add('registry-tool-btn','registry-tool-admin');
   ensureRegistryActionToolbarLayout();
 }
 async function exportRegistryFiltered(fmt){
