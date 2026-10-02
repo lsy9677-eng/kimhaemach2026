@@ -7693,15 +7693,18 @@ function _pastRosterAddNames(names=[],club='',mode='append'){
   try{ renderRegistrationRosterPreview(REG_CLUB||club, ge('regNo')?.value||'', _pastRosterExistingNames(), ''); }catch(e){}
   return true;
 }
-function _pastRosterTogglePlayer(rowIdx,playerIdx){
+function _pastRosterTogglePlayer(ev,rowIdx,playerIdx){
+  try{ ev?.preventDefault?.(); ev?.stopPropagation?.(); }catch(e){}
   const cb=ge(`pastRosterCb_${rowIdx}_${playerIdx}`);
-  if(!cb) return;
+  if(!cb) return false;
   cb.checked=!cb.checked;
   const card=cb.closest('[data-past-player]');
   if(card){
     card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0';
     card.style.background=cb.checked?'#eff6ff':'#f8fafc';
+    card.setAttribute('aria-pressed',cb.checked?'true':'false');
   }
+  return false;
 }
 function _pastRosterSelectAll(rowIdx,checked=true){
   document.querySelectorAll(`input[data-past-row="${rowIdx}"]`).forEach(cb=>{
@@ -7741,7 +7744,7 @@ function _renderPastClubRosterModal(club,entries=[]){
       const st=_pastRosterMemberState(n,club);
       const idx=isSub?main.length+pi:pi;
       const badge=st.required ? (st.ok?'<span style="font-size:.6rem;color:#15803d;font-weight:900">등록</span>':'<span style="font-size:.6rem;color:#dc2626;font-weight:900">미등록</span>') : '';
-      return `<label data-past-player style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="event.preventDefault();_pastRosterTogglePlayer(${i},${idx})"><input id="pastRosterCb_${i}_${idx}" data-past-row="${i}" data-name="${esc(n)}" type="checkbox" style="width:17px;height:17px;accent-color:#2563eb;flex:0 0 auto"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:${isSub?'#64748b':'#10213d'};color:#fff;font-size:.62rem;flex:0 0 auto">${idx+1}</span><span style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n)}</span>${badge}</label>`;
+      return `<label data-past-player role="button" aria-pressed="false" style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent" onclick="return _pastRosterTogglePlayer(event,${i},${idx})"><input id="pastRosterCb_${i}_${idx}" data-past-row="${i}" data-name="${esc(n)}" type="checkbox" tabindex="-1" aria-hidden="true" style="width:17px;height:17px;accent-color:#2563eb;flex:0 0 auto;pointer-events:none"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:${isSub?'#64748b':'#10213d'};color:#fff;font-size:.62rem;flex:0 0 auto">${idx+1}</span><span style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n)}</span>${badge}</label>`;
     };
     const playerGrid=main.length?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${main.map((n,pi)=>renderPlayer(n,pi,false)).join('')}</div>`:'<div style="font-size:.76rem;color:#94a3b8">선수 명단 없음</div>';
     const subsHtml=subs.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.7rem;color:#64748b;font-weight:900;margin-bottom:5px">후보</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${subs.map((n,pi)=>renderPlayer(n,pi,true)).join('')}</div></div>`:'';
