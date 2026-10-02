@@ -24001,19 +24001,15 @@ function decorateRegistryStatusBadges(year,members){
     }
     // 구버전/다른 렌더러에서도 동작하도록 이름 텍스트로 보조 탐색한다.
     if(!anchor){
-      const nm=String(m?.name||'').trim();
-      const candidates=[...root.querySelectorAll('div,span,button')].filter(el=>{
-        if(el.children.length>3) return false;
-        const t=String(el.textContent||'').trim();
-        return t===nm || t.startsWith(nm+' ');
-      });
-      anchor=candidates[0]||null;
+      // PHASE158: 상태 배지는 반드시 해당 선수 이름 요소 안에 붙인다.
+      // 부모(grid/flex)에 형제 요소로 넣으면 배지가 독립 셀을 차지해 다음 선수 칸으로 밀릴 수 있다.
+      anchor=findRegistryPlayerNameElement(root,m?.name||'');
     }
     if(!anchor) return;
-    const host=anchor.closest('[data-registry-row],.registry-row,.registry-member-row') || anchor.parentElement;
+    const host=anchor.closest('[data-registry-row],.registry-row,.registry-member-row') || anchor.parentElement || anchor;
     if(!host) return;
     const key=`${String(m?.name||'').trim()}|${normalizeClub(m?.club||'')}`;
-    if(host.querySelector(`.registry-status-badge154[data-player-key="${CSS.escape(key)}"]`)) return;
+    if(root.querySelector(`.registry-status-badge154[data-player-key="${CSS.escape(key)}"]`)) return;
     const wrap=document.createElement('span');
     wrap.className='registry-status-badge154';
     wrap.dataset.playerKey=key;
@@ -24032,9 +24028,13 @@ function decorateRegistryStatusBadges(year,members){
       b.style.cssText='display:inline-flex;align-items:center;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.6rem;font-weight:900;white-space:nowrap';
       wrap.appendChild(b);
     }
-    // 이름 쪽에 붙이고, 공간이 좁아지면 자연스럽게 줄바꿈되도록 한다.
-    if(anchor.parentElement) anchor.parentElement.insertBefore(wrap, anchor);
-    else host.appendChild(wrap);
+    // PHASE158: 이름과 상태배지를 같은 선수 셀 안에 유지한다.
+    // 여성/65+ 배지가 별도의 선수 칸처럼 보이는 오류를 방지한다.
+    anchor.style.display='inline-flex';
+    anchor.style.alignItems='center';
+    anchor.style.gap='4px';
+    anchor.style.flexWrap='wrap';
+    anchor.appendChild(wrap);
   });
 }
 
