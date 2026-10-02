@@ -7851,12 +7851,33 @@ function _divisionRuleProfileFromCache(cache,name,club){
   if(!cache) return null;
   const nn=normName(name); if(!nn) return null;
   let recs=(cache.byName.get(nn)||[]).slice();
-  const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>normName(r?.name||'')===nn);
-  if(currentRows.length>1){
-    const bc=baseClub(normalizeClub(club||''))||normalizeClub(club||'');
-    recs=recs.filter(r=>(baseClub(r.club)||r.club)===bc);
-  }
   if(!recs.length) return null;
+
+  // PHASE162: 부서 자격 판정은 동일 이름만으로 과거 타 클럽 기록을 무조건 합치지 않는다.
+  // 현재 주클럽/부클럽과 연결되는 과거 기록을 우선하고, 연결되지 않는 복수 클럽 기록은
+  // 오판 방지를 위해 자동 하향 판정에서 제외한다.
+  const allowedClubs=new Set();
+  const addClub=(v)=>{
+    const c=normalizeClub(v||''); if(!c) return;
+    allowedClubs.add(c); const b=baseClub(c)||c; if(b) allowedClubs.add(b);
+  };
+  addClub(club);
+  const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>normName(r?.name||'')===nn);
+  currentRows.forEach(r=>{
+    addClub(r?.club||'');
+    String(r?.subClub||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(addClub);
+  });
+  const linked=recs.filter(r=>{
+    const rc=normalizeClub(r?.club||''), rb=baseClub(rc)||rc;
+    return !rc || allowedClubs.has(rc) || allowedClubs.has(rb);
+  });
+  if(linked.length){
+    recs=linked;
+  }else{
+    const histClubs=[...new Set(recs.map(r=>baseClub(normalizeClub(r?.club||''))||normalizeClub(r?.club||'')).filter(Boolean))];
+    if(histClubs.length>1) return null; // 동일이름 복수 과거클럽: 관리자 검증 전 자동판정 금지
+  }
+
   let baseline=0, promoted=false, won=[];
   recs.forEach(r=>{
     const lv=_ruleDivLevel(r.div); baseline=Math.max(baseline,lv);
@@ -7866,15 +7887,27 @@ function _divisionRuleProfileFromCache(cache,name,club){
   const key=({1:'bronze',2:'silver',3:'gold'})[baseline];
   return {baselineLevel:baseline,baselineDiv:key,promoted,winningRecords:won,records:recs};
 }
+function _divisionRuleMove(profile,div){
+  const target=_ruleDivLevel(div);
+  if(!profile || !target) return {known:false,target:0,delta:0,step:0,isDowngrade:false,isUpward:false};
+  const delta=Number(profile.baselineLevel||0)-target;
+  return {
+    known:true,target,delta,
+    step:delta>0?delta:0,
+    isDowngrade:delta>0,
+    isUpward:delta<0,
+    isSame:delta===0
+  };
+}
 function _divisionRuleClassifySync(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
   const profile=_divisionRuleProfileFromCache(cache,name,club);
-  if(!profile) return {known:false,step:0};
-  const target=_ruleDivLevel(div); if(!target) return {known:false,step:0};
-  const step=Math.max(0,profile.baselineLevel-target);
+  if(!profile) return {known:false,step:0,isDowngrade:false,isUpward:false};
+  const mv=_divisionRuleMove(profile,div);
+  if(!mv.known) return {known:false,step:0,isDowngrade:false,isUpward:false};
   const age65=isAge65CertifiedForDivisionRule(name,club,cache.currentYear);
   const female=isFemaleForDivisionRule(name,club,cache.currentYear);
-  return {known:true,step,age65,female,exceptionApproved:(age65||female),profile,target};
+  return {known:true,step:mv.step,isDowngrade:mv.isDowngrade,isUpward:mv.isUpward,delta:mv.delta,age65,female,exceptionApproved:(age65||female),profile,target:mv.target};
 }
 function divisionRuleBadgeHtml(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
@@ -7885,7 +7918,7 @@ function divisionRuleBadgeHtml(tid,div,name,club){
   const flags=[];
   if(female) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;font-size:.58rem;font-weight:900;white-space:nowrap">여성</span>');
   if(age65) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.58rem;font-weight:900;white-space:nowrap">65+ 인증완료</span>');
-  if(!c.known||c.step<=0) return flags.join('');
+  if(!c.known||!c.isDowngrade||c.step<=0) return flags.join('');
   const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
   const ok=age65||female;
   flags.unshift(`<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap">↓ ${move}${ok?' · 예외승인':''}</span>`);
@@ -7899,7 +7932,9 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
   const details=[];
   for(const n of uniqNames){
     const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) continue;
-    const step=Math.max(0,p.baselineLevel-_ruleDivLevel(div));
+    const mv=_divisionRuleMove(p,div);
+    if(!mv.known || !mv.isDowngrade) continue; // 동일부서/상향은 제한 대상이 아님
+    const step=mv.step;
     const age65=isAge65CertifiedForDivisionRule(n,cc,cache.currentYear);
     const female=isFemaleForDivisionRule(n,cc,cache.currentYear);
     const exceptionApproved=age65||female;
@@ -7918,15 +7953,15 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
       if(normalizeClub(tm?.club||'')!==cc) return;
       (tm?.players||[]).forEach(n=>{
         const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) return;
-        const step=Math.max(0,p.baselineLevel-_ruleDivLevel(kd.div));
-        if(step!==1 || isDivisionExceptionApproved(n,cc,cache.currentYear)) return;
+        const mv=_divisionRuleMove(p,kd.div);
+        if(!mv.known || !mv.isDowngrade || mv.step!==1 || isDivisionExceptionApproved(n,cc,cache.currentYear)) return;
         ordinary.set(normName(n),{name:n,move:`${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(kd.div)}`});
       });
     });
   });
   details.forEach(d=>{ if(d.step===1 && !d.exceptionApproved) ordinary.set(normName(d.name),{name:d.name,move:d.move}); });
   if(ordinary.size>2){
-    const arr=[...ordinary.values()];
+    const arr=[...ordinary.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
     return {ok:false,error:`1단계 부서 하향은 최대 연 2명입니다. (클럽대항 합산)\n\n현재 하향 인원 ${arr.length}명입니다.\n${arr.map(x=>`${x.name} (${x.move})`).join(', ')}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)`};
   }
   return {ok:true,details};
