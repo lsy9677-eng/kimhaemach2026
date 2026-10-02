@@ -19234,43 +19234,30 @@ function getRegistryRowsForAutocomplete(year){
 }
 
 function selectRegistrationPlayerSuggestion(num,name,club){
-  // club 인자는 phint에서 공식 등록명단의 주클럽만 전달한다.
   const inp=ge('p'+num);
-  if(inp) inp.value=String(name||'');
+  const selectedClub=normalizeClub(getRegClubInputValue()||((REG&&!AD&&REG_CLUB)?REG_CLUB:''));
+  const rowClub=normalizeClub(club||'');
+
+  // PHASE164: 팀전은 '선택한 클럽 → 그 클럽 선수' 순서로만 선택한다.
+  // 다른 클럽 동명이인이 클릭/선택되는 것을 원천 차단한다.
+  if(!currentRegIsIndividual()){
+    if(!selectedClub){
+      toast('먼저 클럽을 선택하세요','info');
+      return;
+    }
+    if(rowClub && !isSameRegistrationClub(selectedClub,rowClub)){
+      toast('선택한 클럽의 선수가 아닙니다','error');
+      return;
+    }
+  }
+
+  if(inp){
+    inp.value=String(name||'');
+    inp.dataset.registryClub=selectedClub||rowClub||'';
+    inp.dataset.registryName=normName(name||'');
+  }
   const hint=ge('h'+num);
   if(hint) hint.innerHTML='';
-
-  // 개인전은 참가자별 클럽 입력 구조이므로 팀명 자동입력 대상이 아니다.
-  if(currentRegIsIndividual()) return;
-
-  // 경기이사 로그인 상태라면 로그인한 본인 클럽을 최우선으로 사용한다.
-  const suggestedClub=normalizeClub((REG && !AD && REG_CLUB) ? REG_CLUB : (club||''));
-  if(!suggestedClub) return;
-
-  if(usesFixedClubList()){
-    const sel=ge('regClub');
-    if(!sel || sel.value) return;
-
-    const wantBase=baseClub(suggestedClub);
-    const opt=[...(sel.options||[])].find(o=>{
-      const ov=normalizeClub(o.value||o.textContent||'');
-      return ov===suggestedClub || baseClub(ov)===wantBase;
-    });
-    if(opt){
-      sel.value=opt.value;
-      try{ onRegClubChange(); }catch(e){}
-    }
-    return;
-  }
-
-  // 자유 입력 방식(현재 화면의 클럽/팀명 입력란)은 비어 있을 때만 자동 채운다.
-  // 관리자가 별도 팀명을 직접 입력한 경우에는 덮어쓰지 않는다.
-  const txt=ge('regClubText');
-  if(txt && !String(txt.value||'').trim()){
-    txt.value=suggestedClub;
-    try{ txt.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
-    try{ txt.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}
-  }
 }
 
 
@@ -19285,12 +19272,24 @@ function isSameRegistrationClub(a,b){
 function phint(inp,num){
   const v=(inp?.value||'').trim(), h=ge('h'+num);
   if(!h) return;
+  if(inp?.dataset?.registryName && normName(v)!==inp.dataset.registryName){
+    delete inp.dataset.registryName;
+    delete inp.dataset.registryClub;
+  }
   if(!v){ h.innerHTML=''; return; }
 
   const nv = normName(v);
-  const selectedClub = normalizeClub(getRegClubInputValue()||'');
+  const loginClub = normalizeClub((REG && !AD && REG_CLUB) ? REG_CLUB : '');
+  const selectedClub = normalizeClub(loginClub || getRegClubInputValue() || '');
   const year = getRegAutocompleteYear();
   const registryRows = getRegistryRowsForAutocomplete(year);
+
+  // PHASE164: 단체전은 클럽을 먼저 확정해야 선수검색 가능.
+  // 경기이사는 로그인한 본인 클럽, 관리자는 현재 선택한 클럽만 검색한다.
+  if(!currentRegIsIndividual() && !selectedClub){
+    h.innerHTML=`<span style="color:#b45309;font-size:.72rem;font-weight:800">클럽을 먼저 선택하면 해당 클럽 선수만 표시됩니다.</span>`;
+    return;
+  }
 
   // 2026년 이후 대회는 해당 연도 등록선수 명단 안에서만 자동완성
   const seen = new Set();
@@ -19315,8 +19314,13 @@ function phint(inp,num){
       subMatch,
       matchClub:(mainMatch||subMatch)
     };
-  }).filter(x=> x.disp && normName(x.disp).includes(nv)).sort((a,b)=>{
-    // 현재 팀의 주클럽 회원을 최우선, 그 다음 부클럽 일치, 그 다음 이름순
+  }).filter(x=>{
+    if(!x.disp || !normName(x.disp).includes(nv)) return false;
+    // 팀전에서는 선택한 클럽 소속(주클럽 또는 부클럽)만 후보에 남긴다.
+    if(!currentRegIsIndividual() && selectedClub) return !!x.matchClub;
+    return true;
+  }).sort((a,b)=>{
+    // 동일 클럽 안에서는 주클럽 회원을 먼저, 부클럽 회원을 다음으로 표시
     if(!!b.mainMatch !== !!a.mainMatch) return Number(b.mainMatch)-Number(a.mainMatch);
     if(!!b.subMatch !== !!a.subMatch) return Number(b.subMatch)-Number(a.subMatch);
     return a.disp.localeCompare(b.disp,'ko');
@@ -19342,7 +19346,9 @@ function phint(inp,num){
     const subText = x.subClubs?.length
       ? `<span style="font-size:.62rem;color:var(--text3);text-decoration:none"> · 부 ${x.subClubs.map(esc).join(', ')}</span>`
       : '';
-    return `<span onclick="selectRegistrationPlayerSuggestion(${num},'${esc(x.disp)}','${esc(clubDisp)}')"
+    // 팀전 선택은 현재 선택한 팀 클럽을 identity로 넘긴다. 주클럽 표시는 참고정보일 뿐이다.
+    const identityClub = (!currentRegIsIndividual() && selectedClub) ? selectedClub : clubDisp;
+    return `<span onclick="selectRegistrationPlayerSuggestion(${num},'${esc(x.disp)}','${esc(identityClub)}')"
       style="cursor:pointer;color:var(--primary);font-size:.73rem;text-decoration:underline">
       ${x.disp}${clubDisp?`(${clubDisp})`:''}${badge}${subText}
     </span>`;
