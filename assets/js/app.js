@@ -4004,6 +4004,10 @@ function showPage(n){
       return;
     }
   }
+  // PHASE163: PC 출력센터는 사용자가 직접 출력센터로 이동했을 때만 보인다.
+  // 반응형 메뉴 복원 과정에서 page-output이 다시 생성돼도 다른 페이지 아래에 붙어 보이지 않게 한다.
+  const ocPageBefore=ge('page-output');
+  if(ocPageBefore) ocPageBefore.style.display=(n==='output'?'block':'none');
   if(isOperatorMode() && ['tournament','register','players'].includes(n)){
     toast('경기진행자 권한에서는 대진표/시합결과만 운영할 수 있습니다','info');
     n='bracket';
@@ -7863,7 +7867,19 @@ function _divisionRuleProfileFromCache(cache,name,club){
   };
   addClub(club);
   const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>normName(r?.name||'')===nn);
-  currentRows.forEach(r=>{
+  // PHASE163: 동명이인이면 현재 선택 클럽과 연결되는 공식명단 행만 사용한다.
+  // 다른 클럽 동명이인의 과거 부서가 현재 선수의 기준부서로 섞이면 승격/하향 판정이 틀어진다.
+  let identityRows=currentRows;
+  if(currentRows.length>1){
+    const want=normalizeClub(club||''), wantBase=baseClub(want)||want;
+    identityRows=currentRows.filter(r=>{
+      const main=normalizeClub(r?.club||''), mainBase=baseClub(main)||main;
+      const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+      return !!want && (main===want || mainBase===wantBase || subs.some(sc=>sc===want || (baseClub(sc)||sc)===wantBase));
+    });
+    if(identityRows.length!==1) return null; // 동일인을 확정할 수 없으면 자동 자격판정하지 않음
+  }
+  identityRows.forEach(r=>{
     addClub(r?.club||'');
     String(r?.subClub||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(addClub);
   });
@@ -7874,6 +7890,8 @@ function _divisionRuleProfileFromCache(cache,name,club){
   if(linked.length){
     recs=linked;
   }else{
+    // 동명이인은 현재 공식명단과 연결되는 과거 기록이 없으면 다른 사람 기록을 가져오지 않는다.
+    if(currentRows.length>1) return null;
     const histClubs=[...new Set(recs.map(r=>baseClub(normalizeClub(r?.club||''))||normalizeClub(r?.club||'')).filter(Boolean))];
     if(histClubs.length>1) return null; // 동일이름 복수 과거클럽: 관리자 검증 전 자동판정 금지
   }
@@ -19119,9 +19137,11 @@ function getPlayerKeyByName(name,club){
       const pk=pKeyParse(k);
       if(normName(pk.name)!==n) continue;
       const p=G.players[k]||{};
-      const clubs=[normalizeClub(pk.club||''), ...(Array.isArray(p.clubs)?p.clubs.map(c=>normalizeClub(c)):[])].filter(Boolean);
+      const clubs=[normalizeClub(pk.club||''), normalizeClub(p.club||''), ...(Array.isArray(p.clubs)?p.clubs.map(c=>normalizeClub(c)):[])].filter(Boolean);
       if(clubs.includes(wantClub)) return k;
     }
+    // PHASE163: 클럽이 명시된 동명이인 조회에서는 다른 클럽의 같은 이름으로 fallback 하지 않는다.
+    return null;
   }
   for(const k of Object.keys(G.players||{})){
     const pk=pKeyParse(k);
@@ -19448,6 +19468,25 @@ function buildPH(name,p){
   const registryRowsForName=((G_REGISTRY&&(G_REGISTRY[REG_YEAR]||G_REGISTRY[2026]))||[])
     .filter(r=>normName(r?.name||'')===normName(safeName));
   const uniqueRegistryIdentity=registryRowsForName.length===1;
+  const duplicateRegistryIdentity=registryRowsForName.length>1;
+  // PHASE163: 동명이인이 공식명단에 2명 이상이면 현재 선택한 주클럽/부클럽만 동일인 식별 근거로 사용한다.
+  const strictRegistryRow=getPlayerRegistryRow(safeName,p,clubInfo.mainClub||p?.club||'');
+  const strictIdentityClubs=new Set();
+  const addStrictIdentityClub=(v)=>{
+    const c=normalizeClub(v||''); if(!c) return;
+    strictIdentityClubs.add(c); const b=baseClub(c)||c; if(b) strictIdentityClubs.add(b);
+  };
+  if(strictRegistryRow){
+    addStrictIdentityClub(strictRegistryRow.club||'');
+    String(strictRegistryRow.subClub||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(addStrictIdentityClub);
+  }else{
+    addStrictIdentityClub(clubInfo.mainClub||p?.club||'');
+  }
+  const historyClubMatchesIdentity=(rawClub)=>{
+    if(!duplicateRegistryIdentity) return true;
+    const c=normalizeClub(rawClub||''), b=baseClub(c)||c;
+    return !!(c && (strictIdentityClubs.has(c)||strictIdentityClubs.has(b)));
+  };
 
   Object.entries(G.players||{}).forEach(([pk,obj])=>{
     const parsed=pKeyParse(pk);
@@ -19461,10 +19500,16 @@ function buildPH(name,p){
     const phone=normalizePhoneDigits(obj?.phone||'');
     const phoneLinked=!!(basePhone && phone && basePhone===phone);
     const phoneConflict=!!(basePhone && phone && basePhone!==phone);
-    const clubLinked=[...cset].some(c=>linkedClubSet.has(c));
+    const clubLinked=[...cset].some(c=>{
+      const b=baseClub(c)||c;
+      return duplicateRegistryIdentity
+        ? (strictIdentityClubs.has(c)||strictIdentityClubs.has(b))
+        : (linkedClubSet.has(c)||linkedClubSet.has(b));
+    });
     const legacyLinked=!parsed.club && !obj?.club;
     const uniqueNameLinked=uniqueRegistryIdentity && !phoneConflict;
-    if(phoneLinked || clubLinked || legacyLinked || uniqueNameLinked) pushLinked(obj);
+    // 동명이인이 있으면 이름-only 레거시 문서는 누구 것인지 확정할 수 없으므로 자동 병합하지 않는다.
+    if(phoneLinked || clubLinked || (!duplicateRegistryIdentity && legacyLinked) || uniqueNameLinked) pushLinked(obj);
   });
 
   const fbHist=linkedPlayers.flatMap(lp=>(lp?.history||[]).map(h=>({
@@ -19476,6 +19521,7 @@ function buildPH(name,p){
   const histHist=[];
   HIST_DATA.forEach(t=>{
     t.teams.forEach(tm=>{
+      if(!historyClubMatchesIdentity(baseClub(tm.club)||tm.club||'')) return;
       if((tm.players||[]).some(pn=>pn===safeName||pn.replace(/\s/g,'')=== safeName.replace(/\s/g,''))){
         histHist.push({
           date:t.date, tname:t.name,
@@ -19502,6 +19548,7 @@ function buildPH(name,p){
   const registrationHist=registrationHistRaw.filter(h=>{
     if(uniqueRegistryIdentity) return true;
     const hc=normalizeClub(h.baseClub||baseClub(h.club)||h.club||'');
+    if(duplicateRegistryIdentity) return historyClubMatchesIdentity(hc);
     return !hc || linkedClubSet.has(hc);
   });
 
@@ -20107,13 +20154,14 @@ async function openPD(name,club){
     const liveRecs = collectLivePlayerHistory(dispName, useClub);
     const regRecs=getCachedPlayerRegistrationHistory(dispName);
     if(histRecs.length || liveRecs.length || regRecs.length){
-      const allClubs=[...new Set([
-        ...(useClub?[useClub]:[]),
+      // 클럽을 지정해 연 선수기록은 그 클럽의 동일인 컨텍스트만 유지한다.
+      // 동명이인일 때 다른 클럽 registrations가 더미 선수의 clubs에 섞이지 않게 한다.
+      const allClubs=useClub ? [normalizeClub(useClub)] : [...new Set([
         ...histRecs.map(r=>r.club).filter(Boolean),
         ...liveRecs.map(r=>r.club||r.baseClub||'').filter(Boolean),
         ...regRecs.map(r=>r.club||r.baseClub||'').filter(Boolean)
       ])];
-      p={name:dispName,clubs:allClubs,history:[],wins:0,losses:0};
+      p={name:dispName,club:normalizeClub(useClub||allClubs[0]||''),clubs:allClubs.filter(Boolean),history:[],wins:0,losses:0};
     }
   }
 
@@ -26252,10 +26300,15 @@ function installPublicOutputCenter(){
     existingTab=tab;
   }
   const existing=document.getElementById('page-output');
-  if(existing)return;
+  if(existing){
+    // 설치/복원만으로 출력센터가 현재 페이지 아래 노출되지 않게 한다.
+    if(!existing.classList.contains('active')) existing.style.display='none';
+    return;
+  }
   const main=document.querySelector('.main-content');
   if(!main)return;
   const page=document.createElement('div');page.className='page';page.id='page-output';
+  page.style.display='none';
   page.innerHTML=outputCenterInnerHtml();
   main.appendChild(page);
 }
