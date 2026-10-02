@@ -8720,6 +8720,13 @@ function setRegisterDivisionFilter(div){
   renderRegisterDivisionOverview();
 }
 function renderRegisterDivisionOverview(){
+  // PHASE168: 팀등록 렌더 중 출력센터 페이지가 현재 화면 아래에 끼어들지 않도록 보장.
+  const _oc=ge('page-output');
+  if(_oc && document.querySelector('.page.active')?.id!=='page-output'){
+    _oc.hidden=true;
+    _oc.classList.remove('active');
+    _oc.style.setProperty('display','none','important');
+  }
   const box=ge('regDivisionOverview');
   const tid=ge('regTS')?.value||'';
   if(!box) return;
@@ -8729,11 +8736,27 @@ function renderRegisterDivisionOverview(){
     ensureFirstAppearanceDataReady().then(()=>{ try{ renderRegisterDivisionOverview(); }catch(e){} }).catch(()=>{});
   }
 
-  // ✅ innerHTML 갱신 전에 aoReg 폼을 body로 피신시켜 DOM 소실 방지
+  // PHASE168: 팀등록 폼은 재렌더링 중 document.body로 보내지 않는다.
+  // body로 피신시키면 다른 렌더/화면전환 타이밍에 폼이 페이지 맨 아래에 고립될 수 있다.
+  // regSection 안의 숨김 parking 영역에 보관한 뒤 선택 부서 카드 안으로만 다시 마운트한다.
   const form=ge('aoReg');
-  if(form && box.contains(form)) document.body.appendChild(form);
+  let parking=ge('regFormParking168');
+  if(!parking){
+    parking=document.createElement('div');
+    parking.id='regFormParking168';
+    parking.setAttribute('aria-hidden','true');
+    parking.style.cssText='display:none!important;width:0!important;height:0!important;overflow:hidden!important;';
+    const regSection=ge('regSection');
+    if(regSection) regSection.appendChild(parking);
+    else document.body.appendChild(parking);
+  }
+  if(form && box.contains(form)) parking.appendChild(form);
 
-  if(!tid){ box.innerHTML=''; return; }
+  if(!tid){
+    box.innerHTML='';
+    if(form){ parking.appendChild(form); form.style.display='none'; }
+    return;
+  }
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t){ box.innerHTML=''; return; }
   const isOpen=t.status==='open';
@@ -8797,6 +8820,24 @@ function renderRegisterDivisionOverview(){
       ${!isOpen&&!AD?`<div style="margin-top:10px;padding:9px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;font-size:.76rem;color:var(--text2)">⛔ 현재 대회 상태가 <b>${t.status==='finished'?'종료':t.status==='closed'?'마감':'접수 불가'}</b>라 ${isIndividualTournament(t)?'참가 접수':'일반 팀 등록'}은 비활성화됩니다.</div>`:''}
     </div>`;
   }).join('');
+
+  // PHASE168: renderRegisterDivisionOverview()가 단독 호출되어도 선택 중인 부서의
+  // 팀등록 폼을 즉시 원래 카드 안으로 복원한다. 선택 부서가 없거나 등록 불가면
+  // 숨김 parking에 두어 화면 하단에 별도 블록으로 노출되지 않게 한다.
+  if(form){
+    const selectedHost=selected ? ge(`regInlineForm_${selected}`) : null;
+    const selectedCanRegister=isIndiv
+      ? isOpen
+      : ((AD||REG||isPublicTeamRegistrationEnabled()) && (AD||isOpen) && (AD||!isRegDeadlinePassed()));
+    if(selectedHost && selectedCanRegister){
+      selectedHost.appendChild(form);
+      selectedHost.style.display='block';
+      form.style.display='block';
+    }else{
+      parking.appendChild(form);
+      form.style.display='none';
+    }
+  }
 }
 
 function selectRegDivision(div){
