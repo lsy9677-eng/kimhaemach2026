@@ -7662,6 +7662,20 @@ function _dedupePastRosterEntries(entries=[]){
   });
 }
 let PAST_ROSTER_CONTEXT={tid:'',div:''};
+function _pastRosterDivisionKey(v=''){
+  const raw=String(v||'').trim();
+  const compact=raw.replace(/\s+/g,'').replace(/[🥇🥈🥉🌱👩🏢🎖]/g,'');
+  const map={
+    '금':'gold','금배':'gold','금배부':'gold','gold':'gold',
+    '은':'silver','은배':'silver','은배부':'silver','silver':'silver',
+    '동':'bronze','동배':'bronze','동배부':'bronze','bronze':'bronze',
+    '테린이':'terinee','테린이부':'terinee','terinee':'terinee',
+    '여성':'women','여성부':'women','women':'women',
+    '직장':'office','직장부':'office','office':'office',
+    '시니어':'senior','시니어부':'senior','senior':'senior'
+  };
+  return map[compact]||compact.toLowerCase();
+}
 function _pastRosterResolveDivision(tid='', preferredDiv=''){
   const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid||''))||null;
   const divisions=Array.isArray(t?.divisions)?t.divisions:[];
@@ -7672,7 +7686,11 @@ function _pastRosterResolveDivision(tid='', preferredDiv=''){
     preferredDiv||''
   ].map(v=>String(v||'').trim()).filter(Boolean);
   for(const d of candidates){
-    if(!divisions.length || divisions.includes(d)) return d;
+    if(!divisions.length) return d;
+    if(divisions.includes(d)) return d;
+    const key=_pastRosterDivisionKey(d);
+    const matched=divisions.find(x=>_pastRosterDivisionKey(x)===key);
+    if(matched) return matched;
   }
   return divisions.length===1 ? divisions[0] : '';
 }
