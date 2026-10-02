@@ -23955,6 +23955,7 @@ async function renderRegistryTab(force){
     ensureRegistryRepairButton();
     ensureRegistryNewMemberAdminControls();
     decorateRegistryStatusBadges(year, filtered);
+    wireRegistryPlayerRows(year, filtered);
   },0);
 }
 
@@ -24017,6 +24018,107 @@ function decorateRegistryStatusBadges(year,members){
     else host.appendChild(wrap);
   });
 }
+
+// PHASE156: 선수 등록 현황은 이름 중심의 깔끔한 목록으로 유지한다.
+// - 관리자는 이름 클릭 → 선수기록 + 수정/삭제 통합 팝업
+// - 일반 사용자는 이름 클릭 → 선수기록만 표시
+// - 목록의 개별 수정/삭제 버튼은 관리자에게도 숨긴다.
+function findRegistryPlayerNameElement(root,name){
+  const nm=String(name||'').trim();
+  if(!root||!nm) return null;
+  const els=[...root.querySelectorAll('div,span,strong,b')];
+  return els.find(el=>{
+    if(el.closest('.registry-status-badge154')) return false;
+    const own=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>String(n.textContent||'')).join(' ').replace(/\s+/g,' ').trim();
+    const full=String(el.textContent||'').replace(/\s+/g,' ').trim();
+    return own===nm || full===nm || own.startsWith(nm+' ') || full.startsWith(nm+' 🆕');
+  })||null;
+}
+function wireRegistryPlayerRows(year,members){
+  const root=ge('regTabBody'); if(!root) return;
+  (members||[]).forEach(m=>{
+    const idx=Number(m?.__idx); if(!Number.isFinite(idx)) return;
+    let editBtn=null, delBtn=null;
+    try{
+      editBtn=root.querySelector(`[onclick*="quickEditRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickEditRegistryMember(${Number(year)},${idx})"]`);
+      delBtn=root.querySelector(`[onclick*="quickDeleteRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickDeleteRegistryMember(${Number(year)},${idx})"]`);
+    }catch(_e){}
+    const nameEl=findRegistryPlayerNameElement(root,m?.name||'');
+    if(editBtn){ editBtn.style.display='none'; editBtn.setAttribute('aria-hidden','true'); }
+    if(delBtn){ delBtn.style.display='none'; delBtn.setAttribute('aria-hidden','true'); }
+    const target=nameEl || editBtn?.parentElement || delBtn?.parentElement;
+    if(!target) return;
+    target.style.cursor='pointer';
+    target.title=AD?'선수기록 및 관리':'선수기록 보기';
+    target.onclick=(ev)=>{
+      ev.preventDefault(); ev.stopPropagation();
+      if(AD) openRegistryPlayerAdminHub(Number(year),idx);
+      else openPD(String(m?.name||''),String(m?.club||''));
+    };
+  });
+}
+function ensureRegistryPlayerAdminHub(){
+  let o=ge('registryPlayerAdminHub');
+  if(o) return o;
+  o=document.createElement('div');
+  o.id='registryPlayerAdminHub';
+  o.style.cssText='display:none;position:fixed;inset:0;z-index:10120;background:rgba(15,23,42,.62);align-items:center;justify-content:center;padding:14px';
+  o.innerHTML=`<div style="width:min(720px,96vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:#0f1e3a;color:#fff">
+      <div id="registryPlayerAdminHubTitle" style="font-size:1rem;font-weight:900">👤 선수 관리</div>
+      <button type="button" onclick="closeRegistryPlayerAdminHub()" style="border:0;border-radius:999px;width:34px;height:34px;background:rgba(255,255,255,.16);color:#fff;font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div id="registryPlayerAdminHubBody" style="padding:14px 16px;overflow:auto;flex:1"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc">
+      <button id="registryPlayerAdminHubEdit" class="btn btn-primary" style="font-weight:900;flex:1;min-width:120px">✏️ 선수정보 수정</button>
+      <button id="registryPlayerAdminHubDelete" class="btn" style="font-weight:900;flex:1;min-width:110px;background:#dc2626;color:#fff">🗑 명단에서 삭제</button>
+      <button class="btn btn-gray" onclick="closeRegistryPlayerAdminHub()">닫기</button>
+    </div>
+  </div>`;
+  o.addEventListener('click',closeRegistryPlayerAdminHub);
+  document.body.appendChild(o);
+  return o;
+}
+function closeRegistryPlayerAdminHub(){ const o=ge('registryPlayerAdminHub'); if(o) o.style.display='none'; }
+async function openRegistryPlayerAdminHub(year,idx){
+  if(!AD){ return; }
+  const members=await loadRegistry(Number(year)||2026);
+  const m=members?.[idx];
+  if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
+  ensureRegistryPlayerAdminHub();
+  const nm=cleanName(m.name||'');
+  const club=canonicalRegistryClub(m.club||'');
+  const title=ge('registryPlayerAdminHubTitle');
+  const body=ge('registryPlayerAdminHubBody');
+  if(title) title.textContent=`👤 ${nm} · 선수기록/관리`;
+  if(body) body.innerHTML='<div style="padding:28px;text-align:center;color:#64748b">선수 기록을 불러오는 중입니다…</div>';
+  const editBtn=ge('registryPlayerAdminHubEdit');
+  const delBtn=ge('registryPlayerAdminHubDelete');
+  if(editBtn) editBtn.onclick=()=>{ closeRegistryPlayerAdminHub(); quickEditRegistryMember(Number(year),idx); };
+  if(delBtn) delBtn.onclick=async()=>{
+    if(!confirm(`"${nm}" (${club})을 ${year}년 명단에서 삭제할까요?`)) return;
+    closeRegistryPlayerAdminHub();
+    await quickDeleteRegistryMember(Number(year),idx,true);
+  };
+  ge('registryPlayerAdminHub').style.display='flex';
+  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(_e){}
+  try{ await ensurePlayerRegistrationHistory(nm); }catch(_e){}
+  let k=club?getPlayerKeyByName(nm,club):getPlayerKeyByName(nm);
+  let p=k?G.players[k]:null;
+  if(!p){
+    const regRecs=getCachedPlayerRegistrationHistory(nm);
+    const liveRecs=collectLivePlayerHistory(nm,club);
+    if(regRecs.length||liveRecs.length||hasHistPlayer(nm)) p={name:nm,club,clubs:[club].filter(Boolean),history:[],wins:0,losses:0};
+  }
+  if(body){
+    const female=_ruleGenderKey(m?.gender||m?.sex||'')==='F';
+    const age65=!!m?.age65Certified || isAge65CertifiedForDivisionRule(nm,club,Number(year));
+    const tags=[female?'<span style="display:inline-flex;padding:2px 7px;border-radius:999px;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;font-size:.68rem;font-weight:900">여성</span>':'',age65?'<span style="display:inline-flex;padding:2px 7px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.68rem;font-weight:900">65+ 인증</span>':''].filter(Boolean).join(' ');
+    const meta=`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px;padding:9px 11px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:.76rem"><b>${esc(club||'소속 미지정')}</b>${m?.subClub?`<span>부클럽 ${esc(m.subClub)}</span>`:''}${tags}</div>`;
+    body.innerHTML=meta+(p?buildPH(nm,p):'<div class="empty-state"><div class="empty-icon">👤</div><p>대회 기록 없음</p></div>');
+  }
+}
+
 
 function ensureRegistryNewMemberAdminControls(){
   if(!AD||ge('regShowNewOnly'))return;
@@ -24539,12 +24641,12 @@ async function saveRegistryQuickEditModal(){
 }
 
 // 선수 등록 현황 탭 — 인라인 빠른 삭제
-async function quickDeleteRegistryMember(year, idx){
+async function quickDeleteRegistryMember(year, idx, skipConfirm=false){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const members = await loadRegistry(year);
   const m = members[idx];
   if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
-  if(!confirm(`"${m.name}" (${m.club})을 ${year}년 명단에서 삭제할까요?`)) return;
+  if(!skipConfirm && !confirm(`"${m.name}" (${m.club})을 ${year}년 명단에서 삭제할까요?`)) return;
   members.splice(idx,1);
   if(window.G_REGISTRY && G_REGISTRY[year]) G_REGISTRY[year] = members;
   sl(true);
