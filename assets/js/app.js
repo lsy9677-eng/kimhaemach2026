@@ -7631,11 +7631,27 @@ function _dedupePastRosterEntries(entries=[]){
     return String(b.tid||'').localeCompare(String(a.tid||''));
   });
 }
+let PAST_ROSTER_CONTEXT={tid:'',div:''};
 function _pastRosterCurrentContext(){
-  const tid=ge('regTS')?.value||'';
-  const div=ge('regDS')?.value||'';
+  const liveTid=ge('regTS')?.value||'';
+  const liveDiv=ge('regDS')?.value||'';
+  const tid=liveTid||PAST_ROSTER_CONTEXT.tid||'';
+  const div=liveDiv||PAST_ROSTER_CONTEXT.div||'';
   const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid||''))||null;
   return {tid,div,t};
+}
+function _pastRosterRestoreCurrentContext(){
+  const tid=PAST_ROSTER_CONTEXT.tid||'';
+  const div=PAST_ROSTER_CONTEXT.div||'';
+  const ts=ge('regTS'), ds=ge('regDS');
+  if(ts && !ts.value && tid){
+    ts.value=tid;
+    try{ onRegTC(); }catch(e){}
+  }
+  if(ds && !ds.value && div){
+    ds.value=div;
+    try{ renderRL(); }catch(e){}
+  }
 }
 function _pastRosterVisibleSlots(){
   const out=[];
@@ -7661,6 +7677,7 @@ function _pastRosterMemberState(name,club){
 function _pastRosterAddNames(names=[],club='',mode='append'){
   const clean=[...new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))];
   if(!clean.length){ toast('선택한 선수가 없습니다','info'); return false; }
+  _pastRosterRestoreCurrentContext();
   const {tid,div,t}=_pastRosterCurrentContext();
   if(!tid||!div){ toast('현재 대회와 부서를 먼저 선택하세요','error'); return false; }
   if(isIndividualTournament(t)){ toast('지난대회 단체전 명단 불러오기는 단체전 팀등록에서 사용할 수 있습니다','info'); return false; }
@@ -7779,6 +7796,8 @@ async function openPastClubRosterReference(){
     club=v;
   }
   const currentTid=ge('regTS')?.value||'';
+  const currentDiv=ge('regDS')?.value||'';
+  PAST_ROSTER_CONTEXT={tid:currentTid,div:currentDiv};
   const entries=_collectPastRosterLocal(club,currentTid);
   try{
     const exact=String(club||'').trim();
