@@ -8069,7 +8069,31 @@ function renderRegistrationRosterPreview(club='', teamNo='', players=[], note=''
 }
 
 async function registerTeam(){
-  const tid=ge('regTS').value,div=ge('regDS').value;
+  // PHASE135: 지난대회 명단 보기/불러오기 과정에서 등록 화면이 재렌더링되어
+  // regTS/regDS 값이 잠깐 비는 경우에도, 열 때 보존한 현재 대회/부서를 안전하게 복원한다.
+  const tsEl=ge('regTS'), dsEl=ge('regDS');
+  let tid=tsEl?.value||'';
+  let div=dsEl?.value||'';
+  const savedTid=String(PAST_ROSTER_CONTEXT?.tid||'');
+  const savedDiv=String(PAST_ROSTER_CONTEXT?.div||'');
+  if(!tid && savedTid){
+    tid=savedTid;
+    if(tsEl){
+      tsEl.value=tid;
+      try{ onRegTC(); }catch(e){}
+    }
+  }
+  // 저장된 부서는 현재 대회와 같은 대회 컨텍스트일 때만 복원한다.
+  if(!div && savedDiv && savedTid && String(tid)===savedTid){
+    div=savedDiv;
+    if(dsEl){
+      dsEl.value=div;
+      try{ renderRL(); }catch(e){}
+    }
+  }
+  // onRegTC/renderRL이 DOM을 다시 구성했을 수 있으므로 최종값을 한 번 더 읽는다.
+  tid=ge('regTS')?.value||tid;
+  div=ge('regDS')?.value||div;
   const t=G.tournaments.find(t=>t.id===tid);
   const isIndividual=isIndividualTournament(t);
   const club=getRegClubInputValue();
