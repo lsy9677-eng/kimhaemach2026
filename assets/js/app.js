@@ -7775,11 +7775,26 @@ function _pastRosterAddNames(names=[],club='',mode='append',preferredDiv=''){
   try{ renderRegistrationRosterPreview(REG_CLUB||club, ge('regNo')?.value||'', _pastRosterExistingNames(), ''); }catch(e){}
   return true;
 }
+const PAST_ROSTER_SELECTION_ORDER = Object.create(null);
+
+function _pastRosterRememberSelection(rowIdx, playerIdx, checked){
+  const key=String(rowIdx);
+  const arr=Array.isArray(PAST_ROSTER_SELECTION_ORDER[key]) ? PAST_ROSTER_SELECTION_ORDER[key] : [];
+  const pos=arr.indexOf(playerIdx);
+  if(checked){
+    if(pos<0) arr.push(playerIdx);
+  }else if(pos>=0){
+    arr.splice(pos,1);
+  }
+  PAST_ROSTER_SELECTION_ORDER[key]=arr;
+}
+
 function _pastRosterTogglePlayer(ev,rowIdx,playerIdx){
   try{ ev?.preventDefault?.(); ev?.stopPropagation?.(); }catch(e){}
   const cb=ge(`pastRosterCb_${rowIdx}_${playerIdx}`);
   if(!cb) return false;
   cb.checked=!cb.checked;
+  _pastRosterRememberSelection(rowIdx, playerIdx, cb.checked);
   const card=cb.closest('[data-past-player]');
   if(card){
     card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0';
@@ -7789,14 +7804,21 @@ function _pastRosterTogglePlayer(ev,rowIdx,playerIdx){
   return false;
 }
 function _pastRosterSelectAll(rowIdx,checked=true){
-  document.querySelectorAll(`input[data-past-row="${rowIdx}"]`).forEach(cb=>{
+  const boxes=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]`)];
+  boxes.forEach((cb,idx)=>{
     cb.checked=!!checked;
     const card=cb.closest('[data-past-player]');
-    if(card){ card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0'; card.style.background=cb.checked?'#eff6ff':'#f8fafc'; }
+    if(card){ card.style.borderColor=cb.checked?'#2563eb':'#dbe4f0'; card.style.background=cb.checked?'#eff6ff':'#f8fafc'; card.setAttribute('aria-pressed',cb.checked?'true':'false'); }
   });
+  PAST_ROSTER_SELECTION_ORDER[String(rowIdx)] = checked ? boxes.map((_,idx)=>idx) : [];
 }
 function _pastRosterApplySelected(rowIdx,club='',sourceDiv=''){
-  const names=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]:checked`)].map(cb=>cb.dataset.name||'').filter(Boolean);
+  const boxes=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]`)];
+  const checkedByIndex=new Map(boxes.map((cb,idx)=>[idx,cb]));
+  const order=(PAST_ROSTER_SELECTION_ORDER[String(rowIdx)]||[]).filter(idx=>checkedByIndex.get(idx)?.checked);
+  // 혹시 체크박스 상태만 남은 경우에는 DOM 순서로 뒤에 보완한다.
+  boxes.forEach((cb,idx)=>{ if(cb.checked && !order.includes(idx)) order.push(idx); });
+  const names=order.map(idx=>checkedByIndex.get(idx)?.dataset.name||'').filter(Boolean);
   if(_pastRosterAddNames(names,club,'append',sourceDiv)) cm('mPastClubRoster');
 }
 function _pastRosterApplyAll(rowIdx,club='',sourceDiv=''){
@@ -7810,6 +7832,7 @@ function _pastRosterApplyAll(rowIdx,club='',sourceDiv=''){
   if(_pastRosterAddNames(names,club,'replace',sourceDiv)) cm('mPastClubRoster');
 }
 function _renderPastClubRosterModal(club,entries=[]){
+  Object.keys(PAST_ROSTER_SELECTION_ORDER).forEach(k=>delete PAST_ROSTER_SELECTION_ORDER[k]);
   let modal=ge('mPastClubRoster');
   if(!modal){
     modal=document.createElement('div');
@@ -8097,6 +8120,46 @@ function renderRL(){
 // - 각 칸의 ✕ 버튼으로 선수 제거(값 비우기)
 // - + 선수 추가 버튼은 첫 빈칸으로 이동
 // 저장 방식은 기존 registerTeam/saveETeam 로직을 그대로 사용한다.
+function _teamRosterEditableInputs(root,prefix){
+  const out=[];
+  for(let i=1;i<=12;i++){
+    const el=ge(prefix+i);
+    if(!el || !root?.contains(el)) continue;
+    const slot=el.closest('.pslot');
+    if(slot && getComputedStyle(slot).display==='none') continue;
+    out.push(el);
+  }
+  return out;
+}
+
+function _teamRosterSetInputValue(el,value){
+  if(!el) return;
+  el.value=value||'';
+  try{ el.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
+  try{ el.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}
+}
+
+function _teamRosterMove(root,prefix,input,dir){
+  const inputs=_teamRosterEditableInputs(root,prefix);
+  const idx=inputs.indexOf(input);
+  const to=idx+dir;
+  if(idx<0 || to<0 || to>=inputs.length) return;
+  const a=String(inputs[idx].value||'');
+  const b=String(inputs[to].value||'');
+  _teamRosterSetInputValue(inputs[idx],b);
+  _teamRosterSetInputValue(inputs[to],a);
+  inputs[to].focus();
+}
+
+function _teamRosterSortKorean(root,prefix){
+  const inputs=_teamRosterEditableInputs(root,prefix);
+  const names=inputs.map(el=>String(el.value||'').trim()).filter(Boolean);
+  if(names.length<2){ toast('정렬할 선수가 2명 이상 필요합니다','info'); return; }
+  names.sort((a,b)=>a.localeCompare(b,'ko-KR',{sensitivity:'base'}));
+  inputs.forEach((el,idx)=>_teamRosterSetInputValue(el,names[idx]||''));
+  toast('선수 명단을 가나다순으로 정렬했습니다','success');
+}
+
 function enhanceTeamRosterEditor({mode='register', editable=true}={}){
   const isEdit=mode==='edit';
   const root=isEdit ? ge('mETeamB') : ge('aoReg');
@@ -8136,6 +8199,19 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
       slot.appendChild(clear);
     }
     clear.style.display=editable?'flex':'none';
+
+    let moveWrap=slot.querySelector('.team-roster-move138');
+    if(!moveWrap){
+      moveWrap=document.createElement('span');
+      moveWrap.className='team-roster-move138';
+      moveWrap.style.cssText='display:flex;gap:3px;flex:0 0 auto;margin-left:2px;';
+      moveWrap.innerHTML='<button type="button" aria-label="위로 이동" title="위로 이동" style="width:27px;height:30px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;font-weight:950;cursor:pointer">↑</button><button type="button" aria-label="아래로 이동" title="아래로 이동" style="width:27px;height:30px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;font-weight:950;cursor:pointer">↓</button>';
+      const [upBtn,downBtn]=moveWrap.querySelectorAll('button');
+      upBtn.onclick=()=>{ if(!input.disabled&&!input.readOnly) _teamRosterMove(root,prefix,input,-1); };
+      downBtn.onclick=()=>{ if(!input.disabled&&!input.readOnly) _teamRosterMove(root,prefix,input,1); };
+      slot.appendChild(moveWrap);
+    }
+    moveWrap.style.display=editable?'flex':'none';
   }
 
   const host=(isEdit ? ge('etSlots') : (ge('regPlayerLabel')?.closest('.form-group') || root));
@@ -8145,7 +8221,7 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
       tools=document.createElement('div');
       tools.className='team-roster-tools138';
       tools.style.cssText='display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;';
-      tools.innerHTML=`<button type="button" class="btn btn-outline team-roster-add138" style="padding:6px 10px;font-size:.74rem;font-weight:900;white-space:nowrap">＋ 선수 추가</button><span style="font-size:.7rem;color:#64748b;font-weight:700">이름을 직접 고치거나 ✕로 빼고 빈칸에 새 선수를 입력할 수 있습니다.</span>`;
+      tools.innerHTML=`<button type="button" class="btn btn-outline team-roster-add138" style="padding:6px 10px;font-size:.74rem;font-weight:900;white-space:nowrap">＋ 선수 추가</button><button type="button" class="btn btn-outline team-roster-sort139" style="padding:6px 10px;font-size:.74rem;font-weight:900;white-space:nowrap">가나다순 정렬</button><span style="font-size:.7rem;color:#64748b;font-weight:700">이름 수정 · ✕ 삭제 · ↑↓ 순서변경이 가능합니다.</span>`;
       host.insertAdjacentElement('afterend',tools);
       const addBtn=tools.querySelector('.team-roster-add138');
       if(addBtn) addBtn.onclick=()=>{
@@ -8162,6 +8238,8 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
         empty.focus();
         try{ empty.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
       };
+      const sortBtn=tools.querySelector('.team-roster-sort139');
+      if(sortBtn) sortBtn.onclick=()=>_teamRosterSortKorean(root,prefix);
     }
     tools.style.display=editable?'flex':'none';
   }
