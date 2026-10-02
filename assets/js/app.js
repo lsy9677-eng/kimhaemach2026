@@ -7925,25 +7925,35 @@ function refreshDivisionRuleFormBadges(mode='register'){
     for(let i=1;i<=12;i++){
       const el=ge(prefix+i); if(!el||!root.contains(el)) continue;
       const slot=el.closest('.pslot'); if(!slot) continue;
-      slot.querySelector('.division-rule-form-badge148')?.remove();
+      slot.querySelectorAll('.division-rule-form-badge148,.division-rule-form-row153').forEach(x=>x.remove());
       const name=String(el.value||'').trim(); if(!name) continue;
       const c=_divisionRuleClassifySync(tid,div,name,club); if(!c.known||c.step<=0) continue;
       const ok=c.exceptionApproved;
       const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
+
+      // PHASE153: 하향/예외 배지는 이름 입력줄을 압축하지 않도록 항상 별도 두 번째 줄에 표시한다.
+      // 선수 이름 + 삭제/순서 버튼은 첫 줄에 고정되어 1,2번 선수명이 사라지는 현상을 방지한다.
+      slot.style.flexWrap='wrap';
+      slot.style.alignItems='center';
+      const badgeRow=document.createElement('div');
+      badgeRow.className='division-rule-form-row153';
+      badgeRow.style.cssText='flex:0 0 100%;width:100%;box-sizing:border-box;display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:3px 4px 1px 42px;min-width:0;';
+      slot.appendChild(badgeRow);
+
       const b=document.createElement('span'); b.className='division-rule-form-badge148';
       b.textContent=`↓ ${move}${c.female?' · 여성':c.age65?' · 65+ 인증완료':''}`;
-      b.style.cssText=`flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'}`;
-      slot.appendChild(b);
+      b.style.cssText=`display:inline-flex;align-items:center;max-width:100%;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'}`;
+      badgeRow.appendChild(b);
       if(c.female){
-        const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; slot.appendChild(f);
+        const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; badgeRow.appendChild(f);
       }
       if(!ok && (REG||CLUB_MEMBER||AD)) {
         const rq=document.createElement('button'); rq.type='button'; rq.className='division-rule-form-badge148';
-        rq.textContent='🔐 예외 승인요청'; rq.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
-        rq.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionExceptionRequest(name,club,tid,div);}; slot.appendChild(rq);
+        rq.textContent='🔐 예외 승인요청'; rq.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
+        rq.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionExceptionRequest(name,club,tid,div);}; badgeRow.appendChild(rq);
         if(AD){
-          const age=document.createElement('button'); age.type='button'; age.className='division-rule-form-badge148'; age.textContent='✅ 65+ 바로인증'; age.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:850;white-space:nowrap;background:#ecfdf5;border:1px solid #22c55e;color:#166534;cursor:pointer';
-          age.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();directApproveAge65Player(name,club,'팀등록 관리자 바로인증');}; slot.appendChild(age);
+          const age=document.createElement('button'); age.type='button'; age.className='division-rule-form-badge148'; age.textContent='✅ 65+ 바로인증'; age.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:850;white-space:nowrap;background:#ecfdf5;border:1px solid #22c55e;color:#166534;cursor:pointer';
+          age.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();directApproveAge65Player(name,club,'팀등록 관리자 바로인증');}; badgeRow.appendChild(age);
         }
       }
     }
@@ -8815,6 +8825,8 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
       input.readOnly=false;
       input.style.pointerEvents='auto';
       input.style.userSelect='text';
+      input.style.minWidth='72px';
+      input.style.flex='1 1 120px';
     }
 
     let clear=slot.querySelector('.team-roster-clear138');
