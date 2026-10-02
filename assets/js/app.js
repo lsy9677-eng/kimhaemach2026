@@ -1,4 +1,25 @@
 'use strict';
+// PHASE161: responsive navigation bootstrap. Hide legacy mobile navigation before
+// delayed role/data initialization so the old bar never flashes before the
+// dedicated mobile quick navigation is created.
+(function installKimhaeResponsiveNavBootstrap(){
+  try{
+    if(document.getElementById('kimhaeResponsiveNavBootstrapStyle')) return;
+    const st=document.createElement('style');
+    st.id='kimhaeResponsiveNavBootstrapStyle';
+    st.textContent=`@media (max-width:768px){
+      .app-header > .nav-tabs,
+      .nav-tabs,
+      #bottomTabBar,
+      .bottom-tab-bar,
+      .mobile-bottom-nav{display:none!important;visibility:hidden!important;pointer-events:none!important;}
+    }
+    @media (min-width:769px){
+      #kimhaeMobileBottomNav,#kimhaeMobileHomeQuick{display:none!important;}
+    }`;
+    (document.head||document.documentElement).appendChild(st);
+  }catch(e){}
+})();
 // ── 현재 연도 (매년 자동 갱신 - 코드 수정 불필요) ──
 const REG_YEAR = new Date().getFullYear(); // 2026, 2027, 2028...
 // ── 대회 편집 복식 수 헬퍼 ──
@@ -25985,6 +26006,42 @@ function suppressLegacyMobileBottomNav(){
     }catch(e){}
   });
 }
+function restoreLegacyDesktopNav(){
+  // PHASE161: suppressLegacyMobileBottomNav uses inline !important styles on mobile.
+  // Remove only those styles we added when returning to desktop so the original
+  // PC top navigation is restored without a refresh.
+  document.querySelectorAll('[data-kimhae-legacy-mobile-nav="1"]').forEach(el=>{
+    try{
+      ['display','visibility','pointer-events','height','min-height','max-height','margin','padding','border','overflow'].forEach(prop=>el.style.removeProperty(prop));
+      delete el.dataset.kimhaeLegacyMobileNav;
+    }catch(e){}
+  });
+  const bar=ge('kimhaeMobileBottomNav');
+  if(bar) bar.style.removeProperty('display');
+  ge('kimhaeMobileHomeQuick')?.remove();
+  closeMobileMoreMenu();
+}
+let __kimhaeResponsiveNavTimer=0;
+function syncKimhaeResponsiveNavigation(){
+  const mobile=isMobileOutputCenter();
+  document.documentElement.classList.toggle('kimhae-mobile-layout',mobile);
+  document.documentElement.classList.toggle('kimhae-desktop-layout',!mobile);
+  if(mobile){
+    ensureKimhaeMobileNavigation();
+  }else{
+    try{ __kimhaeMobileNavSyncTimers.forEach(t=>clearTimeout(t)); }catch(e){}
+    __kimhaeMobileNavSyncTimers=[];
+    restoreLegacyDesktopNav();
+    // Output center is a normal top-level PC page. It may have been removed while
+    // the viewport was mobile, so recreate it immediately on desktop return.
+    try{ installPublicOutputCenter(); }catch(e){}
+  }
+}
+function scheduleKimhaeResponsiveNavigationSync(){
+  clearTimeout(__kimhaeResponsiveNavTimer);
+  __kimhaeResponsiveNavTimer=setTimeout(()=>{ try{ syncKimhaeResponsiveNavigation(); }catch(e){ console.warn('responsive nav sync failed',e); } },60);
+}
+
 function ensureMobileBottomMore(){
   if(!isMobileOutputCenter()) return;
   suppressLegacyMobileBottomNav();
@@ -26113,12 +26170,17 @@ function ensurePhase117MobileHeaderLayout(){
 // PHASE126: 새로고침 직후 권한/세션 복원이 이어져도 하단 메뉴를 최종 상태로 재동기화한다.
 let __kimhaeMobileNavSyncTimers=[];
 function scheduleKimhaeMobileNavigationSync(){
-  if(!isMobileOutputCenter()) return;
+  // Kept for existing callers, but now also restores desktop navigation when the
+  // viewport crosses the breakpoint.
+  if(!isMobileOutputCenter()){
+    scheduleKimhaeResponsiveNavigationSync();
+    return;
+  }
   try{ __kimhaeMobileNavSyncTimers.forEach(t=>clearTimeout(t)); }catch(e){}
   __kimhaeMobileNavSyncTimers=[];
-  const run=()=>{ try{ ensureKimhaeMobileNavigation(); }catch(e){ console.warn('mobile nav sync failed',e); } };
+  const run=()=>{ try{ syncKimhaeResponsiveNavigation(); }catch(e){ console.warn('mobile nav sync failed',e); } };
   try{ requestAnimationFrame(run); }catch(e){ run(); }
-  [80,250,700,1500,3000].forEach(ms=>{ __kimhaeMobileNavSyncTimers.push(setTimeout(run,ms)); });
+  [80,250,700,1500].forEach(ms=>{ __kimhaeMobileNavSyncTimers.push(setTimeout(run,ms)); });
 }
 function ensureKimhaeMobileNavigation(){
   if(!isMobileOutputCenter()) return;
@@ -26813,7 +26875,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
@@ -26849,14 +26911,14 @@ Object.assign(window,{closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,ini
   updateMainManualSeeds,
   toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchOperationsEdit,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
 
+window.addEventListener('resize',scheduleKimhaeResponsiveNavigationSync,{passive:true});
+window.addEventListener('orientationchange',()=>{ setTimeout(scheduleKimhaeResponsiveNavigationSync,80); },{passive:true});
 window.addEventListener('pageshow',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
 window.addEventListener('load',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
 
 document.addEventListener('DOMContentLoaded',()=>{
   installPublicOutputCenter();
-  if(isMobileOutputCenter()){
-    scheduleKimhaeMobileNavigationSync();
-  }
+  scheduleKimhaeMobileNavigationSync();
   installRegSaveMenu44();
   setTimeout(installRegSaveMenu44,300);
   // 연도 레이블 초기화 (REG_YEAR는 모듈 스코프라 직접 접근 불가 → 현재 연도 직접 계산)
