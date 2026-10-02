@@ -18878,7 +18878,10 @@ function buildPH(name,p){
   // 총 참가 횟수, 통계
   const totalGames=allHist.length;
   const divCounts={'금':0,'은':0,'동':0,'테린이':0};
-  allHist.forEach(h=>{if(divCounts[h.div]!==undefined)divCounts[h.div]++;});
+  allHist.forEach(h=>{
+    const nd=outputNormalizeDiv(h.div||h.division||'');
+    if(divCounts[nd]!==undefined)divCounts[nd]++;
+  });
 
   // ④ 이력 HTML 생성
   const histHtml=allHist.length
@@ -18888,11 +18891,12 @@ function buildPH(name,p){
         const rankStr=rank===1?'🥇 1위':rank===2?'🥈 2위':rank===3?'🥉 3위':rank===4?'4위':rank?rank+'위':(resultLabel||'참가');
         const badgeCls=(rank===1||resultLabel==='1위')?'bg-gold':(rank===2||resultLabel==='2위')?'bg-silver':((rank===3||/3위/.test(resultLabel))?'bg-bronze':(resultLabel && resultLabel!=='참가' ? 'bg-blue' : 'bg-gray'));
         const srcBadge='';
+        const normDiv=outputNormalizeDiv(h.div||h.division||'');
         return`<div class="hist-row">
           <div class="hist-yr">${h.date.substring(0,4)}</div>
           <div class="hist-detail">
             <div style="font-weight:600;font-size:.82rem">${formatTournamentTitle(h.tname, h.date)}${srcBadge}</div>
-            <div style="font-size:.7rem;color:var(--text2);margin-top:1px">${h.club} · <span class="dpill ${dc(h.div)}" style="font-size:.58rem;padding:1px 4px">${dl(h.div)}</span></div>
+            <div style="font-size:.7rem;color:var(--text2);margin-top:1px">${h.club} · <span class="dpill ${dc(normDiv)}" style="font-size:.58rem;padding:1px 4px">${dl(normDiv)}</span></div>
           </div>
           <div><span class="badge ${badgeCls}" style="white-space:nowrap;font-size:.72rem">${rankStr}</span></div>
         </div>`;
