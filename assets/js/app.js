@@ -18738,10 +18738,39 @@ function buildPH(name,p){
   const clubInfo=resolvePlayerDisplayClubInfo(safeName,p,p?.club||'');
 
   // ① Firebase 저장 이력
-  const fbHist=(p.history||[]).map(h=>({
-    date:h.date||'',tname:h.tname||'',club:h.club||'',div:h.div||'',
+  // 같은 선수가 레거시(name-only), 현재 주클럽, 부클럽 키로 나뉜 경우
+  // 현재 선수와 연결되는 키의 history를 함께 모은다. 동명이인 방지를 위해 클럽/전화 연결이 있는 키만 포함한다.
+  const linkedClubSet=new Set([
+    clubInfo.mainClub,
+    ...(clubInfo.subClubs||[]),
+    p?.club,
+    pKeyParse(p?.key||'').club,
+    ...((p?.clubs)||[])
+  ].map(c=>normalizeClub(c||'')).filter(Boolean));
+  const basePhone=normalizePhoneDigits(p?.phone||'');
+  const linkedPlayers=[];
+  const pushLinked=(obj)=>{ if(obj && !linkedPlayers.includes(obj)) linkedPlayers.push(obj); };
+  pushLinked(p);
+  Object.entries(G.players||{}).forEach(([pk,obj])=>{
+    const parsed=pKeyParse(pk);
+    if(normName(parsed.name||obj?.name||'')!==normName(safeName)) return;
+    if(obj===p){ pushLinked(obj); return; }
+    const cset=new Set([
+      parsed.club,
+      obj?.club,
+      ...((obj?.clubs)||[])
+    ].map(c=>normalizeClub(c||'')).filter(Boolean));
+    const phone=normalizePhoneDigits(obj?.phone||'');
+    const phoneLinked=!!(basePhone && phone && basePhone===phone);
+    const clubLinked=[...cset].some(c=>linkedClubSet.has(c));
+    const legacyLinked=!parsed.club && !obj?.club;
+    if(phoneLinked || clubLinked || legacyLinked) pushLinked(obj);
+  });
+
+  const fbHist=linkedPlayers.flatMap(lp=>(lp?.history||[]).map(h=>({
+    tid:h.tid||'', date:h.date||'',tname:h.tname||'',club:h.club||'',baseClub:h.baseClub||baseClub(h.club)||'',div:h.div||h.division||'',
     rank:h.rank||null,result:h.result||'',source:'fb'
-  }));
+  })));
 
   // ② 내장 과거 데이터에서 선수 검색
   const histHist=[];
@@ -18766,13 +18795,20 @@ function buildPH(name,p){
   const seen=new Set();
   const liveHist = collectLivePlayerHistory(safeName, clubInfo.mainClub||p?.club||'');
   const allHist=[...fbHist,...histHist,...liveHist].filter(h=>{
-    const keyTid = (h.tid||'') || (h.tname||'');
-    const keyClub = (h.baseClub||baseClub(h.club)||h.club||'');
-    const k = keyTid+'|'+(h.div||'')+'|'+keyClub;
-    if(seen.has(k))return false;
-    seen.add(k);
+    const keyClub=normalizeClub(h.baseClub||baseClub(h.club)||h.club||'');
+    const keyDiv=outputNormalizeDiv(h.div||h.division||'');
+    const rawTitle=String(h.tname||'').replace(/\s+/g,' ').trim();
+    const titleKey=rawTitle.replace(/제\s*/g,'제').replace(/\s*회/g,'회').toLowerCase();
+    const dateKey=String(h.date||'').slice(0,10);
+    const aliases=[];
+    if(h.tid) aliases.push(`tid:${String(h.tid)}`);
+    if(titleKey || dateKey) aliases.push(`name:${dateKey}|${titleKey}`);
+    if(!aliases.length) aliases.push(`fallback:${String(h.tname||'')}|${dateKey}`);
+    const keys=aliases.map(a=>`${a}|${keyDiv}|${keyClub}`);
+    if(keys.some(k=>seen.has(k))) return false;
+    keys.forEach(k=>seen.add(k));
     return true;
-  }).sort((a,b)=>b.date.localeCompare(a.date));
+  }).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
 
   // 총 참가 횟수, 통계
   const totalGames=allHist.length;
