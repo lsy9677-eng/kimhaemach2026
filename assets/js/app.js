@@ -8053,9 +8053,40 @@ function refreshDivisionRuleFormBadges(mode='register'){
     const div=isEdit?String(CE_key||'').split('_')[1]:(ge('regDS')?.value||'');
     const club=isEdit?(ge('etTC')?.value||''):getRegClubInputValue();
     if(!tid||!div||!club) return;
-    await ensureDivisionRuleCache(tid);
+    const cache=await ensureDivisionRuleCache(tid);
     const root=isEdit?ge('mETeamB'):ge('aoReg'), prefix=isEdit?'ep':'p';
     if(!root) return;
+
+    // PHASE167: 예외 UI는 실제로 예외가 필요한 순간에만 표시한다.
+    // 연간 1단계 일반 하향은 클럽별 고유 선수 2명까지 허용하므로,
+    // 기존 저장팀의 일반 하향 인원 + 현재 입력 순서를 기준으로 3번째부터 승인요청을 노출한다.
+    const cc=normalizeClub(club||'');
+    const savedOrdinary=new Set();
+    Object.entries(G.teams||{}).forEach(([key,teams])=>{
+      const kd=_k2td(key), t=(G.tournaments||[]).find(x=>String(x.id)===String(kd.tid));
+      if(!t || _ruleTournamentYear(t)!==cache?.currentYear || isIndividualTournament(t)) return;
+      (teams||[]).forEach((tm,idx)=>{
+        if(isEdit && key===CE_key && idx===Number(CE_idx)) return;
+        if(normalizeClub(tm?.club||'')!==cc || !tm?._id) return;
+        (tm?.players||[]).forEach(n=>{
+          const pc=_divisionRuleClassifySync(tid,kd.div,n,cc);
+          if(pc.known && pc.isDowngrade && pc.step===1 && !pc.exceptionApproved) savedOrdinary.add(normName(n));
+        });
+      });
+    });
+    const currentOrdinary=[];
+    for(let j=1;j<=12;j++){
+      const pe=ge(prefix+j); if(!pe||!root.contains(pe)) continue;
+      const pn=String(pe.value||'').trim(); if(!pn) continue;
+      const pc=_divisionRuleClassifySync(tid,div,pn,club);
+      if(pc.known && pc.isDowngrade && pc.step===1 && !pc.exceptionApproved){
+        const nk=normName(pn);
+        if(!savedOrdinary.has(nk) && !currentOrdinary.some(x=>x.key===nk)) currentOrdinary.push({key:nk,name:pn});
+      }
+    }
+    const allowedCurrent=Math.max(0,2-savedOrdinary.size);
+    const needsLimitApproval=new Set(currentOrdinary.slice(allowedCurrent).map(x=>x.key));
+
     for(let i=1;i<=12;i++){
       const el=ge(prefix+i); if(!el||!root.contains(el)) continue;
       const slot=el.closest('.pslot'); if(!slot) continue;
@@ -8083,7 +8114,10 @@ function refreshDivisionRuleFormBadges(mode='register'){
       if(c.female){
         const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; badgeRow.appendChild(f);
       }
-      if(!ok && (REG||CLUB_MEMBER||AD)) {
+      const needsException = !ok && (c.step>=2 || (c.step===1 && needsLimitApproval.has(normName(name))));
+      // 첫 2명의 정상 1단계 하향은 '하향 표시'만 보여주고 인증 UI는 숨긴다.
+      // 금→동 같은 2단계 하향 또는 연간 3번째 이후 일반 하향에서만 승인요청을 표시한다.
+      if(needsException && (REG||CLUB_MEMBER||AD)) {
         const rq=document.createElement('button'); rq.type='button'; rq.className='division-rule-form-badge148';
         rq.textContent='🔐 예외 승인요청'; rq.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
         rq.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionExceptionRequest(name,club,tid,div);}; badgeRow.appendChild(rq);
