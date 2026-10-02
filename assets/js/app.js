@@ -7347,10 +7347,50 @@ function openPlayerContact(name, club='', phone='', career=''){
     console.warn('openPlayerContact error', e);
   }
 }
+function ensureRosterPlayerActionModal(){
+  let el=ge('mRosterPlayerAction');
+  if(el) return el;
+  el=document.createElement('div');
+  el.className='modal-overlay';
+  el.id='mRosterPlayerAction';
+  el.innerHTML=`<div class="modal-box" style="max-width:380px" onclick="event.stopPropagation()">
+    <div class="modal-header" style="background:#0f1e3a">
+      <h3 id="mRosterPlayerActionTitle">👤 선수 보기</h3>
+      <button class="modal-close" onclick="cm('mRosterPlayerAction')">✕</button>
+    </div>
+    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:18px">
+      <button class="btn btn-primary" id="mRosterPlayerRecordBtn" style="min-height:58px;font-weight:900">📊 선수기록 보기</button>
+      <button class="btn btn-outline" id="mRosterPlayerContactBtn" style="min-height:58px;font-weight:900">📱 연락처·구력</button>
+    </div>
+  </div>`;
+  el.addEventListener('click',()=>cm('mRosterPlayerAction'));
+  document.body.appendChild(el);
+  return el;
+}
+function openRosterPlayerInfo(name, club='', phone='', career=''){
+  const nm=String(name||'').trim();
+  if(!nm) return;
+  // 일반 사용자에게는 개인정보성 연락처 화면을 노출하지 않고 선수 기록으로 바로 이동한다.
+  if(!AD){
+    openPD(nm, club||'');
+    return;
+  }
+  ensureRosterPlayerActionModal();
+  const title=ge('mRosterPlayerActionTitle');
+  if(title) title.textContent=`👤 ${nm}`;
+  const recordBtn=ge('mRosterPlayerRecordBtn');
+  const contactBtn=ge('mRosterPlayerContactBtn');
+  if(recordBtn) recordBtn.onclick=()=>{ cm('mRosterPlayerAction'); openPD(nm, club||''); };
+  if(contactBtn) contactBtn.onclick=()=>{ cm('mRosterPlayerAction'); openPlayerContact(nm, club||'', phone||'', career||''); };
+  om('mRosterPlayerAction');
+}
 function rosterPlayerHTML(name, club, tid){
   const mark=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
-  const clickable=renderClickablePlayerName(name, club, info.phone||'', 'color:var(--primary);font-weight:700', info.career||'');
+  const nm=String(name||'').trim();
+  const clickable=nm
+    ? `<span onclick="openRosterPlayerInfo('${esc(nm)}','${esc(info.club||club||'')}','${esc(info.phone||'')}','${esc(info.career||'')}')" style="cursor:pointer;color:var(--primary);font-weight:700">${nm}</span>`
+    : '-';
   return `${mark?'<span title="첫 출전자" aria-label="첫 출전자" style="color:#f59e0b;font-weight:1000;margin-right:3px;text-shadow:0 1px 0 #fff">★</span>':''}${clickable}`;
 }
 
@@ -25770,7 +25810,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   backupJSON,restoreFromJSON,backupPlayersExcel,exportPlayersCSV,exportPlayersExcel,
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
   onRankTC,renderRanking,
-  filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,
+  filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,ensureRosterPlayerActionModal,openRosterPlayerInfo,
   switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
   registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
