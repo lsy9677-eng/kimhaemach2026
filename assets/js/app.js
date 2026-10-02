@@ -18859,7 +18859,42 @@ function buildPH(name,p){
     return !hc || linkedClubSet.has(hc);
   });
 
-  const allHist=[...fbHist,...histHist,...liveHist,...registrationHist].filter(h=>{
+  // PHASE147: 같은 대회가 여러 데이터 소스에서 발견되면 단순히 '먼저 발견된 기록'을 남기지 않는다.
+  // 순위/결과가 더 구체적인 기록을 우선해서 '참가'가 준우승/우승 같은 실제 성적을 덮지 못하게 한다.
+  const normalizeHistoryOutcome=(h)=>{
+    const rec={...h};
+    const txt=String(rec.result||'').trim();
+    let rv=Number(rec.rank||0)||null;
+    if(!rv){
+      if(/^(우승|1위)$/.test(txt)) rv=1;
+      else if(/^(준우승|2위)$/.test(txt)) rv=2;
+      else if(/(공동\s*)?3위/.test(txt)) rv=3;
+      else if(/^4위$/.test(txt)) rv=4;
+      else {
+        const m=txt.match(/^(\d+)위$/);
+        if(m) rv=Number(m[1])||null;
+      }
+    }
+    rec.rank=rv;
+    if(rv===1) rec.result='우승';
+    else if(rv===2) rec.result='준우승';
+    else if(rv===3) rec.result=/공동/.test(txt)?'공동 3위':'3위';
+    else if(rv===4) rec.result='4위';
+    else if(!txt) rec.result='참가';
+    return rec;
+  };
+  const historyOutcomeScore=(h)=>{
+    const r=Number(h?.rank||0)||0;
+    const txt=String(h?.result||'').trim();
+    let score=0;
+    if(r>0) score=100;
+    else if(txt && !/^(참가|예선 참가)$/.test(txt)) score=60;
+    else if(txt==='예선 참가') score=20;
+    // registrations는 출전 사실 확인용 fallback이므로 동률이면 기존 결과 데이터가 우선
+    if(h?.source==='registration') score-=5;
+    return score;
+  };
+  const historyAliasKeys=(h)=>{
     const keyClub=normalizeClub(h.baseClub||baseClub(h.club)||h.club||'');
     const keyDiv=outputNormalizeDiv(h.div||h.division||'');
     const rawTitle=String(h.tname||'').replace(/\s+/g,' ').trim();
@@ -18869,11 +18904,39 @@ function buildPH(name,p){
     if(h.tid) aliases.push(`tid:${String(h.tid)}`);
     if(titleKey || dateKey) aliases.push(`name:${dateKey}|${titleKey}`);
     if(!aliases.length) aliases.push(`fallback:${String(h.tname||'')}|${dateKey}`);
-    const keys=aliases.map(a=>`${a}|${keyDiv}|${keyClub}`);
-    if(keys.some(k=>seen.has(k))) return false;
-    keys.forEach(k=>seen.add(k));
-    return true;
-  }).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    return aliases.map(a=>`${a}|${keyDiv}|${keyClub}`);
+  };
+
+  const mergedHist=[];
+  const aliasToIndex=new Map();
+  [...fbHist,...histHist,...liveHist,...registrationHist].map(normalizeHistoryOutcome).forEach(rec=>{
+    const keys=historyAliasKeys(rec);
+    let idx=-1;
+    for(const k of keys){
+      if(aliasToIndex.has(k)){ idx=aliasToIndex.get(k); break; }
+    }
+    if(idx<0){
+      idx=mergedHist.length;
+      mergedHist.push(rec);
+    }else{
+      const cur=mergedHist[idx];
+      if(historyOutcomeScore(rec)>historyOutcomeScore(cur)){
+        // 실제 성적이 있는 기록으로 교체하되, 기존 기록의 빈 메타정보는 보존
+        mergedHist[idx]={...cur,...rec,
+          tid:rec.tid||cur.tid,
+          date:rec.date||cur.date,
+          tname:rec.tname||cur.tname,
+          club:rec.club||cur.club,
+          baseClub:rec.baseClub||cur.baseClub,
+          div:rec.div||cur.div
+        };
+      }
+    }
+    // 교체 여부와 관계없이 모든 별칭을 같은 병합 레코드에 연결
+    historyAliasKeys(mergedHist[idx]).forEach(k=>aliasToIndex.set(k,idx));
+    keys.forEach(k=>aliasToIndex.set(k,idx));
+  });
+  const allHist=mergedHist.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
 
   // 총 참가 횟수, 통계
   const totalGames=allHist.length;
