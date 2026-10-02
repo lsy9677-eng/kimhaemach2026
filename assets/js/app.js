@@ -18691,6 +18691,7 @@ async function openPHist(iid){
   const sp = splitKeyNameClub(name);
   name = sp.name || name;
 
+  try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
   const info = getPlayerForDisplay(name);
   ge('mPHistBody').innerHTML = info.exists
     ? buildPH(info.name, info.p)
@@ -18732,6 +18733,49 @@ function resolvePlayerDisplayClubInfo(name,p,preferClub=''){
   const fallbackMain=normalizeClub((preferClub||p?.club||pKeyParse(p?.key||'').club||((p?.clubs||[])[0])||'').trim());
   return {mainClub:fallbackMain, subClubs:[], registryRow:null, registryDriven:false};
 }
+
+// PHASE145: 과거 registrations 문서 기반 선수 참가이력 보강
+// 일부 예전 선수는 players.history에 이력이 없지만 registrations에는 팀 명단이 남아 있다.
+const PLAYER_REG_HISTORY_CACHE = new Map();
+async function ensurePlayerRegistrationHistory(name){
+  const clean=cleanName(String(name||'').trim());
+  const nk=normName(clean);
+  if(!nk) return [];
+  if(PLAYER_REG_HISTORY_CACHE.has(nk)) return PLAYER_REG_HISTORY_CACHE.get(nk)||[];
+
+  let out=[];
+  try{
+    const snap=await getDocs(query(collection(db,'registrations'),where('players','array-contains',clean)));
+    snap.forEach(d=>{
+      const x=d.data()||{};
+      const tid=String(x.tournamentId||x.tid||'');
+      const meta=_pastRosterTournamentMeta(tid);
+      const club=String(x.club||x.teamClub||'').trim();
+      const div=String(x.division||x.div||'').trim();
+      const rawRank=Number(x.rank||x.teamRank||0)||null;
+      const result=String(x.result||x.teamResult||'').trim();
+      out.push({
+        tid,
+        date:meta?.date||x.tournamentDate||x.date||'',
+        tname:meta?.name||x.tournamentName||x.name||'과거 대회',
+        club,
+        baseClub:baseClub(club)||club,
+        div,
+        rank:rawRank,
+        result:result||(rawRank?rawRank+'위':'참가'),
+        source:'registration'
+      });
+    });
+  }catch(e){
+    console.warn('선수 과거 registrations 이력 조회 실패', clean, e);
+  }
+  PLAYER_REG_HISTORY_CACHE.set(nk,out);
+  return out;
+}
+function getCachedPlayerRegistrationHistory(name){
+  return PLAYER_REG_HISTORY_CACHE.get(normName(cleanName(String(name||'').trim())))||[];
+}
+
 function buildPH(name,p){
   const safeName=cleanName(pKeyParse(name||'').name||name||'');
   const wr=p.wins+p.losses>0?Math.round(p.wins/(p.wins+p.losses)*100):0;
@@ -18804,7 +18848,18 @@ function buildPH(name,p){
   // - club은 하모니A/하모니B 같은 팀표기를 baseClub로 정규화해서 중복 방지
   const seen=new Set();
   const liveHist = collectLivePlayerHistory(safeName, clubInfo.mainClub||p?.club||'');
-  const allHist=[...fbHist,...histHist,...liveHist].filter(h=>{
+
+  // ③-1 과거 registrations 팀명단에서 직접 복원한 참가 이력
+  // 현재 등록명단에서 동명이인이 1명뿐이면 과거 클럽이 달라도 포함한다.
+  // 동명이인이 여러 명이면 현재 주클럽/부클럽과 연결되는 기록만 포함한다.
+  const registrationHistRaw=getCachedPlayerRegistrationHistory(safeName);
+  const registrationHist=registrationHistRaw.filter(h=>{
+    if(uniqueRegistryIdentity) return true;
+    const hc=normalizeClub(h.baseClub||baseClub(h.club)||h.club||'');
+    return !hc || linkedClubSet.has(hc);
+  });
+
+  const allHist=[...fbHist,...histHist,...liveHist,...registrationHist].filter(h=>{
     const keyClub=normalizeClub(h.baseClub||baseClub(h.club)||h.club||'');
     const keyDiv=outputNormalizeDiv(h.div||h.division||'');
     const rawTitle=String(h.tname||'').replace(/\s+/g,' ').trim();
@@ -19137,6 +19192,7 @@ async function showP(name,club){
   const clubFromKey = sp.club || '';
   const useClub = (club||'').trim() || clubFromKey;
 
+  try{ await ensurePlayerRegistrationHistory(dispName); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -19154,8 +19210,9 @@ async function showP(name,club){
     // ② 현재 라이브 대회 참가 기록도 확인 (G.teams 기반)
     const liveRecs = collectLivePlayerHistory(dispName, useClub);
 
-    // 양쪽 모두 없을 때만 "기록 없음" 처리
-    if(!histRecs.length && !liveRecs.length){
+    const regRecs=getCachedPlayerRegistrationHistory(dispName);
+    // 세 데이터 소스 모두 없을 때만 "기록 없음" 처리
+    if(!histRecs.length && !liveRecs.length && !regRecs.length){
       toast(`"${dispName}" 기록 없음`,'info');
       return;
     }
@@ -19320,6 +19377,7 @@ async function openPD(name,club){
   const dispClubFromKey = sp.club || '';
   const useClub = (club||'').trim() || dispClubFromKey;
 
+  try{ await ensurePlayerRegistrationHistory(dispName); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -19334,11 +19392,13 @@ async function openPD(name,club){
       });
     });
     const liveRecs = collectLivePlayerHistory(dispName, useClub);
-    if(histRecs.length || liveRecs.length){
+    const regRecs=getCachedPlayerRegistrationHistory(dispName);
+    if(histRecs.length || liveRecs.length || regRecs.length){
       const allClubs=[...new Set([
         ...(useClub?[useClub]:[]),
         ...histRecs.map(r=>r.club).filter(Boolean),
-        ...liveRecs.map(r=>r.club||r.baseClub||'').filter(Boolean)
+        ...liveRecs.map(r=>r.club||r.baseClub||'').filter(Boolean),
+        ...regRecs.map(r=>r.club||r.baseClub||'').filter(Boolean)
       ])];
       p={name:dispName,clubs:allClubs,history:[],wins:0,losses:0};
     }
