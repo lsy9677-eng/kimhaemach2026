@@ -8080,7 +8080,12 @@ function renderRL(){
   const regBtn = ge('aoReg')?.querySelector('button[onclick*="registerTeam"]') || document.querySelector('#aoReg button.btn.btn-primary');
   if(regBtn){
     regBtn.disabled = lock || !canRegister;
-    regBtn.textContent = isIndividual ? '✅ 참가 접수' : '✅ 팀 등록';
+    regBtn.textContent = isIndividual ? '✅ 참가 접수' : '💾 이 명단 저장';
+    if(!isIndividual){
+      regBtn.style.background='#166534';
+      regBtn.style.color='#fff';
+      regBtn.style.borderColor='#166534';
+    }
   }
   if(!isIndividual) enhanceTeamRosterEditor({mode:'register',editable:!!canRegister&&!lock});
 
@@ -8247,10 +8252,23 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
   // 등록/수정의 최종 저장 버튼 이름을 기능과 맞게 명확하게 표시한다.
   if(isEdit){
     const saveBtn=ge('mETeam')?.querySelector('button[onclick*="saveETeam"]');
-    if(saveBtn) saveBtn.textContent='✅ 명단 수정 저장';
+    if(saveBtn){
+      saveBtn.textContent='💾 수정 내용 저장';
+      saveBtn.style.background='#166534';
+      saveBtn.style.color='#fff';
+      saveBtn.style.borderColor='#166534';
+    }
   }else{
     const regBtn=root.querySelector('button[onclick*="registerTeam"]');
-    if(regBtn) regBtn.textContent=currentRegIsIndividual()?'✅ 참가 접수':'✅ 팀 등록';
+    if(regBtn){
+      const individual=currentRegIsIndividual();
+      regBtn.textContent=individual?'✅ 참가 접수':'💾 이 명단 저장';
+      if(!individual){
+        regBtn.style.background='#166534';
+        regBtn.style.color='#fff';
+        regBtn.style.borderColor='#166534';
+      }
+    }
   }
 }
 
