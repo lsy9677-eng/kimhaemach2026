@@ -7430,15 +7430,17 @@ function ensureAge65RequestModal(){
   let el=ge('mAge65CertRequest'); if(el) return el;
   el=document.createElement('div'); el.id='mAge65CertRequest'; el.className='modal-overlay';
   el.innerHTML=`<div class="modal-box" style="max-width:520px">
-    <div class="modal-header" style="background:#92400e"><h3>🔐 만 65세 이상 인증 요청</h3><button class="modal-close" onclick="cm('mAge65CertRequest')">✕</button></div>
+    <div class="modal-header" style="background:#92400e"><h3>🔐 부서 하향 예외 승인 요청</h3><button class="modal-close" onclick="cm('mAge65CertRequest')">✕</button></div>
     <div class="modal-body" style="padding:16px">
       <input type="hidden" id="age65ReqName"><input type="hidden" id="age65ReqClub"><input type="hidden" id="age65ReqTid"><input type="hidden" id="age65ReqDiv">
       <div id="age65ReqSummary" style="padding:11px 12px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;font-size:.82rem;font-weight:800;line-height:1.55;margin-bottom:12px"></div>
+      <label style="display:block;font-size:.72rem;font-weight:900;color:#475569;margin:0 0 5px">예외 사유</label>
+      <select id="age65ReqType" class="form-select" style="width:100%;margin-bottom:10px"><option value="age65">남성 만 65세 이상</option><option value="female">여성</option></select>
       <div style="padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:.76rem;line-height:1.55;color:#475569;margin-bottom:12px">
-        <b>관리자가 이미 연령을 알고 있으면 사진 없이 바로 확인·승인할 수 있습니다.</b><br>
+        <b>관리자가 이미 예외 사유를 알고 있으면 사진 없이 바로 확인·승인할 수 있습니다.</b><br>
         증빙이 필요한 경우에만 신분증 사진을 선택적으로 첨부하세요.<br>
         사진을 첨부할 때는 <b>생년월일 외 주민등록번호 뒷자리·주소 등 민감정보를 반드시 가려 주세요.</b><br>
-        승인 후 사진과 요청 원본은 삭제되고 <b>65+ 인증완료</b> 상태만 영구 보존됩니다.
+        승인 후 사진과 요청 원본은 삭제되고 <b>예외 확인 상태</b>만 보존됩니다.
       </div>
       <div style="font-size:.72rem;font-weight:900;color:#475569;margin:0 0 5px">증빙 사진 (선택)</div>
       <input id="age65ReqFile" class="form-input" type="file" accept="image/*" capture="environment" style="width:100%;box-sizing:border-box;margin-bottom:8px">
@@ -7459,7 +7461,7 @@ async function _age65LatestRequest(name,club){
     return arr[0]||null;
   }catch(e){ console.warn('[Age65] request lookup failed',e); return null; }
 }
-async function openAge65CertificationRequest(name,club,tid,div){
+async function openAge65CertificationRequest(name,club,tid,div,requestType='age65'){
   const nm=String(name||'').trim(), cc=normalizeClub(club||'');
   if(!nm){ toast('선수 이름을 확인해 주세요','error'); return; }
   if(!(AD||REG||CLUB_MEMBER)){ toast('클럽 로그인 후 인증 요청할 수 있습니다','info'); return; }
@@ -7468,12 +7470,14 @@ async function openAge65CertificationRequest(name,club,tid,div){
   }
   await loadAge65Certifications();
   const year=_ruleTournamentYear((G.tournaments||[]).find(t=>String(t.id)===String(tid)))||REG_YEAR;
-  if(isAge65CertifiedForDivisionRule(nm,cc,year)){ toast(`${nm} 선수는 이미 65+ 인증완료 상태입니다`,'success'); return; }
+  if(requestType==='female' && isFemaleForDivisionRule(nm,cc,year)){ toast(`${nm} 선수는 이미 여성으로 확인되어 있습니다`,'success'); return; }
+  if(requestType!=='female' && isAge65CertifiedForDivisionRule(nm,cc,year)){ toast(`${nm} 선수는 이미 65+ 인증완료 상태입니다`,'success'); return; }
   ensureAge65RequestModal();
   ge('age65ReqName').value=nm; ge('age65ReqClub').value=cc; ge('age65ReqTid').value=String(tid||''); ge('age65ReqDiv').value=String(div||'');
   const cache=await ensureDivisionRuleCache(tid); const p=_divisionRuleProfileFromCache(cache,nm,cc);
   const from=p? _ruleDivLabel(p.baselineDiv):'현재 자격';
-  ge('age65ReqSummary').innerHTML=`<b>${esc(nm)}</b> · ${esc(cc||'-')}<br>${esc(from)} → ${esc(_ruleDivLabel(div)||div||'-')} 하향 예외 인증 요청`;
+  ge('age65ReqSummary').innerHTML=`<b>${esc(nm)}</b> · ${esc(cc||'-')}<br>${esc(from)} → ${esc(_ruleDivLabel(div)||div||'-')} 하향 예외 승인 요청`;
+  if(ge('age65ReqType')) ge('age65ReqType').value=requestType==='female'?'female':'age65';
   ge('age65ReqFile').value=''; ge('age65ReqPrivacy').checked=false;
   const directBox=ge('age65ReqAdminDirect'); if(directBox) directBox.style.display=AD?'block':'none';
   const prev=await _age65LatestRequest(nm,cc);
@@ -7484,6 +7488,12 @@ async function openAge65CertificationRequest(name,club,tid,div){
     else st.textContent='';
   }
   om('mAge65CertRequest');
+}
+function openDivisionExceptionRequest(name,club,tid,div){
+  ensureAge65RequestModal();
+  const year=_ruleTournamentYear((G.tournaments||[]).find(t=>String(t.id)===String(tid)))||REG_YEAR;
+  const suggested=isFemaleForDivisionRule(name,club,year)?'female':'age65';
+  return openAge65CertificationRequest(name,club,tid,div,suggested);
 }
 async function _age65UploadFile(file,requestId){
   if(!file || !String(file.type||'').startsWith('image/')) throw new Error('신분증 사진 파일을 선택해 주세요.');
@@ -7496,6 +7506,7 @@ async function _age65UploadFile(file,requestId){
 }
 async function submitAge65CertificationRequest(){
   const name=ge('age65ReqName')?.value||'', club=ge('age65ReqClub')?.value||'', tid=ge('age65ReqTid')?.value||'', div=ge('age65ReqDiv')?.value||'';
+  const requestType=ge('age65ReqType')?.value==='female'?'female':'age65';
   const file=ge('age65ReqFile')?.files?.[0];
   if(file && !ge('age65ReqPrivacy')?.checked){ toast('사진을 첨부한 경우 민감정보를 가렸는지 확인해 주세요','error'); return; }
   const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
@@ -7503,17 +7514,17 @@ async function submitAge65CertificationRequest(){
   try{
     reqRef=await addDoc(collection(db,'age65CertificationRequests'),{
       name:String(name).trim(), nameNorm:_age65NormName(name), club:normalizeClub(club||''), tournamentId:String(tid||''), tournamentName:t?.name||'', targetDivision:String(div||''),
-      requestedByClub:REG_CLUB||club||'', requestedByRole:AD?'관리자':REG?'경기이사':'클럽회원', status:'pending',
+      requestedByClub:REG_CLUB||club||'', requestedByRole:AD?'관리자':REG?'경기이사':'클럽회원', status:'pending', requestType,
       evidenceType:file?'photo':'admin_check', hasPhoto:!!file, createdAt:serverTimestamp(), createdAtText:new Date().toISOString()
     });
     if(file){
       uploaded=await _age65UploadFile(file,reqRef.id);
       await updateDoc(reqRef,{...uploaded});
     }
-    sl(false); cm('mAge65CertRequest'); toast('65세 이상 인증 요청이 접수되었습니다 ✅','success');
+    sl(false); cm('mAge65CertRequest'); toast(requestType==='female'?'여성 예외 승인 요청이 접수되었습니다 ✅':'65세 이상 인증 요청이 접수되었습니다 ✅','success');
     const adminPhone=String(G.meta?.adminPhone||'').replace(/[^0-9+]/g,'');
     if(adminPhone && confirm('인증 요청이 접수되었습니다. 관리자에게 문자 알림을 보낼까요?')){
-      const body=encodeURIComponent(`[김해시테니스협회] 65세 이상 인증요청\n${name} / ${club}\n${_ruleDivLabel(div)||div}\n앱 관리자 설정에서 확인해 주세요.`);
+      const body=encodeURIComponent(`[김해시테니스협회] 부서 하향 예외 승인요청\n${name} / ${club}\n사유: ${requestType==='female'?'여성':'남성 만65세 이상'}\n${_ruleDivLabel(div)||div}\n앱 관리자 설정에서 확인해 주세요.`);
       location.href=`sms:${adminPhone}?body=${body}`;
     }
   }catch(e){
@@ -7538,7 +7549,7 @@ function ensureAge65AdminRequestButton(){
   if(!wrap){
     wrap=document.createElement('div'); wrap.id='age65AdminRequestEntry';
     wrap.style.cssText='margin:0 0 12px;padding:10px 12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:12px';
-    wrap.innerHTML=`<button id="age65AdminRequestBtn" class="btn" style="width:100%;background:#b45309;color:#fff;font-weight:900" onclick="openAge65AdminCenter()">🔔 65세 인증 요청</button>`;
+    wrap.innerHTML=`<button id="age65AdminRequestBtn" class="btn" style="width:100%;background:#b45309;color:#fff;font-weight:900" onclick="openAge65AdminCenter()">🔔 하향 예외 승인 요청</button>`;
     body.prepend(wrap);
   }
   refreshAge65AdminRequestBadge();
@@ -7546,14 +7557,14 @@ function ensureAge65AdminRequestButton(){
 async function refreshAge65AdminRequestBadge(){
   if(!AD) return;
   const arr=await _age65LoadAdminRequests(); const pending=arr.filter(x=>x.status==='pending');
-  const btn=ge('age65AdminRequestBtn'); if(btn) btn.textContent=`🔔 65세 인증 요청${pending.length?` (${pending.length})`:''}`;
-  const top=ge('adminSettingsBtn'); if(top) top.title=pending.length?`65세 인증 대기 ${pending.length}건`:'관리자 설정';
+  const btn=ge('age65AdminRequestBtn'); if(btn) btn.textContent=`🔔 하향 예외 승인 요청${pending.length?` (${pending.length})`:''}`;
+  const top=ge('adminSettingsBtn'); if(top) top.title=pending.length?`하향 예외 승인 대기 ${pending.length}건`:'관리자 설정';
   if(pending.length) try{ console.info(`[Age65] 인증 대기 ${pending.length}건`); }catch(e){}
 }
 function ensureAge65AdminCenter(){
   let el=ge('mAge65AdminCenter'); if(el) return el;
   el=document.createElement('div'); el.id='mAge65AdminCenter'; el.className='modal-overlay';
-  el.innerHTML=`<div class="modal-box" style="max-width:760px"><div class="modal-header" style="background:#7c2d12"><h3>🔔 65세 인증 요청 확인</h3><button class="modal-close" onclick="cm('mAge65AdminCenter')">✕</button></div><div class="modal-body" id="age65AdminCenterBody" style="padding:14px;max-height:72vh;overflow:auto"></div></div>`;
+  el.innerHTML=`<div class="modal-box" style="max-width:760px"><div class="modal-header" style="background:#7c2d12"><h3>🔔 하향 예외 승인 요청 확인</h3><button class="modal-close" onclick="cm('mAge65AdminCenter')">✕</button></div><div class="modal-body" id="age65AdminCenterBody" style="padding:14px;max-height:72vh;overflow:auto"></div></div>`;
   document.body.appendChild(el); return el;
 }
 async function openAge65AdminCenter(){
@@ -7564,34 +7575,44 @@ async function openAge65AdminCenter(){
   const pending=arr.filter(x=>x.status==='pending'), rejected=arr.filter(x=>x.status==='rejected').slice(0,10);
   const card=x=>`<div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-bottom:10px;background:#fff">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><b style="font-size:.95rem">${esc(x.name||'-')}</b> <span style="font-size:.72rem;color:#64748b">${esc(x.club||'')}</span><div style="font-size:.75rem;color:#475569;margin-top:3px">${esc(x.tournamentName||'')} · ${esc(_ruleDivLabel(x.targetDivision)||x.targetDivision||'')}</div></div><span style="font-size:.68rem;font-weight:900;color:${x.status==='pending'?'#b45309':'#b91c1c'}">${x.status==='pending'?'인증대기':'반려'}</span></div>
-    <div style="margin-top:8px;font-size:.72rem;font-weight:800;color:${x.photoURL?'#0369a1':'#64748b'}">${x.photoURL?'📷 증빙 사진 첨부':'👤 사진 없음 · 관리자 직접 확인 요청'}</div>
+    <div style="margin-top:8px;font-size:.72rem;font-weight:900;color:#7c2d12">예외 사유: ${x.requestType==='female'?'여성':'남성 만65세 이상'}</div>
+    <div style="margin-top:5px;font-size:.72rem;font-weight:800;color:${x.photoURL?'#0369a1':'#64748b'}">${x.photoURL?'📷 증빙 사진 첨부':'👤 사진 없음 · 관리자 직접 확인 요청'}</div>
     ${x.photoURL?`<a href="${esc(x.photoURL)}" target="_blank" rel="noopener"><img src="${esc(x.photoURL)}" alt="인증사진" style="display:block;width:100%;max-height:260px;object-fit:contain;background:#f8fafc;border-radius:10px;margin-top:8px;border:1px solid #e2e8f0"></a>`:''}
     ${x.rejectReason?`<div style="margin-top:8px;font-size:.74rem;color:#b91c1c">반려사유: ${esc(x.rejectReason)}</div>`:''}
     ${x.status==='pending'?`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;background:#15803d;font-weight:900" onclick="approveAge65CertificationRequest('${x.id}')">✅ 승인</button><button class="btn btn-outline" style="flex:1;border-color:#dc2626;color:#b91c1c;font-weight:900" onclick="rejectAge65CertificationRequest('${x.id}')">반려</button></div>`:''}
   </div>`;
-  if(body) body.innerHTML=`<div style="font-size:.78rem;color:#64748b;margin-bottom:10px">사진은 선택사항입니다. 관리자가 연령을 알고 있으면 바로 승인할 수 있습니다. 승인 시 요청 원본과 첨부 사진이 있으면 삭제하고 <b>65+ 인증완료 상태만 영구 저장</b>합니다.</div>${pending.length?pending.map(card).join(''):'<div style="padding:24px;text-align:center;color:#64748b">대기 중인 인증 요청이 없습니다.</div>'}${rejected.length?`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800;color:#64748b">최근 반려 ${rejected.length}건</summary><div style="margin-top:8px">${rejected.map(card).join('')}</div></details>`:''}`;
+  if(body) body.innerHTML=`<div style="font-size:.78rem;color:#64748b;margin-bottom:10px">사진은 선택사항입니다. 관리자가 예외 사유를 알고 있으면 바로 승인할 수 있습니다. 여성 승인 시 등록명단 성별을 여성으로 표시하고, 65세 승인 시 65+ 인증상태를 영구 저장합니다.</div>${pending.length?pending.map(card).join(''):'<div style="padding:24px;text-align:center;color:#64748b">대기 중인 인증 요청이 없습니다.</div>'}${rejected.length?`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800;color:#64748b">최근 반려 ${rejected.length}건</summary><div style="margin-top:8px">${rejected.map(card).join('')}</div></details>`:''}`;
   refreshAge65AdminRequestBadge();
 }
 async function _age65DeletePhoto(req){ if(req?.storagePath){ try{await deleteObject(ref(storage,req.storagePath));}catch(e){console.warn('[Age65] photo delete skipped',e);} } }
 async function approveAge65CertificationRequest(id){
   if(!AD) return;
   const req=AGE65_ADMIN_REQUESTS.find(x=>x.id===id) || (await _age65LoadAdminRequests()).find(x=>x.id===id); if(!req) return;
-  if(!confirm(`${req.name} 선수를 만 65세 이상으로 영구 인증할까요?\n\n관리자가 연령을 확인했거나 이미 알고 있는 경우 승인하세요.${req.photoURL?'\n첨부 사진과 요청 원본은 승인 후 삭제됩니다.':'\n요청 원본은 승인 후 삭제됩니다.'}`)) return;
+  const isFemale=req.requestType==='female';
+  if(!confirm(`${req.name} 선수의 ${isFemale?'여성':'만 65세 이상'} 예외를 승인할까요?\n\n관리자가 직접 확인한 경우 승인하세요.${req.photoURL?'\n첨부 사진과 요청 원본은 승인 후 삭제됩니다.':'\n요청 원본은 승인 후 삭제됩니다.'}`)) return;
   sl(true);
   try{
-    const certId=_age65CertDocId(req.name,req.club);
-    await setDoc(doc(db,'age65Certifications',certId),{name:req.name,nameNorm:_age65NormName(req.name),clubAtApproval:normalizeClub(req.club||''),certified:true,certifiedAt:serverTimestamp(),certifiedAtText:new Date().toISOString(),certifiedBy:'관리자'},{merge:true});
-    // 현재 로드된 등록명단에도 표시를 남겨 기존 화면/규칙과 즉시 호환한다.
-    for(const y of Object.keys(G_REGISTRY||{})){
-      const year=Number(y), rows=G_REGISTRY[year]||[]; let changed=false;
-      rows.forEach(r=>{ if(_age65NormName(r?.name||'')===_age65NormName(req.name) && (normalizeClub(r?.club||'')===normalizeClub(req.club||'') || rows.filter(z=>_age65NormName(z?.name||'')===_age65NormName(req.name)).length===1)){ r.age65Certified=true; r.age65CertifiedAt=new Date().toISOString(); changed=true; } });
-      if(changed) try{await saveRegistry(year);}catch(e){console.warn('[Age65] registry mirror save failed',year,e);}
+    if(isFemale){
+      for(const y of Object.keys(G_REGISTRY||{})){
+        const year=Number(y), rows=G_REGISTRY[year]||[]; let changed=false;
+        const sameName=rows.filter(z=>_age65NormName(z?.name||'')===_age65NormName(req.name));
+        rows.forEach(r=>{ if(_age65NormName(r?.name||'')===_age65NormName(req.name) && (normalizeClub(r?.club||'')===normalizeClub(req.club||'') || sameName.length===1)){ r.gender='F'; changed=true; } });
+        if(changed) try{await saveRegistry(year);}catch(e){console.warn('[DivisionRule] female registry save failed',year,e);}
+      }
+    }else{
+      const certId=_age65CertDocId(req.name,req.club);
+      await setDoc(doc(db,'age65Certifications',certId),{name:req.name,nameNorm:_age65NormName(req.name),clubAtApproval:normalizeClub(req.club||''),certified:true,certifiedAt:serverTimestamp(),certifiedAtText:new Date().toISOString(),certifiedBy:'관리자'},{merge:true});
+      for(const y of Object.keys(G_REGISTRY||{})){
+        const year=Number(y), rows=G_REGISTRY[year]||[]; let changed=false;
+        rows.forEach(r=>{ if(_age65NormName(r?.name||'')===_age65NormName(req.name) && (normalizeClub(r?.club||'')===normalizeClub(req.club||'') || rows.filter(z=>_age65NormName(z?.name||'')===_age65NormName(req.name)).length===1)){ r.age65Certified=true; r.age65CertifiedAt=new Date().toISOString(); changed=true; } });
+        if(changed) try{await saveRegistry(year);}catch(e){console.warn('[Age65] registry mirror save failed',year,e);}
+      }
     }
     await _age65DeletePhoto(req); await deleteDoc(doc(db,'age65CertificationRequests',id));
     await loadAge65Certifications(true); DIVISION_RULE_CACHE.clear();
-    sl(false); toast(`${req.name} 65+ 인증완료 ✅`,'success');
-    try{await openAge65AdminCenter();}catch(e){} try{renderRL();}catch(e){} try{await renderRegistryTab(true);}catch(e){}
-  }catch(e){ sl(false); console.error(e); toast('인증 승인 실패: '+e.message,'error'); }
+    sl(false); toast(`${req.name} ${isFemale?'여성 예외':'65+ 인증'} 승인완료 ✅`,'success');
+    try{await openAge65AdminCenter();}catch(e){} try{renderRL();}catch(e){} try{await renderRegistryTab(true);}catch(e){} try{await renderRegistryMgr();}catch(e){}
+  }catch(e){ sl(false); console.error(e); toast('예외 승인 실패: '+e.message,'error'); }
 }
 async function directApproveAge65Player(name,club,source='관리자 바로인증'){
   if(!AD){ toast('관리자만 바로 인증할 수 있습니다','error'); return false; }
@@ -7667,6 +7688,50 @@ function _ruleRegistryMatches(name,club,year){
 }
 function isAge65CertifiedForDivisionRule(name,club,year){
   return _ruleRegistryMatches(name,club,year).some(r=>r?.age65Certified===true) || _age65GlobalCertified(name,club,year);
+}
+function _ruleGenderKey(v){
+  const s=String(v||'').trim().toLowerCase();
+  if(['f','female','여','여성','여자'].includes(s)) return 'F';
+  if(['m','male','남','남성','남자'].includes(s)) return 'M';
+  return '';
+}
+function isFemaleForDivisionRule(name,club,year){
+  return _ruleRegistryMatches(name,club,year).some(r=>_ruleGenderKey(r?.gender||r?.sex||'')==='F');
+}
+function isDivisionExceptionApproved(name,club,year){
+  return isAge65CertifiedForDivisionRule(name,club,year) || isFemaleForDivisionRule(name,club,year);
+}
+async function setRegistryGender(year,idx,gender){
+  if(!AD){ toast('관리자만 성별을 지정할 수 있습니다','error'); return; }
+  const members=await loadRegistry(Number(year));
+  const row=members?.[Number(idx)]; if(!row) return;
+  row.gender=_ruleGenderKey(gender);
+  G_REGISTRY[Number(year)]=members;
+  sl(true);
+  try{
+    await saveRegistry(Number(year));
+    DIVISION_RULE_CACHE.clear();
+    sl(false); toast(row.gender==='F'?`${row.name} 여성 표시 저장 ✅`:row.gender==='M'?`${row.name} 남성 표시 저장 ✅`:`${row.name} 성별 표시 해제`,'success');
+    try{ await renderRegistryMgr(); }catch(e){}
+    try{ await renderRegistryTab(true); }catch(e){}
+    try{ refreshDivisionRuleFormBadges('register'); }catch(e){}
+  }catch(e){ sl(false); toast('성별 저장 실패: '+e.message,'error'); }
+}
+function decorateRegistryGenderControls(year,members){
+  if(!AD) return;
+  (members||[]).forEach((m,idx)=>{
+    const inp=ge(`rmgr_n_${idx}`); if(!inp) return;
+    const row=inp.closest('tr')||inp.closest('[data-registry-row]')||inp.parentElement?.parentElement;
+    if(!row || row.querySelector(`[data-gender-idx="${idx}"]`)) return;
+    const sel=document.createElement('select');
+    sel.dataset.genderIdx=String(idx);
+    sel.title='부서 하향 예외 판정을 위한 성별';
+    sel.style.cssText='margin:3px 4px;padding:5px 7px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:.68rem;font-weight:900;white-space:nowrap;cursor:pointer';
+    sel.innerHTML='<option value="">성별</option><option value="M">남성</option><option value="F">여성</option>';
+    sel.value=_ruleGenderKey(m?.gender||m?.sex||'');
+    sel.onchange=()=>setRegistryGender(year,idx,sel.value);
+    (inp.closest('td')||row).appendChild(sel);
+  });
 }
 async function toggleRegistryAge65Certification(year,idx){
   if(!AD){ toast('관리자만 65세 이상 인증을 변경할 수 있습니다','error'); return; }
@@ -7787,56 +7852,61 @@ function _divisionRuleClassifySync(tid,div,name,club){
   const target=_ruleDivLevel(div); if(!target) return {known:false,step:0};
   const step=Math.max(0,profile.baselineLevel-target);
   const age65=isAge65CertifiedForDivisionRule(name,club,cache.currentYear);
-  return {known:true,step,age65,profile,target};
+  const female=isFemaleForDivisionRule(name,club,cache.currentYear);
+  return {known:true,step,age65,female,exceptionApproved:(age65||female),profile,target};
 }
 function divisionRuleBadgeHtml(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
   const year=cache?.currentYear||REG_YEAR;
-  const certified=isAge65CertifiedForDivisionRule(name,club,year);
+  const age65=isAge65CertifiedForDivisionRule(name,club,year);
+  const female=isFemaleForDivisionRule(name,club,year);
   const c=_divisionRuleClassifySync(tid,div,name,club);
-  if(!c.known||c.step<=0){
-    return certified?'<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.58rem;font-weight:900;white-space:nowrap">65+ 인증완료</span>':'';
-  }
-  const txt=c.step>=2?'↓ 2단계 하향':`↓ ${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
-  const extra=certified?' · 65+ 인증완료':'';
-  return `<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${certified?'#ecfdf5':'#fff7ed'};border:1px solid ${certified?'#86efac':'#fdba74'};color:${certified?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap">${txt}${extra}</span>`;
+  const flags=[];
+  if(female) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;font-size:.58rem;font-weight:900;white-space:nowrap">여성</span>');
+  if(age65) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.58rem;font-weight:900;white-space:nowrap">65+ 인증완료</span>');
+  if(!c.known||c.step<=0) return flags.join('');
+  const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
+  const ok=age65||female;
+  flags.unshift(`<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap">↓ ${move}${ok?' · 예외승인':''}</span>`);
+  return flags.join('');
 }
 async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
   const cache=await ensureDivisionRuleCache(tid);
   if(!cache || !_ruleDivKey(div)) return {ok:true,details:[]};
-  const targetKey=_ruleDivKey(div);
   const cc=normalizeClub(club||'');
   const uniqNames=[...new Set((names||[]).map(n=>String(n||'').trim()).filter(Boolean))];
   const details=[];
   for(const n of uniqNames){
-    const p=_divisionRuleProfileFromCache(cache,n,cc);
-    if(!p) continue;
+    const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) continue;
     const step=Math.max(0,p.baselineLevel-_ruleDivLevel(div));
     const age65=isAge65CertifiedForDivisionRule(n,cc,cache.currentYear);
-    details.push({name:n,step,age65,profile:p});
-    if(step>=2 && !age65){
-      return {ok:false,error:`${n} 선수는 ${_ruleDivLabel(p.baselineDiv)} 자격으로 ${_ruleDivLabel(div)}까지 2단계 하향할 수 없습니다.\n\n만 65세 이상 예외인 경우 관리자가 먼저 '65+ 인증'을 완료해야 합니다.`};
+    const female=isFemaleForDivisionRule(n,cc,cache.currentYear);
+    const exceptionApproved=age65||female;
+    details.push({name:n,step,age65,female,exceptionApproved,profile:p,move:`${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(div)}`});
+    if(step>=2 && !exceptionApproved){
+      return {ok:false,error:`${n} 선수의 ${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(div)} 등록은 관리자 예외 승인이 필요합니다.\n\n예외 대상: 남성 만65세 이상, 여성 등\n팀등록 화면의 '예외 승인요청'을 이용해 주세요.`};
     }
   }
-  // 현재 대회에서 같은 클럽이 같은 대상부서로 내린 일반 하향 인원을 합산한다.
-  const ordinary=new Set();
+  // 연간 클럽대항 합산: 같은 클럽의 1단계 일반 하향 선수는 연간 고유인원 최대 2명.
+  const ordinary=new Map();
   Object.entries(G.teams||{}).forEach(([key,teams])=>{
-    const [ktid,kdiv]=String(key).split('_');
-    if(String(ktid)!==String(tid) || _ruleDivKey(kdiv)!==targetKey) return;
+    const kd=_k2td(key), t=(G.tournaments||[]).find(x=>String(x.id)===String(kd.tid));
+    if(!t || _ruleTournamentYear(t)!==cache.currentYear || isIndividualTournament(t)) return;
     (teams||[]).forEach((tm,idx)=>{
       if(key===excludeKey && idx===Number(excludeIdx)) return;
       if(normalizeClub(tm?.club||'')!==cc) return;
       (tm?.players||[]).forEach(n=>{
         const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) return;
-        const step=Math.max(0,p.baselineLevel-_ruleDivLevel(div));
-        if(step===1 && !isAge65CertifiedForDivisionRule(n,cc,cache.currentYear)) ordinary.add(normName(n));
+        const step=Math.max(0,p.baselineLevel-_ruleDivLevel(kd.div));
+        if(step!==1 || isDivisionExceptionApproved(n,cc,cache.currentYear)) return;
+        ordinary.set(normName(n),{name:n,move:`${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(kd.div)}`});
       });
     });
   });
-  details.forEach(d=>{ if(d.step===1 && !d.age65) ordinary.add(normName(d.name)); });
+  details.forEach(d=>{ if(d.step===1 && !d.exceptionApproved) ordinary.set(normName(d.name),{name:d.name,move:d.move}); });
   if(ordinary.size>2){
-    const offenders=details.filter(d=>d.step===1&&!d.age65).map(d=>d.name);
-    return {ok:false,error:`${_ruleDivLabel(div)}로 일반 하향 등록할 수 있는 인원은 클럽별 최대 2명입니다.\n\n현재 일반 하향 ${ordinary.size}명입니다.${offenders.length?'\n이번 명단: '+offenders.join(', '):''}\n\n2명 초과 인원은 만 65세 이상 관리자 인증이 있어야 등록할 수 있습니다.`};
+    const arr=[...ordinary.values()];
+    return {ok:false,error:`1단계 부서 하향은 최대 연 2명입니다. (클럽대항 합산)\n\n현재 하향 인원 ${arr.length}명입니다.\n${arr.map(x=>`${x.name} (${x.move})`).join(', ')}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)`};
   }
   return {ok:true,details};
 }
@@ -7858,18 +7928,22 @@ function refreshDivisionRuleFormBadges(mode='register'){
       slot.querySelector('.division-rule-form-badge148')?.remove();
       const name=String(el.value||'').trim(); if(!name) continue;
       const c=_divisionRuleClassifySync(tid,div,name,club); if(!c.known||c.step<=0) continue;
+      const ok=c.exceptionApproved;
+      const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
       const b=document.createElement('span'); b.className='division-rule-form-badge148';
-      b.textContent=c.step>=2?(c.age65?'↓2단계 · 65+ 인증완료':'⛔ 2단계'):(c.age65?'↓하향 · 65+ 인증완료':'↓하향');
-      b.style.cssText=`flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${c.age65?'#ecfdf5':'#fff7ed'};border:1px solid ${c.age65?'#86efac':'#fdba74'};color:${c.age65?'#166534':'#9a3412'}`;
+      b.textContent=`↓ ${move}${c.female?' · 여성':c.age65?' · 65+ 인증완료':''}`;
+      b.style.cssText=`flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'}`;
       slot.appendChild(b);
-      if(!c.age65 && (REG||CLUB_MEMBER||AD)) {
+      if(c.female){
+        const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; slot.appendChild(f);
+      }
+      if(!ok && (REG||CLUB_MEMBER||AD)) {
         const rq=document.createElement('button'); rq.type='button'; rq.className='division-rule-form-badge148';
-        rq.textContent=AD?'✅ 65+ 바로인증':'🔐 65+ 인증요청'; rq.style.cssText=`flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:${AD?'#ecfdf5':'#fff'};border:1px solid ${AD?'#22c55e':'#f59e0b'};color:${AD?'#166534':'#92400e'};cursor:pointer`;
-        rq.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation(); if(AD) directApproveAge65Player(name,club,'팀등록 관리자 바로인증'); else openAge65CertificationRequest(name,club,tid,div);}; slot.appendChild(rq);
+        rq.textContent='🔐 예외 승인요청'; rq.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
+        rq.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionExceptionRequest(name,club,tid,div);}; slot.appendChild(rq);
         if(AD){
-          const req=document.createElement('button'); req.type='button'; req.className='division-rule-form-badge148'; req.textContent='🔐 요청창';
-          req.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:850;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
-          req.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openAge65CertificationRequest(name,club,tid,div);}; slot.appendChild(req);
+          const age=document.createElement('button'); age.type='button'; age.className='division-rule-form-badge148'; age.textContent='✅ 65+ 바로인증'; age.style.cssText='flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.56rem;font-weight:850;white-space:nowrap;background:#ecfdf5;border:1px solid #22c55e;color:#166534;cursor:pointer';
+          age.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();directApproveAge65Player(name,club,'팀등록 관리자 바로인증');}; slot.appendChild(age);
         }
       }
     }
@@ -8091,8 +8165,8 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const neutralFiveRoster=(dbl===5);
   const mainP=neutralFiveRoster?p.slice():p.slice(0,mainCount);
   const subP=neutralFiveRoster?[]:p.slice(mainCount);
-  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:36px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span></div>`).join('')}</div>`;
-  const subHtml=subP.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.69rem;color:#64748b;font-weight:800;margin-bottom:5px">후보</div><div style="display:flex;flex-wrap:wrap;gap:5px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.75rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span>`).join('')}</div></div>`:'';
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:flex-start;gap:6px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:42px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:1px">${pi+1}</span><span style="min-width:0;flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px"><span style="display:block;max-width:100%;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}</span><span class="division-rule-card-badges151" style="display:flex;flex-wrap:wrap;gap:3px;max-width:100%;line-height:1">${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span></span></div>`).join('')}</div>`;
+  const subHtml=subP.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.69rem;color:#64748b;font-weight:800;margin-bottom:5px">후보</div><div style="display:flex;flex-wrap:wrap;gap:5px">${subP.map(n=>`<span style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:3px;padding:5px 8px;border-radius:10px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.75rem;font-weight:700;min-width:0"><span style="max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}</span><span class="division-rule-card-badges151" style="display:flex;flex-wrap:wrap;gap:3px;max-width:100%">${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span></span>`).join('')}</div></div>`:'';
   return mainHtml+subHtml;
 }
 
@@ -24216,6 +24290,7 @@ async function renderRegistryMgr(){
   if(ge('rmgrSearchInput')) ge('rmgrSearchInput').value=searchValue;
   applyRegistryMgrSearch();
   decorateRegistryAge65Controls(year,members);
+  decorateRegistryGenderControls(year,members);
 }
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
@@ -26513,7 +26588,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,ensureRosterPlayerActionModal,openRosterPlayerInfo,
-  switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,toggleRegistryAge65Certification,openAge65CertificationRequest,submitAge65CertificationRequest,directApproveAge65Player,adminDirectApproveAge65FromRequest,ensureAge65AdminRequestButton,refreshAge65AdminRequestBadge,openAge65AdminCenter,approveAge65CertificationRequest,rejectAge65CertificationRequest,
+  switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,toggleRegistryAge65Certification,setRegistryGender,openAge65CertificationRequest,openDivisionExceptionRequest,submitAge65CertificationRequest,directApproveAge65Player,adminDirectApproveAge65FromRequest,ensureAge65AdminRequestButton,refreshAge65AdminRequestBadge,openAge65AdminCenter,approveAge65CertificationRequest,rejectAge65CertificationRequest,
   registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
