@@ -7384,6 +7384,237 @@ function openRosterPlayerInfo(name, club='', phone='', career=''){
   if(contactBtn) contactBtn.onclick=()=>{ cm('mRosterPlayerAction'); openPlayerContact(nm, club||'', phone||'', career||''); };
   om('mRosterPlayerAction');
 }
+
+// PHASE148: 김해시 단체전 부서 자격 규칙
+// - 전년도 시장기/협회장기 중 1개 대회라도 우승한 팀의 전체 등록명단(후보 포함)은 다음 해 1단계 승격
+// - 일반 하향은 바로 아래 1단계만, 클럽/대상부서별 일반 하향 최대 2명
+// - 2단계 하향 또는 일반 하향 2명 초과는 65세 이상 관리자 인증이 있어야 허용
+// - 최하위팀 자동 강등 규칙은 적용하지 않는다.
+const DIVISION_RULE_CACHE=new Map();
+const DIVISION_RULE_PROMISE=new Map();
+function _ruleDivKey(v){
+  const s=String(v||'').trim().replace(/\s+/g,'');
+  if(['금','금배','금배부','gold'].includes(s)) return 'gold';
+  if(['은','은배','은배부','silver'].includes(s)) return 'silver';
+  if(['동','동배','동배부','bronze'].includes(s)) return 'bronze';
+  return '';
+}
+function _ruleDivLevel(v){ return ({bronze:1,silver:2,gold:3})[_ruleDivKey(v)]||0; }
+function _ruleDivLabel(v){ return ({gold:'금배부',silver:'은배부',bronze:'동배부'})[_ruleDivKey(v)]||String(v||''); }
+function _ruleTournamentYear(t){ return _m26YearFromTournament(t); }
+function _rulePrevTournaments(currentT){
+  const y=_ruleTournamentYear(currentT)-1;
+  if(!y) return [];
+  const all=[...(G.tournaments||[]),...(HIST_DATA||[])];
+  const uniq=new Map();
+  all.forEach(t=>{ if(t?.id && _ruleTournamentYear(t)===y && !isIndividualTournament(t)) uniq.set(String(t.id),t); });
+  let arr=[...uniq.values()];
+  const designated=arr.filter(t=>/시장기|협회장기/.test(String(t?.name||'')));
+  if(designated.length) arr=designated;
+  arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  return arr;
+}
+function _ruleRegistryRowsSync(year){
+  return (G_REGISTRY?.[year]||((year===REG_YEAR)?getMemberRegistry2026():[])||[]);
+}
+function _ruleRegistryMatches(name,club,year){
+  const nn=normName(name), cc=normalizeClub(club||'');
+  const rows=_ruleRegistryRowsSync(year).filter(r=>normName(r?.name||'')===nn);
+  if(rows.length<=1) return rows;
+  const bc=baseClub(cc)||cc;
+  return rows.filter(r=>{
+    const rc=normalizeClub(r?.club||''), rbc=baseClub(rc)||rc;
+    const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+    return rbc===bc || subs.some(sc=>(baseClub(sc)||sc)===bc);
+  });
+}
+function isAge65CertifiedForDivisionRule(name,club,year){
+  return _ruleRegistryMatches(name,club,year).some(r=>r?.age65Certified===true);
+}
+async function toggleRegistryAge65Certification(year,idx){
+  if(!AD){ toast('관리자만 65세 이상 인증을 변경할 수 있습니다','error'); return; }
+  const members=await loadRegistry(Number(year));
+  const row=members?.[Number(idx)];
+  if(!row){ toast('선수를 찾을 수 없습니다','error'); return; }
+  const next=!row.age65Certified;
+  if(next && !confirm(`${row.name} 선수를 만 65세 이상으로 인증할까요?\n\n신분증 등으로 연령을 확인한 경우에만 승인해 주세요.\n생년월일은 저장하지 않고 인증 여부만 저장합니다.`)) return;
+  if(!next && !confirm(`${row.name} 선수의 65세 이상 인증을 해제할까요?`)) return;
+  row.age65Certified=next;
+  row.age65CertifiedAt=next?new Date().toISOString():'';
+  G_REGISTRY[Number(year)]=members;
+  sl(true);
+  try{
+    await saveRegistry(Number(year));
+    DIVISION_RULE_CACHE.clear();
+    sl(false);
+    toast(next?'65세 이상 인증 완료 ✅':'65세 이상 인증 해제','success');
+    try{ await renderRegistryMgr(); }catch(e){}
+    try{ await renderRegistryTab(true); }catch(e){}
+    try{ renderRL(); }catch(e){}
+  }catch(e){ sl(false); toast('인증 저장 실패: '+e.message,'error'); }
+}
+function decorateRegistryAge65Controls(year,members){
+  if(!AD) return;
+  (members||[]).forEach((m,idx)=>{
+    const inp=ge(`rmgr_n_${idx}`);
+    if(!inp) return;
+    const row=inp.closest('tr')||inp.closest('[data-registry-row]')||inp.parentElement?.parentElement;
+    if(!row || row.querySelector(`[data-age65-idx="${idx}"]`)) return;
+    const btn=document.createElement('button');
+    btn.type='button'; btn.dataset.age65Idx=String(idx);
+    btn.textContent=m?.age65Certified?'✅ 65+ 인증':'🔐 65+ 인증';
+    btn.title='만 65세 이상 예외 인증';
+    btn.style.cssText=`margin:3px 4px;padding:5px 8px;border-radius:8px;border:1px solid ${m?.age65Certified?'#16a34a':'#f59e0b'};background:${m?.age65Certified?'#f0fdf4':'#fffbeb'};color:${m?.age65Certified?'#166534':'#92400e'};font-size:.68rem;font-weight:900;white-space:nowrap;cursor:pointer`;
+    btn.onclick=()=>toggleRegistryAge65Certification(year,idx);
+    const cell=inp.closest('td')||row;
+    cell.appendChild(btn);
+  });
+}
+async function ensureDivisionRuleCache(tid){
+  tid=String(tid||'');
+  if(!tid) return null;
+  if(DIVISION_RULE_CACHE.has(tid)) return DIVISION_RULE_CACHE.get(tid);
+  if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
+  const promise=(async()=>{
+    const currentT=(G.tournaments||[]).find(t=>String(t.id)===tid);
+    if(!currentT) return null;
+    const currentYear=_ruleTournamentYear(currentT)||REG_YEAR;
+    try{ await loadRegistry(currentYear); }catch(e){}
+    const prevTs=_rulePrevTournaments(currentT);
+    const records=[];
+    for(const pt of prevTs){
+      const seen=new Set();
+      try{
+        const snap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',String(pt.id))));
+        snap.docs.forEach(d=>{
+          const x=d.data()||{};
+          const div=x.division||x.div||'';
+          if(!_ruleDivKey(div)) return;
+          const rec={tid:String(pt.id),tname:pt.name||'',date:pt.date||'',club:normalizeClub(x.club||''),div,rank:Number(x.rank||0)||null,players:(x.players||[]).map(n=>String(n||'').trim()).filter(Boolean)};
+          const k=[rec.club,_ruleDivKey(div),rec.players.join('|'),rec.rank||''].join('__');
+          if(!seen.has(k)){ seen.add(k); records.push(rec); }
+        });
+      }catch(e){ console.warn('[DivisionRule] previous registrations load failed',pt.id,e); }
+      const ht=(HIST_DATA||[]).find(t=>String(t.id)===String(pt.id));
+      (ht?.teams||[]).forEach(tm=>{
+        const div=tm.div||tm.division||''; if(!_ruleDivKey(div)) return;
+        const rec={tid:String(pt.id),tname:pt.name||'',date:pt.date||'',club:normalizeClub(tm.club||''),div,rank:Number(tm.rank||0)||null,players:(tm.players||[]).map(n=>String(n||'').trim()).filter(Boolean)};
+        const k=[rec.club,_ruleDivKey(div),rec.players.join('|'),rec.rank||''].join('__');
+        if(!seen.has(k)){ seen.add(k); records.push(rec); }
+      });
+    }
+    const byName=new Map();
+    records.forEach(r=>r.players.forEach(name=>{
+      const nn=normName(name); if(!nn) return;
+      if(!byName.has(nn)) byName.set(nn,[]);
+      byName.get(nn).push(r);
+    }));
+    const cache={tid,currentYear,prevTs,records,byName};
+    DIVISION_RULE_CACHE.set(tid,cache);
+    return cache;
+  })().finally(()=>DIVISION_RULE_PROMISE.delete(tid));
+  DIVISION_RULE_PROMISE.set(tid,promise);
+  return promise;
+}
+function _divisionRuleProfileFromCache(cache,name,club){
+  if(!cache) return null;
+  const nn=normName(name); if(!nn) return null;
+  let recs=(cache.byName.get(nn)||[]).slice();
+  const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>normName(r?.name||'')===nn);
+  if(currentRows.length>1){
+    const bc=baseClub(normalizeClub(club||''))||normalizeClub(club||'');
+    recs=recs.filter(r=>(baseClub(r.club)||r.club)===bc);
+  }
+  if(!recs.length) return null;
+  let baseline=0, promoted=false, won=[];
+  recs.forEach(r=>{
+    const lv=_ruleDivLevel(r.div); baseline=Math.max(baseline,lv);
+    if(Number(r.rank)===1){ promoted=true; baseline=Math.max(baseline,Math.min(3,lv+1)); won.push(r); }
+  });
+  if(!baseline) return null;
+  const key=({1:'bronze',2:'silver',3:'gold'})[baseline];
+  return {baselineLevel:baseline,baselineDiv:key,promoted,winningRecords:won,records:recs};
+}
+function _divisionRuleClassifySync(tid,div,name,club){
+  const cache=DIVISION_RULE_CACHE.get(String(tid||''));
+  const profile=_divisionRuleProfileFromCache(cache,name,club);
+  if(!profile) return {known:false,step:0};
+  const target=_ruleDivLevel(div); if(!target) return {known:false,step:0};
+  const step=Math.max(0,profile.baselineLevel-target);
+  const age65=isAge65CertifiedForDivisionRule(name,club,cache.currentYear);
+  return {known:true,step,age65,profile,target};
+}
+function divisionRuleBadgeHtml(tid,div,name,club){
+  const c=_divisionRuleClassifySync(tid,div,name,club);
+  if(!c.known||c.step<=0) return '';
+  const txt=c.step>=2?'↓ 2단계 하향':`↓ ${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
+  const extra=c.age65?' · 65+인증':'';
+  return `<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${c.age65?'#ecfdf5':'#fff7ed'};border:1px solid ${c.age65?'#86efac':'#fdba74'};color:${c.age65?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap">${txt}${extra}</span>`;
+}
+async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
+  const cache=await ensureDivisionRuleCache(tid);
+  if(!cache || !_ruleDivKey(div)) return {ok:true,details:[]};
+  const targetKey=_ruleDivKey(div);
+  const cc=normalizeClub(club||'');
+  const uniqNames=[...new Set((names||[]).map(n=>String(n||'').trim()).filter(Boolean))];
+  const details=[];
+  for(const n of uniqNames){
+    const p=_divisionRuleProfileFromCache(cache,n,cc);
+    if(!p) continue;
+    const step=Math.max(0,p.baselineLevel-_ruleDivLevel(div));
+    const age65=isAge65CertifiedForDivisionRule(n,cc,cache.currentYear);
+    details.push({name:n,step,age65,profile:p});
+    if(step>=2 && !age65){
+      return {ok:false,error:`${n} 선수는 ${_ruleDivLabel(p.baselineDiv)} 자격으로 ${_ruleDivLabel(div)}까지 2단계 하향할 수 없습니다.\n\n만 65세 이상 예외인 경우 관리자가 먼저 '65+ 인증'을 완료해야 합니다.`};
+    }
+  }
+  // 현재 대회에서 같은 클럽이 같은 대상부서로 내린 일반 하향 인원을 합산한다.
+  const ordinary=new Set();
+  Object.entries(G.teams||{}).forEach(([key,teams])=>{
+    const [ktid,kdiv]=String(key).split('_');
+    if(String(ktid)!==String(tid) || _ruleDivKey(kdiv)!==targetKey) return;
+    (teams||[]).forEach((tm,idx)=>{
+      if(key===excludeKey && idx===Number(excludeIdx)) return;
+      if(normalizeClub(tm?.club||'')!==cc) return;
+      (tm?.players||[]).forEach(n=>{
+        const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) return;
+        const step=Math.max(0,p.baselineLevel-_ruleDivLevel(div));
+        if(step===1 && !isAge65CertifiedForDivisionRule(n,cc,cache.currentYear)) ordinary.add(normName(n));
+      });
+    });
+  });
+  details.forEach(d=>{ if(d.step===1 && !d.age65) ordinary.add(normName(d.name)); });
+  if(ordinary.size>2){
+    const offenders=details.filter(d=>d.step===1&&!d.age65).map(d=>d.name);
+    return {ok:false,error:`${_ruleDivLabel(div)}로 일반 하향 등록할 수 있는 인원은 클럽별 최대 2명입니다.\n\n현재 일반 하향 ${ordinary.size}명입니다.${offenders.length?'\n이번 명단: '+offenders.join(', '):''}\n\n2명 초과 인원은 만 65세 이상 관리자 인증이 있어야 등록할 수 있습니다.`};
+  }
+  return {ok:true,details};
+}
+let _divisionRuleFormTimer=null;
+function refreshDivisionRuleFormBadges(mode='register'){
+  clearTimeout(_divisionRuleFormTimer);
+  _divisionRuleFormTimer=setTimeout(async()=>{
+    const isEdit=mode==='edit';
+    const tid=isEdit?String(CE_key||'').split('_')[0]:(ge('regTS')?.value||'');
+    const div=isEdit?String(CE_key||'').split('_')[1]:(ge('regDS')?.value||'');
+    const club=isEdit?(ge('etTC')?.value||''):getRegClubInputValue();
+    if(!tid||!div||!club) return;
+    await ensureDivisionRuleCache(tid);
+    const root=isEdit?ge('mETeamB'):ge('aoReg'), prefix=isEdit?'ep':'p';
+    if(!root) return;
+    for(let i=1;i<=12;i++){
+      const el=ge(prefix+i); if(!el||!root.contains(el)) continue;
+      const slot=el.closest('.pslot'); if(!slot) continue;
+      slot.querySelector('.division-rule-form-badge148')?.remove();
+      const name=String(el.value||'').trim(); if(!name) continue;
+      const c=_divisionRuleClassifySync(tid,div,name,club); if(!c.known||c.step<=0) continue;
+      const b=document.createElement('span'); b.className='division-rule-form-badge148';
+      b.textContent=c.step>=2?(c.age65?'↓2단계 · 65+':'⛔ 2단계'):(c.age65?'↓하향 · 65+':'↓하향');
+      b.style.cssText=`flex:0 0 auto;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${c.age65?'#ecfdf5':'#fff7ed'};border:1px solid ${c.age65?'#86efac':'#fdba74'};color:${c.age65?'#166534':'#9a3412'}`;
+      slot.appendChild(b);
+    }
+  },120);
+}
 function rosterPlayerHTML(name, club, tid){
   const mark=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(name, club, tid);
   const info=getPlayerContactInfo(name, club);
@@ -7600,8 +7831,8 @@ function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
   const neutralFiveRoster=(dbl===5);
   const mainP=neutralFiveRoster?p.slice():p.slice(0,mainCount);
   const subP=neutralFiveRoster?[]:p.slice(mainCount);
-  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:36px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}</span></div>`).join('')}</div>`;
-  const subHtml=subP.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.69rem;color:#64748b;font-weight:800;margin-bottom:5px">후보</div><div style="display:flex;flex-wrap:wrap;gap:5px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.75rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}</span>`).join('')}</div></div>`:'';
+  const mainHtml=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:stretch">${mainP.map((n,pi)=>`<div style="display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:10px;border:1px solid #dbe4f0;background:#f8fafc;min-width:0;min-height:36px;box-sizing:border-box"><span style="width:20px;height:20px;border-radius:999px;background:var(--primary);color:#fff;font-size:.64rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${pi+1}</span><span style="min-width:0;font-size:.79rem;font-weight:800;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rosterPlayerHTML(n, team?.club||'', tid)}${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span></div>`).join('')}</div>`;
+  const subHtml=subP.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dbe4f0"><div style="font-size:.69rem;color:#64748b;font-weight:800;margin-bottom:5px">후보</div><div style="display:flex;flex-wrap:wrap;gap:5px">${subP.map(n=>`<span style="display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid #dbe4f0;background:#fff;color:#334155;font-size:.75rem;font-weight:700">${rosterPlayerHTML(n, team?.club||'', tid)}${divisionRuleBadgeHtml(tid,div,n,team?.club||'')}</span>`).join('')}</div></div>`:'';
   return mainHtml+subHtml;
 }
 
@@ -8080,6 +8311,9 @@ function mountRegisterFormInline(div){
 
 function renderRL(){
   const tid=ge('regTS').value,div=ge('regDS').value;
+  if(tid && !DIVISION_RULE_CACHE.has(String(tid)) && !DIVISION_RULE_PROMISE.has(String(tid))){
+    ensureDivisionRuleCache(tid).then(()=>{ try{ if(ge('regTS')?.value===tid) renderRL(); }catch(e){} });
+  }
   updateFilterBtnUI('register', MY_CLUB_FILTER);
   renderRegisterDivisionOverview();
   if(!tid||!div){
@@ -8281,7 +8515,13 @@ function enhanceTeamRosterEditor({mode='register', editable=true}={}){
       slot.appendChild(moveWrap);
     }
     moveWrap.style.display=editable?'flex':'none';
+    if(!input.dataset.divRuleBound148){
+      input.dataset.divRuleBound148='1';
+      input.addEventListener('input',()=>refreshDivisionRuleFormBadges(mode));
+      input.addEventListener('change',()=>refreshDivisionRuleFormBadges(mode));
+    }
   }
+  refreshDivisionRuleFormBadges(mode);
 
   const host=(isEdit ? ge('etSlots') : (ge('regPlayerLabel')?.closest('.form-group') || root));
   if(host){
@@ -8456,6 +8696,8 @@ async function registerTeam(){
     if(!teamCheck.ok){ toast(teamCheck.error,'error'); return; }
     const missing2026=missingMembers2026(names, club, t);
     if(missing2026.length){showMissingMembers2026(missing2026);return;}
+    const divRuleCheck=await validateTeamDivisionRules({tid,div,club,names});
+    if(!divRuleCheck.ok){ alert(divRuleCheck.error); toast('부서 자격 규정을 확인해 주세요','error'); return; }
   }
 
   sl(true);
@@ -8891,6 +9133,8 @@ async function saveETeam(){
     showMissingMembers2026(missing2026);
     return;
   }
+  const divRuleCheck=await validateTeamDivisionRules({tid,div,club:newClub,names:np,excludeKey:CE_key,excludeIdx:CE_idx});
+  if(!divRuleCheck.ok){ alert(divRuleCheck.error); toast('부서 자격 규정을 확인해 주세요','error'); return; }
 
   const oldPlayers = [...(team.players || [])];
   const oldClub = team.club || '';
@@ -23711,6 +23955,7 @@ async function renderRegistryMgr(){
   ensureRegistryMgrSearchUI();
   if(ge('rmgrSearchInput')) ge('rmgrSearchInput').value=searchValue;
   applyRegistryMgrSearch();
+  decorateRegistryAge65Controls(year,members);
 }
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
@@ -26008,7 +26253,7 @@ Object.assign(window,{initMobileBracketHorizontalScroll,installPublicOutputCente
   bracketToImage,bracketToPDF,openBracketView,switchBVTab,renderBracketView,saveBracketViewImage,
   onRankTC,renderRanking,
   filterP,showP,renderAllP,openPD,openRoster,openIndividualExcelModal,previewIndividualExcelFile,importIndividualExcelTeams,openPlayerContact,ensureRosterPlayerActionModal,openRosterPlayerInfo,
-  switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,
+  switchPlayersTab,initRegistryTab,renderRegistryTab,openRegistryMgr,renderRegistryMgr,toggleRegistryAge65Certification,
   registryTabQuickAdd,ensureRegistryNewMemberAdminControls,repairRegistryClubGroupsNow,ensureRegistryRepairButton,quickEditRegistryMember,ensureRegistryQuickEditModal,closeRegistryQuickEditModal,updateRegistryQuickEditRegionHint,saveRegistryQuickEditModal,quickDeleteRegistryMember,addRegistryRow,saveRegistryRow,deleteRegistryRow,clearRegistryYear,renderClubDefaultRegionManager,saveAllClubDefaultRegions,syncDefaultRegionEditor,saveClubDefaultRegionSetting,applyDefaultRegionsToUnassigned,
   importRegistryFromFile,exportRegistryExcel,exportRegistryExcelMgr,exportRegistryFiltered,normalizeClub,bulkChangeRegion,
   openClubMgr,addClub,delClub,renderCL,
