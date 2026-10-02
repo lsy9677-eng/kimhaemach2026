@@ -19356,16 +19356,62 @@ function phint(inp,num){
 }
 async function openPHist(iid){
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
-  let name=(ge(iid)?.value||'').trim();
+  const inp=ge(iid);
+  let name=(inp?.value||'').trim();
   if(!name){toast('이름 먼저 입력','info');return;}
 
   // 입력값에 "이름__클럽"이 들어와도 보정
   const sp = splitKeyNameClub(name);
   name = sp.name || name;
 
+  // PHASE165: 팀등록에서 선택한 선수의 클럽 identity를 끝까지 유지한다.
+  // 동명이인이 있을 때 이름만으로 다시 찾으면 다른 클럽 선수 기록이 열릴 수 있으므로
+  // 입력칸 dataset -> 현재 팀등록 클럽 -> key에 포함된 클럽 순으로 정확한 클럽을 확정한다.
+  const identityClub=normalizeClub(
+    inp?.dataset?.registryClub ||
+    getRegClubInputValue() ||
+    sp.club ||
+    ''
+  );
+
   try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
-  const info = getPlayerForDisplay(name);
-  ge('mPHistBody').innerHTML = info.exists
+
+  let info=null;
+  if(identityClub){
+    const exactKey=getPlayerKeyByName(name, identityClub);
+    if(exactKey && G.players[exactKey]){
+      const exact=G.players[exactKey];
+      info={name:cleanName(pKeyParse(exactKey).name||exact.name||name),key:exactKey,p:exact,exists:true};
+    }else{
+      // players 문서에 정확한 name__club 키가 없어도 다른 클럽 동명이인으로 fallback하지 않는다.
+      // 현재 선택 클럽 identity를 가진 임시 객체로 buildPH가 해당 클럽 기록만 조합하게 한다.
+      const regRows=((G_REGISTRY&&(G_REGISTRY[REG_YEAR]||G_REGISTRY[2026]))||[])
+        .filter(r=>normName(r?.name||'')===normName(name));
+      const regRow=regRows.find(r=>{
+        const main=normalizeClub(r?.club||'');
+        const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+        return isSameRegistrationClub(main,identityClub)||subs.some(c=>isSameRegistrationClub(c,identityClub));
+      })||null;
+      const mainClub=normalizeClub(regRow?.club||identityClub);
+      const subClubs=String(regRow?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+      const regHist=getCachedPlayerRegistrationHistory(name).filter(h=>{
+        const hc=normalizeClub(h?.baseClub||baseClub(h?.club)||h?.club||'');
+        return hc && [mainClub,...subClubs].some(c=>isSameRegistrationClub(c,hc));
+      });
+      const liveHist=collectLivePlayerHistory(name,mainClub||identityClub);
+      const hasAny=!!(regRow||regHist.length||liveHist.length||hasHistPlayer(name));
+      info={
+        name:cleanName(name),
+        key:pKey(name,mainClub||identityClub),
+        p:{key:pKey(name,mainClub||identityClub),name:cleanName(name),club:mainClub||identityClub,clubs:[mainClub||identityClub,...subClubs].filter(Boolean),history:[],wins:0,losses:0,phone:String(regRow?.phone||'').trim()},
+        exists:hasAny
+      };
+    }
+  }else{
+    info=getPlayerForDisplay(name);
+  }
+
+  ge('mPHistBody').innerHTML = info?.exists
     ? buildPH(info.name, info.p)
     : `<div class="empty-state"><div class="empty-icon">👤</div><p>${name} 기록 없음</p></div>`;
   om('mPHist');
