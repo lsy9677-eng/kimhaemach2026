@@ -25904,20 +25904,14 @@ function ensureMobileMoreMenu(){
 
   // PHASE125: 권한이 바뀌어도 오래된 더보기 DOM을 재사용하지 않고 현재 권한으로 매번 동기화한다.
   const settingsLabel = AD ? '관리자 설정' : ((REG||CLUB_MEMBER)&&REG_CLUB ? '클럽 설정' : '개인 설정');
-  const extra=[];
-  if(AD){
-    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('register')"><span style="font-size:1.25rem">📋</span><span>팀등록</span></button>`);
-    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('players')"><span style="font-size:1.25rem">👥</span><span>선수현황</span></button>`);
-  }else if(REG && !CLUB_MEMBER){
-    extra.push(`<button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('register')"><span style="font-size:1.25rem">📋</span><span>팀등록</span></button>`);
-  }
-
+  // PHASE160: 하단 퀵메뉴에 선수현황을 올리고, 시합결과는 더보기로 이동한다.
+  // 팀등록/선수현황은 더보기에서 중복 노출하지 않는다.
   modal.innerHTML=`<div class="modal-box" style="max-width:360px;width:calc(100% - 28px)">
     <div class="modal-header" style="background:#0f1e3a"><h3>••• 더보기</h3><button class="modal-close" onclick="closeMobileMoreMenu()">✕</button></div>
     <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
+      <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('ranking')"><span style="font-size:1.25rem">📊</span><span>시합결과</span></button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>${outputEsc(settingsLabel)}</span></button>
-      ${extra.join('')}
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openRolePermissionCheck()"><span style="font-size:1.25rem">🔎</span><span>권한확인</span></button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openKimhaeManual()"><span style="font-size:1.25rem">📖</span><span>매뉴얼</span></button>
     </div>
@@ -26016,14 +26010,14 @@ function ensureMobileBottomMore(){
         ['home','🏠','홈'],
         ['tournament','🏆','대회목록'],
         ['bracket','🎲','대진표'],
-        ['ranking','📊','시합결과']
+        ['players','👥','선수현황']
       ]
     : [
         ['home','🏠','홈'],
         ['tournament','🏆','대회목록'],
         ['register','📋','팀등록'],
         ['bracket','🎲','대진표'],
-        ['ranking','📊','시합결과']
+        ['players','👥','선수현황']
       ];
   bar.innerHTML = bottomItems.map(([page,icon,label])=>`<button type="button" data-kmb-page="${page}" onclick="mobileBottomGo('${page}')"><span>${icon}</span><b>${label}</b></button>`).join('')
     + `<button type="button" data-kmb-more="1" onclick="openMobileMoreMenu()"><span>•••</span><b>더보기</b></button>`;
