@@ -4007,7 +4007,10 @@ function showPage(n){
   // PHASE163: PC 출력센터는 사용자가 직접 출력센터로 이동했을 때만 보인다.
   // 반응형 메뉴 복원 과정에서 page-output이 다시 생성돼도 다른 페이지 아래에 붙어 보이지 않게 한다.
   const ocPageBefore=ge('page-output');
-  if(ocPageBefore) ocPageBefore.style.display=(n==='output'?'block':'none');
+  if(ocPageBefore){
+    if(n==='output'){ ocPageBefore.hidden=false; ocPageBefore.style.setProperty('display','block','important'); }
+    else { ocPageBefore.hidden=true; ocPageBefore.classList.remove('active'); ocPageBefore.style.setProperty('display','none','important'); }
+  }
   if(isOperatorMode() && ['tournament','register','players'].includes(n)){
     toast('경기진행자 권한에서는 대진표/시합결과만 운영할 수 있습니다','info');
     n='bracket';
@@ -7501,7 +7504,7 @@ async function openAge65CertificationRequest(name,club,tid,div,requestType='age6
   ge('age65ReqName').value=nm; ge('age65ReqClub').value=cc; ge('age65ReqTid').value=String(tid||''); ge('age65ReqDiv').value=String(div||'');
   const cache=await ensureDivisionRuleCache(tid); const p=_divisionRuleProfileFromCache(cache,nm,cc);
   const from=p? _ruleDivLabel(p.baselineDiv):'현재 자격';
-  ge('age65ReqSummary').innerHTML=`<b>${esc(nm)}</b> · ${esc(cc||'-')}<br>${esc(from)} → ${esc(_ruleDivLabel(div)||div||'-')} 하향 예외 승인 요청`;
+  ge('age65ReqSummary').innerHTML=`<b>${esc(nm)}</b> · ${esc(cc||'-')}<br>${esc(from)} → ${esc(_ruleDivLabel(div)||div||'-')} 하향 예외 승인 요청<br><button type="button" onclick="openDivisionRuleReason('${esc(nm)}','${esc(cc)}','${esc(String(tid||''))}','${esc(String(div||''))}')" style="margin-top:7px;border:1px solid #fdba74;background:#fff;color:#9a3412;border-radius:8px;padding:5px 8px;font-weight:900;cursor:pointer">📌 왜 하향 판정인지 보기</button>`;
   if(ge('age65ReqType')) ge('age65ReqType').value=requestType==='female'?'female':'age65';
   ge('age65ReqFile').value=''; ge('age65ReqPrivacy').checked=false;
   const directBox=ge('age65ReqAdminDirect'); if(directBox) directBox.style.display=AD?'block':'none';
@@ -7939,8 +7942,59 @@ function divisionRuleBadgeHtml(tid,div,name,club){
   if(!c.known||!c.isDowngrade||c.step<=0) return flags.join('');
   const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
   const ok=age65||female;
-  flags.unshift(`<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap">↓ ${move}${ok?' · 예외승인':''}</span>`);
+  flags.unshift(`<button type="button" onclick="event.stopPropagation();openDivisionRuleReason('${esc(name)}','${esc(club||'')}','${esc(tid||'')}','${esc(div||'')}')" title="판정 근거 보기" style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap;cursor:pointer;font-family:inherit">↓ ${move}${ok?' · 예외승인':''}</button>`);
   return flags.join('');
+}
+
+function ensureDivisionRuleReasonModal(){
+  let el=ge('mDivisionRuleReason'); if(el) return el;
+  el=document.createElement('div'); el.id='mDivisionRuleReason'; el.className='modal-overlay';
+  el.innerHTML=`<div class="modal-box" style="max-width:580px">
+    <div class="modal-header" style="background:#7c2d12"><h3>📌 부서 판정 근거</h3><button class="modal-close" onclick="cm('mDivisionRuleReason')">✕</button></div>
+    <div class="modal-body" id="divisionRuleReasonBody" style="padding:16px;line-height:1.6"></div>
+  </div>`;
+  document.body.appendChild(el); return el;
+}
+function _divisionRuleReasonLines(tid,div,name,club){
+  const cache=DIVISION_RULE_CACHE.get(String(tid||''));
+  const p=_divisionRuleProfileFromCache(cache,name,club);
+  if(!p) return {title:`${name} 선수`,html:'<div style="color:#64748b">자동 판정에 사용할 수 있는 동일인 기준자료가 충분하지 않습니다. 관리자 확인이 필요합니다.</div>'};
+  const mv=_divisionRuleMove(p,div);
+  const target=_ruleDivLabel(div)||div||'-';
+  const base=_ruleDivLabel(p.baselineDiv)||p.baselineDiv||'-';
+  const year=cache?.currentYear||REG_YEAR;
+  const age65=isAge65CertifiedForDivisionRule(name,club,year);
+  const female=isFemaleForDivisionRule(name,club,year);
+  const wins=(p.winningRecords||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  let reason='';
+  if(wins.length){
+    reason=wins.map(r=>{
+      const from=_ruleDivLabel(r.div)||r.div||'-';
+      const y=(String(r.date||r.tname||'').match(/20\d{2}/)||[])[0]||'';
+      return `<div style="margin-top:7px;padding:9px 10px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa"><b>${esc(y?y+' ':'' )}${esc(r.tname||'전년도 지정대회')}</b><br>${esc(from)} 우승팀 등록명단 포함 → 다음 연도 1단계 승격 반영</div>`;
+    }).join('');
+  }else{
+    const src=(p.records||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];
+    if(src) reason=`<div style="margin-top:7px;padding:9px 10px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0"><b>기준자료</b><br>${esc(src.tname||'과거대회')} · ${esc(_ruleDivLabel(src.div)||src.div||'-')} 등록기록</div>`;
+  }
+  let result='';
+  if(!mv.known) result='판정 불가';
+  else if(mv.isUpward) result=`${base} → ${target} : 상향 등록 (제한 없음)`;
+  else if(mv.isSame) result=`${base} → ${target} : 동일 부서`;
+  else result=`${base} → ${target} : ${mv.step===1?'1단계':'2단계 이상'} 하향`;
+  const exception=[female?'여성':'',age65?'65+ 인증완료':''].filter(Boolean).join(' · ');
+  return {title:`${name} 선수`,html:`
+    <div style="font-weight:950;font-size:1rem;color:#0f1e3a">${esc(name)} <span style="font-size:.78rem;color:#64748b">(${esc(club||'-')})</span></div>
+    <div style="margin-top:10px;padding:11px 12px;border-radius:12px;background:${mv.isDowngrade?'#fff7ed':'#f0fdf4'};border:1px solid ${mv.isDowngrade?'#fdba74':'#86efac'};font-weight:900;color:${mv.isDowngrade?'#9a3412':'#166534'}">${esc(result)}</div>
+    ${exception?`<div style="margin-top:8px;color:#166534;font-weight:850">예외 자격: ${esc(exception)}</div>`:''}
+    ${reason}
+    <div style="margin-top:10px;font-size:.74rem;color:#64748b">※ 과거 참가 부서는 참고자료이며, 전년도 지정대회 우승 승격 규칙과 동일인 확인 결과를 기준으로 판정합니다.</div>`};
+}
+function openDivisionRuleReason(name,club,tid,div){
+  ensureDivisionRuleReasonModal();
+  const r=_divisionRuleReasonLines(tid,div,name,club);
+  const body=ge('divisionRuleReasonBody'); if(body) body.innerHTML=r.html;
+  om('mDivisionRuleReason');
 }
 async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
   const cache=await ensureDivisionRuleCache(tid);
@@ -7969,18 +8023,24 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
     (teams||[]).forEach((tm,idx)=>{
       if(key===excludeKey && idx===Number(excludeIdx)) return;
       if(normalizeClub(tm?.club||'')!==cc) return;
+      // 연간 누적은 실제 Firestore에 저장된 팀만 사용한다. 임시/화면상 잔존 팀은 집계하지 않는다.
+      if(!tm?._id) return;
       (tm?.players||[]).forEach(n=>{
         const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) return;
         const mv=_divisionRuleMove(p,kd.div);
         if(!mv.known || !mv.isDowngrade || mv.step!==1 || isDivisionExceptionApproved(n,cc,cache.currentYear)) return;
-        ordinary.set(normName(n),{name:n,move:`${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(kd.div)}`});
+        ordinary.set(normName(n),{name:n,move:`${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(kd.div)}`,source:'saved',tname:t.name||'',div:kd.div});
       });
     });
   });
-  details.forEach(d=>{ if(d.step===1 && !d.exceptionApproved) ordinary.set(normName(d.name),{name:d.name,move:d.move}); });
+  details.forEach(d=>{ if(d.step===1 && !d.exceptionApproved) ordinary.set(normName(d.name),{name:d.name,move:d.move,source:'current',tname:(G.tournaments||[]).find(t=>String(t.id)===String(tid))?.name||'현재대회',div}); });
   if(ordinary.size>2){
     const arr=[...ordinary.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
-    return {ok:false,error:`1단계 부서 하향은 최대 연 2명입니다. (클럽대항 합산)\n\n현재 하향 인원 ${arr.length}명입니다.\n${arr.map(x=>`${x.name} (${x.move})`).join(', ')}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)`};
+    const cur=arr.filter(x=>x.source==='current');
+    const prev=arr.filter(x=>x.source!=='current');
+    const curText=cur.length?cur.map(x=>`${x.name} (${x.move})`).join(', '):'없음';
+    const prevText=prev.length?prev.map(x=>`${x.name} (${x.move} · ${x.tname||'기존 저장팀'} ${_ruleDivLabel(x.div)||x.div||''})`).join('\n'):'없음';
+    return {ok:false,error:`1단계 부서 하향은 최대 연 2명입니다. (클럽대항 합산)\n\n연간 누적 하향 인원 ${arr.length}명입니다.\n\n[현재 저장하려는 팀]\n${curText}\n\n[올해 이미 저장된 다른 팀/대회]\n${prevText}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)\n\n※ 하향 배지를 누르면 선수별 판정 근거를 확인할 수 있습니다.`};
   }
   return {ok:true,details};
 }
@@ -8016,7 +8076,9 @@ function refreshDivisionRuleFormBadges(mode='register'){
 
       const b=document.createElement('span'); b.className='division-rule-form-badge148';
       b.textContent=`↓ ${move}${c.female?' · 여성':c.age65?' · 65+ 인증완료':''}`;
-      b.style.cssText=`display:inline-flex;align-items:center;max-width:100%;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'}`;
+      b.title='판정 근거 보기';
+      b.style.cssText=`display:inline-flex;align-items:center;max-width:100%;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};cursor:pointer`;
+      b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionRuleReason(name,club,tid,div);};
       badgeRow.appendChild(b);
       if(c.female){
         const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; badgeRow.appendChild(f);
@@ -26169,7 +26231,12 @@ function syncKimhaeResponsiveNavigation(){
     restoreLegacyDesktopNav();
     // Output center is a normal top-level PC page. It may have been removed while
     // the viewport was mobile, so recreate it immediately on desktop return.
-    try{ installPublicOutputCenter(); }catch(e){}
+    try{
+      installPublicOutputCenter();
+      const oc=ge('page-output');
+      const isOutput=document.querySelector('.page.active')?.id==='page-output';
+      if(oc){ oc.hidden=!isOutput; oc.style.setProperty('display',isOutput?'block':'none','important'); if(!isOutput) oc.classList.remove('active'); }
+    }catch(e){}
   }
 }
 function scheduleKimhaeResponsiveNavigationSync(){
@@ -26354,13 +26421,18 @@ function installPublicOutputCenter(){
   const existing=document.getElementById('page-output');
   if(existing){
     // 설치/복원만으로 출력센터가 현재 페이지 아래 노출되지 않게 한다.
-    if(!existing.classList.contains('active')) existing.style.display='none';
+    const current=document.querySelector('.page.active')?.id||'';
+    const isOutput=current==='page-output';
+    existing.hidden=!isOutput;
+    existing.style.setProperty('display',isOutput?'block':'none','important');
+    if(!isOutput) existing.classList.remove('active');
     return;
   }
   const main=document.querySelector('.main-content');
   if(!main)return;
   const page=document.createElement('div');page.className='page';page.id='page-output';
-  page.style.display='none';
+  page.hidden=true;
+  page.style.setProperty('display','none','important');
   page.innerHTML=outputCenterInnerHtml();
   main.appendChild(page);
 }
@@ -27015,7 +27087,7 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
