@@ -7719,12 +7719,14 @@ function _pastRosterDivisionKey(v=''){
 function _pastRosterResolveDivision(tid='', preferredDiv=''){
   const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid||''))||null;
   const divisions=Array.isArray(t?.divisions)?t.divisions:[];
-  const candidates=[
-    ge('regDS')?.value||'',
-    PAST_ROSTER_CONTEXT.div||'',
-    (REGISTER_DIVISION_FILTER && REGISTER_DIVISION_FILTER!=='all') ? REGISTER_DIVISION_FILTER : '',
-    preferredDiv||''
-  ].map(v=>String(v||'').trim()).filter(Boolean);
+  const filter=String(REGISTER_DIVISION_FILTER||'all').trim();
+  const specificFilter=(filter && filter!=='all') ? filter : '';
+  // PHASE142: 부서 필터가 특정 부서면 현재 선택 부서를 우선한다.
+  // '전체' 상태라면 지난대회 카드의 부서(preferredDiv)를 우선해 현재 대회 부서를 자동 선택한다.
+  const candidates=(specificFilter
+    ? [specificFilter, ge('regDS')?.value||'', PAST_ROSTER_CONTEXT.div||'', preferredDiv||'']
+    : [preferredDiv||'', PAST_ROSTER_CONTEXT.div||'']
+  ).map(v=>String(v||'').trim()).filter(Boolean);
   for(const d of candidates){
     if(!divisions.length) return d;
     if(divisions.includes(d)) return d;
@@ -7744,19 +7746,22 @@ function _pastRosterCurrentContext(preferredDiv=''){
 function _pastRosterRestoreCurrentContext(preferredDiv=''){
   const tid=ge('regTS')?.value||PAST_ROSTER_CONTEXT.tid||'';
   const div=_pastRosterResolveDivision(tid, preferredDiv);
-  const ts=ge('regTS'), ds=ge('regDS');
+  const ts=ge('regTS');
   if(ts && !ts.value && tid){
     ts.value=tid;
     try{ onRegTC(); }catch(e){}
   }
   const finalTid=ge('regTS')?.value||tid;
   const finalDiv=_pastRosterResolveDivision(finalTid, div);
-  if(ds && finalDiv && ds.value!==finalDiv){
+  const ds=ge('regDS');
+  if(ds && finalDiv){
     ds.value=finalDiv;
     PAST_ROSTER_CONTEXT={tid:finalTid,div:finalDiv};
+    // 선수 추가 직후 해당 부서 입력폼이 실제로 열려 보이도록 필터/폼을 항상 동기화한다.
     try{ REGISTER_DIVISION_FILTER=finalDiv; }catch(e){}
     try{ renderRL(); }catch(e){}
   }
+  return {tid:finalTid,div:finalDiv};
 }
 function _pastRosterVisibleSlots(){
   const out=[];
@@ -7852,6 +7857,17 @@ function _pastRosterSelectAll(rowIdx,checked=true){
   });
   PAST_ROSTER_SELECTION_ORDER[String(rowIdx)] = checked ? boxes.map((_,idx)=>idx) : [];
 }
+function _pastRosterRevealRegistration(div=''){
+  if(!div) return;
+  setTimeout(()=>{
+    try{
+      const host=ge(`regInlineForm_${div}`) || ge('aoReg');
+      if(host) host.scrollIntoView({behavior:'smooth',block:'center'});
+      const firstEmpty=_pastRosterVisibleSlots().find(el=>!String(el.value||'').trim());
+      if(firstEmpty) firstEmpty.focus({preventScroll:true});
+    }catch(e){}
+  },120);
+}
 function _pastRosterApplySelected(rowIdx,club='',sourceDiv=''){
   const boxes=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]`)];
   const checkedByIndex=new Map(boxes.map((cb,idx)=>[idx,cb]));
@@ -7859,7 +7875,11 @@ function _pastRosterApplySelected(rowIdx,club='',sourceDiv=''){
   // 혹시 체크박스 상태만 남은 경우에는 DOM 순서로 뒤에 보완한다.
   boxes.forEach((cb,idx)=>{ if(cb.checked && !order.includes(idx)) order.push(idx); });
   const names=order.map(idx=>checkedByIndex.get(idx)?.dataset.name||'').filter(Boolean);
-  if(_pastRosterAddNames(names,club,'append',sourceDiv)) cm('mPastClubRoster');
+  if(_pastRosterAddNames(names,club,'append',sourceDiv)){
+    const div=_pastRosterCurrentContext(sourceDiv).div;
+    cm('mPastClubRoster');
+    _pastRosterRevealRegistration(div);
+  }
 }
 function _pastRosterApplyAll(rowIdx,club='',sourceDiv=''){
   const names=[...document.querySelectorAll(`input[data-past-row="${rowIdx}"]`)].map(cb=>cb.dataset.name||'').filter(Boolean);
@@ -7869,7 +7889,11 @@ function _pastRosterApplyAll(rowIdx,club='',sourceDiv=''){
   if(existing.length){
     if(!confirm(`현재 입력 중인 명단 ${existing.length}명이 있습니다.\n지난대회 명단 전체로 교체할까요?`)) return;
   }
-  if(_pastRosterAddNames(names,club,'replace',sourceDiv)) cm('mPastClubRoster');
+  if(_pastRosterAddNames(names,club,'replace',sourceDiv)){
+    const div=_pastRosterCurrentContext(sourceDiv).div;
+    cm('mPastClubRoster');
+    _pastRosterRevealRegistration(div);
+  }
 }
 function _renderPastClubRosterModal(club,entries=[]){
   Object.keys(PAST_ROSTER_SELECTION_ORDER).forEach(k=>delete PAST_ROSTER_SELECTION_ORDER[k]);
