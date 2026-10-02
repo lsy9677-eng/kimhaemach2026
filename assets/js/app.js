@@ -8054,11 +8054,12 @@ function renderRL(){
   const clubSel=ge('regClub'); if(clubSel) clubSel.disabled = lock || isIndividual;
   const clubTxt=ge('regClubText'); if(clubTxt) clubTxt.disabled = lock || !isIndividual;
   for(let i=1;i<=12;i++){ const el=ge('p'+i); if(el) el.disabled = lock; }
-  const regBtn = document.querySelector('#aoReg button.btn.btn-primary');
+  const regBtn = ge('aoReg')?.querySelector('button[onclick*="registerTeam"]') || document.querySelector('#aoReg button.btn.btn-primary');
   if(regBtn){
     regBtn.disabled = lock || !canRegister;
     regBtn.textContent = isIndividual ? '✅ 참가 접수' : '✅ 팀 등록';
   }
+  if(!isIndividual) enhanceTeamRosterEditor({mode:'register',editable:!!canRegister&&!lock});
 
   let msg = ge('regLockMsg');
   if(!msg){
@@ -8088,6 +8089,91 @@ function renderRL(){
   ge('regTCnt').textContent=teams.length+(isIndividual?'조':'팀');
   ge('regNo').value=teams.length+1;
   renderRegistrationRosterPreview('', '', [], '');
+}
+
+
+// PHASE138: 팀등록/수정 명단을 같은 방식으로 직접 편집할 수 있게 한다.
+// - 이름칸 직접 수정
+// - 각 칸의 ✕ 버튼으로 선수 제거(값 비우기)
+// - + 선수 추가 버튼은 첫 빈칸으로 이동
+// 저장 방식은 기존 registerTeam/saveETeam 로직을 그대로 사용한다.
+function enhanceTeamRosterEditor({mode='register', editable=true}={}){
+  const isEdit=mode==='edit';
+  const root=isEdit ? ge('mETeamB') : ge('aoReg');
+  const prefix=isEdit ? 'ep' : 'p';
+  if(!root) return;
+
+  for(let i=1;i<=12;i++){
+    const input=ge(prefix+i);
+    if(!input || !root.contains(input)) continue;
+    const slot=input.closest('.pslot') || input.parentElement;
+    if(!slot) continue;
+
+    // 현재 대회가 잠겨 있지 않은 경우에만 직접 편집 가능.
+    if(editable){
+      input.disabled=false;
+      input.readOnly=false;
+      input.style.pointerEvents='auto';
+      input.style.userSelect='text';
+    }
+
+    let clear=slot.querySelector('.team-roster-clear138');
+    if(!clear){
+      clear=document.createElement('button');
+      clear.type='button';
+      clear.className='team-roster-clear138';
+      clear.setAttribute('aria-label','선수 빼기');
+      clear.title='이 선수 빼기';
+      clear.textContent='✕';
+      clear.style.cssText='flex:0 0 30px;width:30px;height:30px;border:1px solid #fecaca;border-radius:9px;background:#fff7f7;color:#dc2626;font-size:.82rem;font-weight:950;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:4px;';
+      clear.onclick=()=>{
+        if(input.disabled || input.readOnly) return;
+        input.value='';
+        try{ input.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
+        try{ input.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){}
+        input.focus();
+      };
+      slot.appendChild(clear);
+    }
+    clear.style.display=editable?'flex':'none';
+  }
+
+  const host=(isEdit ? ge('etSlots') : (ge('regPlayerLabel')?.closest('.form-group') || root));
+  if(host){
+    let tools=root.querySelector('.team-roster-tools138');
+    if(!tools){
+      tools=document.createElement('div');
+      tools.className='team-roster-tools138';
+      tools.style.cssText='display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;';
+      tools.innerHTML=`<button type="button" class="btn btn-outline team-roster-add138" style="padding:6px 10px;font-size:.74rem;font-weight:900;white-space:nowrap">＋ 선수 추가</button><span style="font-size:.7rem;color:#64748b;font-weight:700">이름을 직접 고치거나 ✕로 빼고 빈칸에 새 선수를 입력할 수 있습니다.</span>`;
+      host.insertAdjacentElement('afterend',tools);
+      const addBtn=tools.querySelector('.team-roster-add138');
+      if(addBtn) addBtn.onclick=()=>{
+        const candidates=[];
+        for(let i=1;i<=12;i++){
+          const el=ge(prefix+i);
+          if(!el || !root.contains(el) || el.disabled || el.readOnly) continue;
+          const slot=el.closest('.pslot');
+          if(slot && getComputedStyle(slot).display==='none') continue;
+          candidates.push(el);
+        }
+        const empty=candidates.find(el=>!String(el.value||'').trim());
+        if(!empty){ toast('추가할 수 있는 빈 선수칸이 없습니다','info'); return; }
+        empty.focus();
+        try{ empty.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+      };
+    }
+    tools.style.display=editable?'flex':'none';
+  }
+
+  // 등록/수정의 최종 저장 버튼 이름을 기능과 맞게 명확하게 표시한다.
+  if(isEdit){
+    const saveBtn=ge('mETeam')?.querySelector('button[onclick*="saveETeam"]');
+    if(saveBtn) saveBtn.textContent='✅ 명단 수정 저장';
+  }else{
+    const regBtn=root.querySelector('button[onclick*="registerTeam"]');
+    if(regBtn) regBtn.textContent=currentRegIsIndividual()?'✅ 참가 접수':'✅ 팀 등록';
+  }
 }
 
 function renderRegistrationRosterPreview(club='', teamNo='', players=[], note=''){
@@ -8495,6 +8581,7 @@ function openETeam(key,idx){
       <div style="font-size:.72rem;color:var(--text3);margin-top:6px">페어는 경기 결과 입력 때 선택합니다.</div>
     </div>`;
   om('mETeam');
+  enhanceTeamRosterEditor({mode:'edit',editable:true});
 }
 function etUpdateSlots(newDbl,origIdx){
   const team=(G.teams[CE_key]||[])[CE_idx];
@@ -8513,6 +8600,7 @@ function etUpdateSlots(newDbl,origIdx){
   ge('etSlots').innerHTML=buildRosterInputsHTML('ep',dbl*2+2,curVals.length?curVals:p,eDiv,dbl,dbl*2);
   const lbl=ge('editRosterLabel');
   if(lbl) lbl.textContent=dbl===5?'선수 10명 필수 · 최대 12명 등록 가능 · 추가 2명까지 후보 등록 가능':isEW?'주전 6명 + 후보 최대 2명':isET?`주전 ${dbl*2}명 + 후보 최대 2명`:'선수 명단';
+  enhanceTeamRosterEditor({mode:'edit',editable:true});
 }
 async function saveETeam(){
   const teams = G.teams[CE_key] || [];
