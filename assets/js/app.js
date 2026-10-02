@@ -18751,6 +18751,14 @@ function buildPH(name,p){
   const linkedPlayers=[];
   const pushLinked=(obj)=>{ if(obj && !linkedPlayers.includes(obj)) linkedPlayers.push(obj); };
   pushLinked(p);
+
+  // PHASE144: 과거에 같은 선수가 클럽 이동/레거시 저장 때문에 여러 key로 갈라진 경우 복구한다.
+  // 2026 공식 등록명단에서 동명이인이 1명뿐이면, 같은 이름의 player 문서는 과거 클럽이 달라도
+  // 동일인으로 합친다. 다만 서로 다른 유효 전화번호가 명확히 충돌하면 합치지 않는다.
+  const registryRowsForName=((G_REGISTRY&&(G_REGISTRY[REG_YEAR]||G_REGISTRY[2026]))||[])
+    .filter(r=>normName(r?.name||'')===normName(safeName));
+  const uniqueRegistryIdentity=registryRowsForName.length===1;
+
   Object.entries(G.players||{}).forEach(([pk,obj])=>{
     const parsed=pKeyParse(pk);
     if(normName(parsed.name||obj?.name||'')!==normName(safeName)) return;
@@ -18762,9 +18770,11 @@ function buildPH(name,p){
     ].map(c=>normalizeClub(c||'')).filter(Boolean));
     const phone=normalizePhoneDigits(obj?.phone||'');
     const phoneLinked=!!(basePhone && phone && basePhone===phone);
+    const phoneConflict=!!(basePhone && phone && basePhone!==phone);
     const clubLinked=[...cset].some(c=>linkedClubSet.has(c));
     const legacyLinked=!parsed.club && !obj?.club;
-    if(phoneLinked || clubLinked || legacyLinked) pushLinked(obj);
+    const uniqueNameLinked=uniqueRegistryIdentity && !phoneConflict;
+    if(phoneLinked || clubLinked || legacyLinked || uniqueNameLinked) pushLinked(obj);
   });
 
   const fbHist=linkedPlayers.flatMap(lp=>(lp?.history||[]).map(h=>({
