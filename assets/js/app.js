@@ -23942,13 +23942,16 @@ async function renderRegistryTab(force){
     return String(a.name||'').localeCompare(String(b.name||''),'ko',{numeric:true});
   });
 
-  body.innerHTML=buildRegistryRegionSections({
+  const registryRegionHtml=buildRegistryRegionSections({
     members:sortedFiltered,
     year,
     admin:AD,
     escapeHtml:esc,
     escapeAttr:escAttr
   });
+  // PHASE157: 수정/삭제 버튼은 렌더 후 숨기지 않고, DOM에 넣기 전에 제거한다.
+  // 관리자도 선수 이름 클릭 → 선수기록/관리 통합 팝업만 사용하므로 초기 깜빡임이 없다.
+  body.innerHTML=stripRegistryInlineAdminButtons(registryRegionHtml);
   body.dataset.ready='1';
   setTimeout(()=>{
     ensureRegistryManagerButton();
@@ -23957,6 +23960,22 @@ async function renderRegistryTab(force){
     decorateRegistryStatusBadges(year, filtered);
     wireRegistryPlayerRows(year, filtered);
   },0);
+}
+
+// PHASE157: 선수 등록 현황의 개별 수정/삭제 버튼은 처음부터 생성하지 않는다.
+function stripRegistryInlineAdminButtons(html){
+  try{
+    const tpl=document.createElement('template');
+    tpl.innerHTML=String(html||'');
+    tpl.content.querySelectorAll('[onclick]').forEach(el=>{
+      const oc=String(el.getAttribute('onclick')||'');
+      if(/quick(?:Edit|Delete)RegistryMember\s*\(/.test(oc)) el.remove();
+    });
+    return tpl.innerHTML;
+  }catch(e){
+    console.warn('[Registry] inline admin button strip failed',e);
+    return String(html||'');
+  }
 }
 
 // PHASE154: 공식 등록명단에서도 여성/65+ 예외 자격을 한눈에 확인한다.
