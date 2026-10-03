@@ -19539,6 +19539,33 @@ function phint(inp,num){
 // PHASE175: 지난대회 선수기록은 한 번 정확히 확정한 뒤 다시 불러오지 않는다.
 // 최초 확정 시에는 모든 참가/순위 소스를 충분히 합친 뒤 저장하고, 이후에는 이름+클럽 identity별 확정본을 즉시 사용한다.
 const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V2';
+// PHASE176: 팀 최종결과도 별도 확정 캐시로 보관한다.
+// 대회+부서+클럽의 최종 순위가 한 번 확인되면 선수 참가이력보다 항상 우선한다.
+const PLAYER_TEAM_FINAL_RESULT_CACHE_KEY='KIMHAE_PLAYER_TEAM_FINAL_RESULT_V1';
+function playerTeamFinalResultKey(tid,div,club=''){
+  return `${String(tid||'')}__${outputNormalizeDiv(div||'')}__${normalizeClub(baseClub(club)||club||'')}`;
+}
+function readPlayerTeamFinalResult(tid,div,club=''){
+  try{
+    const all=JSON.parse(localStorage.getItem(PLAYER_TEAM_FINAL_RESULT_CACHE_KEY)||'{}')||{};
+    const hit=all[playerTeamFinalResultKey(tid,div,club)];
+    return hit&&Number(hit.rank||0)>0 ? hit : null;
+  }catch(e){ return null; }
+}
+function writePlayerTeamFinalResult(tid,div,club='',rank,result=''){
+  const rv=Number(rank||0)||0;
+  if(!tid||!rv) return;
+  try{
+    const all=JSON.parse(localStorage.getItem(PLAYER_TEAM_FINAL_RESULT_CACHE_KEY)||'{}')||{};
+    const key=playerTeamFinalResultKey(tid,div,club);
+    const prev=all[key];
+    // 이미 더 좋은/같은 순위가 확정돼 있으면 불필요하게 낮은 정보로 덮지 않는다.
+    if(prev&&Number(prev.rank||0)>0&&Number(prev.rank)<=rv) return;
+    all[key]={rank:rv,result:result||(rv===1?'우승':rv===2?'준우승':rv===3?'3위':`${rv}위`),ts:Date.now()};
+    const entries=Object.entries(all).sort((a,b)=>Number(b[1]?.ts||0)-Number(a[1]?.ts||0)).slice(0,1000);
+    localStorage.setItem(PLAYER_TEAM_FINAL_RESULT_CACHE_KEY,JSON.stringify(Object.fromEntries(entries)));
+  }catch(e){}
+}
 function playerHistoryViewCacheKey(name,club=''){
   return `${normName(cleanName(String(name||'')))}__${normalizeClub(club||'')}`;
 }
@@ -19575,7 +19602,8 @@ function readPlayerHistoryViewCache(name,club='',epoch=''){
     const all=JSON.parse(localStorage.getItem(PLAYER_HISTORY_VIEW_CACHE_KEY)||'{}')||{};
     const hit=all[playerHistoryViewCacheKey(name,club)];
     if(!hit||!hit.html||hit.final!==true) return null;
-    if(epoch && hit.epoch && hit.epoch!==epoch) return null;
+    // PHASE176: 지난대회 확정 기록은 새로고침 직후 G 데이터가 아직 덜 로드됐다는 이유로
+    // epoch 불일치 처리하지 않는다. 한 번 확정된 화면을 즉시 보여주고 참가 상태로 되돌리지 않는다.
     return hit;
   }catch(e){ return null; }
 }
@@ -19623,9 +19651,10 @@ async function openPHist(iid){
   om('mPHist');
 
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
-  // 이미 확정된 과거기록이고 원본 epoch가 같으면 네트워크/registrations 재조회 없이 즉시 사용한다.
+  // PHASE176: 이미 확정된 과거기록은 원본 로딩 순서와 무관하게 즉시 사용한다.
+  // 새로고침 직후 참가 데이터만 먼저 준비돼도 확정 순위를 절대 임시값으로 되돌리지 않는다.
   let epoch=playerHistorySourceEpoch(name,identityClub);
-  const finalized=readPlayerHistoryViewCache(name,identityClub,epoch);
+  const finalized=readPlayerHistoryViewCache(name,identityClub);
   if(finalized?.html){
     ge('mPHistBody').innerHTML=finalized.html;
     return;
@@ -19882,6 +19911,13 @@ function buildPH(name,p){
   // 순위/결과가 더 구체적인 기록을 우선해서 '참가'가 준우승/우승 같은 실제 성적을 덮지 못하게 한다.
   const normalizeHistoryOutcome=(h)=>{
     const rec={...h};
+    // PHASE176: 같은 대회/부서/클럽의 최종결과가 이미 확정돼 있으면
+    // registrations의 '참가'보다 확정 순위를 먼저 적용한다.
+    const finalHit=readPlayerTeamFinalResult(rec.tid,rec.div||rec.division,rec.baseClub||rec.club||'');
+    if(finalHit&&Number(finalHit.rank||0)>0){
+      rec.rank=Number(finalHit.rank);
+      rec.result=String(finalHit.result||'').trim() || (rec.rank===1?'우승':rec.rank===2?'준우승':rec.rank===3?'3위':`${rec.rank}위`);
+    }
     const txt=String(rec.result||'').trim();
     let rv=Number(rec.rank||0)||null;
     if(!rv){
@@ -20109,7 +20145,14 @@ function collectLivePlayerHistory(name, preferClub=''){
         if(!matched) return;
 
         const ach = getLiveTeamAchievementForHistory(key, teamIdx, team, tid, div);
-        const rankVal = (typeof team?.rank === 'number') ? team.rank : ((typeof ach?.rank === 'number') ? ach.rank : (Number(team?.rank||0) || null));
+        const cachedFinal=readPlayerTeamFinalResult(tid,div,teamBaseClub||teamClubRaw||'');
+        const rankVal = (typeof team?.rank === 'number') ? team.rank
+          : ((typeof ach?.rank === 'number') ? ach.rank
+          : (Number(cachedFinal?.rank||0) || Number(team?.rank||0) || null));
+        const finalResultLabel = ach?.rank!=null ? ach?.result : (cachedFinal?.result||ach?.result||'');
+        if(Number(rankVal||0)>0){
+          writePlayerTeamFinalResult(tid,div,teamBaseClub||teamClubRaw||'',rankVal,finalResultLabel);
+        }
         const rec = {
           tid,
           date: t?.date || '',
@@ -20118,7 +20161,7 @@ function collectLivePlayerHistory(name, preferClub=''){
           baseClub: teamBaseClub || '',
           div: div || '',
           rank: rankVal,
-          result: ach?.result || (rankVal===1 ? '우승' : rankVal===2 ? '준우승' : rankVal===3 ? '3위' : '참가'),
+          result: finalResultLabel || (rankVal===1 ? '우승' : rankVal===2 ? '준우승' : rankVal===3 ? '3위' : '참가'),
           source: 'live'
         };
         const dk = `${rec.tid}|${rec.div}|${rec.baseClub||rec.club}|${targetName}`;
