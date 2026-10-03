@@ -8321,10 +8321,9 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
       }catch(e){}
     });
   }
-  const statusBadges=[
-    downgradeCount?`<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.64rem;font-weight:900;white-space:nowrap">↓ 하향 ${downgradeCount}명</span>`:'',
-    exceptionCount?`<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.64rem;font-weight:900;white-space:nowrap">✓ 예외 ${exceptionCount}명</span>`:''
-  ].filter(Boolean).join('');
+  const statusBadges=downgradeCount
+    ? `<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.64rem;font-weight:900;white-space:nowrap">↓ 하향 ${downgradeCount}명${exceptionCount?` <span style="margin-left:4px;color:#166534">(예외 ${exceptionCount})</span>`:''}</span>`
+    : '';
 
   const headerRight=canManage
     ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
