@@ -19538,10 +19538,10 @@ function phint(inp,num){
 }
 // PHASE175: 지난대회 선수기록은 한 번 정확히 확정한 뒤 다시 불러오지 않는다.
 // 최초 확정 시에는 모든 참가/순위 소스를 충분히 합친 뒤 저장하고, 이후에는 이름+클럽 identity별 확정본을 즉시 사용한다.
-const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V5';
+const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V6';
 // PHASE176: 팀 최종결과도 별도 확정 캐시로 보관한다.
 // 대회+부서+클럽의 최종 순위가 한 번 확인되면 선수 참가이력보다 항상 우선한다.
-const PLAYER_TEAM_FINAL_RESULT_CACHE_KEY='KIMHAE_PLAYER_TEAM_FINAL_RESULT_V4';
+const PLAYER_TEAM_FINAL_RESULT_CACHE_KEY='KIMHAE_PLAYER_TEAM_FINAL_RESULT_V5';
 function playerTeamFinalResultKey(tid,div,club=''){
   return `${String(tid||'')}__${outputNormalizeDiv(div||'')}__${normalizeClub(baseClub(club)||club||'')}`;
 }
@@ -19569,7 +19569,7 @@ function writePlayerTeamFinalResult(tid,div,club='',rank,result=''){
 
 // PHASE177: 과거대회 전체 참가/최종결과를 대회 단위로 한 번 확정해 영구 보관한다.
 // 선수기록을 열 때마다 registrations/matches를 다시 조립하지 않고 이 확정 아카이브를 우선 사용한다.
-const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V4';
+const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V5';
 let FINALIZED_PAST_ARCHIVE_MEM=null;
 let FINALIZED_PAST_ARCHIVE_PROMISE=null;
 function readFinalizedPastArchive(){
@@ -19621,37 +19621,47 @@ function buildPastArchiveEntryFromLoadedTournament(t){
           stats.forEach(row=>{ if(Number(row?.rank||0)>0) rankByIdx.set(Number(row.teamIdx??row.ti),{rank:Number(row.rank),result:historyResultLabelFromRank(row.rank,row.rankLabel)}); });
         }
       }else{
-        // PHASE179: 선수기록 확정 순위는 '시합결과' 화면과 동일한 최종결과 계산을 최우선으로 사용한다.
-        // 별도 추정값 때문에 참가로 남는 문제를 막기 위해 getMainMedalSummary()의 우승/준우승/3위를
-        // 실제 등록팀 index에 역매칭한다. 이 함수가 시합결과 요약 카드의 원본이다.
+        // PHASE180: 확정 순위를 팀명 문자열로 다시 맞추지 않는다.
+        // 결승/3위전의 실제 team index를 그대로 사용해 선수기록에 반영한다.
+        // 결과 화면과 선수기록 사이의 팀명 표기 차이(A/B, 공백, 클럽명 정규화) 때문에
+        // 준우승/우승이 '참가'로 남는 문제를 원천 차단한다.
         const allMatches=G.matches[key]||[];
         const mainMatches=allMatches.filter(m=>m && m.phase==='main');
-        const summary=getMainMedalSummary(key,teams,mainMatches);
-        const normalizeTeamDisplay=(v)=>String(v||'').replace(/\s+/g,'').replace(/-([A-C])$/i,'$1').toLowerCase();
-        const findTeamIdxByDisplay=(display)=>{
-          const target=normalizeTeamDisplay(display);
-          if(!target) return -1;
-          let hit=teams.findIndex((tm,idx)=>normalizeTeamDisplay(tdn(tm,key,idx))===target);
-          if(hit>=0) return hit;
-          const targetClub=normalizeClub(baseClub(display)||display||'');
-          if(targetClub) hit=teams.findIndex(tm=>isSameRegistrationClub(normalizeClub(baseClub(tm?.club)||tm?.club||''),targetClub));
-          return hit;
-        };
-        if(summary){
-          const champIdx=findTeamIdxByDisplay(summary.champion);
-          const runnerIdx=findTeamIdxByDisplay(summary.runner);
-          if(champIdx>=0) rankByIdx.set(champIdx,{rank:1,result:'우승'});
-          if(runnerIdx>=0) rankByIdx.set(runnerIdx,{rank:2,result:'준우승'});
-          (summary.thirds||[]).forEach(nm=>{
-            const idx=findTeamIdxByDisplay(nm);
-            if(idx>=0) rankByIdx.set(idx,{rank:3,result:summary.thirdLabel||'3위'});
-          });
-          if(summary.fourth){
-            const idx=findTeamIdxByDisplay(summary.fourth);
-            if(idx>=0) rankByIdx.set(idx,{rank:4,result:'4위'});
+        const mainList=getMainOnlyMatches(mainMatches);
+        const finalMatch=getMainFinalMatch(mainList);
+        if(finalMatch && finalMatch.winner!=null){
+          const champIdx=Number(finalMatch.winner);
+          const runnerIdx=(String(finalMatch.winner)===String(finalMatch.t1)) ? Number(finalMatch.t2) : Number(finalMatch.t1);
+          if(Number.isInteger(champIdx) && teams[champIdx]) rankByIdx.set(champIdx,{rank:1,result:'우승'});
+          if(Number.isInteger(runnerIdx) && teams[runnerIdx]) rankByIdx.set(runnerIdx,{rank:2,result:'준우승'});
+
+          const bronzeMode=getThirdPlaceModeByKey(key);
+          const bronzeMatch=getBronzeMatch(key);
+          if(bronzeMode==='match' && bronzeMatch && bronzeMatch.winner!=null && !bronzeMatch.bye){
+            const thirdIdx=Number(bronzeMatch.winner);
+            const fourthIdx=(String(bronzeMatch.winner)===String(bronzeMatch.t1)) ? Number(bronzeMatch.t2) : Number(bronzeMatch.t1);
+            if(Number.isInteger(thirdIdx) && teams[thirdIdx]) rankByIdx.set(thirdIdx,{rank:3,result:'3위'});
+            if(Number.isInteger(fourthIdx) && teams[fourthIdx]) rankByIdx.set(fourthIdx,{rank:4,result:'4위'});
+          }else{
+            getSharedThirdTeamIndexes(key,teams,mainList).forEach(idx=>{
+              const ti=Number(idx);
+              if(Number.isInteger(ti) && teams[ti]) rankByIdx.set(ti,{rank:3,result:'공동 3위'});
+            });
           }
         }
-        // 결과 요약이 없는 예외 대회는 기존 최종순위 계산을 보조로 사용한다.
+
+        // 각 팀에 대해 기존 경기결과 판정 함수도 보조 적용한다.
+        // 이 함수는 실제 경기결과/본선구조를 이용하므로 과거 결과 화면과 동일한 데이터 상태를 사용한다.
+        teams.forEach((tm,idx)=>{
+          try{
+            const ach=getLiveTeamAchievementForHistory(key,idx,tm,tid,div);
+            if(Number(ach?.rank||0)>0 && !rankByIdx.has(idx)){
+              rankByIdx.set(idx,{rank:Number(ach.rank),result:historyResultLabelFromRank(ach.rank,ach.result)});
+            }
+          }catch(e){}
+        });
+
+        // 마지막 보조: 기존 최종순위 계산 결과를 사용한다.
         const ranks=calcFinalRanks(key,teams,allMatches)||[];
         ranks.forEach(r=>{
           const idx=Number(r.teamIdx);
@@ -19669,7 +19679,7 @@ function buildPastArchiveEntryFromLoadedTournament(t){
       teamsOut.push({div,club:clubRaw,baseClub:base,players,rank:rr?.rank||null,result:rr?.result||'참가'});
     });
   });
-  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now(),source:'firestore-final-v4'};
+  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now(),source:'firestore-final-v5'};
 }
 function seedArchiveFromHistData(all){
   (HIST_DATA||[]).forEach(t=>{
@@ -19689,8 +19699,6 @@ async function ensureFinalizedPastTournamentArchive(){
     const all={...readFinalizedPastArchive()};
     const past=(G.tournaments||[]).filter(isPastTournamentForFinalArchive);
     const failed=new Set();
-    // PHASE180: 확정 결과는 앱/기기별 오래된 참가 캐시에 의존하지 않는다.
-    // V4 아카이브가 없는 대회는 반드시 실제 Firestore registrations/matches/draws를 강제 조회해 확정한다.
 
     // PHASE178: 과거대회 확정값은 Firestore 최종 경기/등록 데이터가 항상 1순위다.
     // HIST_DATA의 '참가' fallback이 먼저 들어와 실제 준우승/우승을 막지 않도록
@@ -19699,7 +19707,10 @@ async function ensureFinalizedPastTournamentArchive(){
       const tid=String(t.id||'');
       if(!tid) continue;
       const cached=all[tid];
-      if(cached?.source==='firestore-final-v4' && Array.isArray(cached?.teams) && cached.teams.length) continue;
+      if(cached?.source==='firestore-final-v5' && Array.isArray(cached?.teams) && cached.teams.length){
+        const hasAnyFinalRank=cached.teams.some(tm=>Number(tm?.rank||0)>0);
+        if(hasAnyFinalRank) continue;
+      }
       try{
         await fetchTournamentBundle(tid,{force:true,acceptStale:true});
         const entry=buildPastArchiveEntryFromLoadedTournament(t);
@@ -19718,17 +19729,9 @@ async function ensureFinalizedPastTournamentArchive(){
     const fallback={};
     seedArchiveFromHistData(fallback);
     Object.entries(fallback).forEach(([tid,entry])=>{
-      if(!all[tid] || failed.has(tid)) all[tid]=all[tid]?.source==='firestore-final-v4'?all[tid]:entry;
+      if(!all[tid] || failed.has(tid)) all[tid]=all[tid]?.source==='firestore-final-v5'?all[tid]:entry;
     });
 
-    // 최종 저장 전에 rank/result가 있는 항목을 팀 최종결과 인덱스에도 다시 반영한다.
-    // 선수기록의 '참가' fallback이 이 확정값을 절대 덮지 못하게 한다.
-    Object.values(all).forEach(entry=>{
-      (entry?.teams||[]).forEach(tm=>{
-        const r=Number(tm?.rank||0)||0;
-        if(r>0) writePlayerTeamFinalResult(entry.tid,tm.div,tm.baseClub||tm.club,r,tm.result||historyResultLabelFromRank(r));
-      });
-    });
     writeFinalizedPastArchive(all);
     return all;
   })().finally(()=>{ FINALIZED_PAST_ARCHIVE_PROMISE=null; });
@@ -19841,11 +19844,9 @@ async function openPHist(iid){
   // PHASE176: 이미 확정된 과거기록은 원본 로딩 순서와 무관하게 즉시 사용한다.
   // 새로고침 직후 참가 데이터만 먼저 준비돼도 확정 순위를 절대 임시값으로 되돌리지 않는다.
   let epoch=playerHistorySourceEpoch(name,identityClub);
-  const finalized=readPlayerHistoryViewCache(name,identityClub);
-  if(finalized?.html){
-    ge('mPHistBody').innerHTML=finalized.html;
-    return;
-  }
+  // PHASE180: 완성 HTML 캐시는 표시 우선소스로 사용하지 않는다.
+  // 기기별 localStorage에 남은 오래된 '참가' 화면이 확정 결과를 가리는 문제를 막고,
+  // 매번 이미 확정된 과거대회 아카이브에서 즉시 렌더한다.
 
   try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
 
