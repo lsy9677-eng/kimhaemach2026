@@ -776,7 +776,7 @@ import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPl
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
@@ -842,6 +842,7 @@ function startTournamentListSync(){
   stopTournamentListSync();
   _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async snap=>{
     G.tournaments=snap.docs.map(d=>({id:d.id,...d.data()}));
+    hydratePastArchives();
     try{
       const activeTid=getRealtimeTargetTournamentId()||null;
       await syncTournamentDataForPage(getCurrentPageName(),activeTid,false);
@@ -1108,7 +1109,7 @@ function applyTournamentBundle(tid, bundle){
 
   const regs=Array.isArray(bundle.regs)?bundle.regs:[];
   regs.forEach(x=>{
-    const div=x.division; if(!div) return;
+    const div=x.division||x.div; if(!div) return;
     const key=tid+'_'+div;
     if(!G.teams[key]) G.teams[key]=[];
     G.teams[key].push({_id:x._id||x.id||'', ...x, players:x.players||[]});
@@ -1123,7 +1124,7 @@ function applyTournamentBundle(tid, bundle){
 
   const matches=Array.isArray(bundle.matches)?bundle.matches:[];
   matches.forEach(x=>{
-    const div=x.division; if(!div) return;
+    const div=x.division||x.div; if(!div) return;
     const key=tid+'_'+div;
     if(!G.matches[key]) G.matches[key]=[];
     G.matches[key].push({_id:x._id||x.id||'', ...x});
@@ -1144,10 +1145,166 @@ function applyTournamentBundle(tid, bundle){
     markFbWriteCache('draws', id, payload||{});
   });
 }
+// PHASE182: shared past-tournament snapshot. This is the source for rosters and player outcomes.
+const PAST_ARCHIVE_VERSION=182;
+const PAST_ARCHIVE_JOBS=new Map();
+const PAST_ARCHIVE_ATTEMPTS=new Set();
+let PAST_ARCHIVE_MIGRATION_TIMER=null;
+function schedulePastArchiveMigration(){
+  if(!AD || PAST_ARCHIVE_MIGRATION_TIMER)return;
+  PAST_ARCHIVE_MIGRATION_TIMER=setTimeout(async()=>{
+    try{
+      for(const t of (G.tournaments||[]).filter(isPastArchiveTournament)){
+        const attempt=String(t.id)+'|'+Number(t.pastArchiveRevision||0);
+        if(getPastArchive(t.id)||PAST_ARCHIVE_ATTEMPTS.has(attempt))continue;
+        PAST_ARCHIVE_ATTEMPTS.add(attempt);
+        try{await ensurePastTournamentArchive(t.id);}catch(e){console.warn('[past-archive] migration failed',t.id,e);toast('지난대회 확정본 저장 실패: '+String(t.name||'')+' · '+e.message,'info');}
+      }
+    }finally{PAST_ARCHIVE_MIGRATION_TIMER=null;}
+  },500);
+}
+function isPastArchiveTournament(t){
+  const d=getTournamentDateKey(t);
+  return !!t && (t.status==='finished' || (d && d<getTodayDateKey()));
+}
+function getPastArchive(tid){
+  const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
+  const a=t?.pastArchive;
+  if(!isPastArchiveTournament(t) || a?.version!==PAST_ARCHIVE_VERSION || a.revision!==Number(t.pastArchiveRevision||0)) return null;
+  try{
+    const b=JSON.parse(a.json);
+    return Array.isArray(b.regs)&&Array.isArray(b.matches)&&Array.isArray(b.draws)?b:null;
+  }catch(e){return null;}
+}
+function hydratePastArchives(){
+  (G.tournaments||[]).forEach(t=>{
+    const b=getPastArchive(t.id);
+    if(b){applyTournamentBundle(t.id,b);saveTournamentBundleCache(t.id,b);}
+  });
+}
+function pastArchiveMutation(batch,tid){
+  const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
+  if(!isPastArchiveTournament(t)) return;
+  // Invalidate in the same commit as the source change. Another device cannot read an old snapshot after this commit.
+  batch.update(doc(db,'tournaments',tid),{pastArchive:null,pastArchiveRevision:increment(1)});
+}
+function pastArchiveLocalInvalidation(tid){
+  const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
+  if(!isPastArchiveTournament(t)) return;
+  t.pastArchive=null;
+  Object.entries(G.teams||{}).forEach(([k,teams])=>{if(k.startsWith(tid+'_'))(teams||[]).forEach(tm=>delete tm._pastOutcome);});
+  delete TOURNAMENT_BUNDLE_MEM[tid];
+  const all=readTournamentBundleCache();delete all[tid];writeTournamentBundleCache(all);
+  PLAYER_REG_HISTORY_CACHE.clear();
+}
+function pastArchiveOutcomeRank(team){
+  for(const v of [team?.rank,team?._rank,team?.teamRank]){
+    const n=Number(v);if(Number.isFinite(n)&&n>0)return n;
+  }
+  const txt=String(team?.result||team?.teamResult||'').trim();
+  if(/^(우승|1위)$/.test(txt))return 1;
+  if(/^(준우승|2위)$/.test(txt))return 2;
+  if(/^(공동\s*)?3위$/.test(txt))return 3;
+  if(/^4위$/.test(txt))return 4;
+  return null;
+}
+function buildPastArchiveBundle(tid,bundle){
+  const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
+  const out=JSON.parse(JSON.stringify(bundle));
+  const states={};
+  const divs=new Set(out.regs.map(r=>r.division||r.div).filter(Boolean));
+  divs.forEach(div=>{
+    const key=tid+'_'+div, teams=G.teams[key]||[], matches=G.matches[key]||[];
+    const final=getMainFinalMatch(matches);
+    const finalDone=final && final.winner!=null && [final.t1,final.t2].some(v=>String(v)===String(final.winner));
+    const hasStoredChampion=teams.some(tm=>pastArchiveOutcomeRank(tm)===1);
+    const completed=!!(finalDone||hasStoredChampion);
+    states[div]=completed?'finalized':'pending';
+    const rankingMatches=matches.map(m=>{
+      const x={...m};
+      ['t1','t2','winner'].forEach(k=>{
+        if(x[k]!==null && x[k]!==undefined && x[k]!=='' && /^\d+$/.test(String(x[k])) && teams[Number(x[k])])x[k]=Number(x[k]);
+      });
+      return x;
+    });
+    const computed=calcFinalRanks(key,teams,rankingMatches)||[];
+    teams.forEach((team,i)=>{
+      const raw=out.regs.find(r=>String(r._id||r.id||'')===String(team._id||team.id||'') && (r.division||r.div)===div);
+      if(!raw)return;
+      const rankHit=computed.find(r=>Number(r.teamIdx)===i);
+      const stored=pastArchiveOutcomeRank(team);
+      const outcomeTeam=finalDone?{...team,rank:null,_rank:null,teamRank:null,_pastOutcome:null}:team;
+      const ach=getLiveTeamAchievementForHistory(key,i,outcomeTeam,tid,div);
+      const rank=finalDone?(rankHit?.rank||null):(stored||ach?.rank||null);
+      const result=rank===1?'우승':rank===2?'준우승':rank===3?(rankHit?.label||'3위'):rank===4?'4위':String(team.result||team.teamResult||ach?.result||'참가');
+      raw._pastOutcome={rank,result,confirmed:completed};
+    });
+  });
+  out.divisionStates=states;
+  return out;
+}
+async function ensurePastTournamentArchive(tid,{rebuild=false}={}){
+  const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
+  if(!isPastArchiveTournament(t))return fetchTournamentBundle(tid,{force:false,acceptStale:true});
+  const saved=getPastArchive(tid);
+  if(saved&&!rebuild){applyTournamentBundle(tid,saved);return saved;}
+  if(PAST_ARCHIVE_JOBS.has(tid))return PAST_ARCHIVE_JOBS.get(tid);
+  const job=(async()=>{
+    // Capture the source revision before reading. A concurrent source edit prevents snapshot publication.
+    const metaSnap=await getDocFromServer(doc(db,'tournaments',tid));
+    if(!metaSnap.exists())throw new Error('대회를 찾을 수 없습니다.');
+    const meta=metaSnap.data();
+    const revision=Number(meta.pastArchiveRevision||0);
+    Object.assign(t,meta);
+    const serverSaved=getPastArchive(tid);
+    if(serverSaved&&!rebuild){applyTournamentBundle(tid,serverSaved);return serverSaved;}
+    const bundle=await fetchTournamentBundle(tid,{force:true,acceptStale:true,bypassPastArchive:true,server:true});
+    if(!bundle?.regs?.length)throw new Error('출전 명단이 없어 확정본을 저장하지 않았습니다.');
+    const out=buildPastArchiveBundle(tid,bundle);
+    // Public viewers use the same result locally; publication belongs to the existing administrator role.
+    if(!AD){applyTournamentBundle(tid,out);return out;}
+    const json=JSON.stringify(out);
+    if(new TextEncoder().encode(json).length>700000)throw new Error('대회 자료가 커서 확정본 저장 한도를 초과했습니다.');
+    const archive={version:PAST_ARCHIVE_VERSION,revision,savedAt:new Date().toISOString(),json};
+    await runTransaction(db,async tx=>{
+      const current=await tx.get(doc(db,'tournaments',tid));
+      if(!current.exists()||Number(current.data().pastArchiveRevision||0)!==revision)throw new Error('저장 중 원본이 변경됐습니다. 다시 확정해 주세요.');
+      tx.update(doc(db,'tournaments',tid),{pastArchive:archive});
+    });
+    const verify=await getDocFromServer(doc(db,'tournaments',tid));
+    if(!verify.exists()||verify.data()?.pastArchive?.json!==json)throw new Error('확정본 서버 저장 확인에 실패했습니다.');
+    Object.assign(t,verify.data());
+    applyTournamentBundle(tid,out);saveTournamentBundleCache(tid,out);
+    return out;
+  })().finally(()=>PAST_ARCHIVE_JOBS.delete(tid));
+  PAST_ARCHIVE_JOBS.set(tid,job);return job;
+}
+async function finalizePastTournamentArchive(tid){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  sl(true);
+  try{
+    const bundle=await ensurePastTournamentArchive(tid,{rebuild:true});
+    const pending=Object.entries(bundle.divisionStates||{}).filter(([,s])=>s!=='finalized').map(([d])=>dl(d));
+    hydratePastArchives();renderTL();
+    toast(pending.length?'명단 저장 완료 · 결과 미확정: '+pending.join(', '):'지난대회 명단·결과 확정 저장 완료','success');
+  }catch(e){toast('확정 저장 실패: '+e.message,'error');}
+  finally{sl(false);}
+}
+async function ensurePastArchivesForPlayer(){
+  const past=(G.tournaments||[]).filter(isPastArchiveTournament);
+  for(const t of past){
+    try{await ensurePastTournamentArchive(t.id);}catch(e){console.warn('[past-archive] history load failed',t.id,e);}
+  }
+}
+
 async function fetchTournamentBundle(tid, opts={}){
   const options=opts||{};
   const force=!!options.force;
   if(!tid) return null;
+  if(!options.bypassPastArchive){
+    const archived=getPastArchive(tid);
+    if(archived){applyTournamentBundle(tid,archived);return archived;}
+  }
   if(!force){
     const cached=getTournamentBundleCache(tid);
     if(cached){
@@ -1159,7 +1316,8 @@ async function fetchTournamentBundle(tid, opts={}){
   const regsQ=query(collection(db,'registrations'), where('tournamentId','==',tid));
   const matchesQ=query(collection(db,'matches'), where('tournamentId','==',tid));
   const drawsQ=query(collection(db,'draws'), where(documentId(), '>=', tid + '_'), where(documentId(), '<=', tid + '_\uf8ff'));
-  const [regsSnap, matchesSnap, drawsSnap]=await Promise.all([getDocs(regsQ), getDocs(matchesQ), getDocs(drawsQ)]);
+  const readQuery=options.server?getDocsFromServer:getDocs;
+  const [regsSnap, matchesSnap, drawsSnap]=await Promise.all([readQuery(regsQ), readQuery(matchesQ), readQuery(drawsQ)]);
   if(seq!==_bundleFetchSeq && !options.acceptStale) return null;
   const payload={
     regs: regsSnap.docs.map(d=>({_id:d.id,...(d.data()||{})})),
@@ -2553,7 +2711,11 @@ function normalizeMatchPayloadForHash(payload){
 async function stD(k){
   const payload=G.draws[k]||{};
   if(isSameFbWrite('draws', k, payload)) return;
-  await fbSet('draws',k,payload);
+  const archiveBatch=writeBatch(db);
+  archiveBatch.set(doc(db,'draws',k),{...payload,_u:new Date().toISOString()});
+  pastArchiveMutation(archiveBatch,_k2td(k).tid);
+  await archiveBatch.commit();
+  pastArchiveLocalInvalidation(_k2td(k).tid);
   markFbWriteCache('draws', k, payload);
   try{ cacheTournamentBundleFromMemory(_k2td(k).tid); }catch(e){}
   scheduleTournamentAutoRestorePoint(k,'대진표/추첨 변경');
@@ -2611,7 +2773,9 @@ async function stT(key){
     batch.set(doc(db,'registrations',docId), payload, {merge:true});
   });
   toDel.forEach(id=>batch.delete(doc(db,'registrations',id)));
+  pastArchiveMutation(batch,tid);
   await batch.commit();
+  pastArchiveLocalInvalidation(tid);
   markFbWriteCache('teams', key, hashPayload);
   if(!G._regIdsByKey) G._regIdsByKey={};
   G._regIdsByKey[key]=[...curIds];
@@ -2649,7 +2813,9 @@ async function stM(key){
     batch.set(doc(db,'matches',docId), payload, {merge:true});
   });
   toDel.forEach(id=>batch.delete(doc(db,'matches',id)));
+  pastArchiveMutation(batch,tid);
   await batch.commit();
+  pastArchiveLocalInvalidation(tid);
   markFbWriteCache('matches', key, hashPayload);
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=[...curIds];
@@ -2666,7 +2832,11 @@ async function persistSingleMatchDoc(key, matchObj){
   payload.division=div;
   payload.updatedAt=new Date().toISOString();
   if(!payload.createdAt) payload.createdAt=payload.updatedAt;
-  await setDoc(doc(db,'matches',matchObj._id), payload, {merge:true});
+  const archiveBatch=writeBatch(db);
+  archiveBatch.set(doc(db,'matches',matchObj._id),payload,{merge:true});
+  pastArchiveMutation(archiveBatch,tid);
+  await archiveBatch.commit();
+  pastArchiveLocalInvalidation(tid);
   const cur=G.matches[key]||[];
   const docsForHash=cur.map(x=>{
     const cloned={...x};
@@ -2725,6 +2895,7 @@ async function stP(k){try{const pk=pKeyParse(k);const pureName=cleanName(pk.name
 async function fbLog(t,i='📌'){ return; }
 
 function onDU(){
+  schedulePastArchiveMigration();
   // 새로고침 후 관리자 세션 복원
   if(!AD && localStorage.getItem('adm')==='1'){
     applyAdminUI();
@@ -6780,12 +6951,12 @@ function renderTL(){
     return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${sl2[t.status]||'접수중'}</span></div>
     <div class="tc-body"><div class="tc-meta"><span class="tc-mi">📅 ${t.date}</span>${t.venue?`<span class="tc-mi">📍 ${t.venue}</span>`:''}<span class="tc-mi">${(t.type||'team')==='individual_pair'?'🎾 개인전':'👥 단체전'}</span><span class="tc-mi">👥 ${tc}${(t.type||'team')==='individual_pair'?'조':'팀'}</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${(t.divisions||[]).map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${t.id}','${d}')">${dl(d)} <small>${(G.teams[t.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
-    ${AD?`<div class="tc-acts"><select class="form-select" style="width:auto;padding:5px 8px;font-size:.75rem" onchange="chgTS('${t.id}',this.value)"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select><button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openTD('${t.id}')">⚙️ 설정</button><button class="btn btn-primary" style="font-size:.75rem;padding:5px 10px" onclick="openET('${t.id}')">✏️ 편집</button><button class="btn btn-danger" style="font-size:.75rem;padding:5px 10px" onclick="delT('${t.id}')">삭제</button></div>`:
+    ${AD?`<div class="tc-acts"><select class="form-select" style="width:auto;padding:5px 8px;font-size:.75rem" onchange="chgTS('${t.id}',this.value)"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select><button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openTD('${t.id}')">⚙️ 설정</button><button class="btn btn-primary" style="font-size:.75rem;padding:5px 10px" onclick="openET('${t.id}')">✏️ 편집</button>${isPastArchiveTournament(t)?`<button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="finalizePastTournamentArchive('${t.id}')">${getPastArchive(t.id)?'확정본 다시 저장':'지난대회 명단·결과 저장'}</button>`:''}<button class="btn btn-danger" style="font-size:.75rem;padding:5px 10px" onclick="delT('${t.id}')">삭제</button></div>`:
     `<div class="tc-acts"><button class="btn btn-outline" style="font-size:.75rem" onclick="openTD('${t.id}')">상세보기</button></div>`}</div></div>`;
   }).join('');
 }
 
-async function chgTS(tid,s){try{await updateDoc(doc(db,'tournaments',tid),{status:s});}catch(e){toast('실패','error');}}
+async function chgTS(tid,s){try{await updateDoc(doc(db,'tournaments',tid),{status:s,pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);if(s==='finished'&&AD)await ensurePastTournamentArchive(tid);}catch(e){toast('실패','error');}}
 async function delT(tid){
   if(!confirm('대회를 삭제하시겠습니까?\n⚠️ 관련 경기기록, 팀등록, 선수 이력도 함께 삭제됩니다.'))return;
   sl(true);
@@ -6974,7 +7145,8 @@ async function saveET(){
       courtGroups: getDraftCourtGroups('edit')
     };
 
-    await updateDoc(doc(db, 'tournaments', CE_tid), updFields);
+    await updateDoc(doc(db, 'tournaments', CE_tid), {...updFields,pastArchive:null,pastArchiveRevision:increment(1)});
+    pastArchiveLocalInvalidation(CE_tid);
 
     if(hasGuideAssets){
       await setDoc(doc(db, 'tourGuides', CE_tid), {
@@ -10058,7 +10230,7 @@ async function saveBracketDivisionSettings(tid,div){
   ds[div]={...prev, format:fmt, grpSize, advance:adv};
   sl(true);
   try{
-    await updateDoc(doc(db,'tournaments',tid),{divSettings:ds});
+    await updateDoc(doc(db,'tournaments',tid),{divSettings:ds,pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);
     const idx=G.tournaments.findIndex(x=>x.id===tid);
     if(idx>=0) G.tournaments[idx].divSettings=ds;
     sl(false);
@@ -19590,88 +19762,11 @@ function _mergeFinalizedHistoryRecord(history, rec){
   }
   return false;
 }
-async function finalizePastPlayerHistoryToFirebase(name, identityClub=''){
-  const clean=cleanName(String(name||'').trim());
-  const club=normalizeClub(identityClub||'');
-  const ik=playerHistoryIdentityKey(clean,club);
-  if(PLAYER_HISTORY_FINALIZE_INFLIGHT.has(ik)) return PLAYER_HISTORY_FINALIZE_INFLIGHT.get(ik);
-
-  const job=(async()=>{
-    try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
-    try{ await ensurePlayerRegistrationHistory(clean); }catch(e){}
-
-    let pk=club?getPlayerKeyByName(clean,club):getPlayerKeyByName(clean);
-    if(!pk && club){
-      pk=pKey(clean,club);
-      G.players[pk]={key:pk,name:clean,club,clubs:[club],history:[],wins:0,losses:0};
-    }
-    const p=pk?G.players[pk]:null;
-    if(!p) return false;
-
-    const latestPast=getLatestPastTournamentDateKey();
-    if(latestPast && String(p.historyFinalizedThrough||'')>=latestPast && Number(p.historyFinalizedVersion||0)>=180){
-      return true;
-    }
-
-    const tids=new Set();
-    const linkedClubs=new Set([club,normalizeClub(p.club||''),...((p.clubs||[]).map(normalizeClub))].filter(Boolean));
-    const clubOk=(c)=>{
-      const nc=normalizeClub(baseClub(c)||c||'');
-      if(!club) return true;
-      return nc && [...linkedClubs].some(x=>isSameRegistrationClub(x,nc));
-    };
-    (p.history||[]).forEach(h=>{ if(h?.tid && clubOk(h?.baseClub||h?.club||'')) tids.add(String(h.tid)); });
-    getCachedPlayerRegistrationHistory(clean).forEach(h=>{ if(h?.tid && clubOk(h?.baseClub||h?.club||'')) tids.add(String(h.tid)); });
-    (HIST_DATA||[]).forEach(t=>{
-      (t?.teams||[]).forEach(tm=>{
-        if(!clubOk(tm?.club||'')) return;
-        if((tm?.players||[]).some(pn=>normName(cleanName(pn||''))===normName(clean))) tids.add(String(t?.id||''));
-      });
-    });
-    tids.delete('');
-
-    let allFetched=true;
-    for(const tid of tids){
-      const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid));
-      if(!t) continue;
-      const dateKey=getTournamentDateKey(t);
-      const isPast=String(t?.status||'')==='finished'||String(t?.status||'')==='closed'||(dateKey&&getTodayDateKey()&&dateKey<getTodayDateKey());
-      if(!isPast) continue;
-      try{
-        const bundle=await fetchTournamentBundle(tid,{force:true,acceptStale:true});
-        if(!bundle) allFetched=false;
-      }catch(e){ allFetched=false; console.warn('[player-history] past tournament fetch failed',tid,e); }
-    }
-
-    const live=collectLivePlayerHistory(clean,club);
-    let changed=false;
-    for(const rec0 of live){
-      const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(rec0?.tid||''));
-      if(!t) continue;
-      const dateKey=getTournamentDateKey(t);
-      const isPast=String(t?.status||'')==='finished'||String(t?.status||'')==='closed'||(dateKey&&getTodayDateKey()&&dateKey<getTodayDateKey());
-      if(!isPast) continue;
-      if(club && !clubOk(rec0?.baseClub||rec0?.club||'')) continue;
-      const rank=Number(rec0?.rank||0)||null;
-      const result=rank===1?'우승':rank===2?'준우승':rank===3?'3위':rank===4?'4위':String(rec0?.result||'참가');
-      const rec={...rec0,rank,result,source:'firebase-finalized'};
-      if(_mergeFinalizedHistoryRecord(p.history||(p.history=[]),rec)) changed=true;
-    }
-
-    // Firestore 원본을 모두 확인한 경우에만 '이 날짜까지 확정' 마커를 저장한다.
-    if(allFetched){
-      if(String(p.historyFinalizedThrough||'')!==String(latestPast||'') || Number(p.historyFinalizedVersion||0)!==180){
-        p.historyFinalizedThrough=latestPast||'';
-        p.historyFinalizedVersion=180;
-        changed=true;
-      }
-    }
-    if(changed && pk) await stP(pk);
-    return allFetched;
-  })().finally(()=>PLAYER_HISTORY_FINALIZE_INFLIGHT.delete(ik));
-  PLAYER_HISTORY_FINALIZE_INFLIGHT.set(ik,job);
-  return job;
+async function finalizePastPlayerHistoryToFirebase(name,identityClub=''){
+  await ensurePastArchivesForPlayer();
+  return true;
 }
+
 function showPlayerHistoryLoading(name=''){
   const body=ge('mPHistBody'); if(!body) return;
   body.innerHTML=`<div style="padding:34px 18px;text-align:center;color:var(--text2)"><div style="font-size:1.7rem;margin-bottom:9px">🔎</div><b>${esc(name||'선수')} 기록 확정 중…</b><div style="font-size:.72rem;margin-top:7px;color:var(--text3)">지난대회 명단과 최종결과를 Firebase에서 확인하고 있습니다.</div></div>`;
@@ -19686,7 +19781,7 @@ async function openPHist(iid){
 
   showPlayerHistoryLoading(name);
   om('mPHist');
-  try{ await finalizePastPlayerHistoryToFirebase(name,identityClub); }catch(e){ console.warn('[player-history] finalize failed',e); }
+  try{ await finalizePastPlayerHistoryToFirebase(name,identityClub); }catch(e){ console.warn('[player-history] finalize failed',e); toast('지난대회 기록 조회 또는 저장 실패: 네트워크·권한을 확인해 주세요.','info'); }
 
   let info=null;
   if(identityClub){
@@ -19702,7 +19797,7 @@ async function openPHist(iid){
         return isSameRegistrationClub(main,identityClub)||subs.some(c=>isSameRegistrationClub(c,identityClub));
       })||null;
       const mainClub=normalizeClub(regRow?.club||identityClub);
-      info={name:cleanName(name),key:pKey(name,mainClub||identityClub),p:{key:pKey(name,mainClub||identityClub),name:cleanName(name),club:mainClub||identityClub,clubs:[mainClub||identityClub],history:[],wins:0,losses:0},exists:!!regRow};
+      info={name:cleanName(name),key:pKey(name,mainClub||identityClub),p:{key:pKey(name,mainClub||identityClub),name:cleanName(name),club:mainClub||identityClub,clubs:[mainClub||identityClub],history:[],wins:0,losses:0},exists:!!regRow||collectLivePlayerHistory(name,identityClub).length>0};
     }
   }else info=getPlayerForDisplay(name);
 
@@ -19754,6 +19849,11 @@ async function ensurePlayerRegistrationHistory(name){
   const nk=normName(clean);
   if(!nk) return [];
   if(PLAYER_REG_HISTORY_CACHE.has(nk)) return PLAYER_REG_HISTORY_CACHE.get(nk)||[];
+  const past=(G.tournaments||[]).filter(isPastArchiveTournament);
+  if(past.length && past.every(t=>getPastArchive(t.id))){
+    const records=collectLivePlayerHistory(clean).filter(h=>past.some(t=>String(t.id)===String(h.tid)));
+    return records;
+  }
 
   let out=[];
   try{
@@ -19926,6 +20026,7 @@ function buildPH(name,p){
     const r=Number(h?.rank||0)||0;
     const txt=String(h?.result||'').trim();
     let score=0;
+    if(h?.source==='archive') return 1000;
     if(r>0) score=100;
     else if(txt && !/^(참가|예선 참가)$/.test(txt)) score=60;
     else if(txt==='예선 참가') score=20;
@@ -20052,7 +20153,8 @@ function getLiveTeamAchievementForHistory(key, teamIdx, team, tid, div){
       return {rank:rv, result:'참가'};
     };
 
-    const explicitTeamRank=(typeof team?.rank==='number') ? Number(team.rank||0) : (Number(team?.rank||0)||0);
+    if(team?._pastOutcome)return {rank:team._pastOutcome.rank||null,result:team._pastOutcome.result||'참가'};
+    const explicitTeamRank=pastArchiveOutcomeRank(team)||0;
     if(explicitTeamRank>0){
       return toRankLabel(explicitTeamRank, explicitTeamRank===1?'1위':explicitTeamRank===2?'2위':explicitTeamRank===3?'3위':`${explicitTeamRank}위`);
     }
@@ -20108,12 +20210,16 @@ function collectLivePlayerHistory(name, preferClub=''){
 
   (G.tournaments||[]).forEach(t=>{
     const tid = t?.id || '';
-    (t?.divisions||[]).forEach(div=>{
+    const historyDivisions=new Set(Array.isArray(t?.divisions)?t.divisions:[]);
+    Object.keys(G.teams||{}).forEach(k=>{
+      if(k.startsWith(`${tid}_`)) historyDivisions.add(k.slice(String(tid).length+1));
+    });
+    historyDivisions.forEach(div=>{
       const key = `${tid}_${div}`;
       (G.teams?.[key]||[]).forEach((team, teamIdx)=>{
         const teamClubRaw = String(team?.club||'').trim();
         const teamBaseClub = normalizeClub(baseClub(teamClubRaw)||teamClubRaw);
-        if(wantClub && teamBaseClub && teamBaseClub !== wantClub) return;
+        if(wantClub && teamBaseClub && !isSameRegistrationClub(teamBaseClub,wantClub)) return;
 
         const names = [];
         (team?.players||[]).forEach(pn=>{
@@ -20129,7 +20235,7 @@ function collectLivePlayerHistory(name, preferClub=''){
         if(!matched) return;
 
         const ach = getLiveTeamAchievementForHistory(key, teamIdx, team, tid, div);
-        const rankVal = (typeof team?.rank === 'number') ? team.rank : ((typeof ach?.rank === 'number') ? ach.rank : (Number(team?.rank||0) || null));
+        const rankVal = team?._pastOutcome ? (team._pastOutcome.rank||null) : (pastArchiveOutcomeRank(team)||ach?.rank||null);
         const rec = {
           tid,
           date: t?.date || '',
@@ -20139,7 +20245,7 @@ function collectLivePlayerHistory(name, preferClub=''){
           div: div || '',
           rank: rankVal,
           result: ach?.result || (rankVal===1 ? '우승' : rankVal===2 ? '준우승' : rankVal===3 ? '3위' : '참가'),
-          source: 'live'
+          source: team?._pastOutcome?.confirmed ? 'archive' : 'live'
         };
         const dk = `${rec.tid}|${rec.div}|${rec.baseClub||rec.club}|${targetName}`;
         if(seen.has(dk)) return;
@@ -20298,7 +20404,7 @@ async function showP(name,club){
   const clubFromKey = sp.club || '';
   const useClub = (club||'').trim() || clubFromKey;
 
-  try{ await ensurePlayerRegistrationHistory(dispName); }catch(e){}
+  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -20483,7 +20589,7 @@ async function openPD(name,club){
   const dispClubFromKey = sp.club || '';
   const useClub = (club||'').trim() || dispClubFromKey;
 
-  try{ await ensurePlayerRegistrationHistory(dispName); }catch(e){}
+  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -20776,8 +20882,16 @@ async function deletePlayer(){
     await fbLog(`선수삭제: ${displayName}`,'🗑️');
   }catch(e){sl(false);toast('삭제 실패: '+e.message,'error');}
 }
-function openRoster(tid,div){
+async function openRoster(tid,div){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;
+  const rosterRequest=(window.__pastRosterRequest||0)+1;window.__pastRosterRequest=rosterRequest;
+  const archived=getPastArchive(tid);
+  if(archived)applyTournamentBundle(tid,archived);
+  else if(isPastArchiveTournament(t)){
+    ge('mRosterT').textContent=dl(div)+' 선수명단';
+    ge('mRosterB').innerHTML='<div class="empty-state"><p>지난대회 명단 확인 중…</p></div>';om('mRoster');
+    try{await ensurePastTournamentArchive(tid);if(window.__pastRosterRequest!==rosterRequest)return;}catch(e){if(window.__pastRosterRequest!==rosterRequest)return;ge('mRosterB').innerHTML='<div class="empty-state"><p>'+esc(e.message)+'</p></div>';return;}
+  }
   const key=tid+'_'+div,teams=G.teams[key]||[];
   const isIndividual=isIndividualTournament(t);
   ge('mRosterT').textContent=`${dl(div)} 선수명단 (참가기록 조회 → 명단 클릭)`;
@@ -20798,7 +20912,7 @@ function openRoster(tid,div){
         <div style="padding:10px 14px"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px">${ips.map((ip,idx)=>`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:var(--primary);color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span><span>${esc(ip.name||'')}${ip.clubsRaw?`<span style="font-size:.65rem;color:var(--text3);margin-left:2px">(${esc(ip.clubsRaw)})</span>`:''}</span></div>`).join('')}</div>${note}</div></div>`;
     }else{
       const dn=tdn(team,key,i);const p=team.players||[];const tc=esc(team.club||'');
-      html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
+      html+=`<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden"><div style="background:var(--primary-dark);color:white;padding:7px 14px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">${dn}${team._pastOutcome?` · ${esc(team._pastOutcome.result)}${team._pastOutcome.confirmed?'':' (결과 미확정)'}`:''}</span><span style="font-size:.72rem;opacity:.75">${p.length}명</span></div>
       <div style="padding:10px 14px">${(()=>{const isWV=(div==='여성부');const isTV=(div==='테린이'||div==='terinee');const cfgDbl=Number(G.tournaments.find(x=>x.id===tid)?.divSettings?.[div]?.doublesCount||0);const dbl=Number(team.doublesCount||cfgDbl||((isTV||isWV)?(p.length<=6?3:p.length<=8?4:5):5));const savedMainCount=Number.isFinite(Number(team.mainPlayerCount))&&Number(team.mainPlayerCount)>0?Number(team.mainPlayerCount):0;const mainCount=savedMainCount||(isWV?6:dbl*2);const neutralFiveRoster=(dbl===5);const mainP=neutralFiveRoster?p.slice():p.slice(0,mainCount);const subP=neutralFiveRoster?[]:p.slice(mainCount);return`<div style="font-size:.65rem;color:var(--text3);font-weight:600;margin-bottom:6px">선수 명단 (페어는 경기 때 결정)</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:6px">${mainP.map((n,idx)=>{const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(n,team.club||'',tid);return`<div style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'var(--panel2)'};border:1px solid ${isD?'#f59e0b':'var(--border)'};border-radius:var(--radius);padding:5px 7px;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'var(--primary)'};color:#fff;border-radius:50%;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${rosterPlayerHTML(n, team.club||'', tid)}</div>`;}).join('')}</div>${subP.length?`<div style="font-size:.72rem;color:var(--text3)">후보: ${subP.map(n=>rosterPlayerHTML(n, team.club||'', tid)).join(', ')}</div>`:''}`})()}</div></div>`;
     }
   });
@@ -21182,7 +21296,7 @@ function applyRec(tid,div){
   toast(`${dl(div)} 추천 적용 · ${rec.note}`,'success');
 }
 async function saveDivS
-(tid){const t=G.tournaments.find(t=>t.id===tid);if(!t || !assertTournamentManagePermission(t,'부서 설정 저장'))return;const ds={...(t.divSettings||{})};(t.divisions||[]).forEach(div=>{const fe=ge(`dF_${tid}_${div}`),ge2=ge(`dG_${tid}_${div}`),ae=ge(`dA_${tid}_${div}`),tp=ge(`dTP_${tid}_${div}`);const c=gDS(t,div);const nextMode=normalizeThirdPlaceMode(tp?tp.value:c.thirdPlaceMode,getDivisionTeamCount(tid,div));ds[div]={...(ds[div]||{}),format:fe?fe.value:c.format,grpSize:ge2?parseInt(ge2.value):c.grpSize,advance:ae?parseInt(ae.value):c.advance,doublesCount:Number(ds[div]?.doublesCount||c.doublesCount||((div==='테린이'||div==='terinee')?3:5)),maxTeams:parseInt(ds[div]?.maxTeams||0)||0,thirdPlaceMode:nextMode};});sl(true);try{await updateDoc(doc(db,'tournaments',tid),{divSettings:ds});const idx=G.tournaments.findIndex(x=>x.id===tid);if(idx>=0) G.tournaments[idx].divSettings=ds;for(const div of (t.divisions||[])){await ensureBronzeMatchForKey(tid+'_'+div,true);}await fbLog(`설정 변경: ${t.name}`,'⚙️');sl(false);toast('저장 완료','success');try{renderBracket();}catch(e){}}catch(e){sl(false);toast('저장 실패','error');}}
+(tid){const t=G.tournaments.find(t=>t.id===tid);if(!t || !assertTournamentManagePermission(t,'부서 설정 저장'))return;const ds={...(t.divSettings||{})};(t.divisions||[]).forEach(div=>{const fe=ge(`dF_${tid}_${div}`),ge2=ge(`dG_${tid}_${div}`),ae=ge(`dA_${tid}_${div}`),tp=ge(`dTP_${tid}_${div}`);const c=gDS(t,div);const nextMode=normalizeThirdPlaceMode(tp?tp.value:c.thirdPlaceMode,getDivisionTeamCount(tid,div));ds[div]={...(ds[div]||{}),format:fe?fe.value:c.format,grpSize:ge2?parseInt(ge2.value):c.grpSize,advance:ae?parseInt(ae.value):c.advance,doublesCount:Number(ds[div]?.doublesCount||c.doublesCount||((div==='테린이'||div==='terinee')?3:5)),maxTeams:parseInt(ds[div]?.maxTeams||0)||0,thirdPlaceMode:nextMode};});sl(true);try{await updateDoc(doc(db,'tournaments',tid),{divSettings:ds,pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);const idx=G.tournaments.findIndex(x=>x.id===tid);if(idx>=0) G.tournaments[idx].divSettings=ds;for(const div of (t.divisions||[])){await ensureBronzeMatchForKey(tid+'_'+div,true);}await fbLog(`설정 변경: ${t.name}`,'⚙️');sl(false);toast('저장 완료','success');try{renderBracket();}catch(e){}}catch(e){sl(false);toast('저장 실패','error');}}
 
 function goBracket(tid,div){
   showPage('bracket');
@@ -26716,11 +26830,11 @@ async function outputTournamentChanged(){
   let bundle=null;
   try{
     // 출력센터는 과거 대회 선택이 핵심이므로 10분 로컬 캐시를 믿지 않고 실제 Firestore를 다시 읽는다.
-    bundle=await fetchTournamentBundle(tid,{force:true,acceptStale:true});
+    bundle=isPastArchiveTournament(t)?await ensurePastTournamentArchive(tid):await fetchTournamentBundle(tid,{force:true,acceptStale:true});
   }catch(e){ console.warn('[OutputCenter] forced bundle load failed',e); }
   // registrations는 과거대회 부서 판별의 원본이다. bundle 적용과 별개로 직접 한 번 더 확인한다.
   let rawRegs=Array.isArray(bundle?.regs)?bundle.regs:[];
-  if(!rawRegs.length){
+  if(!rawRegs.length && !getPastArchive(tid)){
     try{
       const snap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',tid)));
       rawRegs=snap.docs.map(d=>({_id:d.id,...(d.data()||{})}));
@@ -27496,7 +27610,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
