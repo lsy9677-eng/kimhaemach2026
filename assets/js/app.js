@@ -8279,7 +8279,15 @@ function updateRegisterSlots(){
 }
 
 
+function ensureRegisterRosterCollapseStyle171(){
+  if(ge('registerRosterCollapseStyle171')) return;
+  const st=document.createElement('style'); st.id='registerRosterCollapseStyle171';
+  st.textContent=`details.register-team-card171>summary::-webkit-details-marker{display:none}details.register-team-card171>summary::marker{display:none}details.register-team-card171[open]>summary{background:#f8fafc}details.register-team-card171[open]>summary span:last-child{}`;
+  document.head.appendChild(st);
+}
+
 function buildRegisterRosterGrid(tid,div,teams,key){
+  ensureRegisterRosterCollapseStyle171();
   const tournament=(G.tournaments||[]).find(x=>x.id===tid);
   const isIndividual=isIndividualTournament(tournament);
   const list=Array.isArray(teams)?teams:[];
@@ -8298,33 +8306,55 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
   const titleBadge=isIndividual ? `${idx+1}` : `${origIdx+1}`;
   const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
   const hasFirst=!!(AD && FIRST_APPEARANCE_READY && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)));
+
+  // PHASE171: 등록팀 첫 화면은 요약 카드만 노출하고, 클릭했을 때 상세 명단을 펼친다.
+  // 모바일에서 팀 수가 많아져도 스크롤이 과도하게 길어지지 않도록 기본은 접힌 상태다.
+  let downgradeCount=0, exceptionCount=0;
+  if(!isIndividual){
+    players.forEach(n=>{
+      try{
+        const c=_divisionRuleClassifySync(tid,div,n,team?.club||'');
+        if(c?.known && c?.isDowngrade && Number(c.step||0)>0){
+          downgradeCount++;
+          if(c.exceptionApproved || Number(c.step||0)>=2) exceptionCount++;
+        }
+      }catch(e){}
+    });
+  }
+  const statusBadges=[
+    downgradeCount?`<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.64rem;font-weight:900;white-space:nowrap">↓ 하향 ${downgradeCount}명</span>`:'',
+    exceptionCount?`<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.64rem;font-weight:900;white-space:nowrap">✓ 예외 ${exceptionCount}명</span>`:''
+  ].filter(Boolean).join('');
+
   const headerRight=canManage
-    ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;white-space:nowrap">
-         <button class="btn btn-outline" style="height:28px;padding:3px 7px;font-size:.68rem;font-weight:850;border-radius:8px;background:#fff;color:#1e293b;white-space:nowrap;min-width:52px;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
-         <button class="btn btn-danger" style="height:28px;padding:3px 7px;font-size:.68rem;font-weight:850;border-radius:8px;white-space:nowrap;min-width:52px;line-height:1" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
+    ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+         <button class="btn btn-outline" style="height:30px;padding:4px 9px;font-size:.7rem;font-weight:850;border-radius:8px;background:#fff;color:#1e293b;white-space:nowrap;line-height:1" onclick="openETeam('${key}',${origIdx})">✏️ 수정</button>
+         <button class="btn btn-danger" style="height:30px;padding:4px 9px;font-size:.7rem;font-weight:850;border-radius:8px;white-space:nowrap;line-height:1" onclick="delTeam('${key}',${origIdx})">🗑 삭제</button>
        </div>`
     : '';
-  return `<div style="border:1px solid #d9e2ef;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.055)">
-    <div style="background:linear-gradient(180deg,#0f1f4a 0%,#0b1738 100%);padding:9px 10px">
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">
-          <span style="width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:900;flex:0 0 auto">${titleBadge}</span>
-          <div style="min-width:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-            <div style="font-size:1rem;font-weight:950;color:#fff;line-height:1.15;letter-spacing:-.15px;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</div>
-            ${!isIndividual?`<span style="display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:.66rem;font-weight:800;color:#dbeafe;white-space:nowrap">${teamCount}명</span>`:''}
+
+  return `<details class="register-team-card171" style="border:1px solid #d9e2ef;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.05)">
+    <summary style="list-style:none;cursor:pointer;padding:11px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;background:#fff;user-select:none;-webkit-tap-highlight-color:transparent">
+      <div style="display:flex;align-items:center;gap:9px;min-width:0">
+        <span style="width:24px;height:24px;border-radius:999px;background:#0f1f4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:900;flex:0 0 auto">${titleBadge}</span>
+        <div style="min-width:0">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0">
+            <span style="font-size:.92rem;font-weight:950;color:#0f172a;line-height:1.15;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</span>
+            ${!isIndividual?`<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;font-size:.64rem;font-weight:900;white-space:nowrap">${teamCount}명</span>`:''}
           </div>
+          ${statusBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${statusBadges}</div>`:''}
         </div>
-        ${headerRight}
       </div>
-    </div>
-    <div style="padding:10px 11px 11px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:7px">
-        <div style="font-size:.7rem;color:#64748b;font-weight:800">${memberLabel}</div>
-        ${hasFirst?'<div style="font-size:.66rem;color:#b45309;font-weight:850">★ 첫 출전자</div>':''}
+      <div style="display:flex;align-items:center;gap:6px;color:#475569;font-size:.7rem;font-weight:850;white-space:nowrap"><span>명단 보기</span><span style="font-size:.9rem">⌄</span></div>
+    </summary>
+    <div style="border-top:1px solid #e2e8f0;background:#f8fafc;padding:10px 11px 11px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-size:.7rem;color:#64748b;font-weight:800">${memberLabel}${hasFirst?' · <span style="color:#b45309">★ 첫 출전자</span>':''}</div>
+        ${headerRight}
       </div>
       ${buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual})}
     </div>
-  </div>`;
+  </details>`;
 }
 
 function buildRegisterRosterMemberGridHtml({tid,div,team,players,isIndividual}){
