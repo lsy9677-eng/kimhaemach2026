@@ -8862,6 +8862,7 @@ function mountRegisterFormInline(div){
   host.style.display='block';
   if(form.parentElement!==host) host.appendChild(form);
   form.style.display='block';
+  scheduleRegisterMobileLayoutNormalize();
 }
 
 function renderRL(){
@@ -8970,6 +8971,7 @@ function renderRL(){
   ge('regTCnt').textContent=teams.length+(isIndividual?'조':'팀');
   ge('regNo').value=teams.length+1;
   renderRegistrationRosterPreview('', '', [], '');
+  scheduleRegisterMobileLayoutNormalize();
 }
 
 
@@ -27162,7 +27164,184 @@ function printOutputCenter(){
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
 }
 
-Object.assign(window,{openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+
+// PHASE169: 모바일 팀등록 화면 폭/높이 고정 및 잘림 방지
+// - 팀등록 폼이 재렌더/화면회전 후 좁아진 폭을 유지하는 현상 방지
+// - page-register 내부 고정 height/max-height/overflow/transform 잔존값 제거
+// - 등록 폼과 부서별 inline host는 항상 현재 viewport 가로폭을 100% 사용
+function installRegisterMobileLayoutStabilityStyle(){
+  if(document.getElementById('phase169RegisterMobileLayoutStyle')) return;
+  const st=document.createElement('style');
+  st.id='phase169RegisterMobileLayoutStyle';
+  st.textContent=`
+    @media (max-width:760px){
+      html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;}
+      .main-content{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:hidden!important;}
+      #page-register{
+        width:100%!important;max-width:100%!important;min-width:0!important;
+        height:auto!important;min-height:0!important;max-height:none!important;
+        overflow:visible!important;box-sizing:border-box!important;
+        transform:none!important;zoom:1!important;
+      }
+      #page-register.active{display:block!important;}
+      #page-register > *,
+      #regSection,#regDivisionOverview,#aoReg,[id^="regInlineForm_"]{
+        width:100%!important;max-width:100%!important;min-width:0!important;
+        box-sizing:border-box!important;
+      }
+      #regSection,#regDivisionOverview,[id^="regInlineForm_"]{
+        height:auto!important;min-height:0!important;max-height:none!important;
+        overflow:visible!important;
+      }
+      #aoReg{
+        margin-left:0!important;margin-right:0!important;
+        height:auto!important;min-height:0!important;max-height:none!important;
+        overflow:visible!important;transform:none!important;zoom:1!important;
+      }
+      #aoReg .card,#regSection .card{max-width:100%!important;min-width:0!important;box-sizing:border-box!important;}
+      #aoReg .pslot{
+        width:100%!important;max-width:100%!important;min-width:0!important;
+        box-sizing:border-box!important;
+      }
+      #aoReg .pslot input,#aoReg input,#aoReg select,#aoReg textarea{
+        max-width:100%!important;min-width:0!important;box-sizing:border-box!important;
+      }
+      #aoReg .division-rule-form-row153{padding-left:38px!important;max-width:100%!important;box-sizing:border-box!important;}
+    }
+    @media (max-width:360px){
+      #page-register{padding-left:6px!important;padding-right:6px!important;}
+      #regSection,#regDivisionOverview,#aoReg{margin-left:0!important;margin-right:0!important;}
+      #aoReg .division-rule-form-row153{padding-left:32px!important;}
+      #aoReg .division-rule-form-badge148{font-size:.54rem!important;padding:2px 5px!important;}
+    }
+  `;
+  (document.head||document.documentElement).appendChild(st);
+}
+let __phase169RegisterLayoutTimer=0;
+function normalizeRegisterMobileLayout(){
+  installRegisterMobileLayoutStabilityStyle();
+  if(!isMobileOutputCenter()) return;
+  const page=ge('page-register');
+  if(!page) return;
+  // 화면이 팀등록이 아닐 때는 다른 페이지 레이아웃을 건드리지 않는다.
+  if(!page.classList.contains('active')) return;
+  const els=[page,ge('regSection'),ge('regDivisionOverview'),ge('aoReg'),...page.querySelectorAll('[id^="regInlineForm_"]')].filter(Boolean);
+  els.forEach(el=>{
+    try{
+      el.style.removeProperty('width');
+      el.style.removeProperty('min-width');
+      el.style.removeProperty('max-width');
+      el.style.removeProperty('height');
+      el.style.removeProperty('min-height');
+      el.style.removeProperty('max-height');
+      el.style.removeProperty('overflow');
+      el.style.removeProperty('overflow-x');
+      el.style.removeProperty('transform');
+      el.style.removeProperty('zoom');
+    }catch(e){}
+  });
+  // 현재 선택된 부서의 입력폼은 카드 폭을 그대로 사용한다.
+  const div=ge('regDS')?.value||'';
+  const host=div?ge(`regInlineForm_${div}`):null;
+  const form=ge('aoReg');
+  if(host&&form&&form.parentElement!==host){
+    try{ host.appendChild(form); }catch(e){}
+  }
+  if(host){ host.style.display='block'; }
+  if(form && host){ form.style.display='block'; }
+}
+function scheduleRegisterMobileLayoutNormalize(){
+  clearTimeout(__phase169RegisterLayoutTimer);
+  const run=()=>{ try{ normalizeRegisterMobileLayout(); }catch(e){ console.warn('register mobile layout normalize failed',e); } };
+  try{ requestAnimationFrame(run); }catch(e){ run(); }
+  __phase169RegisterLayoutTimer=setTimeout(run,120);
+  setTimeout(run,420);
+  try{ scheduleRegisterMobileVerticalViewportNormalize(); }catch(e){}
+}
+
+
+
+// PHASE170: 모바일 팀등록 세로 viewport/슬라이더 높이 고정 잔존 제거
+// - 비동기 렌더 후 바깥 page slider가 이전 높이를 유지해 화면 아래가 잘리는 현상 방지
+// - page-register에서 main-content까지의 높이는 내용 기준 auto로 복원
+// - visualViewport(모바일 주소창/키보드) 변화 후에도 다시 계산
+let __phase170RegisterVerticalTimer=0;
+let __phase170WrappedSliderHeight=false;
+function normalizeRegisterMobileVerticalViewport(){
+  if(!isMobileOutputCenter()) return;
+  const page=ge('page-register');
+  if(!page || !page.classList.contains('active')) return;
+
+  // 현재 viewport 높이를 CSS 변수로 기록해 브라우저 주소창 변화에도 안정적으로 대응한다.
+  try{
+    const vh=Math.max(320, Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0));
+    document.documentElement.style.setProperty('--kimhae-mobile-vh', vh+'px');
+  }catch(e){}
+
+  // 활성 페이지에서 main-content까지의 wrapper에 남아 있는 고정 높이를 제거한다.
+  const chain=[];
+  let el=page;
+  while(el && el!==document.body && el!==document.documentElement){
+    chain.push(el);
+    if(el.classList?.contains('main-content')) break;
+    el=el.parentElement;
+  }
+  const main=document.querySelector('.main-content');
+  if(main && !chain.includes(main)) chain.push(main);
+
+  chain.forEach(node=>{
+    try{
+      node.style.removeProperty('height');
+      node.style.removeProperty('min-height');
+      node.style.removeProperty('max-height');
+      node.style.setProperty('height','auto','important');
+      node.style.setProperty('max-height','none','important');
+      if(node===page || node===main) node.style.setProperty('min-height','0','important');
+    }catch(e){}
+  });
+
+  // 팀등록 내부 주요 컨테이너도 내용 높이를 그대로 사용한다.
+  [ge('regSection'),ge('regDivisionOverview'),ge('aoReg'),...page.querySelectorAll('[id^="regInlineForm_"]')].filter(Boolean).forEach(node=>{
+    try{
+      node.style.setProperty('height','auto','important');
+      node.style.setProperty('max-height','none','important');
+      node.style.setProperty('min-height','0','important');
+    }catch(e){}
+  });
+}
+function scheduleRegisterMobileVerticalViewportNormalize(){
+  clearTimeout(__phase170RegisterVerticalTimer);
+  const run=()=>{ try{ normalizeRegisterMobileVerticalViewport(); }catch(e){ console.warn('register vertical viewport normalize failed',e); } };
+  try{ requestAnimationFrame(run); }catch(e){ run(); }
+  __phase170RegisterVerticalTimer=setTimeout(run,120);
+  setTimeout(run,420);
+  setTimeout(run,1000);
+}
+function installRegisterSliderHeightGuard170(){
+  if(__phase170WrappedSliderHeight) return;
+  const fn=window.updatePageSliderHeight;
+  if(typeof fn!=='function') return;
+  if(fn.__phase170Wrapped){ __phase170WrappedSliderHeight=true; return; }
+  const wrapped=function(...args){
+    const r=fn.apply(this,args);
+    if(isMobileOutputCenter() && ge('page-register')?.classList.contains('active')){
+      scheduleRegisterMobileVerticalViewportNormalize();
+    }
+    return r;
+  };
+  wrapped.__phase170Wrapped=true;
+  window.updatePageSliderHeight=wrapped;
+  __phase170WrappedSliderHeight=true;
+}
+function scheduleRegisterSliderHeightGuard170(){
+  installRegisterSliderHeightGuard170();
+  if(!__phase170WrappedSliderHeight){
+    setTimeout(installRegisterSliderHeightGuard170,250);
+    setTimeout(installRegisterSliderHeightGuard170,900);
+  }
+}
+
+Object.assign(window,{installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
@@ -27199,11 +27378,19 @@ Object.assign(window,{openDivisionRuleReason,closeRegistryPlayerAdminHub,openReg
   toggleIndividualGroupMatches,toggleCompactMatchDetail,openMatchOperations,openMatchOperationsEdit,openMatchDetailReadOnly,openSimpleMatchDetail,setMatchStatusFilter});
 
 window.addEventListener('resize',scheduleKimhaeResponsiveNavigationSync,{passive:true});
+window.addEventListener('resize',scheduleRegisterMobileLayoutNormalize,{passive:true});
+window.addEventListener('resize',scheduleRegisterMobileVerticalViewportNormalize,{passive:true});
 window.addEventListener('orientationchange',()=>{ setTimeout(scheduleKimhaeResponsiveNavigationSync,80); },{passive:true});
+window.addEventListener('orientationchange',()=>{ setTimeout(scheduleRegisterMobileLayoutNormalize,120); },{passive:true});
+window.addEventListener('orientationchange',()=>{ setTimeout(scheduleRegisterMobileVerticalViewportNormalize,140); },{passive:true});
+try{ window.visualViewport?.addEventListener('resize',scheduleRegisterMobileVerticalViewportNormalize,{passive:true}); }catch(e){}
 window.addEventListener('pageshow',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
 window.addEventListener('load',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
 
 document.addEventListener('DOMContentLoaded',()=>{
+  installRegisterMobileLayoutStabilityStyle();
+  scheduleRegisterSliderHeightGuard170();
+  scheduleRegisterMobileVerticalViewportNormalize();
   installPublicOutputCenter();
   scheduleKimhaeMobileNavigationSync();
   installRegSaveMenu44();
