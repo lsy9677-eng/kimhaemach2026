@@ -19569,7 +19569,7 @@ function writePlayerTeamFinalResult(tid,div,club='',rank,result=''){
 
 // PHASE177: 과거대회 전체 참가/최종결과를 대회 단위로 한 번 확정해 영구 보관한다.
 // 선수기록을 열 때마다 registrations/matches를 다시 조립하지 않고 이 확정 아카이브를 우선 사용한다.
-const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V1';
+const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V2';
 let FINALIZED_PAST_ARCHIVE_MEM=null;
 let FINALIZED_PAST_ARCHIVE_PROMISE=null;
 function readFinalizedPastArchive(){
@@ -19635,7 +19635,7 @@ function buildPastArchiveEntryFromLoadedTournament(t){
       teamsOut.push({div,club:clubRaw,baseClub:base,players,rank:rr?.rank||null,result:rr?.result||'참가'});
     });
   });
-  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now()};
+  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now(),source:'firestore-final-v2'};
 }
 function seedArchiveFromHistData(all){
   (HIST_DATA||[]).forEach(t=>{
@@ -19653,17 +19653,38 @@ async function ensureFinalizedPastTournamentArchive(){
   if(FINALIZED_PAST_ARCHIVE_PROMISE) return FINALIZED_PAST_ARCHIVE_PROMISE;
   FINALIZED_PAST_ARCHIVE_PROMISE=(async()=>{
     const all={...readFinalizedPastArchive()};
-    seedArchiveFromHistData(all);
     const past=(G.tournaments||[]).filter(isPastTournamentForFinalArchive);
+    const failed=new Set();
+
+    // PHASE178: 과거대회 확정값은 Firestore 최종 경기/등록 데이터가 항상 1순위다.
+    // HIST_DATA의 '참가' fallback이 먼저 들어와 실제 준우승/우승을 막지 않도록
+    // Firestore 확정본이 없는 대회는 반드시 한 번 직접 다시 읽어 V2 확정본으로 만든다.
     for(const t of past){
-      const tid=String(t.id||''); if(!tid||all[tid]) continue;
+      const tid=String(t.id||'');
+      if(!tid) continue;
+      const cached=all[tid];
+      if(cached?.source==='firestore-final-v2' && Array.isArray(cached?.teams) && cached.teams.length) continue;
       try{
-        // 과거대회는 실시간 listener가 아니라 Firestore 전체 묶음을 한 번 직접 읽어 확정한다.
         await fetchTournamentBundle(tid,{force:true,acceptStale:true});
         const entry=buildPastArchiveEntryFromLoadedTournament(t);
-        if(entry) all[tid]=entry;
-      }catch(e){ console.warn('[PastArchive] finalize failed',tid,e); }
+        if(entry && Array.isArray(entry.teams) && entry.teams.length){
+          all[tid]=entry;
+        }else{
+          failed.add(tid);
+        }
+      }catch(e){
+        failed.add(tid);
+        console.warn('[PastArchive] firestore finalize failed',tid,e);
+      }
     }
+
+    // Firestore에서 정말 읽지 못한 과거대회에 한해서만 내장 과거자료를 보조로 사용한다.
+    const fallback={};
+    seedArchiveFromHistData(fallback);
+    Object.entries(fallback).forEach(([tid,entry])=>{
+      if(!all[tid] || failed.has(tid)) all[tid]=all[tid]?.source==='firestore-final-v2'?all[tid]:entry;
+    });
+
     writeFinalizedPastArchive(all);
     return all;
   })().finally(()=>{ FINALIZED_PAST_ARCHIVE_PROMISE=null; });
