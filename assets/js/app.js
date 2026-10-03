@@ -19538,10 +19538,10 @@ function phint(inp,num){
 }
 // PHASE175: 지난대회 선수기록은 한 번 정확히 확정한 뒤 다시 불러오지 않는다.
 // 최초 확정 시에는 모든 참가/순위 소스를 충분히 합친 뒤 저장하고, 이후에는 이름+클럽 identity별 확정본을 즉시 사용한다.
-const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V3';
+const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V4';
 // PHASE176: 팀 최종결과도 별도 확정 캐시로 보관한다.
 // 대회+부서+클럽의 최종 순위가 한 번 확인되면 선수 참가이력보다 항상 우선한다.
-const PLAYER_TEAM_FINAL_RESULT_CACHE_KEY='KIMHAE_PLAYER_TEAM_FINAL_RESULT_V2';
+const PLAYER_TEAM_FINAL_RESULT_CACHE_KEY='KIMHAE_PLAYER_TEAM_FINAL_RESULT_V3';
 function playerTeamFinalResultKey(tid,div,club=''){
   return `${String(tid||'')}__${outputNormalizeDiv(div||'')}__${normalizeClub(baseClub(club)||club||'')}`;
 }
@@ -19569,7 +19569,7 @@ function writePlayerTeamFinalResult(tid,div,club='',rank,result=''){
 
 // PHASE177: 과거대회 전체 참가/최종결과를 대회 단위로 한 번 확정해 영구 보관한다.
 // 선수기록을 열 때마다 registrations/matches를 다시 조립하지 않고 이 확정 아카이브를 우선 사용한다.
-const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V2';
+const FINALIZED_PAST_ARCHIVE_KEY='KIMHAE_FINALIZED_PAST_TOURNAMENT_ARCHIVE_V3';
 let FINALIZED_PAST_ARCHIVE_MEM=null;
 let FINALIZED_PAST_ARCHIVE_PROMISE=null;
 function readFinalizedPastArchive(){
@@ -19621,8 +19621,42 @@ function buildPastArchiveEntryFromLoadedTournament(t){
           stats.forEach(row=>{ if(Number(row?.rank||0)>0) rankByIdx.set(Number(row.teamIdx??row.ti),{rank:Number(row.rank),result:historyResultLabelFromRank(row.rank,row.rankLabel)}); });
         }
       }else{
-        const ranks=calcFinalRanks(key,teams,G.matches[key]||[])||[];
-        ranks.forEach(r=>{ if(Number(r?.rank||0)>0) rankByIdx.set(Number(r.teamIdx),{rank:Number(r.rank),result:historyResultLabelFromRank(r.rank,r.label)}); });
+        // PHASE179: 선수기록 확정 순위는 '시합결과' 화면과 동일한 최종결과 계산을 최우선으로 사용한다.
+        // 별도 추정값 때문에 참가로 남는 문제를 막기 위해 getMainMedalSummary()의 우승/준우승/3위를
+        // 실제 등록팀 index에 역매칭한다. 이 함수가 시합결과 요약 카드의 원본이다.
+        const allMatches=G.matches[key]||[];
+        const mainMatches=allMatches.filter(m=>m && m.phase==='main');
+        const summary=getMainMedalSummary(key,teams,mainMatches);
+        const normalizeTeamDisplay=(v)=>String(v||'').replace(/\s+/g,'').replace(/-([A-C])$/i,'$1').toLowerCase();
+        const findTeamIdxByDisplay=(display)=>{
+          const target=normalizeTeamDisplay(display);
+          if(!target) return -1;
+          let hit=teams.findIndex((tm,idx)=>normalizeTeamDisplay(tdn(tm,key,idx))===target);
+          if(hit>=0) return hit;
+          const targetClub=normalizeClub(baseClub(display)||display||'');
+          if(targetClub) hit=teams.findIndex(tm=>isSameRegistrationClub(normalizeClub(baseClub(tm?.club)||tm?.club||''),targetClub));
+          return hit;
+        };
+        if(summary){
+          const champIdx=findTeamIdxByDisplay(summary.champion);
+          const runnerIdx=findTeamIdxByDisplay(summary.runner);
+          if(champIdx>=0) rankByIdx.set(champIdx,{rank:1,result:'우승'});
+          if(runnerIdx>=0) rankByIdx.set(runnerIdx,{rank:2,result:'준우승'});
+          (summary.thirds||[]).forEach(nm=>{
+            const idx=findTeamIdxByDisplay(nm);
+            if(idx>=0) rankByIdx.set(idx,{rank:3,result:summary.thirdLabel||'3위'});
+          });
+          if(summary.fourth){
+            const idx=findTeamIdxByDisplay(summary.fourth);
+            if(idx>=0) rankByIdx.set(idx,{rank:4,result:'4위'});
+          }
+        }
+        // 결과 요약이 없는 예외 대회는 기존 최종순위 계산을 보조로 사용한다.
+        const ranks=calcFinalRanks(key,teams,allMatches)||[];
+        ranks.forEach(r=>{
+          const idx=Number(r.teamIdx);
+          if(Number(r?.rank||0)>0 && !rankByIdx.has(idx)) rankByIdx.set(idx,{rank:Number(r.rank),result:historyResultLabelFromRank(r.rank,r.label)});
+        });
       }
     }catch(e){ console.warn('[PastArchive] rank calc failed',tid,div,e); }
     teams.forEach((tm,idx)=>{
@@ -19635,7 +19669,7 @@ function buildPastArchiveEntryFromLoadedTournament(t){
       teamsOut.push({div,club:clubRaw,baseClub:base,players,rank:rr?.rank||null,result:rr?.result||'참가'});
     });
   });
-  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now(),source:'firestore-final-v2'};
+  return {tid,name:t.name||'',date:t.date||'',teams:teamsOut,finalizedAt:Date.now(),source:'firestore-final-v3'};
 }
 function seedArchiveFromHistData(all){
   (HIST_DATA||[]).forEach(t=>{
@@ -19663,7 +19697,7 @@ async function ensureFinalizedPastTournamentArchive(){
       const tid=String(t.id||'');
       if(!tid) continue;
       const cached=all[tid];
-      if(cached?.source==='firestore-final-v2' && Array.isArray(cached?.teams) && cached.teams.length) continue;
+      if(cached?.source==='firestore-final-v3' && Array.isArray(cached?.teams) && cached.teams.length) continue;
       try{
         await fetchTournamentBundle(tid,{force:true,acceptStale:true});
         const entry=buildPastArchiveEntryFromLoadedTournament(t);
@@ -19682,7 +19716,7 @@ async function ensureFinalizedPastTournamentArchive(){
     const fallback={};
     seedArchiveFromHistData(fallback);
     Object.entries(fallback).forEach(([tid,entry])=>{
-      if(!all[tid] || failed.has(tid)) all[tid]=all[tid]?.source==='firestore-final-v2'?all[tid]:entry;
+      if(!all[tid] || failed.has(tid)) all[tid]=all[tid]?.source==='firestore-final-v3'?all[tid]:entry;
     });
 
     writeFinalizedPastArchive(all);
