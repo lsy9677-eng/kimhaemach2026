@@ -5325,7 +5325,7 @@ function _getActiveTournamentLabel(){
 function onRegClubChange(){
   const club = (ge('regClub')?.value||'').trim();
   const row = ge('regContactRow');
-  if(!club){ if(row) row.style.display='none'; return; }
+  if(!club){ if(row) row.style.display='none'; try{ updatePastRosterReferenceButton(); }catch(e){} return; }
   const contacts = G.meta.clubContacts||{};
   const saved = contacts[club]||'';
   const lbl = ge('regContactClubLabel');
@@ -5339,6 +5339,7 @@ function onRegClubChange(){
   if(emailInp) emailInp.value = savedEmail;
   if(badge) badge.style.display = saved ? 'inline' : 'none';
   if(row) row.style.display = 'block';
+  try{ updatePastRosterReferenceButton(); }catch(e){}
 }
 
 function onRegContactInput(){
@@ -8715,14 +8716,23 @@ function _renderPastClubRosterModal(club,entries=[]){
   </div>`;
   om('mPastClubRoster');
 }
+function getPastRosterReferenceClub(){
+  if((REG||CLUB_MEMBER) && REG_CLUB && !AD) return normalizeClub(REG_CLUB);
+  if(AD) return normalizeClub(getRegClubInputValue()||'');
+  return '';
+}
+function updatePastRosterReferenceButton(){
+  const btn=ge('pastRosterRefBtn');
+  if(!btn) return;
+  const club=getPastRosterReferenceClub();
+  btn.style.display=club?'inline-flex':'none';
+  btn.disabled=!club;
+  btn.title=club?`${club} 지난대회 명단 보기`:'클럽을 먼저 선택하세요';
+}
 async function openPastClubRosterReference(){
   if(!(REG&&REG_CLUB) && !AD){ toast('경기이사 로그인 후 사용할 수 있습니다','info'); return; }
-  let club=REG_CLUB||'';
-  if(AD && !club){
-    const v=String(prompt('조회할 클럽명을 입력하세요')||'').trim();
-    if(!v) return;
-    club=v;
-  }
+  const club=getPastRosterReferenceClub();
+  if(!club){ toast('클럽을 먼저 선택하세요','info'); return; }
   const currentTid=ge('regTS')?.value||'';
   const currentDiv=_pastRosterResolveDivision(currentTid,'');
   PAST_ROSTER_CONTEXT={tid:currentTid,div:currentDiv};
@@ -8811,7 +8821,7 @@ function renderRegisterDivisionOverview(){
   ];
   const _divisionFilterBar = divisions.length
     ? `<div style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${(REG&&REG_CLUB&&!isIndiv)?`<button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:.7rem;font-weight:900;white-space:nowrap" onclick="openPastClubRosterReference()">📋 지난대회 명단 보기</button>`:''}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${(!isIndiv&&((REG&&REG_CLUB&&!AD)||AD))?`<button id="pastRosterRefBtn" type="button" class="btn btn-outline" style="padding:5px 9px;font-size:.7rem;font-weight:900;white-space:nowrap;${AD&&!getPastRosterReferenceClub()?'display:none;':''}" onclick="openPastClubRosterReference()">📋 지난대회 명단 보기</button>`:''}</div>
         <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
           ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
         </div>
@@ -19106,16 +19116,20 @@ function upDash(){
   const assocClubs = new Set(reg2026.map(m=>m.club).filter(Boolean));
   const assocPlayers = reg2026.length;
 
-  // 등록 팀수: G.teams 전체 (현재까지 등록된 모든 팀)
-  let assocTeams = 0;
-  Object.values(G.teams||{}).forEach(arr=>{ assocTeams += (arr||[]).length; });
+  // PHASE174: 상단 '팀등록' 배지는 과거대회 전체 누적이 아니라 현재 선택/기본 대회의 등록 팀수만 표시한다.
+  // 예전에는 Object.values(G.teams) 전체를 더해 2팀 등록 상태에서도 52처럼 보일 수 있었다.
+  const badgeTid = ge('regTS')?.value || pickDefaultTournamentId() || '';
+  const badgeTournament = (G.tournaments||[]).find(t=>String(t?.id||'')===String(badgeTid)) || null;
+  const currentRegTeamCount = badgeTournament
+    ? (badgeTournament.divisions||[]).reduce((sum,d)=>sum+((G.teams?.[badgeTournament.id+'_'+d]||[]).length),0)
+    : 0;
   const totalCourts = getTotalCourtCount();
 
   ge('sClubs').textContent = assocClubs.size || 0;
   ge('sTeams').textContent = totalCourts;
   ge('sMatches').textContent = reg2026.length;
   ge('sPlayers').textContent = assocPlayers;
-  ge('regBadge').textContent = assocTeams;
+  ge('regBadge').textContent = currentRegTeamCount;
   const assocCard=ge('homeAssocCard'); if(assocCard) assocCard.style.display = G.meta.showAssociationDashboard ? '' : 'none';
 
   // ── 현재 대회 섹션 ──────────────────────────────────────────
@@ -19522,19 +19536,53 @@ function phint(inp,num){
     </span>`;
   }).join(' ');
 }
+// PHASE174: 선수기록은 과거 결과가 거의 고정 데이터이므로 마지막으로 검증된 완성 화면을 로컬 캐시에 보관한다.
+// 캐시가 있으면 즉시 표시하고 실제 데이터는 뒤에서 다시 검증한다. 첫 조회에서는 '참가' 임시화면 대신 확인중을 보여준다.
+const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_VIEW_CACHE_V1';
+function playerHistoryViewCacheKey(name,club=''){
+  return `${normName(cleanName(String(name||'')))}__${normalizeClub(club||'')}`;
+}
+function readPlayerHistoryViewCache(name,club=''){
+  try{
+    const all=JSON.parse(localStorage.getItem(PLAYER_HISTORY_VIEW_CACHE_KEY)||'{}')||{};
+    const hit=all[playerHistoryViewCacheKey(name,club)];
+    if(!hit||!hit.html) return null;
+    return hit;
+  }catch(e){ return null; }
+}
+function _playerHistoryHtmlQuality(html=''){
+  const txt=String(html||'');
+  const ranked=(txt.match(/🥇\s*1위|🥈\s*2위|🥉\s*3위|>4위<|>\d+위</g)||[]).length;
+  const meaningful=(txt.match(/우승|준우승|공동\s*3위|본선\s*진출|예선\s*통과/g)||[]).length;
+  const rows=(txt.match(/class="hist-row"/g)||[]).length;
+  return ranked*100+meaningful*20+rows;
+}
+function writePlayerHistoryViewCache(name,club='',html=''){
+  if(!html) return;
+  try{
+    const key=playerHistoryViewCacheKey(name,club);
+    const all=JSON.parse(localStorage.getItem(PLAYER_HISTORY_VIEW_CACHE_KEY)||'{}')||{};
+    const prev=all[key];
+    const nextQuality=_playerHistoryHtmlQuality(html);
+    const prevQuality=Number(prev?.quality||0);
+    // 과거 순위가 이미 확인된 캐시를 일시적인 '참가' 위주 화면이 덮지 못하게 한다.
+    if(prev?.html && prevQuality>nextQuality) return;
+    all[key]={html,quality:nextQuality,ts:Date.now()};
+    const entries=Object.entries(all).sort((a,b)=>Number(b[1]?.ts||0)-Number(a[1]?.ts||0)).slice(0,300);
+    localStorage.setItem(PLAYER_HISTORY_VIEW_CACHE_KEY,JSON.stringify(Object.fromEntries(entries)));
+  }catch(e){}
+}
+function showPlayerHistoryLoading(name=''){
+  const body=ge('mPHistBody'); if(!body) return;
+  body.innerHTML=`<div style="padding:34px 18px;text-align:center;color:var(--text2)"><div style="font-size:1.7rem;margin-bottom:9px">🔎</div><b>${esc(name||'선수')} 기록 확인 중…</b><div style="font-size:.72rem;margin-top:7px;color:var(--text3)">과거 대회 결과와 순위를 확인하고 있습니다.</div></div>`;
+}
 async function openPHist(iid){
-  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
   const inp=ge(iid);
   let name=(inp?.value||'').trim();
   if(!name){toast('이름 먼저 입력','info');return;}
 
-  // 입력값에 "이름__클럽"이 들어와도 보정
   const sp = splitKeyNameClub(name);
   name = sp.name || name;
-
-  // PHASE165: 팀등록에서 선택한 선수의 클럽 identity를 끝까지 유지한다.
-  // 동명이인이 있을 때 이름만으로 다시 찾으면 다른 클럽 선수 기록이 열릴 수 있으므로
-  // 입력칸 dataset -> 현재 팀등록 클럽 -> key에 포함된 클럽 순으로 정확한 클럽을 확정한다.
   const identityClub=normalizeClub(
     inp?.dataset?.registryClub ||
     getRegClubInputValue() ||
@@ -19542,47 +19590,76 @@ async function openPHist(iid){
     ''
   );
 
-  try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
-
-  let info=null;
-  if(identityClub){
-    const exactKey=getPlayerKeyByName(name, identityClub);
-    if(exactKey && G.players[exactKey]){
-      const exact=G.players[exactKey];
-      info={name:cleanName(pKeyParse(exactKey).name||exact.name||name),key:exactKey,p:exact,exists:true};
-    }else{
-      // players 문서에 정확한 name__club 키가 없어도 다른 클럽 동명이인으로 fallback하지 않는다.
-      // 현재 선택 클럽 identity를 가진 임시 객체로 buildPH가 해당 클럽 기록만 조합하게 한다.
-      const regRows=((G_REGISTRY&&(G_REGISTRY[REG_YEAR]||G_REGISTRY[2026]))||[])
-        .filter(r=>normName(r?.name||'')===normName(name));
-      const regRow=regRows.find(r=>{
-        const main=normalizeClub(r?.club||'');
-        const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
-        return isSameRegistrationClub(main,identityClub)||subs.some(c=>isSameRegistrationClub(c,identityClub));
-      })||null;
-      const mainClub=normalizeClub(regRow?.club||identityClub);
-      const subClubs=String(regRow?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
-      const regHist=getCachedPlayerRegistrationHistory(name).filter(h=>{
-        const hc=normalizeClub(h?.baseClub||baseClub(h?.club)||h?.club||'');
-        return hc && [mainClub,...subClubs].some(c=>isSameRegistrationClub(c,hc));
-      });
-      const liveHist=collectLivePlayerHistory(name,mainClub||identityClub);
-      const hasAny=!!(regRow||regHist.length||liveHist.length||hasHistPlayer(name));
-      info={
-        name:cleanName(name),
-        key:pKey(name,mainClub||identityClub),
-        p:{key:pKey(name,mainClub||identityClub),name:cleanName(name),club:mainClub||identityClub,clubs:[mainClub||identityClub,...subClubs].filter(Boolean),history:[],wins:0,losses:0,phone:String(regRow?.phone||'').trim()},
-        exists:hasAny
-      };
-    }
-  }else{
-    info=getPlayerForDisplay(name);
-  }
-
-  ge('mPHistBody').innerHTML = info?.exists
-    ? buildPH(info.name, info.p)
-    : `<div class="empty-state"><div class="empty-icon">👤</div><p>${name} 기록 없음</p></div>`;
+  // 캐시가 있으면 모달을 즉시 연다. 없으면 잘못된 임시 '참가' 대신 확인중 상태만 보인다.
+  const cached=readPlayerHistoryViewCache(name,identityClub);
+  if(cached?.html) ge('mPHistBody').innerHTML=cached.html;
+  else showPlayerHistoryLoading(name);
   om('mPHist');
+
+  try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
+  try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
+  // Firestore 팀/경기 스냅샷과 registrations fallback이 같은 tick에서 합쳐지도록 아주 짧게 양보한다.
+  await new Promise(resolve=>setTimeout(resolve,cached?.html?0:220));
+
+  const resolveInfo=()=>{
+    let info=null;
+    if(identityClub){
+      const exactKey=getPlayerKeyByName(name, identityClub);
+      if(exactKey && G.players[exactKey]){
+        const exact=G.players[exactKey];
+        info={name:cleanName(pKeyParse(exactKey).name||exact.name||name),key:exactKey,p:exact,exists:true};
+      }else{
+        const regRows=((G_REGISTRY&&(G_REGISTRY[REG_YEAR]||G_REGISTRY[2026]))||[])
+          .filter(r=>normName(r?.name||'')===normName(name));
+        const regRow=regRows.find(r=>{
+          const main=normalizeClub(r?.club||'');
+          const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+          return isSameRegistrationClub(main,identityClub)||subs.some(c=>isSameRegistrationClub(c,identityClub));
+        })||null;
+        const mainClub=normalizeClub(regRow?.club||identityClub);
+        const subClubs=String(regRow?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+        const regHist=getCachedPlayerRegistrationHistory(name).filter(h=>{
+          const hc=normalizeClub(h?.baseClub||baseClub(h?.club)||h?.club||'');
+          return hc && [mainClub,...subClubs].some(c=>isSameRegistrationClub(c,hc));
+        });
+        const liveHist=collectLivePlayerHistory(name,mainClub||identityClub);
+        const hasAny=!!(regRow||regHist.length||liveHist.length||hasHistPlayer(name));
+        info={
+          name:cleanName(name),
+          key:pKey(name,mainClub||identityClub),
+          p:{key:pKey(name,mainClub||identityClub),name:cleanName(name),club:mainClub||identityClub,clubs:[mainClub||identityClub,...subClubs].filter(Boolean),history:[],wins:0,losses:0,phone:String(regRow?.phone||'').trim()},
+          exists:hasAny
+        };
+      }
+    }else{
+      info=getPlayerForDisplay(name);
+    }
+    return info;
+  };
+
+  const renderFresh=()=>{
+    const info=resolveInfo();
+    const html=info?.exists
+      ? buildPH(info.name, info.p)
+      : `<div class="empty-state"><div class="empty-icon">👤</div><p>${esc(name)} 기록 없음</p></div>`;
+    const prev=readPlayerHistoryViewCache(name,identityClub);
+    // 검증된 캐시가 현재 임시 데이터보다 더 풍부하면 잠시 캐시를 유지한다.
+    if(prev?.html && Number(prev.quality||0)>_playerHistoryHtmlQuality(html)){
+      ge('mPHistBody').innerHTML=prev.html;
+    }else{
+      ge('mPHistBody').innerHTML=html;
+      if(info?.exists) writePlayerHistoryViewCache(name,identityClub,html);
+    }
+  };
+
+  renderFresh();
+  // 늦게 도착하는 순위/경기 결과 스냅샷까지 한 번 더 흡수해 캐시를 완성한다.
+  setTimeout(()=>{
+    try{
+      if(!ge('mPHist')?.classList.contains('open')) return;
+      renderFresh();
+    }catch(e){}
+  },900);
 }
 // ── 선수 상세 카드 빌더 (Firebase + 내장 과거 데이터 통합) ──
 function getPlayerRegistryRow(name,p,preferClub=''){
