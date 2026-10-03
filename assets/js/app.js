@@ -19536,17 +19536,46 @@ function phint(inp,num){
     </span>`;
   }).join(' ');
 }
-// PHASE174: 선수기록은 과거 결과가 거의 고정 데이터이므로 마지막으로 검증된 완성 화면을 로컬 캐시에 보관한다.
-// 캐시가 있으면 즉시 표시하고 실제 데이터는 뒤에서 다시 검증한다. 첫 조회에서는 '참가' 임시화면 대신 확인중을 보여준다.
-const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_VIEW_CACHE_V1';
+// PHASE175: 지난대회 선수기록은 한 번 정확히 확정한 뒤 다시 불러오지 않는다.
+// 최초 확정 시에는 모든 참가/순위 소스를 충분히 합친 뒤 저장하고, 이후에는 이름+클럽 identity별 확정본을 즉시 사용한다.
+const PLAYER_HISTORY_VIEW_CACHE_KEY='KIMHAE_PLAYER_HISTORY_FINAL_VIEW_V2';
 function playerHistoryViewCacheKey(name,club=''){
   return `${normName(cleanName(String(name||'')))}__${normalizeClub(club||'')}`;
 }
-function readPlayerHistoryViewCache(name,club=''){
+function playerHistorySourceEpoch(name,club=''){
+  try{
+    const nn=normName(cleanName(String(name||'')));
+    const cc=normalizeClub(club||'');
+    const chunks=[];
+    (G.tournaments||[]).forEach(t=>{
+      chunks.push(`T:${t?.id||''}:${t?.date||''}:${t?.status||''}`);
+      (t?.divisions||[]).forEach(div=>{
+        const key=`${t?.id||''}_${div}`;
+        (G.teams?.[key]||[]).forEach((tm,idx)=>{
+          const tc=normalizeClub(baseClub(tm?.club)||tm?.club||'');
+          const names=[...(tm?.players||[]),...((tm?.individualPlayers||[]).map(x=>x?.name||''))];
+          if(!names.some(x=>normName(cleanName(String(x||'')))===nn)) return;
+          if(cc && tc && !isSameRegistrationClub(tc,cc)) return;
+          chunks.push(`E:${key}:${idx}:${tc}:${Number(tm?.rank||0)||0}`);
+        });
+      });
+    });
+    Object.entries(G.players||{}).forEach(([pk,obj])=>{
+      const parsed=pKeyParse(pk);
+      if(normName(parsed.name||obj?.name||'')!==nn) return;
+      const pc=normalizeClub(parsed.club||obj?.club||'');
+      if(cc && pc && !isSameRegistrationClub(pc,cc)) return;
+      (obj?.history||[]).forEach(h=>chunks.push(`H:${h?.tid||''}:${outputNormalizeDiv(h?.div||h?.division||'')}:${Number(h?.rank||0)||0}:${String(h?.result||'')}`));
+    });
+    return chunks.sort().join('|');
+  }catch(e){ return ''; }
+}
+function readPlayerHistoryViewCache(name,club='',epoch=''){
   try{
     const all=JSON.parse(localStorage.getItem(PLAYER_HISTORY_VIEW_CACHE_KEY)||'{}')||{};
     const hit=all[playerHistoryViewCacheKey(name,club)];
-    if(!hit||!hit.html) return null;
+    if(!hit||!hit.html||hit.final!==true) return null;
+    if(epoch && hit.epoch && hit.epoch!==epoch) return null;
     return hit;
   }catch(e){ return null; }
 }
@@ -19557,7 +19586,7 @@ function _playerHistoryHtmlQuality(html=''){
   const rows=(txt.match(/class="hist-row"/g)||[]).length;
   return ranked*100+meaningful*20+rows;
 }
-function writePlayerHistoryViewCache(name,club='',html=''){
+function writePlayerHistoryViewCache(name,club='',html='',epoch=''){
   if(!html) return;
   try{
     const key=playerHistoryViewCacheKey(name,club);
@@ -19565,16 +19594,16 @@ function writePlayerHistoryViewCache(name,club='',html=''){
     const prev=all[key];
     const nextQuality=_playerHistoryHtmlQuality(html);
     const prevQuality=Number(prev?.quality||0);
-    // 과거 순위가 이미 확인된 캐시를 일시적인 '참가' 위주 화면이 덮지 못하게 한다.
-    if(prev?.html && prevQuality>nextQuality) return;
-    all[key]={html,quality:nextQuality,ts:Date.now()};
-    const entries=Object.entries(all).sort((a,b)=>Number(b[1]?.ts||0)-Number(a[1]?.ts||0)).slice(0,300);
+    // 확정 기록은 더 낮은 품질의 '참가' 화면으로 절대 되돌리지 않는다.
+    if(prev?.html && prev?.final===true && prevQuality>nextQuality && (!epoch || prev.epoch===epoch)) return;
+    all[key]={html,quality:nextQuality,epoch,final:true,ts:Date.now()};
+    const entries=Object.entries(all).sort((a,b)=>Number(b[1]?.ts||0)-Number(a[1]?.ts||0)).slice(0,500);
     localStorage.setItem(PLAYER_HISTORY_VIEW_CACHE_KEY,JSON.stringify(Object.fromEntries(entries)));
   }catch(e){}
 }
-function showPlayerHistoryLoading(name=''){
+function showPlayerHistoryLoading(name='',msg='지난대회 참가와 최종 결과를 확정하고 있습니다.'){
   const body=ge('mPHistBody'); if(!body) return;
-  body.innerHTML=`<div style="padding:34px 18px;text-align:center;color:var(--text2)"><div style="font-size:1.7rem;margin-bottom:9px">🔎</div><b>${esc(name||'선수')} 기록 확인 중…</b><div style="font-size:.72rem;margin-top:7px;color:var(--text3)">과거 대회 결과와 순위를 확인하고 있습니다.</div></div>`;
+  body.innerHTML=`<div style="padding:34px 18px;text-align:center;color:var(--text2)"><div style="font-size:1.7rem;margin-bottom:9px">🔎</div><b>${esc(name||'선수')} 기록 확인 중…</b><div style="font-size:.72rem;margin-top:7px;color:var(--text3)">${esc(msg)}</div></div>`;
 }
 async function openPHist(iid){
   const inp=ge(iid);
@@ -19590,16 +19619,19 @@ async function openPHist(iid){
     ''
   );
 
-  // 캐시가 있으면 모달을 즉시 연다. 없으면 잘못된 임시 '참가' 대신 확인중 상태만 보인다.
-  const cached=readPlayerHistoryViewCache(name,identityClub);
-  if(cached?.html) ge('mPHistBody').innerHTML=cached.html;
-  else showPlayerHistoryLoading(name);
+  showPlayerHistoryLoading(name);
   om('mPHist');
 
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
+  // 이미 확정된 과거기록이고 원본 epoch가 같으면 네트워크/registrations 재조회 없이 즉시 사용한다.
+  let epoch=playerHistorySourceEpoch(name,identityClub);
+  const finalized=readPlayerHistoryViewCache(name,identityClub,epoch);
+  if(finalized?.html){
+    ge('mPHistBody').innerHTML=finalized.html;
+    return;
+  }
+
   try{ await ensurePlayerRegistrationHistory(name); }catch(e){}
-  // Firestore 팀/경기 스냅샷과 registrations fallback이 같은 tick에서 합쳐지도록 아주 짧게 양보한다.
-  await new Promise(resolve=>setTimeout(resolve,cached?.html?0:220));
 
   const resolveInfo=()=>{
     let info=null;
@@ -19637,29 +19669,26 @@ async function openPHist(iid){
     return info;
   };
 
-  const renderFresh=()=>{
+  const buildFresh=()=>{
     const info=resolveInfo();
     const html=info?.exists
       ? buildPH(info.name, info.p)
       : `<div class="empty-state"><div class="empty-icon">👤</div><p>${esc(name)} 기록 없음</p></div>`;
-    const prev=readPlayerHistoryViewCache(name,identityClub);
-    // 검증된 캐시가 현재 임시 데이터보다 더 풍부하면 잠시 캐시를 유지한다.
-    if(prev?.html && Number(prev.quality||0)>_playerHistoryHtmlQuality(html)){
-      ge('mPHistBody').innerHTML=prev.html;
-    }else{
-      ge('mPHistBody').innerHTML=html;
-      if(info?.exists) writePlayerHistoryViewCache(name,identityClub,html);
-    }
+    return {info,html,quality:_playerHistoryHtmlQuality(html)};
   };
 
-  renderFresh();
-  // 늦게 도착하는 순위/경기 결과 스냅샷까지 한 번 더 흡수해 캐시를 완성한다.
-  setTimeout(()=>{
-    try{
-      if(!ge('mPHist')?.classList.contains('open')) return;
-      renderFresh();
-    }catch(e){}
-  },900);
+  // 최초 1회만 충분히 기다려 과거 순위까지 모두 합친 뒤 '확정본'으로 저장한다.
+  // 그 다음 조회부터는 이 확정본을 즉시 사용하므로 참가→순위로 뒤늦게 바뀌는 현상이 없다.
+  let best=buildFresh();
+  const waits=[450,900,1600,2600,4200,6500];
+  for(const ms of waits){
+    await new Promise(resolve=>setTimeout(resolve,ms));
+    const cur=buildFresh();
+    if(cur.quality>best.quality) best=cur;
+  }
+  epoch=playerHistorySourceEpoch(name,identityClub);
+  if(best.info?.exists) writePlayerHistoryViewCache(name,identityClub,best.html,epoch);
+  if(ge('mPHist')?.classList.contains('open')) ge('mPHistBody').innerHTML=best.html;
 }
 // ── 선수 상세 카드 빌더 (Firebase + 내장 과거 데이터 통합) ──
 function getPlayerRegistryRow(name,p,preferClub=''){
