@@ -8169,6 +8169,15 @@ function openDivisionRuleReason(name,club,tid,div){
   const body=ge('divisionRuleReasonBody'); if(body) body.innerHTML=r.html;
   om('mDivisionRuleReason');
 }
+// PHASE183: the quota belongs to the selected tournament, destination division and club.
+// Prior tournament records still establish a player's baseline, but do not consume this quota.
+function isSameDivisionDowngradeQuota(key,team,tid,div,club){
+  const kd=_k2td(key);
+  if(String(kd.tid)!==String(tid) || _ruleDivKey(kd.div)!==_ruleDivKey(div))return false;
+  const saved=normalizeClub(baseClub(team?.club||'')||team?.club||'');
+  const current=normalizeClub(baseClub(club||'')||club||'');
+  return !!saved && !!current && isSameRegistrationClub(saved,current);
+}
 async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
   const cache=await ensureDivisionRuleCache(tid);
   if(!cache || !_ruleDivKey(div)) return {ok:true,details:[]};
@@ -8188,15 +8197,15 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
       return {ok:false,error:`${n} 선수의 ${_ruleDivLabel(p.baselineDiv)}→${_ruleDivLabel(div)} 등록은 관리자 예외 승인이 필요합니다.\n\n예외 대상: 남성 만65세 이상, 여성 등\n팀등록 화면의 '예외 승인요청'을 이용해 주세요.`};
     }
   }
-  // 연간 클럽대항 합산: 같은 클럽의 1단계 일반 하향 선수는 연간 고유인원 최대 2명.
+  // 같은 대회·신청 부서에서 같은 클럽의 1단계 일반 하향 선수 최대 2명.
   const ordinary=new Map();
   Object.entries(G.teams||{}).forEach(([key,teams])=>{
     const kd=_k2td(key), t=(G.tournaments||[]).find(x=>String(x.id)===String(kd.tid));
-    if(!t || _ruleTournamentYear(t)!==cache.currentYear || isIndividualTournament(t)) return;
+    if(!t || String(kd.tid)!==String(tid) || _ruleDivKey(kd.div)!==_ruleDivKey(div) || isIndividualTournament(t)) return;
     (teams||[]).forEach((tm,idx)=>{
       if(key===excludeKey && idx===Number(excludeIdx)) return;
-      if(normalizeClub(tm?.club||'')!==cc) return;
-      // 연간 누적은 실제 Firestore에 저장된 팀만 사용한다. 임시/화면상 잔존 팀은 집계하지 않는다.
+      if(!isSameDivisionDowngradeQuota(key,tm,tid,div,cc)) return;
+      // 하향 인원은 실제 Firestore에 저장된 팀만 사용한다. 임시/화면상 잔존 팀은 집계하지 않는다.
       if(!tm?._id) return;
       (tm?.players||[]).forEach(n=>{
         const p=_divisionRuleProfileFromCache(cache,n,cc); if(!p) return;
@@ -8213,7 +8222,7 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
     const prev=arr.filter(x=>x.source!=='current');
     const curText=cur.length?cur.map(x=>`${x.name} (${x.move})`).join(', '):'없음';
     const prevText=prev.length?prev.map(x=>`${x.name} (${x.move} · ${x.tname||'기존 저장팀'} ${_ruleDivLabel(x.div)||x.div||''})`).join('\n'):'없음';
-    return {ok:false,error:`1단계 부서 하향은 최대 연 2명입니다. (클럽대항 합산)\n\n연간 누적 하향 인원 ${arr.length}명입니다.\n\n[현재 저장하려는 팀]\n${curText}\n\n[올해 이미 저장된 다른 팀/대회]\n${prevText}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)\n\n※ 하향 배지를 누르면 선수별 판정 근거를 확인할 수 있습니다.`};
+    return {ok:false,error:`1단계 부서 하향은 같은 대회·같은 부서에서 클럽별 최대 2명입니다.\n\n${_ruleDivLabel(div)||div} 하향 인원 ${arr.length}명입니다.\n\n[현재 저장하려는 팀]\n${curText}\n\n[같은 대회·같은 부서에 저장된 다른 팀]\n${prevText}\n\n초과 인원 또는 금→동 등 예외 하향의 경우 관리자의 승인이 필요합니다.\n(남성 만65세 이상, 여성 등)\n\n※ 하향 배지를 누르면 선수별 판정 근거를 확인할 수 있습니다.`};
   }
   return {ok:true,details};
 }
@@ -8222,8 +8231,8 @@ function refreshDivisionRuleFormBadges(mode='register'){
   clearTimeout(_divisionRuleFormTimer);
   _divisionRuleFormTimer=setTimeout(async()=>{
     const isEdit=mode==='edit';
-    const tid=isEdit?String(CE_key||'').split('_')[0]:(ge('regTS')?.value||'');
-    const div=isEdit?String(CE_key||'').split('_')[1]:(ge('regDS')?.value||'');
+    const tid=isEdit?_k2td(String(CE_key||'')).tid:(ge('regTS')?.value||'');
+    const div=isEdit?_k2td(String(CE_key||'')).div:(ge('regDS')?.value||'');
     const club=isEdit?(ge('etTC')?.value||''):getRegClubInputValue();
     if(!tid||!div||!club) return;
     const cache=await ensureDivisionRuleCache(tid);
@@ -8231,16 +8240,16 @@ function refreshDivisionRuleFormBadges(mode='register'){
     if(!root) return;
 
     // PHASE167: 예외 UI는 실제로 예외가 필요한 순간에만 표시한다.
-    // 연간 1단계 일반 하향은 클럽별 고유 선수 2명까지 허용하므로,
+    // 같은 대회·같은 부서의 1단계 일반 하향은 클럽별 고유 선수 2명까지 허용하므로,
     // 기존 저장팀의 일반 하향 인원 + 현재 입력 순서를 기준으로 3번째부터 승인요청을 노출한다.
     const cc=normalizeClub(club||'');
     const savedOrdinary=new Set();
     Object.entries(G.teams||{}).forEach(([key,teams])=>{
       const kd=_k2td(key), t=(G.tournaments||[]).find(x=>String(x.id)===String(kd.tid));
-      if(!t || _ruleTournamentYear(t)!==cache?.currentYear || isIndividualTournament(t)) return;
+      if(!t || String(kd.tid)!==String(tid) || _ruleDivKey(kd.div)!==_ruleDivKey(div) || isIndividualTournament(t)) return;
       (teams||[]).forEach((tm,idx)=>{
         if(isEdit && key===CE_key && idx===Number(CE_idx)) return;
-        if(normalizeClub(tm?.club||'')!==cc || !tm?._id) return;
+        if(!isSameDivisionDowngradeQuota(key,tm,tid,div,cc) || !tm?._id) return;
         (tm?.players||[]).forEach(n=>{
           const pc=_divisionRuleClassifySync(tid,kd.div,n,cc);
           if(pc.known && pc.isDowngrade && pc.step===1 && !pc.exceptionApproved) savedOrdinary.add(normName(n));
@@ -8289,7 +8298,7 @@ function refreshDivisionRuleFormBadges(mode='register'){
       }
       const needsException = !ok && (c.step>=2 || (c.step===1 && needsLimitApproval.has(normName(name))));
       // 첫 2명의 정상 1단계 하향은 '하향 표시'만 보여주고 인증 UI는 숨긴다.
-      // 금→동 같은 2단계 하향 또는 연간 3번째 이후 일반 하향에서만 승인요청을 표시한다.
+      // 금→동 같은 2단계 하향 또는 같은 대회·부서에서 3번째 이후 일반 하향에서만 승인요청을 표시한다.
       if(needsException && (REG||CLUB_MEMBER||AD)) {
         const rq=document.createElement('button'); rq.type='button'; rq.className='division-rule-form-badge148';
         rq.textContent='🔐 예외 승인요청'; rq.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;white-space:nowrap;background:#fff;border:1px solid #f59e0b;color:#92400e;cursor:pointer';
