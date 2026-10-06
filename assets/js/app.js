@@ -2721,10 +2721,27 @@ async function stD(k){
   scheduleTournamentAutoRestorePoint(k,'대진표/추첨 변경');
 } // draws는 기존처럼 tid_div 문서 유지
 
-async function stT(key){
+async function preserveServerRegistrationHistory(tid,reason='명단 교체 전 영구 보관',onlyDiv=''){
+  const snap=await getDocsFromServer(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+  const groups=new Map();
+  snap.docs.forEach(d=>{const data=d.data(),div=String(data.division||'');if(!div||(onlyDiv&&div!==onlyDiv))return;if(!groups.has(div))groups.set(div,[]);groups.get(div).push({_id:d.id,...data});});
+  for(const [division,rows] of groups){
+    const json=JSON.stringify(rows);
+    if(new TextEncoder().encode(json).length>700000)throw new Error('명단 백업 한도 초과로 작업을 중단했습니다.');
+    await addDoc(collection(db,'restorePoints'),{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason,division,createdAt:new Date().toISOString(),createdAtMs:Date.now(),version:185,beforeJson:json,afterJson:json});
+  }
+}
+function registrationSafetyProjection(t,tid,div){
+  const payload={tournamentId:tid,division:div,club:t.club,players:t.players||[],registeredAt:t.registeredAt||''};
+  ['tournamentType','editPin','individualPlayers','clubTokens'].forEach(k=>{if(t[k])payload[k]=t[k];});
+  ['pairLabel','entryLabel','note','doublesCount','mainPlayerCount'].forEach(k=>{if(t[k]!==undefined)payload[k]=t[k];});
+  if(t.tiebreakAge!==undefined)payload.tiebreakAge=Number(t.tiebreakAge||0)||0;
+  return normalizeRegistrationPayloadForHash(payload);
+}
+async function stT(key,{allowDelete=false}={}){
   const {tid,div}=_k2td(key);
   const cur=G.teams[key]||[];
-  cur.forEach(t=>{ if(!t._id) t._id=_rid(); });
+  cur.forEach(t=>{ if(!t._id) t._id=_rid(); if(!t.registeredAt)t.registeredAt=new Date().toISOString(); });
   const curIds=new Set(cur.map(t=>t._id));
   const prevIds=new Set((G._regIdsByKey && G._regIdsByKey[key]) ? G._regIdsByKey[key] : []);
   const toDel=[...prevIds].filter(id=>!curIds.has(id));
@@ -2749,7 +2766,11 @@ async function stT(key){
   const hashPayload={ docs: docsForHash, ids:[...curIds].sort(), deleted:[...toDel].sort() };
   if(isSameFbWrite('teams', key, hashPayload)) return;
 
-  const batch=writeBatch(db);
+  if(toDel.length&&!allowDelete)throw new Error('저장된 팀 누락을 감지해 저장을 중단했습니다. 새로고침 후 다시 확인해 주세요.');
+  const baseline=JSON.parse(__FB_WRITE_CACHE.teams[key]||'{"docs":[]}').docs||[];
+  const expected=new Set(baseline.map(stableStringify));
+  const writes=[];
+  const batch={set:(ref,data,opts)=>writes.push({ref,data,opts}),delete:ref=>writes.push({ref,remove:true}),update:(ref,data)=>writes.push({ref,data,update:true})};
   cur.forEach(t=>{
     const docId=t._id;
     const payload={
@@ -2774,7 +2795,30 @@ async function stT(key){
   });
   toDel.forEach(id=>batch.delete(doc(db,'registrations',id)));
   pastArchiveMutation(batch,tid);
-  await batch.commit();
+  const rp=doc(collection(db,'restorePoints'));
+  const when=new Date().toISOString();
+  await runTransaction(db,async tx=>{
+    const snapshots=[];
+    for(const id of new Set([...prevIds,...curIds]))snapshots.push({id,snap:await tx.get(doc(db,'registrations',id))});
+    const before=[];
+    for(const {id,snap} of snapshots){
+      if(snap.exists()){
+        const data=snap.data();
+        if(String(data.tournamentId)!==String(tid)||String(data.division)!==String(div))throw new Error('팀 문서의 대회·부서가 다릅니다. 저장을 중단했습니다.');
+        if(prevIds.has(id)&&!expected.has(stableStringify(registrationSafetyProjection(data,tid,div))))throw new Error('다른 기기에서 명단이 변경됐습니다. 새로고침 후 다시 저장해 주세요.');
+        if(!prevIds.has(id))throw new Error('새 팀의 저장 ID가 이미 사용 중입니다. 새로고침해 주세요.');
+        before.push({_id:id,...data});
+      }else if(prevIds.has(id))throw new Error('기존 팀이 서버에서 누락됐습니다. 복구센터에서 확인해 주세요.');
+    }
+    const after=cur.map(t=>({...before.find(x=>x._id===t._id),...writes.find(w=>w.ref.id===t._id&&!w.remove)?.data,_id:t._id}));
+    const beforeJson=JSON.stringify(before),afterJson=JSON.stringify(after);
+    if(new TextEncoder().encode(beforeJson+afterJson).length>700000)throw new Error('명단 이력이 저장 한도를 초과해 원본 저장을 중단했습니다.');
+    tx.set(rp,{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason:dl(div)+' 팀명단 영구 이력',division:div,createdAt:when,createdAtMs:Date.now(),version:185,beforeJson,afterJson});
+    for(const w of writes){if(w.remove)tx.delete(w.ref);else if(w.update)tx.update(w.ref,w.data);else tx.set(w.ref,w.data,w.opts);}
+  });
+  // The transaction commits the original and its history together. Server acknowledgement is mandatory.
+  // runTransaction resolves only after the server has acknowledged the atomic commit.
+  // A separate post-commit read failure must not report an already-saved team as failed.
   pastArchiveLocalInvalidation(tid);
   markFbWriteCache('teams', key, hashPayload);
   if(!G._regIdsByKey) G._regIdsByKey={};
@@ -6961,6 +7005,7 @@ async function delT(tid){
   if(!confirm('대회를 삭제하시겠습니까?\n⚠️ 관련 경기기록, 팀등록, 선수 이력도 함께 삭제됩니다.'))return;
   sl(true);
   try{
+    await preserveServerRegistrationHistory(tid,'대회 삭제 전 팀명단 영구 보관');
     const keys=['금','은','동','테린이','여성부'].map(d=>tid+'_'+d);
     // ① 매치 승패 차감
     for(const key of keys) await resetMatchRecords(key);
@@ -9643,7 +9688,7 @@ async function delTeam(key,idx){
   sl(true);
   try{
     G.teams[key].splice(idx,1);
-    await stT(key);
+    await stT(key,{allowDelete:true});
   }catch(e){
     G.teams[key] = backupTeams;
     sl(false);
@@ -21837,6 +21882,7 @@ async function cleanupOldTournamentRestorePoints(tid){
   }catch(e){console.warn('restore point cleanup failed',e);}
 }
 async function _replaceCollectionForRestore(col,tid,div,rows){
+  if(col==='registrations')await preserveServerRegistrationHistory(tid,'복구 교체 전 서버 명단 영구 보관',div);
   const qs=await getDocs(query(collection(db,col),where('tournamentId','==',tid),where('division','==',div)));
   const ops=[];
   qs.docs.forEach(d=>ops.push({kind:'delete',ref:d.ref}));
@@ -21851,7 +21897,7 @@ async function _replaceCollectionForRestore(col,tid,div,rows){
     await b.commit();
   }
 }
-async function restoreTournamentRestorePoint(id){
+async function restoreTournamentRestorePoint(id,phase='after'){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   const snap=await getDoc(doc(db,'restorePoints',id));
   if(!snap.exists()){toast('복구점을 찾을 수 없습니다','error');return;}
@@ -21859,8 +21905,19 @@ async function restoreTournamentRestorePoint(id){
   if(!confirm(`${meta.tournamentName||tid}\n${new Date(meta.createdAt).toLocaleString()}\n\n이 복구점으로 되돌리시겠습니까?\n현재 상태는 먼저 안전 복구점으로 저장됩니다.`))return;
   sl(true);
   try{
-    await createTournamentRestorePoint(tid,{type:'safety',reason:'복원 직전 안전 복구점',force:true});
+    const safetyId=await createTournamentRestorePoint(tid,{type:'safety',reason:'복원 직전 안전 복구점',force:true});
+    if(!safetyId)throw new Error('현재 상태의 안전 복구점 저장에 실패해 복원을 중단했습니다.');
     __autoRestoreSuppressed=true;
+    if(meta.type==='registration_snapshot'){
+      const div=String(meta.division||'');
+      if(!div)throw new Error('복구 부서 정보가 없습니다.');
+      await fetchTournamentBundle(tid,{force:true,acceptStale:true,bypassPastArchive:true,server:true});
+      const key=tid+'_'+div;
+      G.teams[key]=JSON.parse((phase==='before'?meta.beforeJson:meta.afterJson)||'[]');
+      await stT(key,{allowDelete:true});
+      toast('팀명단 복구 완료 · 경기결과는 유지됩니다.','success');
+      closeAutoRestoreCenter();return;
+    }
     const ps=await getDocs(collection(db,'restorePoints',id,'parts'));
     for(const d of ps.docs){
       const part=d.data(),div=String(part.division||'');if(!div)continue;
@@ -21907,15 +21964,15 @@ async function openAutoRestoreCenter(){
     const arr=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
     const t=_restorePointTournament(tid);
     const rows=arr.length?arr.map(x=>{
-      const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':'수동';
+      const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
       return `<div style="display:flex;align-items:center;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
         <span style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
         <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reason||'-'}</div></div>
-        <button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
+        ${x.type==='registration_snapshot'?`<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}','before')">변경 전 명단 복원</button>`:''}<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
       </div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
     body.innerHTML=`<div style="font-size:.82rem;font-weight:900">${t?.name||t?.title||tid}</div>
-      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">운영 데이터 변경 후 약 5분 간격으로 자동 저장 · 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
+      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">팀명단 저장·변경·삭제 이력은 매번 영구 보관 · 일반 운영 복구점은 약 5분 간격으로 저장, 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" onclick="manualTournamentRestorePoint('${tid}')">💾 지금 복구점 저장</button><button class="btn btn-outline" onclick="cleanupOldTournamentRestorePoints('${tid}').then(openAutoRestoreCenter)">🧹 오래된 자동 복구점 정리</button></div>${rows}`;
   }catch(e){body.innerHTML=`<div style="color:#b91c1c">복구점 조회 실패: ${e.message}</div>`;}
 }
@@ -24018,6 +24075,7 @@ async function uploadHistFromExcel(){
     const batch = writeBatch(db);
 
     if(overwrite){
+      await preserveServerRegistrationHistory(tid,'엑셀 덮어쓰기 전 팀명단 영구 보관');
       existingRegs.forEach(r=>{
         if(r.tournamentId===tid){
           batch.delete(doc(db,'registrations', r.id));
@@ -24170,6 +24228,7 @@ async function selectiveClearTournament(tid, tname, deleteTournament){
     // ③ Firestore batch 삭제
     const batch=writeBatch(db);
     if(deleteTournament){
+      await preserveServerRegistrationHistory(tid,'대회 정리 전 팀명단 영구 보관');
       batch.delete(doc(db,'tournaments',tid));
       keys.forEach(k=>{
         batch.delete(doc(db,'teams',k));
