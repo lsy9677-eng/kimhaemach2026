@@ -21943,6 +21943,55 @@ async function restoreTournamentRestorePoint(id,phase='after'){
   }finally{__autoRestoreSuppressed=false;sl(false);}
 }
 function closeAutoRestoreCenter(){const x=ge('mAutoRestoreCenter');if(x)x.classList.remove('open');}
+// PHASE186: read-only snapshot inspection. Opening this modal never restores or writes data.
+function snapshotRosterNames(team){
+  const players=Array.isArray(team?.players)?team.players:[];
+  const individual=Array.isArray(team?.individualPlayers)?team.individualPlayers:[];
+  return (players.length?players:individual).map(p=>typeof p==='string'?p:String(p?.name||'')).filter(Boolean);
+}
+function renderSnapshotRosterSection(title,teams,division=''){
+  if(!Array.isArray(teams))throw new Error('저장된 명단 형식이 올바르지 않습니다.');
+  const count=teams.reduce((n,t)=>n+snapshotRosterNames(t).length,0);
+  const cards=teams.map((team,i)=>{
+    const names=snapshotRosterNames(team);
+    const club=String(team.club||team.teamClub||'');
+    const label=String(team.entryLabel||team.teamName||team.pairLabel||club||'팀 '+(i+1));
+    return `<div style="border:1px solid #dbe3ef;border-radius:10px;padding:10px;margin-top:8px;background:#fff"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.82rem"><b>${i+1}. ${esc(label)}</b><span style="color:#64748b">${esc(dl(team.division||division)||division)} · ${names.length}명</span></div>${club&&club!==label?`<div style="color:#64748b;font-size:.73rem;margin-top:4px">클럽: ${esc(club)}</div>`:''}<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${names.length?names.map((n,j)=>`<span style="font-size:.78rem;padding:5px 7px;border-radius:6px;background:#f1f5f9;color:#0f172a">${j+1}. ${esc(n)}</span>`).join(''):'<span style="color:#64748b;font-size:.76rem">선수 명단 없음</span>'}</div></div>`;
+  }).join('');
+  return `<section style="margin-top:14px"><div style="font-weight:900;font-size:.86rem;color:#10264b">${esc(title)} <span style="font-size:.72rem;color:#64748b">${teams.length}팀 · ${count}명</span></div>${cards||'<div style="padding:12px;color:#64748b;font-size:.78rem">저장된 팀 없음</div>'}</section>`;
+}
+function closeRegistrationSnapshotViewer(){
+  const el=ge('registrationSnapshotViewer');if(el)el.classList.remove('open');
+  window.__registrationSnapshotViewRequest=(window.__registrationSnapshotViewRequest||0)+1;
+}
+async function openRegistrationSnapshotViewer(id){
+  if(!AD){toast('관리자 로그인 필요','info');return;}
+  let modal=ge('registrationSnapshotViewer');
+  if(!modal){
+    modal=document.createElement('div');modal.id='registrationSnapshotViewer';modal.className='modal-overlay';
+    modal.style.cssText='z-index:10040;align-items:flex-start;padding:4vh 10px;overflow:auto';
+    modal.innerHTML='<div style="width:min(760px,100%);background:#f8fafc;border-radius:14px;margin:auto;overflow:hidden"><div style="display:flex;align-items:center;justify-content:space-between;background:#10264b;color:#fff;padding:13px"><b>📋 스냅샷 명단 상세보기</b><button type="button" id="registrationSnapshotViewerClose" style="border:0;background:#ffffff22;color:#fff;border-radius:8px;padding:7px 12px">닫기</button></div><div id="registrationSnapshotViewerBody" style="padding:14px;overflow-wrap:anywhere"></div></div>';
+    document.body.appendChild(modal);
+    ge('registrationSnapshotViewerClose').onclick=closeRegistrationSnapshotViewer;
+  }
+  const request=(window.__registrationSnapshotViewRequest||0)+1;window.__registrationSnapshotViewRequest=request;
+  const body=ge('registrationSnapshotViewerBody');body.innerHTML='<div style="padding:20px;text-align:center">저장된 명단을 확인 중입니다…</div>';modal.classList.add('open');
+  try{
+    const snap=await getDoc(doc(db,'restorePoints',id));
+    if(!snap.exists())throw new Error('스냅샷을 찾을 수 없습니다.');
+    const meta=snap.data();let sections='';
+    if(meta.type==='registration_snapshot'){
+      if(typeof meta.beforeJson!=='string'||typeof meta.afterJson!=='string')throw new Error('저장 전후 명단 정보가 없습니다.');
+      sections=renderSnapshotRosterSection('저장 후 명단',JSON.parse(meta.afterJson),meta.division||'')+renderSnapshotRosterSection('변경 전 명단',JSON.parse(meta.beforeJson),meta.division||'');
+    }else{
+      const parts=await getDocs(collection(db,'restorePoints',id,'parts'));
+      sections=parts.docs.map(d=>{const part=d.data();return renderSnapshotRosterSection(dl(part.division||'')+' 저장 명단',part.teams||[],part.division||'');}).join('')||'<div style="padding:12px;color:#64748b">이 복구점에는 저장된 부서 명단이 없습니다.</div>';
+    }
+    if(window.__registrationSnapshotViewRequest!==request)return;
+    body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
+  }catch(e){if(window.__registrationSnapshotViewRequest===request)body.innerHTML='<div style="color:#b91c1c">명단 조회 실패: '+esc(e.message)+'</div>';}
+}
+
 async function openAutoRestoreCenter(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   let ov=ge('mAutoRestoreCenter');
@@ -21965,9 +22014,10 @@ async function openAutoRestoreCenter(){
     const t=_restorePointTournament(tid);
     const rows=arr.length?arr.map(x=>{
       const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
+      return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
         <span style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
         <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reason||'-'}</div></div>
+        <button class="btn btn-primary" style="padding:5px 9px;font-size:.7rem" onclick="openRegistrationSnapshotViewer('${x.id}')">명단 상세보기</button>
         ${x.type==='registration_snapshot'?`<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}','before')">변경 전 명단 복원</button>`:''}<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
       </div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
@@ -27687,7 +27737,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
