@@ -27053,34 +27053,24 @@ function outputGeneratedPrelimSheet(tid,div){
 }
 function outputGeneratedMainTable(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
-  if(!regs.length)return '';
-  let n=1;while(n<Math.max(2,regs.length))n*=2;
-  const slots=Array.from({length:n},(_,i)=>regs[i]?.club||'');
+  const n=outputPreDrawMainSize(tid,div);
+  const slots=Array(n).fill('');
   const rows=[];for(let i=0;i<n;i+=2)rows.push(`<tr><td>${i+1}</td><td>${outputEsc(slots[i]||'')}</td><td>vs</td><td>${outputEsc(slots[i+1]||'')}</td><td class="oc-write"></td><td class="oc-write"></td></tr>`);
-  return outputHeader(t,div,'본선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 참가팀을 기준으로 만든 ${n}강 수기용 빈 대진표입니다. 당시 실제 본선 대진 복원본은 아닙니다.</div><section class="oc-round"><div class="oc-round-title">${n}강</div><table><thead><tr><th>No</th><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${rows.join('')}</tbody></table></section>`;
+  return outputHeader(t,div,'본선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 본선 대진이 없습니다. 본선 추첨 전에는 팀 칸을 비워 두며, 추첨 후 실제 배치를 표시합니다.</div><section class="oc-round"><div class="oc-round-title">${n}강</div><table><thead><tr><th>No</th><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${rows.join('')}</tbody></table></section>`;
 }
 function outputGeneratedTree(tid,div,blank=true){
-  const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
-  if(!regs.length)return '';
-  let n=1;while(n<Math.max(2,regs.length))n*=2;
-  const width=Math.max(760,n*88), levels=Math.log2(n)+1, height=75+(levels-1)*70;
-  let nodes=[],cur=Array.from({length:n},(_,i)=>outputEsc(regs[i]?.club||''));
-  for(let li=0;li<levels;li++){
-    const count=cur.length,y=height-28-li*70;
-    cur.forEach((name,i)=>nodes.push({li,i,x:(i+.5)*width/count,y,name}));
-    cur=Array.from({length:Math.max(1,count/2)},()=> '');
-  }
-  let lines='';
-  for(let li=0;li<levels-1;li++){
-    const lower=nodes.filter(x=>x.li===li),upper=nodes.filter(x=>x.li===li+1);
-    upper.forEach((u,i)=>[lower[i*2],lower[i*2+1]].filter(Boolean).forEach(c=>{
-      const my=(c.y+u.y)/2;lines+=`<path d="M ${c.x} ${c.y-11} V ${my} H ${u.x} V ${u.y+11}" fill="none" stroke="#334155" stroke-width="1.3"/>`;
-    }));
-  }
-  const boxes=nodes.map(nod=>`<div style="position:absolute;left:${nod.x}px;top:${nod.y}px;transform:translate(-50%,-50%);width:${Math.max(64,width/(n/(2**nod.li))-12)}px;max-width:145px;height:27px;border:${nod.li===levels-1?'2':'1'}px solid ${nod.li===levels-1?'#b7791f':'#334155'};background:#fff;border-radius:4px;padding:5px 3px;text-align:center;font-size:8px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${nod.name||(blank?'________________':'')}</div>`).join('');
-  const html=`<div style="overflow:hidden;width:100%"><div style="position:relative;width:${width}px;height:${height}px;margin:0 auto"><svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${lines}</svg>${boxes}</div></div>`;
-  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
-    `<div style="font-size:8px;margin-bottom:5px;color:#6b7280;text-align:center">※ 저장된 본선 대진이 없어 참가팀 기준으로 만든 양식입니다. 맨 아래 출전팀에서 위로 올라가 최상단이 우승입니다.</div>`+html;
+  const t=(G.tournaments||[]).find(x=>x.id===tid);
+  return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 추첨 전')+outputPreDrawPyramidSkeleton(tid,div);
+}
+function outputPreDrawMainSize(tid,div){
+  const key=tid+'_'+div, draw=G.draws?.[key], t=(G.tournaments||[]).find(x=>x.id===tid), cfg=gDS(t,div)||{};
+  const groups=Array.isArray(draw?.groups)?draw.groups:[];
+  const advance=Math.max(1,Number(draw?.advance||cfg.advance||2));
+  const regs=outputHistoricalRegs(tid,div);
+  const groupSize=Math.max(2,Number(cfg.grpSize||t?.grpSize||4));
+  const entrants=Math.max(2,groups.length?groups.length*advance:Math.ceil(regs.length/groupSize)*advance);
+  let n=2;while(n<entrants)n*=2;
+  return n;
 }
 function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   const t=(G.tournaments||[]).find(x=>x.id===tid);
@@ -27127,11 +27117,7 @@ function outputMainTableHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null)).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
-  if(!ms.length){
-    if(blank){const gen=outputGeneratedMainTable(tid,div);if(gen)return gen;}
-    const hist=outputHistoricalRegistrationFallback(tid,div,blank?'본선 현장 수기용':'본선 현재상황',blank);
-    return hist||outputHeader(t,div,blank?'본선 현장 수기용':'본선 현재상황')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
-  }
+  if(!ms.length)return outputGeneratedMainTable(tid,div);
   const rounds=[...new Set(ms.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const body=rounds.map((r,ri)=>{
     const rm=ms.filter(m=>Number(m.round||0)===r);
@@ -27308,13 +27294,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
 }
 function outputPreDrawPyramidSkeleton(tid,div){
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
-  const key=tid+'_'+div, draw=G.draws?.[key], t=G.tournaments.find(x=>x.id===tid), cfg=gDS(t,div);
-  const groups=Array.isArray(draw?.groups)?draw.groups:[];
-  if(!groups.length)return '';
-  const advance=Math.max(1,Number(draw?.advance||cfg?.advance||2));
-  const entrants=Math.max(2,groups.length*advance);
-  let n=1;while(n<entrants)n*=2;
-  const byeCount=Math.max(0,n-entrants), width=Math.max(900,Math.min(1500,n*46));
+  const n=outputPreDrawMainSize(tid,div), width=Math.max(900,Math.min(1500,n*46));
   const baseY=330,stepY=57,levels=Math.log2(n),x=i=>(i+.5)*width/n,THIN='#a9b8cc';
   let paths='',labels='';
   for(let level=0;level<levels;level++){
@@ -27328,11 +27308,8 @@ function outputPreDrawPyramidSkeleton(tid,div){
     const teamsLeft=n/(2**level),roundLabel=teamsLeft===2?'결승':`${teamsLeft}강`;
     labels+=`<g><rect x="6" y="${y1-10}" width="40" height="18" rx="9" fill="#f3f7fc" stroke="#b9c8dc"/><text x="26" y="${y1+3}" text-anchor="middle" font-size="8" font-weight="900" fill="#64748b">${roundLabel}</text></g>`;
   }
-  // 부전승은 구조상 필요한 자리 수만 공개한다. 어느 조/몇 위가 들어갈지는 본선 추첨 전에는 절대 표시하지 않는다.
-  const byeSlots=new Set();
-  for(let k=0;k<byeCount;k++) byeSlots.add(Math.min(n-1,Math.floor((k+.5)*n/Math.max(1,byeCount))));
   const boxes=Array.from({length:n},(_,i)=>{
-    const bye=byeSlots.has(i),xx=x(i),bw=Math.max(27,Math.min(42,width/n-3));
+    const bye=false,xx=x(i),bw=Math.max(27,Math.min(42,width/n-3));
     return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:78px;border:1px solid ${bye?'#e0a400':'#b8c6d8'};background:${bye?'#fff8dc':'#f8fbff'};border-radius:5px;display:flex;align-items:center;justify-content:center;text-align:center;padding:3px 1px">
       <div style="font-size:${n>=32?'7':'9'}px;font-weight:850;color:${bye?'#9a6700':'#94a3b8'}">${bye?'부<br>전<br>승':'　'}</div></div>`;
   }).join('');
@@ -27340,7 +27317,7 @@ function outputPreDrawPyramidSkeleton(tid,div){
   const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">${resultCell('🏆 우승','#d59b00')}${resultCell('🥈 준우승','#7890ad')}${resultCell('🥉 3위','#b87333')}</div>`;
   return `<div style="padding:8px 10px;border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff)">
     <div style="text-align:center;font-size:.84rem;font-weight:900;color:#10213d;margin-bottom:3px">🌳 본선 빈 대진표 · ${n}강</div>
-    <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">예선 추첨 완료 · 본선 추첨 전에는 팀명과 조/순위 배정 위치를 공개하지 않습니다.${byeCount?` · 부전승 ${byeCount}자리만 표시`:''}</div>
+    <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">본선 추첨 전 · 팀 칸과 배정 위치는 추첨 후 표시합니다.</div>
     ${resultBar}<div class="pyramid-scroll-content" style="overflow:visible;width:${width}px;min-width:${width}px;margin:0 auto"><div style="position:relative;width:${width}px;height:${baseY+102}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+102}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div></div>`;
@@ -27349,18 +27326,7 @@ function outputMainTreeHtml(tid,div,blank=false){
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
-  if(!ms.length){
-    // 예선 추첨이 끝났고 본선 추첨 전이면 실제 본선 화면과 동일한 '빈 피라미드'를 사용한다.
-    // 이 단계에서는 팀명/조/순위 배정 위치를 절대 노출하지 않고, 구조상 필요한 부전승 자리만 표시한다.
-    const skeleton=outputPreDrawPyramidSkeleton(tid,div);
-    if(skeleton){
-      return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 추첨 전')+skeleton;
-    }
-    // 예선 추첨 자체가 없는 과거 자료만 기존 fallback을 유지한다.
-    const gen=outputGeneratedTree(tid,div,blank);if(gen)return gen;
-    const hist=outputHistoricalRegistrationFallback(tid,div,'가지형 본선 대진표',false);
-    return hist||outputHeader(t,div,'가지형 본선 대진표')+'<div class="oc-empty">본선 대진이 아직 없습니다.</div>';
-  }
+  if(!ms.length)return outputGeneratedTree(tid,div,blank);
   const tree=outputBottomUpTreeHtml(tid,div,blank);
   return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 현재상황')+
     `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 팀 배치 · 승리팀은 굵은 가지선으로 위 단계까지 연결</div>${tree}`;
