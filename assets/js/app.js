@@ -1264,7 +1264,7 @@ async function ensurePastTournamentArchive(tid,{rebuild=false}={}){
     // Public viewers use the same result locally; publication belongs to the existing administrator role.
     if(!AD){applyTournamentBundle(tid,out);return out;}
     const json=JSON.stringify(out);
-    if(new TextEncoder().encode(json).length>700000)throw new Error('대회 자료가 커서 확정본 저장 한도를 초과했습니다.');
+    if(new TextEncoder().encode(json+json+fullJson+fullJson).length>700000)throw new Error('대회 자료가 커서 확정본 저장 한도를 초과했습니다.');
     const archive={version:PAST_ARCHIVE_VERSION,revision,savedAt:new Date().toISOString(),json};
     await runTransaction(db,async tx=>{
       const current=await tx.get(doc(db,'tournaments',tid));
@@ -2721,14 +2721,52 @@ async function stD(k){
   scheduleTournamentAutoRestorePoint(k,'대진표/추첨 변경');
 } // draws는 기존처럼 tid_div 문서 유지
 
+// PHASE188: complete tournament rosters, attributed changes and retention controls.
+function registrationAuditActor(requireName=false){
+  const role=AD?'관리자':OP?'진행자':REG?'경기이사':'시스템',club=REG_CLUB||'';
+  const key='kimhae_audit_name_'+role+'_'+club;
+  let name=sessionStorage.getItem(key)||'';
+  if(requireName&&role!=='시스템'&&!name){
+    name=String(prompt('등록·수정 이력에 남길 담당자 이름을 입력해 주세요. (공유 로그인에서는 입력한 이름으로 기록됩니다.)')||'').trim();
+    if(!name)throw new Error('담당자 이름을 입력해야 명단을 저장할 수 있습니다.');
+    sessionStorage.setItem(key,name);
+  }
+  return {role,club,name,identitySource:'shared_login_self_reported'};
+}
+function registrationRosterChanges(before,after){
+  const project=t=>({club:t.club||'',division:t.division||'',players:snapshotRosterNames(t),individualPlayers:t.individualPlayers||[],note:t.note||'',entryLabel:t.entryLabel||'',pairLabel:t.pairLabel||'',doublesCount:t.doublesCount,mainPlayerCount:t.mainPlayerCount,tiebreakAge:t.tiebreakAge});
+  const old=new Map(before.map(t=>[t._id,t])),next=new Map(after.map(t=>[t._id,t])),changes=[];
+  for(const id of new Set([...old.keys(),...next.keys()])){
+    const b=old.get(id),a=next.get(id);
+    if(b&&a&&JSON.stringify(project(b))===JSON.stringify(project(a)))continue;
+    changes.push({id,kind:!b?'추가':!a?'삭제':'수정',before:b||null,after:a||null});
+  }
+  return changes;
+}
+function renderRegistrationChanges(changes){
+  return '<section style="margin-top:14px"><b>변경된 부분</b>'+((changes||[]).map(c=>{
+    const b=c.before,a=c.after,t=a||b;
+    return `<div style="padding:10px;margin-top:7px;border:1px solid #dbe3ef;border-radius:8px"><b>${esc(c.kind)} · ${esc(dl(t.division)||t.division)} · ${esc(t.club||'팀')}</b><div>변경 전: ${esc(b?snapshotRosterNames(b).join(' / '):'없음')}</div><div>변경 후: ${esc(a?snapshotRosterNames(a).join(' / '):'없음')}</div>${b&&a&&b.note!==a.note?`<div>메모: ${esc(b.note||'없음')} → ${esc(a.note||'없음')}</div>`:''}${b&&a?['club','entryLabel','pairLabel','doublesCount','mainPlayerCount','tiebreakAge'].filter(k=>JSON.stringify(b[k])!==JSON.stringify(a[k])).map(k=>`<div>${esc(({club:'클럽',entryLabel:'팀 표시명',pairLabel:'조 표시',doublesCount:'복식 수',mainPlayerCount:'기본 인원',tiebreakAge:'타이브레이크 나이'})[k])}: ${esc(String(b[k]??'없음'))} → ${esc(String(a[k]??'없음'))}</div>`).join(''):''}</div>`;
+  }).join('')||'<div>명단 변경 없음</div>')+'</section>';
+}
+async function toggleRestorePointPermanent(id){
+  if(!AD)return;
+  const ref=doc(db,'restorePoints',id),snap=await getDoc(ref);if(!snap.exists())return;
+  const data=snap.data(),permanent=data.permanent===undefined?data.type==='registration_snapshot':data.permanent===true;
+  if(!permanent){await updateDoc(ref,{permanent:true});}
+  else{if(!confirm('영구보관을 해제하면 7일·80개 보관 기준에 따라 정리될 수 있습니다. 해제하시겠습니까?'))return;await updateDoc(ref,{permanent:false});}
+  await openAutoRestoreCenter();
+}
 async function preserveServerRegistrationHistory(tid,reason='명단 교체 전 영구 보관',onlyDiv=''){
   const snap=await getDocsFromServer(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+  const fullRows=snap.docs.map(d=>({_id:d.id,...d.data()}));
+  const fullJson=JSON.stringify(fullRows);
   const groups=new Map();
   snap.docs.forEach(d=>{const data=d.data(),div=String(data.division||'');if(!div||(onlyDiv&&div!==onlyDiv))return;if(!groups.has(div))groups.set(div,[]);groups.get(div).push({_id:d.id,...data});});
   for(const [division,rows] of groups){
     const json=JSON.stringify(rows);
     if(new TextEncoder().encode(json).length>700000)throw new Error('명단 백업 한도 초과로 작업을 중단했습니다.');
-    await addDoc(collection(db,'restorePoints'),{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason,division,createdAt:new Date().toISOString(),createdAtMs:Date.now(),version:185,beforeJson:json,afterJson:json});
+    await addDoc(collection(db,'restorePoints'),{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason,division,createdAt:new Date().toISOString(),createdAtMs:Date.now(),version:188,permanent:true,actor:registrationAuditActor(),fullBeforeJson:fullJson,fullAfterJson:fullJson,beforeJson:json,afterJson:json});
   }
 }
 function registrationSafetyProjection(t,tid,div){
@@ -2795,15 +2833,21 @@ async function stT(key,{allowDelete=false}={}){
   });
   toDel.forEach(id=>batch.delete(doc(db,'registrations',id)));
   pastArchiveMutation(batch,tid);
+  const actor=registrationAuditActor(true);
+  const tournamentRegs=await getDocsFromServer(query(collection(db,'registrations'),where('tournamentId','==',tid)));
+  const fullIds=tournamentRegs.docs.map(d=>d.id);
   const rp=doc(collection(db,'restorePoints'));
   const when=new Date().toISOString();
   await runTransaction(db,async tx=>{
     const snapshots=[];
-    for(const id of new Set([...prevIds,...curIds]))snapshots.push({id,snap:await tx.get(doc(db,'registrations',id))});
-    const before=[];
+    for(const id of new Set([...fullIds,...prevIds,...curIds]))snapshots.push({id,snap:await tx.get(doc(db,'registrations',id))});
+    const before=[],fullBefore=[];
     for(const {id,snap} of snapshots){
       if(snap.exists()){
         const data=snap.data();
+        if(String(data.tournamentId)!==String(tid))throw new Error('대회 정보가 다릅니다.');
+        fullBefore.push({_id:id,...data});
+        if(String(data.division)!==String(div))continue;
         if(String(data.tournamentId)!==String(tid)||String(data.division)!==String(div))throw new Error('팀 문서의 대회·부서가 다릅니다. 저장을 중단했습니다.');
         if(prevIds.has(id)&&!expected.has(stableStringify(registrationSafetyProjection(data,tid,div))))throw new Error('다른 기기에서 명단이 변경됐습니다. 새로고침 후 다시 저장해 주세요.');
         if(!prevIds.has(id))throw new Error('새 팀의 저장 ID가 이미 사용 중입니다. 새로고침해 주세요.');
@@ -2811,9 +2855,12 @@ async function stT(key,{allowDelete=false}={}){
       }else if(prevIds.has(id))throw new Error('기존 팀이 서버에서 누락됐습니다. 복구센터에서 확인해 주세요.');
     }
     const after=cur.map(t=>({...before.find(x=>x._id===t._id),...writes.find(w=>w.ref.id===t._id&&!w.remove)?.data,_id:t._id}));
+    const changes=registrationRosterChanges(before,after);
+    const fullAfter=[...fullBefore.filter(t=>String(t.division)!==String(div)),...after];
+    const fullBeforeJson=JSON.stringify(fullBefore),fullAfterJson=JSON.stringify(fullAfter);
     const beforeJson=JSON.stringify(before),afterJson=JSON.stringify(after);
-    if(new TextEncoder().encode(beforeJson+afterJson).length>700000)throw new Error('명단 이력이 저장 한도를 초과해 원본 저장을 중단했습니다.');
-    tx.set(rp,{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason:dl(div)+' 팀명단 영구 이력',division:div,createdAt:when,createdAtMs:Date.now(),version:185,beforeJson,afterJson});
+    if(new TextEncoder().encode(beforeJson+afterJson+fullBeforeJson+fullAfterJson+JSON.stringify(changes)).length>700000)throw new Error('명단 이력이 저장 한도를 초과해 원본 저장을 중단했습니다.');
+    tx.set(rp,{tournamentId:tid,tournamentName:(G.tournaments||[]).find(t=>t.id===tid)?.name||tid,type:'registration_snapshot',reason:dl(div)+' 팀명단 영구 이력',division:div,createdAt:when,createdAtMs:Date.now(),version:188,permanent:true,actor,createdBy:[actor.role,actor.club,actor.name].filter(Boolean).join(" · "),fullBeforeJson,fullAfterJson,changes,beforeJson,afterJson});
     for(const w of writes){if(w.remove)tx.delete(w.ref);else if(w.update)tx.update(w.ref,w.data);else tx.set(w.ref,w.data,w.opts);}
   });
   // The transaction commits the original and its history together. Server acknowledgement is mandatory.
@@ -21829,7 +21876,9 @@ async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저�
       reason:String(reason||'').slice(0,160),
       createdAt:new Date().toISOString(),
       createdAtMs:now,
-      createdBy:AD?'관리자':OP?'진행자':REG?'경기이사':'시스템',
+      actor:registrationAuditActor(),
+      createdBy:Object.values(registrationAuditActor()).slice(0,3).filter(Boolean).join(' · '),
+      permanent:false,
       version:1
     });
     const parts=_restorePointKeys(tid);
@@ -21874,7 +21923,7 @@ async function _deleteRestorePointDoc(id){
 async function cleanupOldTournamentRestorePoints(tid){
   try{
     const qs=await getDocs(query(collection(db,'restorePoints'),where('tournamentId','==',tid)));
-    const autos=qs.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.type==='auto')
+    const autos=qs.docs.map(d=>({id:d.id,...d.data()})).filter(x=>(x.type==='auto'||(x.type==='registration_snapshot'&&x.permanent===false))&&x.permanent!==true)
       .sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
     const cutoff=Date.now()-AUTO_RESTORE_KEEP_MS;
     const doomed=autos.filter((x,i)=>Number(x.createdAtMs||0)<cutoff||i>=AUTO_RESTORE_MAX_PER_TOURNAMENT);
@@ -21982,13 +22031,15 @@ async function openRegistrationSnapshotViewer(id){
     const meta=snap.data();let sections='';
     if(meta.type==='registration_snapshot'){
       if(typeof meta.beforeJson!=='string'||typeof meta.afterJson!=='string')throw new Error('저장 전후 명단 정보가 없습니다.');
-      sections=renderSnapshotRosterSection('저장 후 명단',JSON.parse(meta.afterJson),meta.division||'')+renderSnapshotRosterSection('변경 전 명단',JSON.parse(meta.beforeJson),meta.division||'');
+      const before=JSON.parse(meta.fullBeforeJson||meta.beforeJson),after=JSON.parse(meta.fullAfterJson||meta.afterJson);
+      const divs=[...new Set([...((G.tournaments||[]).find(t=>t.id===meta.tournamentId)?.divisions||[]),...before.map(t=>t.division),...after.map(t=>t.division)])].filter(Boolean);
+      sections=renderRegistrationChanges(meta.changes||registrationRosterChanges(JSON.parse(meta.beforeJson),JSON.parse(meta.afterJson)))+`<div style="margin-top:10px;color:#64748b">${meta.fullAfterJson?'대회 전체 부서 명단 보관':'이전 버전 기록: 해당 부서만 보관'} · 복원 버튼은 해당 부서 전체를 복원합니다.</div>`+divs.map(div=>'<details><summary>'+esc(dl(div))+' 전체 명단</summary>'+renderSnapshotRosterSection('저장 후 명단',after.filter(t=>t.division===div),div)+renderSnapshotRosterSection('변경 전 명단',before.filter(t=>t.division===div),div)+'</details>').join('');
     }else{
       const parts=await getDocs(collection(db,'restorePoints',id,'parts'));
       sections=parts.docs.map(d=>{const part=d.data();return renderSnapshotRosterSection(dl(part.division||'')+' 저장 명단',part.teams||[],part.division||'');}).join('')||'<div style="padding:12px;color:#64748b">이 복구점에는 저장된 부서 명단이 없습니다.</div>';
     }
     if(window.__registrationSnapshotViewRequest!==request)return;
-    body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
+    body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}${meta.actor?.name?' (공유 로그인·이름 직접 입력)':''}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
   }catch(e){if(window.__registrationSnapshotViewRequest===request)body.innerHTML='<div style="color:#b91c1c">명단 조회 실패: '+esc(e.message)+'</div>';}
 }
 
@@ -22013,16 +22064,18 @@ async function openAutoRestoreCenter(){
     const arr=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>Number(b.createdAtMs||0)-Number(a.createdAtMs||0));
     const t=_restorePointTournament(tid);
     const rows=arr.length?arr.map(x=>{
+      const permanent=x.permanent===undefined?x.type==='registration_snapshot':x.permanent===true;
       const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
       return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
         <span style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
-        <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.reason||'-'}</div></div>
+        <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.reason||'-')}</div><div style="font-size:.7rem">담당: ${esc(x.createdBy||[x.actor?.role,x.actor?.club,x.actor?.name].filter(Boolean).join(' · ')||'기존 기록: 담당자 미기록')}</div></div>
+        <button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="toggleRestorePointPermanent('${x.id}')">${permanent?'🔒 영구보관 해제':'영구보관 설정'}</button>
         <button class="btn btn-primary" style="padding:5px 9px;font-size:.7rem" onclick="openRegistrationSnapshotViewer('${x.id}')">명단 상세보기</button>
         ${x.type==='registration_snapshot'?`<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}','before')">변경 전 명단 복원</button>`:''}<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
       </div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
     body.innerHTML=`<div style="font-size:.82rem;font-weight:900">${t?.name||t?.title||tid}</div>
-      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">팀명단 저장·변경·삭제 이력은 매번 영구 보관 · 일반 운영 복구점은 약 5분 간격으로 저장, 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
+      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">팀명단 저장 시 전체 부서 명단·변경 내역 보관 · 영구보관은 관리자 선택 · 영구보관 해제 기록 및 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" onclick="manualTournamentRestorePoint('${tid}')">💾 지금 복구점 저장</button><button class="btn btn-outline" onclick="cleanupOldTournamentRestorePoints('${tid}').then(openAutoRestoreCenter)">🧹 오래된 자동 복구점 정리</button></div>${rows}`;
   }catch(e){body.innerHTML=`<div style="color:#b91c1c">복구점 조회 실패: ${e.message}</div>`;}
 }
@@ -27703,7 +27756,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
