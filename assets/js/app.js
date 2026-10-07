@@ -2722,16 +2722,11 @@ async function stD(k){
 } // draws는 기존처럼 tid_div 문서 유지
 
 // PHASE188: complete tournament rosters, attributed changes and retention controls.
-function registrationAuditActor(requireName=false){
-  const role=AD?'관리자':OP?'진행자':REG?'경기이사':'시스템',club=REG_CLUB||'';
-  const key='kimhae_audit_name_'+role+'_'+club;
-  let name=sessionStorage.getItem(key)||'';
-  if(requireName&&role!=='시스템'&&!name){
-    name=String(prompt('등록·수정 이력에 남길 담당자 이름을 입력해 주세요. (공유 로그인에서는 입력한 이름으로 기록됩니다.)')||'').trim();
-    if(!name)throw new Error('담당자 이름을 입력해야 명단을 저장할 수 있습니다.');
-    sessionStorage.setItem(key,name);
-  }
-  return {role,club,name,identitySource:'shared_login_self_reported'};
+function registrationAuditActor(){
+  const role=AD?'관리자':OP?'진행자':REG?'경기이사':'시스템';
+  // Use the active login, never the target club selected for proxy registration.
+  const club=(!AD&&!OP&&REG)?String(REG_CLUB||''):'';
+  return {role,club,name:'',identitySource:'active_shared_login'};
 }
 function registrationRosterChanges(before,after){
   const project=t=>({club:t.club||'',division:t.division||'',players:snapshotRosterNames(t),individualPlayers:t.individualPlayers||[],note:t.note||'',entryLabel:t.entryLabel||'',pairLabel:t.pairLabel||'',doublesCount:t.doublesCount,mainPlayerCount:t.mainPlayerCount,tiebreakAge:t.tiebreakAge});
@@ -2833,7 +2828,7 @@ async function stT(key,{allowDelete=false}={}){
   });
   toDel.forEach(id=>batch.delete(doc(db,'registrations',id)));
   pastArchiveMutation(batch,tid);
-  const actor=registrationAuditActor(true);
+  const actor=registrationAuditActor();
   const tournamentRegs=await getDocsFromServer(query(collection(db,'registrations'),where('tournamentId','==',tid)));
   const fullIds=tournamentRegs.docs.map(d=>d.id);
   const rp=doc(collection(db,'restorePoints'));
@@ -22039,7 +22034,7 @@ async function openRegistrationSnapshotViewer(id){
       sections=parts.docs.map(d=>{const part=d.data();return renderSnapshotRosterSection(dl(part.division||'')+' 저장 명단',part.teams||[],part.division||'');}).join('')||'<div style="padding:12px;color:#64748b">이 복구점에는 저장된 부서 명단이 없습니다.</div>';
     }
     if(window.__registrationSnapshotViewRequest!==request)return;
-    body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}${meta.actor?.name?' (공유 로그인·이름 직접 입력)':''}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
+    body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}${meta.actor?.identitySource==='shared_login_self_reported'?' (이전 기록·이름 직접 입력)':''}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
   }catch(e){if(window.__registrationSnapshotViewRequest===request)body.innerHTML='<div style="color:#b91c1c">명단 조회 실패: '+esc(e.message)+'</div>';}
 }
 
