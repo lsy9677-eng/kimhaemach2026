@@ -20359,9 +20359,31 @@ function getLiveTeamAchievementForHistory(key, teamIdx, team, tid, div){
   }catch(e){}
   return {rank:null,result:'참가'};
 }
+let PLAYER_LIST_HISTORY_INDEX=null;
+function buildPlayerListHistoryIndex(){
+  const index=new Map(),seen=new Set();
+  const tournaments=new Map((G.tournaments||[]).map(t=>[String(t.id),t]));
+  for(const [key,teams] of Object.entries(G.teams||{})){
+    const {tid,div}=_k2td(key),t=tournaments.get(String(tid));if(!t)continue;
+    (teams||[]).forEach((team,teamIdx)=>{
+      const club=String(team.club||''),bc=normalizeClub(baseClub(club)||club);
+      const names=[...new Set([...(team.players||[]),...(team.individualPlayers||[]).map(p=>p.name)].map(n=>cleanName(String(n||'')).trim()).filter(Boolean))];
+      if(!names.length)return;
+      const ach=getLiveTeamAchievementForHistory(key,teamIdx,team,tid,div);
+      const rank=team._pastOutcome?(team._pastOutcome.rank||null):(pastArchiveOutcomeRank(team)||ach?.rank||null);
+      const rec={tid,date:t.date||'',tname:t.name||'',club,baseClub:bc,div,rank,result:ach?.result||(rank===1?'우승':rank===2?'준우승':rank===3?'3위':'참가'),source:team._pastOutcome?.confirmed?'archive':'live'};
+      for(const name of names){
+        const nk=normName(name),dk=JSON.stringify([tid,div,bc,nk]);if(seen.has(dk))continue;seen.add(dk);
+        if(!index.has(nk))index.set(nk,[]);index.get(nk).push(rec);
+      }
+    });
+  }
+  return index;
+}
 function collectLivePlayerHistory(name, preferClub=''){
   const targetName = cleanName(name||'').trim();
   const wantClub = normalizeClub(preferClub||'');
+  if(PLAYER_LIST_HISTORY_INDEX)return (PLAYER_LIST_HISTORY_INDEX.get(normName(targetName))||[]).filter(r=>!wantClub||!r.baseClub||isSameRegistrationClub(r.baseClub,wantClub));
   const out = [];
   const seen = new Set();
 
@@ -20602,6 +20624,8 @@ async function showP(name,club){
 }
 
 function renderAllP(){
+  PLAYER_LIST_HISTORY_INDEX=buildPlayerListHistoryIndex();
+  try{
   if(!PLAYERS_LOADED && !Object.keys(G.players||{}).length){ loadPlayersFromLocalCache(); }
 
   const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
@@ -20737,6 +20761,7 @@ function renderAllP(){
       ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark)">전체 선수 현황</div><div style="font-size:.72rem;color:var(--text3)">총 ${allRows.length}명</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${allRows.map(row=>buildCard(row)).join('')}</div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>표시할 참가자 기록이 없습니다</p></div>';
   }
+  }finally{PLAYER_LIST_HISTORY_INDEX=null;}
 }
 async function openPD(name,club){
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
@@ -24637,6 +24662,7 @@ function mergeRegistryIntoPlayersMemory(rows){
   }
   if(changed)savePlayersToLocalCache();
 }
+let PLAYER_RECORD_TAB_LOAD=null;
 function switchPlayersTab(tab){
   ['records','registry'].forEach(t=>{
     const btn=ge('ptab-'+t); if(btn) btn.classList.toggle('active',t===tab);
@@ -24651,7 +24677,12 @@ function switchPlayersTab(tab){
     setTimeout(()=>initRegistryTab(),0);
   }
   if(tab==='records'){
-    Promise.all([loadRegistry(2026), ensurePlayersLoaded(), ensureAllParticipationDataLoaded()]).then(([registryRows])=>{ mergeRegistryIntoPlayersMemory(registryRows); renderAllP(); popCF(); updatePlayersAdminControls(); }).catch(()=>{ renderAllP(); popCF(); updatePlayersAdminControls(); });
+    if(PLAYER_RECORD_TAB_LOAD)return;
+    PLAYER_RECORD_TAB_LOAD=Promise.all([loadRegistry(2026),ensurePlayersLoaded()]).then(async ([registryRows])=>{
+      mergeRegistryIntoPlayersMemory(registryRows);renderAllP();popCF();updatePlayersAdminControls();
+      await ensurePastArchivesForPlayer();
+      if(ge('ptab-records')?.classList.contains('active')){renderAllP();popCF();}
+    }).catch(e=>{console.warn('player record load failed',e);toast('선수 기록 조회에 실패했습니다. 다시 시도해 주세요.','error');}).finally(()=>{PLAYER_RECORD_TAB_LOAD=null;});
   }
 }
 
