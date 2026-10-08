@@ -20668,8 +20668,7 @@ function renderAllP(){
       fbKeys.find(k=>{
         const pk=pKeyParse(k);
         return cleanName(pk.name||k)===row.name && normalizeClub(pk.club||'')===normalizeClub(row.club||'');
-      }) ||
-      fbKeys.find(k=>cleanName(pKeyParse(k).name||k)===row.name);
+      });
 
     const p = fbKey ? (G.players[fbKey]||{clubs:[],history:[],wins:0,losses:0}) : {clubs:[],history:[],wins:0,losses:0};
     const histRecs = [];
@@ -20677,7 +20676,7 @@ function renderAllP(){
     HIST_DATA.forEach(t=>{
       (t.teams||[]).forEach(tm=>{
         const matched=(tm.players||[]).some(pn=>cleanName(pn)===row.name || normName(cleanName(pn))===normName(row.name));
-        if(matched){
+        if(matched && (!row.club||isSameRegistrationClub(normalizeClub(baseClub(tm.club)||tm.club||''),normalizeClub(row.club)))){
           histRecs.push({
             date:t.date||'',
             tname:t.name||'',
@@ -24848,7 +24847,7 @@ function decorateRegistryStatusBadges(year,members){
     if(!anchor){
       // PHASE158: 상태 배지는 반드시 해당 선수 이름 요소 안에 붙인다.
       // 부모(grid/flex)에 형제 요소로 넣으면 배지가 독립 셀을 차지해 다음 선수 칸으로 밀릴 수 있다.
-      anchor=findRegistryPlayerNameElement(root,m?.name||'');
+      anchor=findRegistryPlayerNameElement(root,m?.name||'',m?.club||'');
     }
     if(!anchor) return;
     const host=anchor.closest('[data-registry-row],.registry-row,.registry-member-row') || anchor.parentElement || anchor;
@@ -24888,16 +24887,19 @@ function decorateRegistryStatusBadges(year,members){
 // - 관리자는 이름 클릭 → 선수기록 + 수정/삭제 통합 팝업
 // - 일반 사용자는 이름 클릭 → 선수기록만 표시
 // - 목록의 개별 수정/삭제 버튼은 관리자에게도 숨긴다.
-function findRegistryPlayerNameElement(root,name){
+function findRegistryPlayerNameElement(root,name,club=""){
   const nm=String(name||'').trim();
   if(!root||!nm) return null;
   const els=[...root.querySelectorAll('div,span,strong,b')];
-  return els.find(el=>{
+  const matches=els.filter(el=>{
     if(el.closest('.registry-status-badge154')) return false;
     const own=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>String(n.textContent||'')).join(' ').replace(/\s+/g,' ').trim();
     const full=String(el.textContent||'').replace(/\s+/g,' ').trim();
     return own===nm || full===nm || own.startsWith(nm+' ') || full.startsWith(nm+' 🆕');
-  })||null;
+  });
+  if(!club)return matches[0]||null;
+  const distance=el=>{let node=el,depth=0;while(node&&node!==root){if(String(node.textContent||'').includes(club))return depth;node=node.parentElement;depth++;}return Infinity;};
+  return matches.sort((a,b)=>distance(a)-distance(b))[0]||null;
 }
 function wireRegistryPlayerRows(year,members){
   const root=ge('regTabBody'); if(!root) return;
@@ -24908,7 +24910,7 @@ function wireRegistryPlayerRows(year,members){
       editBtn=root.querySelector(`[onclick*="quickEditRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickEditRegistryMember(${Number(year)},${idx})"]`);
       delBtn=root.querySelector(`[onclick*="quickDeleteRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickDeleteRegistryMember(${Number(year)},${idx})"]`);
     }catch(_e){}
-    const nameEl=findRegistryPlayerNameElement(root,m?.name||'');
+    const nameEl=findRegistryPlayerNameElement(root,m?.name||'',m?.club||'');
     if(editBtn){ editBtn.style.display='none'; editBtn.setAttribute('aria-hidden','true'); }
     if(delBtn){ delBtn.style.display='none'; delBtn.setAttribute('aria-hidden','true'); }
     const target=nameEl || editBtn?.parentElement || delBtn?.parentElement;
@@ -24917,7 +24919,7 @@ function wireRegistryPlayerRows(year,members){
     target.title=AD?'선수기록 및 관리':'선수기록 보기';
     target.onclick=(ev)=>{
       ev.preventDefault(); ev.stopPropagation();
-      if(AD) openRegistryPlayerAdminHub(Number(year),idx);
+      if(AD) openRegistryPlayerAdminHub(Number(year),idx,String(m.name||''),String(m.club||''),String(m.playerId||''));
       else openPD(String(m?.name||''),String(m?.club||''));
     };
   });
@@ -24945,9 +24947,10 @@ function ensureRegistryPlayerAdminHub(){
   return o;
 }
 function closeRegistryPlayerAdminHub(){ const o=ge('registryPlayerAdminHub'); if(o) o.style.display='none'; }
-async function openRegistryPlayerAdminHub(year,idx){
+async function openRegistryPlayerAdminHub(year,idx,expectedName="",expectedClub="",playerId=""){
   if(!AD){ return; }
   const members=await loadRegistry(Number(year)||2026);
+  if(expectedName){const resolved=members.findIndex(r=>playerId?r.playerId===playerId:(transferName(r.name)===transferName(expectedName)&&canonicalRegistryClub(r.club)===canonicalRegistryClub(expectedClub)));if(resolved<0){toast('선수명단이 변경되었습니다. 다시 열어 주세요.','error');return;}idx=resolved;}
   const m=members?.[idx];
   if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
   ensureRegistryPlayerAdminHub();
@@ -27866,7 +27869,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
