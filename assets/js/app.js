@@ -8085,15 +8085,14 @@ function decorateRegistryGenderControls(year,members){
     const inp=ge(`rmgr_n_${idx}`); if(!inp) return;
     const row=inp.closest('tr')||inp.closest('[data-registry-row]')||inp.parentElement?.parentElement;
     if(!row || row.querySelector(`[data-gender-idx="${idx}"]`)) return;
-    const sel=document.createElement('select');
-    sel.dataset.genderIdx=String(idx);
-    sel.title='부서 하향 예외 판정을 위한 성별';
-    sel.style.cssText='margin:3px 4px;padding:5px 7px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:.68rem;font-weight:900;white-space:nowrap;cursor:pointer';
-    sel.innerHTML='<option value="">성별</option><option value="M">남성</option><option value="F">여성</option>';
+    const label=document.createElement('label');
+    label.style.cssText='display:inline-flex;gap:5px;align-items:center;margin:3px 4px;padding:5px 7px;font-size:.7rem;font-weight:800;cursor:pointer';
+    const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.dataset.genderIdx=String(idx);
     const draftKey=registryGenderDraftKey(year,idx);
-    sel.value=REGISTRY_GENDER_DRAFTS.has(draftKey)?REGISTRY_GENDER_DRAFTS.get(draftKey):_ruleGenderKey(m?.gender||m?.sex||'');
-    sel.onchange=()=>setRegistryGender(year,idx,sel.value);
-    (inp.closest('td')||row).appendChild(sel);
+    checkbox.checked=(REGISTRY_GENDER_DRAFTS.has(draftKey)?REGISTRY_GENDER_DRAFTS.get(draftKey):_ruleGenderKey(m?.gender||m?.sex||''))==='F';
+    checkbox.onchange=()=>setRegistryGender(year,idx,checkbox.checked?'F':'M');
+    label.appendChild(checkbox);label.appendChild(document.createTextNode('여성'));
+    (inp.closest('td')||row).appendChild(label);
   });
 }
 async function toggleRegistryAge65Certification(year,idx){
@@ -25417,7 +25416,7 @@ async function quickEditRegistryMember(year, idx){
   ge('rqemClub').innerHTML='<option value="">-- 클럽 선택 --</option>'+clubOptions.map(c=>`<option value="${escAttr(c)}">${esc(c)}</option>`).join('');
   ge('rqemClub').value=canonicalRegistryClub(m.club||'');
   ge('rqemSubClub').value=m.subClub||'';
-  if(ge('rqemGender')) ge('rqemGender').value=_ruleGenderKey(m?.gender||m?.sex||'');
+  if(ge('rqemGender')) ge('rqemGender').checked=_ruleGenderKey(m?.gender||m?.sex||'')==='F';
   if(ge('rqemAge65')) ge('rqemAge65').checked=!!m?.age65Certified || isAge65CertifiedForDivisionRule(m?.name||'',m?.club||'',Number(year));
   updateRegistryQuickEditRegionHint();
   updateRegistryQuickEditQualificationHint();
@@ -25442,8 +25441,8 @@ function ensureRegistryQuickEditModal(){
     <input id="rqemSubClub" class="form-input" placeholder="없으면 비워두세요" style="width:100%;box-sizing:border-box;margin-bottom:12px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px">
       <div>
-        <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">성별 / 여성 예외</label>
-        <select id="rqemGender" class="form-select" onchange="updateRegistryQuickEditQualificationHint()" style="width:100%;box-sizing:border-box"><option value="">미지정</option><option value="M">남성</option><option value="F">여성</option></select>
+        <label style="display:block;font-size:.75rem;font-weight:800;margin:0 0 5px">여성 예외</label>
+        <label style="display:flex;gap:8px;align-items:center;min-height:43px"><input id="rqemGender" type="checkbox" onchange="updateRegistryQuickEditQualificationHint()"> 여성</label>
       </div>
       <div style="display:flex;align-items:flex-end">
         <label style="width:100%;display:flex;align-items:center;gap:8px;min-height:43px;padding:8px 10px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:.75rem;font-weight:900;box-sizing:border-box;cursor:pointer"><input id="rqemAge65" type="checkbox" onchange="updateRegistryQuickEditQualificationHint()"> 65세 이상 인증</label>
@@ -25466,13 +25465,13 @@ function updateRegistryQuickEditRegionHint(){
 }
 function updateRegistryQuickEditQualificationHint(){
   const el=ge('rqemQualificationHint'); if(!el) return;
-  const g=_ruleGenderKey(ge('rqemGender')?.value||'');
+  const g=ge('rqemGender')?.checked?'F':'M';
   const a=!!ge('rqemAge65')?.checked;
   const tags=[];
   if(g==='F') tags.push('여성 예외 대상');
-  else if(g==='M') tags.push('남성');
+
   if(a) tags.push('65+ 인증완료');
-  el.innerHTML=tags.length?`현재 자격 표시: <b>${tags.map(esc).join(' · ')}</b><br><span style="color:#64748b">저장 즉시 팀등록 하향 예외 판정에 반영됩니다.</span>`:'성별 또는 65+ 인증을 지정하면 선수현황과 팀등록 자격판정에 즉시 반영됩니다.';
+  el.innerHTML=tags.length?`현재 자격 표시: <b>${tags.map(esc).join(' · ')}</b><br><span style="color:#64748b">저장 즉시 팀등록 하향 예외 판정에 반영됩니다.</span>`:'여성 또는 65+ 인증을 지정하면 선수현황과 팀등록 자격판정에 즉시 반영됩니다.';
 }
 async function saveRegistryQuickEditModal(){
   if(!AD)return;
@@ -25490,7 +25489,7 @@ async function saveRegistryQuickEditModal(){
   const identityTag=String(ge('rqemIdentityTag')?.value||'').trim().toUpperCase();
   if(identityTag&&!/^[A-Z0-9]{1,8}$/.test(identityTag)){toast('구분은 영문 또는 숫자 1~8자로 입력하세요','error');return;}
   if(identityTag&&members.some((r,i)=>i!==idx&&transferName(r.name)===transferName(newName)&&r.identityTag===identityTag)){toast('동명이인 구분값이 중복됩니다','error');return;}
-  const newGender=_ruleGenderKey(ge('rqemGender')?.value||'');
+  const newGender=ge('rqemGender')?.checked?'F':'M';
   const newAge65=!!ge('rqemAge65')?.checked;
   if(!newName||!newClub){toast('이름과 주 클럽을 확인해 주세요','error');return;}
   const duplicate=members.some((r,i)=>i!==idx&&normName(cleanName(r.name||''))===normName(newName)&&canonicalRegistryClub(r.club||'')===newClub);
