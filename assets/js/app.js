@@ -8039,21 +8039,45 @@ function isFemaleForDivisionRule(name,club,year){
 function isDivisionExceptionApproved(name,club,year){
   return isAge65CertifiedForDivisionRule(name,club,year) || isFemaleForDivisionRule(name,club,year);
 }
+// PHASE194: manager gender changes are drafts until explicit save.
+const REGISTRY_GENDER_DRAFTS=new Map();
+function registryGenderDraftKey(year,idx){return String(year)+':'+String(idx);}
+function updateRegistryBulkSaveStatus(year){
+  const n=[...REGISTRY_GENDER_DRAFTS.keys()].filter(k=>k.startsWith(String(year)+':')).length;
+  const status=ge('registryBulkSaveStatus');if(status)status.textContent=n?`성별 변경 ${n}건 · 아직 저장되지 않았습니다`:'변경 후 행 저장 또는 전체 저장을 눌러 주세요';
+}
 async function setRegistryGender(year,idx,gender){
-  if(!AD){ toast('관리자만 성별을 지정할 수 있습니다','error'); return; }
-  const members=await loadRegistry(Number(year));
-  const row=members?.[Number(idx)]; if(!row) return;
-  row.gender=_ruleGenderKey(gender);
-  G_REGISTRY[Number(year)]=members;
-  sl(true);
+  if(!AD)return;
+  REGISTRY_GENDER_DRAFTS.set(registryGenderDraftKey(year,idx),_ruleGenderKey(gender));
+  updateRegistryBulkSaveStatus(year);
+}
+function ensureRegistryBulkSaveControls(year){
+  const list=ge('rmgr_list');if(!list)return;
+  let controls=ge('registryBulkSaveControls');
+  if(!controls){controls=document.createElement('div');controls.id='registryBulkSaveControls';controls.style.cssText='position:sticky;bottom:0;padding:10px;background:#eff6ff;display:flex;gap:10px;align-items:center;z-index:2';controls.innerHTML='<button id="registryBulkSaveBtn" class="btn btn-primary">💾 전체 변경사항 저장</button><span id="registryBulkSaveStatus" style="font-size:.73rem"></span>';list.parentElement.appendChild(controls);}
+  ge('registryBulkSaveBtn').onclick=()=>saveRegistryManagerAll(Number(year));updateRegistryBulkSaveStatus(year);
+}
+async function saveRegistryManagerAll(year){
+  if(!AD)return;
+  const original=await loadRegistry(year),next=original.map(r=>({...r})),changed=[];
+  next.forEach((row,idx)=>{
+    const inp=ge(`rmgr_n_${idx}`);
+    if(inp){row.name=inp.value.trim();row.club=canonicalRegistryClub(ge(`rmgr_c_${idx}`)?.value||row.club);row.region=(ge(`rmgr_r_${idx}`)?.value||'').trim()||resolveClubRegionForRegistry(row.club,original);row.subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();}
+    const key=registryGenderDraftKey(year,idx);if(REGISTRY_GENDER_DRAFTS.has(key))row.gender=REGISTRY_GENDER_DRAFTS.get(key);
+    if(JSON.stringify(row)!==JSON.stringify(original[idx]))changed.push(idx);
+  });
+  if(next.some(r=>!r.name||!r.club)){toast('이름과 주클럽을 확인해 주세요','error');return;}
+  if(!changed.length){toast('변경된 내용이 없습니다','info');return;}
+  sl(true);let saved=false;
   try{
-    await saveRegistry(Number(year));
+    G_REGISTRY[year]=next;await saveRegistry(year);saved=true;
+    for(const idx of changed)REGISTRY_GENDER_DRAFTS.delete(registryGenderDraftKey(year,idx));
     DIVISION_RULE_CACHE.clear();
-    sl(false); toast(row.gender==='F'?`${row.name} 여성 표시 저장 ✅`:row.gender==='M'?`${row.name} 남성 표시 저장 ✅`:`${row.name} 성별 표시 해제`,'success');
-    try{ await renderRegistryMgr(); }catch(e){}
-    try{ await renderRegistryTab(true); }catch(e){}
-    try{ refreshDivisionRuleFormBadges('register'); }catch(e){}
-  }catch(e){ sl(false); toast('성별 저장 실패: '+e.message,'error'); }
+    toast(`전체 변경사항 ${changed.length}명 저장 완료 ✅`,'success');
+    try{await syncOfficialRegistryRowsToPlayers(changed.map(i=>next[i]));for(const idx of changed){const old=original[idx],row=next[idx];if(old.name!==row.name||old.club!==row.club)await removeOfficialRegistryPlayerIfUnused(old.name,old.club);}}catch(e){console.warn('registry player sync pending',e);toast('명단은 저장됐으나 선수정보 동기화 확인이 필요합니다.','info');}
+    await renderRegistryMgr();await renderRegistryTab(true);
+  }catch(e){if(!saved)G_REGISTRY[year]=original;toast((saved?'저장은 완료됐으나 화면 갱신 실패: ':'저장 실패: ')+e.message,'error');}
+  finally{sl(false);updateRegistryBulkSaveStatus(year);}
 }
 function decorateRegistryGenderControls(year,members){
   if(!AD) return;
@@ -8066,7 +8090,8 @@ function decorateRegistryGenderControls(year,members){
     sel.title='부서 하향 예외 판정을 위한 성별';
     sel.style.cssText='margin:3px 4px;padding:5px 7px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:.68rem;font-weight:900;white-space:nowrap;cursor:pointer';
     sel.innerHTML='<option value="">성별</option><option value="M">남성</option><option value="F">여성</option>';
-    sel.value=_ruleGenderKey(m?.gender||m?.sex||'');
+    const draftKey=registryGenderDraftKey(year,idx);
+    sel.value=REGISTRY_GENDER_DRAFTS.has(draftKey)?REGISTRY_GENDER_DRAFTS.get(draftKey):_ruleGenderKey(m?.gender||m?.sex||'');
     sel.onchange=()=>setRegistryGender(year,idx,sel.value);
     (inp.closest('td')||row).appendChild(sel);
   });
@@ -25338,6 +25363,7 @@ async function renderRegistryMgr(){
   applyRegistryMgrSearch();
   decorateRegistryAge65Controls(year,members);
   decorateRegistryGenderControls(year,members);
+  ensureRegistryBulkSaveControls(year);
 }
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
@@ -25584,12 +25610,16 @@ async function addRegistryRow(){
 }
 async function saveRegistryRow(year,idx){
   const members=await loadRegistry(year); if(!members[idx]) return;
+  const draftKey=registryGenderDraftKey(year,idx);
+  const originalRow={...members[idx]};
+  if(REGISTRY_GENDER_DRAFTS.has(draftKey))members[idx].gender=REGISTRY_GENDER_DRAFTS.get(draftKey);
   const oldIdentity={name:members[idx].name,club:members[idx].club};
   members[idx].name=(ge(`rmgr_n_${idx}`)?.value||'').trim(); members[idx].club=canonicalRegistryClub(ge(`rmgr_c_${idx}`)?.value||'');
   members[idx].region=(ge(`rmgr_r_${idx}`)?.value||'').trim() || resolveClubRegionForRegistry(members[idx].club,members); members[idx].subClub=(ge(`rmgr_s_${idx}`)?.value||'').trim();
   sl(true);
   try{
     await saveRegistry(year);
+    REGISTRY_GENDER_DRAFTS.delete(draftKey);DIVISION_RULE_CACHE.clear();updateRegistryBulkSaveStatus(year);
     await syncOfficialRegistryRowsToPlayers([members[idx]]);
     if(pKey(cleanName(oldIdentity.name||''),normalizeClub(oldIdentity.club||''))!==pKey(cleanName(members[idx].name||''),normalizeClub(members[idx].club||''))) await removeOfficialRegistryPlayerIfUnused(oldIdentity.name,oldIdentity.club);
     toast('수정 완료','success');
@@ -25601,7 +25631,9 @@ async function saveRegistryRow(year,idx){
 }
 async function deleteRegistryRow(year,idx){
   if(!confirm('이 선수를 삭제하시겠습니까?')) return;
-  const members=await loadRegistry(year); const removed=members[idx]?{...members[idx]}:null; members.splice(idx,1); sl(true);
+  const members=await loadRegistry(year);
+  if([...REGISTRY_GENDER_DRAFTS.keys()].some(k=>k.startsWith(String(year)+':'))){toast('성별 변경사항을 먼저 저장한 뒤 삭제해 주세요','info');return;}
+  const removed=members[idx]?{...members[idx]}:null; members.splice(idx,1); sl(true);
   try{
     await saveRegistry(year);
     if(removed) await removeOfficialRegistryPlayerIfUnused(removed.name,removed.club);
