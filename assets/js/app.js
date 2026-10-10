@@ -22105,7 +22105,7 @@ async function restoreTournamentRestorePoint(id,phase='after'){
     console.error(e);toast('복구 실패: '+e.message,'error');
   }finally{__autoRestoreSuppressed=false;sl(false);}
 }
-function closeAutoRestoreCenter(){const x=ge('mAutoRestoreCenter');if(x)x.classList.remove('open');}
+function closeAutoRestoreCenter(){const x=ge('mAutoRestoreCenter');if(x)x.classList.remove('open');document.body.classList.remove('restore-center-open');}
 // PHASE186: read-only snapshot inspection. Opening this modal never restores or writes data.
 function snapshotRosterNames(team){
   const players=Array.isArray(team?.players)?team.players:[];
@@ -22157,8 +22157,34 @@ async function openRegistrationSnapshotViewer(id){
   }catch(e){if(window.__registrationSnapshotViewRequest===request)body.innerHTML='<div style="color:#b91c1c">명단 조회 실패: '+esc(e.message)+'</div>';}
 }
 
+function installRestoreCenterResponsiveStyle(){
+  if(ge('restoreCenterResponsiveStyle'))return;
+  const style=document.createElement('style');style.id='restoreCenterResponsiveStyle';
+  style.textContent=`
+    body.restore-center-open #kimhaeMobileBottomNav{display:none!important;}
+    #mAutoRestoreCenter .restore-point-card{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #dbe3ef;border-radius:10px;margin-top:9px;min-width:0;}
+    #mAutoRestoreCenter .restore-point-info{display:flex;align-items:flex-start;gap:8px;min-width:0;}
+    #mAutoRestoreCenter .restore-point-tag{flex-shrink:0;white-space:nowrap;}
+    #mAutoRestoreCenter .restore-point-meta{flex:1;min-width:0;overflow-wrap:break-word;}
+    #mAutoRestoreCenter .restore-point-meta b{display:block;line-height:1.5;}
+    #mAutoRestoreCenter .restore-point-reason{white-space:normal!important;overflow:visible!important;line-height:1.5;}
+    #mAutoRestoreCenter .restore-point-actions{display:flex;flex-wrap:wrap;gap:7px;}
+    #mAutoRestoreCenter .restore-point-actions .btn{white-space:normal;line-height:1.4;min-height:40px;}
+    @media(max-width:760px){
+      #mAutoRestoreCenter{padding:12px 8px calc(12px + env(safe-area-inset-bottom,0px))!important;}
+      #mAutoRestoreCenter>div{margin:0 auto!important;max-height:calc(100dvh - 24px - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;}
+      #mAutoRestoreCenter>div>div:first-child{flex-shrink:0;}
+      #autoRestoreBody{overflow-y:auto;min-height:0;padding:12px!important;overscroll-behavior:contain;}
+      #mAutoRestoreCenter .restore-point-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+      #mAutoRestoreCenter .restore-point-actions .btn{width:100%;min-width:0;margin:0!important;}
+      #mAutoRestoreCenter .restore-point-info{flex-direction:column;}
+      #mAutoRestoreCenter .restore-point-meta{width:100%;}
+    }`;
+  document.head.appendChild(style);
+}
 async function openAutoRestoreCenter(){
   if(!AD){toast('관리자 로그인 필요','info');return;}
+  installRestoreCenterResponsiveStyle();
   let ov=ge('mAutoRestoreCenter');
   if(!ov){
     ov=document.createElement('div');ov.id='mAutoRestoreCenter';ov.className='modal-overlay';
@@ -22168,7 +22194,7 @@ async function openAutoRestoreCenter(){
       <div id="autoRestoreBody" style="padding:14px"></div></div>`;
     document.body.appendChild(ov);
   }
-  ov.classList.add('open');
+  ov.classList.add('open');document.body.classList.add('restore-center-open');
   const tid=String(ge('brTS')?.value||pickDefaultTournamentId()||'');
   const body=ge('autoRestoreBody');
   if(!tid){body.innerHTML='<div>대회를 먼저 선택해 주세요.</div>';return;}
@@ -22180,13 +22206,13 @@ async function openAutoRestoreCenter(){
     const rows=arr.length?arr.map(x=>{
       const permanent=x.permanent===undefined?x.type==='registration_snapshot':x.permanent===true;
       const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
-      return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:9px;border:1px solid #dbe3ef;border-radius:10px;margin-top:7px">
-        <span style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
-        <div style="min-width:0;flex:1"><b style="font-size:.78rem">${new Date(x.createdAt).toLocaleString()}</b><div style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.reason||'-')}</div><div style="font-size:.7rem">담당: ${esc(x.createdBy||[x.actor?.role,x.actor?.club,x.actor?.name].filter(Boolean).join(' · ')||'기존 기록: 담당자 미기록')}</div></div>
+      return `<div class="restore-point-card"><div class="restore-point-info">
+        <span class="restore-point-tag" style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
+        <div class="restore-point-meta"><b style="font-size:.78rem">${new Date(x.createdAt||x.createdAtMs).toLocaleString()}</b><div class="restore-point-reason" style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.reason||'-')}</div><div style="font-size:.7rem">담당: ${esc(x.createdBy||[x.actor?.role,x.actor?.club,x.actor?.name].filter(Boolean).join(' · ')||'기존 기록: 담당자 미기록')}</div></div></div><div class="restore-point-actions">
         <button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="toggleRestorePointPermanent('${x.id}')">${permanent?'🔒 영구보관 해제':'영구보관 설정'}</button>
         <button class="btn btn-primary" style="padding:5px 9px;font-size:.7rem" onclick="openRegistrationSnapshotViewer('${x.id}')">명단 상세보기</button>
         ${x.type==='registration_snapshot'?`<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}','before')">변경 전 명단 복원</button>`:''}<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
-      </div>`;
+      </div></div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
     body.innerHTML=`<div style="font-size:.82rem;font-weight:900">${t?.name||t?.title||tid}</div>
       <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">팀명단 저장 시 전체 부서 명단·변경 내역 보관 · 영구보관은 관리자 선택 · 영구보관 해제 기록 및 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
