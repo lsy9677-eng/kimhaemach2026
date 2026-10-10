@@ -20595,7 +20595,15 @@ function matchesPlayerRecordFilters(name, club, summary){
   if(minCount>0 && Number(summary.totalCount||0) < minCount) return false;
   return true;
 }
-function filterP(){PF.club='';PF.div='';PF.recent='';PF.count='';PF.search=ge('psInput')?.value||'';renderAllP();}
+let PLAYER_SEARCH_TIMER=null;
+let PLAYER_SEARCH_MODEL=null;
+function filterP(){
+  clearTimeout(PLAYER_SEARCH_TIMER);
+  PLAYER_SEARCH_TIMER=setTimeout(()=>{
+    PF.club='';PF.div='';PF.recent='';PF.count='';PF.search=ge('psInput')?.value||'';
+    renderAllP(true);
+  },180);
+}
 async function showP(name,club){
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
   const sec=ge('ppSection');
@@ -20647,7 +20655,10 @@ async function showP(name,club){
   om('mPHist');
 }
 
-function renderAllP(){
+function renderAllP(reuseSearchModel=false){
+  clearTimeout(PLAYER_SEARCH_TIMER);
+  let rows,total;
+  if(!reuseSearchModel || !PLAYER_SEARCH_MODEL){
   PLAYER_LIST_HISTORY_INDEX=buildPlayerListHistoryIndex();
   try{
   if(!PLAYERS_LOADED && !Object.keys(G.players||{}).length){ loadPlayersFromLocalCache(); }
@@ -20687,33 +20698,18 @@ function renderAllP(){
     });
   });
 
-  let rows = [...rowMap.values()].map(row=>{
-    const fbKey =
-      fbKeys.find(k=>{
-        const pk=pKeyParse(k);
-        return cleanName(pk.name||k)===row.name && normalizeClub(pk.club||'')===normalizeClub(row.club||'');
-      });
-
-    const p = fbKey ? (G.players[fbKey]||{clubs:[],history:[],wins:0,losses:0}) : {clubs:[],history:[],wins:0,losses:0};
-    const histRecs = [];
-
-    HIST_DATA.forEach(t=>{
-      (t.teams||[]).forEach(tm=>{
-        const matched=(tm.players||[]).some(pn=>cleanName(pn)===row.name || normName(cleanName(pn))===normName(row.name));
-        if(matched && (!row.club||isSameRegistrationClub(normalizeClub(baseClub(tm.club)||tm.club||''),normalizeClub(row.club)))){
-          histRecs.push({
-            date:t.date||'',
-            tname:t.name||'',
-            club:tm.club||'',
-            baseClub:baseClub(tm.club)||tm.club||'',
-            div:tm.div||'',
-            rank:tm.rank||null,
-            tid:t.id||'',
-            source:'hist'
-          });
-        }
-      });
-    });
+  const fbByPlayer=new Map();
+  fbKeys.forEach(k=>{const pk=pKeyParse(k);const key=cleanName(pk.name||k)+'|'+normalizeClub(pk.club||'');if(!fbByPlayer.has(key))fbByPlayer.set(key,k);});
+  const pastByName=new Map();
+  HIST_DATA.forEach(t=>(t.teams||[]).forEach(tm=>{
+    const record={date:t.date||'',tname:t.name||'',club:tm.club||'',baseClub:baseClub(tm.club)||tm.club||'',div:tm.div||'',rank:tm.rank||null,tid:t.id||'',source:'hist'};
+    const names=new Set((tm.players||[]).map(pn=>normName(cleanName(pn))));
+    names.forEach(name=>{if(!pastByName.has(name))pastByName.set(name,[]);pastByName.get(name).push(record);});
+  }));
+  rows = [...rowMap.values()].map(row=>{
+    const fbKey=fbByPlayer.get(row.name+'|'+normalizeClub(row.club||''));
+    const p=fbKey ? (G.players[fbKey]||{clubs:[],history:[],wins:0,losses:0}) : {clubs:[],history:[],wins:0,losses:0};
+    const histRecs=(pastByName.get(normName(row.name))||[]).filter(r=>!row.club||isSameRegistrationClub(normalizeClub(r.baseClub),normalizeClub(row.club)));
 
     collectLivePlayerHistory(row.name, row.club).forEach(r=>histRecs.push(r));
 
@@ -20728,9 +20724,12 @@ function renderAllP(){
     return { name: row.name, club: row.club||recentClub||'', subClub: row.subClub||'', isReg: !!row.isReg, summary };
   });
 
-  rows = rows.filter(row=>matchesPlayerRecordFilters(row.name, row.club, row.summary));
+  PLAYER_SEARCH_MODEL={rows,total:rowMap.size};
+  }finally{PLAYER_LIST_HISTORY_INDEX=null;}
+  }
+  rows=PLAYER_SEARCH_MODEL.rows.filter(row=>matchesPlayerRecordFilters(row.name,row.club,row.summary));
+  total=PLAYER_SEARCH_MODEL.total;
   const q = String(PF.search||'').trim();
-  const total = rowMap.size;
   const info=ge('pFInfo');
   if(info){
     if(q){
@@ -20764,7 +20763,7 @@ function renderAllP(){
     container.innerHTML = limited.length
       ? `<div style="display:flex;flex-direction:column;gap:7px">${limited.map((row,idx)=>buildCard(row, idx===0 && limited.length===1)).join('')}</div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>검색 결과가 없습니다</p></div>';
-    if(limited.length===1){ showP(limited[0].name, limited[0].club); }
+
   } else {
     displayRows.sort((a,b)=>{
       // 전체 현황에서는 2026 공식 등록선수를 우선 표시하고,
@@ -20784,7 +20783,6 @@ function renderAllP(){
       ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark)">전체 선수 현황</div><div style="font-size:.72rem;color:var(--text3)">총 ${allRows.length}명</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${allRows.map(row=>buildCard(row)).join('')}</div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>표시할 참가자 기록이 없습니다</p></div>';
   }
-  }finally{PLAYER_LIST_HISTORY_INDEX=null;}
 }
 async function openPD(name,club){
   try{ if(!Object.keys(G.players||{}).length) await ensurePlayersLoaded(); }catch(e){}
@@ -25299,8 +25297,8 @@ function ensureRegistryMgrSearchUI(){
   list.parentElement?.insertBefore(wrap,list);
   const input=ge('rmgrSearchInput');
   const clear=ge('rmgrSearchClear');
-  input?.addEventListener('input',()=>applyRegistryMgrSearch());
-  input?.addEventListener('search',()=>applyRegistryMgrSearch());
+  input?.addEventListener('input',scheduleRegistryMgrSearch);
+  input?.addEventListener('search',scheduleRegistryMgrSearch);
   clear?.addEventListener('click',()=>{ if(input){ input.value=''; input.focus(); } applyRegistryMgrSearch(); });
 }
 function getRegistryMgrSearchRows(){
@@ -25312,25 +25310,41 @@ function getRegistryMgrSearchRows(){
   if(marked.length) return marked;
   return [...list.children].filter(el=>el.nodeType===1);
 }
+let REGISTRY_MGR_SEARCH_TIMER=null;
+let REGISTRY_MGR_SEARCH_INDEX=[];
+function registryMgrRowSearchText(row){
+  return [String(row.textContent||''),...[...row.querySelectorAll('input,select,textarea')].map(el=>String(el.value||''))].join(' ').toLocaleLowerCase('ko-KR').replace(/\s+/g,' ');
+}
+function rebuildRegistryMgrSearchIndex(){
+  REGISTRY_MGR_SEARCH_INDEX=getRegistryMgrSearchRows().map(row=>({row,header:!!row.querySelector('th'),hay:registryMgrRowSearchText(row)}));
+  const list=ge('rmgr_list');
+  if(list&&!list.dataset.searchIndexEvents){
+    list.dataset.searchIndexEvents='1';
+    const update=event=>{
+      const entry=REGISTRY_MGR_SEARCH_INDEX.find(item=>item.row.contains(event.target));
+      if(entry)entry.hay=registryMgrRowSearchText(entry.row);
+    };
+    list.addEventListener('input',update);list.addEventListener('change',update);
+  }
+}
+function scheduleRegistryMgrSearch(){
+  clearTimeout(REGISTRY_MGR_SEARCH_TIMER);
+  REGISTRY_MGR_SEARCH_TIMER=setTimeout(applyRegistryMgrSearch,180);
+}
 function applyRegistryMgrSearch(){
+  clearTimeout(REGISTRY_MGR_SEARCH_TIMER);
   const input=ge('rmgrSearchInput');
   const clear=ge('rmgrSearchClear');
   const count=ge('rmgrSearchCount');
   const q=String(input?.value||'').trim().toLocaleLowerCase('ko-KR').replace(/\s+/g,' ');
   if(clear) clear.style.display=q?'inline-flex':'none';
-  const rows=getRegistryMgrSearchRows();
   let visible=0,total=0;
-  rows.forEach(row=>{
-    // 표 머리글/안내행은 검색 대상에서 제외하고 항상 유지한다.
-    if(row.querySelector('th')){ row.style.display=''; return; }
-    const controls=[...row.querySelectorAll('input,select,textarea')].map(el=>String(el.value||''));
-    const hay=[String(row.textContent||''),...controls].join(' ').toLocaleLowerCase('ko-KR').replace(/\s+/g,' ');
-    const isMember=hay.trim().length>0;
-    if(!isMember){ row.style.display=''; return; }
-    total++;
-    const show=!q||hay.includes(q);
-    row.style.display=show?'':'none';
-    if(show) visible++;
+  REGISTRY_MGR_SEARCH_INDEX.forEach(({row,header,hay})=>{
+    const isMember=!header&&hay.trim().length>0;
+    const show=!isMember||!q||hay.includes(q);
+    const display=show?'':'none';
+    if(row.style.display!==display)row.style.display=display;
+    if(isMember){total++;if(show)visible++;}
   });
   if(count) count.textContent=q?`${visible}명`:'전체';
   const empty=ge('rmgrSearchEmpty');
@@ -25359,10 +25373,11 @@ async function renderRegistryMgr(){
   });
   ensureRegistryMgrSearchUI();
   if(ge('rmgrSearchInput')) ge('rmgrSearchInput').value=searchValue;
-  applyRegistryMgrSearch();
   decorateRegistryAge65Controls(year,members);
   decorateRegistryGenderControls(year,members);
   ensureRegistryBulkSaveControls(year);
+  rebuildRegistryMgrSearchIndex();
+  applyRegistryMgrSearch();
 }
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
