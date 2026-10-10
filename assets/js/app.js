@@ -974,7 +974,7 @@ function loadPlayersFromLocalCache(){
     const ts=Number(parsed?.ts||0);
     const data=parsed?.data||{};
     if(!ts || !data || typeof data!=='object') return false;
-    if(Date.now()-ts>PLAYER_CACHE_TTL) return false;
+    // 화면 조회는 저장된 명단을 유지하고 명시적 새로고침에서 갱신한다.
     G.players=data;
     return Object.keys(G.players||{}).length>0;
   }catch(e){ return false; }
@@ -986,10 +986,11 @@ function savePlayersToLocalCache(){
 }
 async function ensurePlayersLoaded(force=false){
   if(force){ PLAYERS_LOADED=false; PLAYERS_LOADING_PROMISE=null; }
+  if(!force && !PLAYERS_LOADED && loadPlayersFromLocalCache())PLAYERS_LOADED=true;
   if(PLAYERS_LOADED && !force) return G.players||{};
   if(PLAYERS_LOADING_PROMISE && !force) return PLAYERS_LOADING_PROMISE;
   PLAYERS_LOADING_PROMISE=(async()=>{
-    const playersSnap=await getDocs(collection(db,'players'));
+    const playersSnap=await (force?getDocsFromServer:getDocs)(collection(db,'players'));
     const next={};
     playersSnap.forEach(d=>{
       const x=d.data();
@@ -4343,7 +4344,8 @@ function showPage(n){
       if(b && !b.dataset.ready){
         b.innerHTML='<div class="card" style="padding:22px;text-align:center;font-size:.9rem;color:var(--text2)">선수 명단을 불러오는 중입니다…</div>';
       }
-      setTimeout(()=>initRegistryTab(),0);
+      if(!b?.dataset.ready)setTimeout(()=>initRegistryTab(),0);
+    ensurePlayerViewRefreshButton('registry');
     }
   }
   if(n==='ranking')popSel();
@@ -20536,8 +20538,8 @@ function getPlayerRecordPhoneCandidates(name, playerObj, histClub=''){
   const out=new Set();
   const add=(v)=>{ const digits=normalizePhoneDigits(v||''); if(digits.length>=8) out.add(digits); };
   add(playerObj?.phone||'');
-  Object.values(G.teams||{}).forEach(arr=>{
-    (arr||[]).forEach(team=>{
+  const phoneTeams=PLAYER_PHONE_SEARCH_INDEX ? [{individualPlayers:PLAYER_PHONE_SEARCH_INDEX.get(name)||[]}] : Object.values(G.teams||{}).flat();
+  phoneTeams.forEach(team=>{
       if(Array.isArray(team?.individualPlayers) && team.individualPlayers.length){
         team.individualPlayers.forEach(p=>{
           const pname=String(p?.name||'').trim();
@@ -20548,7 +20550,6 @@ function getPlayerRecordPhoneCandidates(name, playerObj, histClub=''){
           add(p?.phone||'');
         });
       }
-    });
   });
   return [...out];
 }
@@ -20597,6 +20598,18 @@ function matchesPlayerRecordFilters(name, club, summary){
 }
 let PLAYER_SEARCH_TIMER=null;
 let PLAYER_SEARCH_MODEL=null;
+let PLAYER_PHONE_SEARCH_INDEX=null;
+let PLAYER_CARD_RENDER_TOKEN=0;
+function renderPlayerCardsInChunks(container,rows,buildCard,token){
+  let offset=0;
+  const append=()=>{
+    if(token!==PLAYER_CARD_RENDER_TOKEN||!container.isConnected)return;
+    const chunk=rows.slice(offset,offset+30);offset+=chunk.length;
+    container.insertAdjacentHTML('beforeend',chunk.map(row=>buildCard(row)).join(''));
+    if(offset<rows.length)setTimeout(append,16);
+  };
+  setTimeout(append,0);
+}
 function filterP(){
   clearTimeout(PLAYER_SEARCH_TIMER);
   PLAYER_SEARCH_TIMER=setTimeout(()=>{
@@ -20657,9 +20670,16 @@ async function showP(name,club){
 
 function renderAllP(reuseSearchModel=false){
   clearTimeout(PLAYER_SEARCH_TIMER);
+  const cardToken=++PLAYER_CARD_RENDER_TOKEN;
   let rows,total;
   if(!reuseSearchModel || !PLAYER_SEARCH_MODEL){
   PLAYER_LIST_HISTORY_INDEX=buildPlayerListHistoryIndex();
+  PLAYER_PHONE_SEARCH_INDEX=new Map();
+  Object.values(G.teams||{}).forEach(arr=>(arr||[]).forEach(team=>(team.individualPlayers||[]).forEach(p=>{
+    const name=String(p?.name||'').trim();
+    if(!PLAYER_PHONE_SEARCH_INDEX.has(name))PLAYER_PHONE_SEARCH_INDEX.set(name,[]);
+    PLAYER_PHONE_SEARCH_INDEX.get(name).push(p);
+  })));
   try{
   if(!PLAYERS_LOADED && !Object.keys(G.players||{}).length){ loadPlayersFromLocalCache(); }
 
@@ -20725,7 +20745,7 @@ function renderAllP(reuseSearchModel=false){
   });
 
   PLAYER_SEARCH_MODEL={rows,total:rowMap.size};
-  }finally{PLAYER_LIST_HISTORY_INDEX=null;}
+  }finally{PLAYER_LIST_HISTORY_INDEX=null;PLAYER_PHONE_SEARCH_INDEX=null;}
   }
   rows=PLAYER_SEARCH_MODEL.rows.filter(row=>matchesPlayerRecordFilters(row.name,row.club,row.summary));
   total=PLAYER_SEARCH_MODEL.total;
@@ -20780,8 +20800,9 @@ function renderAllP(reuseSearchModel=false){
     // 그래야 신규 공식명단/0경기 선수도 검색 없이 확인할 수 있다.
     const allRows=displayRows;
     container.innerHTML = allRows.length
-      ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark)">전체 선수 현황</div><div style="font-size:.72rem;color:var(--text3)">총 ${allRows.length}명</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${allRows.map(row=>buildCard(row)).join('')}</div>`
+      ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><div style="font-size:.84rem;font-weight:900;color:var(--primary-dark)">전체 선수 현황</div><div style="font-size:.72rem;color:var(--text3)">총 ${allRows.length}명</div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>`
       : '<div class="empty-state" style="padding:18px 6px"><p>표시할 참가자 기록이 없습니다</p></div>';
+    if(allRows.length)renderPlayerCardsInChunks(container.lastElementChild,allRows,buildCard,cardToken);
   }
 }
 async function openPD(name,club){
@@ -24628,30 +24649,37 @@ function attachRegistrationIdentities(team,tid){
     return {name,playerId:chosen?.playerId||'',identityTag:chosen?.identityTag||''};
   });
 }
-async function loadRegistry(year){
-  if(REGISTRY_YEARS_LOADED.includes(year)) return G_REGISTRY[year]||[];
-  try{
-    const loaded=await loadRegistryDocument({db,doc,getDoc,year});
-    if(loaded.exists){
-      if(!_isRegistryClean(loaded.members, loaded.version, year)){
-        console.warn(`⚠️ memberRegistries/${year} 버전 불일치 - 그대로 사용`);
+const REGISTRY_LOAD_REQUESTS=new Map();
+function persistRegistryViewCache(year){
+  try{localStorage.setItem('OAI_REGISTRY_VIEW_V198_'+year,JSON.stringify({members:G_REGISTRY[year]||[],ts:Date.now()}));}catch(e){}
+}
+async function loadRegistry(year,force=false){
+  year=Number(year);
+  if(!force&&REGISTRY_YEARS_LOADED.includes(year))return G_REGISTRY[year]||[];
+  if(!force){
+    try{
+      const cache=JSON.parse(localStorage.getItem('OAI_REGISTRY_VIEW_V198_'+year)||'null');
+      if(Array.isArray(cache?.members)){
+        G_REGISTRY[year]=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
       }
-      const raw=await getDoc(doc(db,'memberRegistries',String(year)));
-      const rawRows=raw.exists()?(raw.data().members||[]):[];
-      G_REGISTRY[year]=loaded.members.map((row,i)=>{const original=rawRows[i];return original&&original.name===row.name&&original.club===row.club?{...row,playerId:original.playerId||'',identityTag:original.identityTag||''}:row;});
-    }else{
-      G_REGISTRY[year]=[];
-    }
-    REGISTRY_YEARS_LOADED.push(year);
-  }catch(e){
-    G_REGISTRY[year]=[];
-    REGISTRY_YEARS_LOADED.push(year);
+    }catch(e){}
   }
-  return G_REGISTRY[year]||[];
+  if(REGISTRY_LOAD_REQUESTS.has(year))return REGISTRY_LOAD_REQUESTS.get(year);
+  const request=(async()=>{
+    const raw=await (force?getDocFromServer:getDoc)(doc(db,'memberRegistries',String(year)));
+    const members=raw.exists()?(raw.data().members||[]):[];
+    if(!Array.isArray(members))throw new Error('선수 명단 형식이 올바르지 않습니다.');
+    G_REGISTRY[year]=members;
+    if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
+    persistRegistryViewCache(year);return members;
+  })().finally(()=>REGISTRY_LOAD_REQUESTS.delete(year));
+  REGISTRY_LOAD_REQUESTS.set(year,request);return request;
 }
 async function saveRegistry(year){
   const members=ensureRegistryPlayerIdentities(G_REGISTRY[year]||[]);
   await setDoc(doc(db,'memberRegistries',String(year)),{year,members,version:_registryVersion(year),updatedAt:serverTimestamp()},{merge:true});
+  persistRegistryViewCache(year);
+  PLAYER_SEARCH_MODEL=null;
   if(Number(year)===2026)G.meta.memberRegistry2026=members;
 }
 async function getRegistryYears(){
@@ -24699,17 +24727,45 @@ function switchPlayersTab(tab){
   }
   if(tab==='records'){
     if(PLAYER_RECORD_TAB_LOAD)return;
-    PLAYER_RECORD_TAB_LOAD=Promise.all([loadRegistry(2026),ensurePlayersLoaded()]).then(async ([registryRows])=>{
+    ensurePlayerViewRefreshButton('records');
+    if(PLAYER_SEARCH_MODEL){renderAllP(true);return;}
+    PLAYER_RECORD_TAB_LOAD=Promise.all([loadRegistry(2026),ensurePlayersLoaded()]).then(([registryRows])=>{
       mergeRegistryIntoPlayersMemory(registryRows);renderAllP();popCF();updatePlayersAdminControls();
-      await ensurePastArchivesForPlayer();
-      if(ge('ptab-records')?.classList.contains('active')){renderAllP();popCF();}
-    }).catch(e=>{console.warn('player record load failed',e);toast('선수 기록 조회에 실패했습니다. 다시 시도해 주세요.','error');}).finally(()=>{PLAYER_RECORD_TAB_LOAD=null;});
+    }).catch(e=>{console.warn('player record load failed',e);toast('선수 기록 조회에 실패했습니다. 새로고침을 눌러 주세요.','error');}).finally(()=>{PLAYER_RECORD_TAB_LOAD=null;});
   }
+}
+
+function ensurePlayerViewRefreshButton(view){
+  const host=view==='manager'?ge('rmgrSearchWrap'):view==='records'?ge('psInput')?.parentElement:ge('regSearchInput')?.parentElement;
+  if(!host||ge('playerRefresh_'+view))return;
+  const button=document.createElement('button');button.id='playerRefresh_'+view;button.type='button';button.className='btn btn-outline';button.textContent='↻ 새로고침';button.title='서버에 저장된 최신 명단과 기록을 불러옵니다';
+  button.onclick=()=>refreshSavedPlayerView(view,button);host.appendChild(button);
+}
+function registryManagerHasUnsavedChanges(year){
+  if([...REGISTRY_GENDER_DRAFTS.keys()].some(k=>k.startsWith(year+':')))return true;
+  return (G_REGISTRY[year]||[]).some((row,i)=>['n','c','r','s'].some((prefix,j)=>{
+    const input=ge('rmgr_'+prefix+'_'+i);return input&&input.value.trim()!==String(row[['name','club','region','subClub'][j]]||'').trim();
+  }));
+}
+async function refreshSavedPlayerView(view,button){
+  const year=view==='manager'?Number(ge('rmgrYearSel')?.value||2026):view==='registry'?Number(ge('regYearSel')?.value||2026):2026;
+  if(view==='manager'&&registryManagerHasUnsavedChanges(year)){toast('변경사항을 먼저 저장해 주세요. 저장하지 않은 명단은 새로고침하지 않습니다.','info');return;}
+  if(button.disabled)return;button.disabled=true;button.textContent='갱신 중…';
+  try{
+    const rows=await loadRegistry(year,true);
+    if(view==='records'){
+      await ensurePlayersLoaded(true);await ensurePastArchivesForPlayer();mergeRegistryIntoPlayersMemory(rows);
+      renderAllP();popCF();
+    }else if(view==='manager')await renderRegistryMgr();
+    else await renderRegistryTab(true);
+    toast('최신 저장 기록으로 업데이트했습니다.','success');
+  }catch(e){console.warn('player view refresh failed',e);toast('갱신에 실패했습니다. 기존 화면은 유지됩니다.','error');}
+  finally{button.disabled=false;button.textContent='↻ 새로고침';}
 }
 
 async function initRegistryTab(force){
   updatePlayersAdminControls();
-  const years=await getRegistryYears();
+  const years=REGISTRY_TAB_CACHE.yearsLoaded&&!force ? REGISTRY_TAB_CACHE.yearsKey.split('|').map(Number) : await getRegistryYears();
   const yearsKey=years.join('|');
   const yearSel=ge('regYearSel');
   if(yearSel && (!REGISTRY_TAB_CACHE.yearsLoaded || REGISTRY_TAB_CACHE.yearsKey!==yearsKey || force)){
@@ -24818,6 +24874,7 @@ async function renderRegistryTab(force){
   // PHASE157: 수정/삭제 버튼은 렌더 후 숨기지 않고, DOM에 넣기 전에 제거한다.
   // 관리자도 선수 이름 클릭 → 선수기록/관리 통합 팝업만 사용하므로 초기 깜빡임이 없다.
   body.innerHTML=stripRegistryInlineAdminButtons(registryRegionHtml);
+  REGISTRY_NAME_ELEMENT_CACHE.delete(body);
   body.dataset.ready='1';
   setTimeout(()=>{
     ensureRegistryManagerButton();
@@ -24909,29 +24966,35 @@ function decorateRegistryStatusBadges(year,members){
 // - 관리자는 이름 클릭 → 선수기록 + 수정/삭제 통합 팝업
 // - 일반 사용자는 이름 클릭 → 선수기록만 표시
 // - 목록의 개별 수정/삭제 버튼은 관리자에게도 숨긴다.
+const REGISTRY_NAME_ELEMENT_CACHE=new WeakMap();
+function registryNameElementIndex(root){
+  let index=REGISTRY_NAME_ELEMENT_CACHE.get(root);
+  if(index)return index;
+  index=new Map();
+  root.querySelectorAll('div,span,strong,b').forEach(el=>{
+    if(el.closest('.registry-status-badge154'))return;
+    const own=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>String(n.textContent||'')).join(' ').replace(/\s+/g,' ').trim();
+    // Names are text-bearing leaves; avoid reading textContent of entire club/region sections.
+    if(!own)return;
+    const key=cleanName(own.split(' 🆕')[0]).trim();
+    if(!index.has(key))index.set(key,[]);
+    index.get(key).push(el);
+  });
+  REGISTRY_NAME_ELEMENT_CACHE.set(root,index);return index;
+}
 function findRegistryPlayerNameElement(root,name,club=""){
   const nm=String(name||'').trim();
   if(!root||!nm) return null;
-  const els=[...root.querySelectorAll('div,span,strong,b')];
-  const matches=els.filter(el=>{
-    if(el.closest('.registry-status-badge154')) return false;
-    const own=[...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>String(n.textContent||'')).join(' ').replace(/\s+/g,' ').trim();
-    const full=String(el.textContent||'').replace(/\s+/g,' ').trim();
-    return own===nm || full===nm || own.startsWith(nm+' ') || full.startsWith(nm+' 🆕');
-  });
-  if(!club)return matches[0]||null;
+  const matches=registryNameElementIndex(root).get(cleanName(nm).trim())||[];
+  if(!club||matches.length<2)return matches[0]||null;
   const distance=el=>{let node=el,depth=0;while(node&&node!==root){if(String(node.textContent||'').includes(club))return depth;node=node.parentElement;depth++;}return Infinity;};
-  return matches.sort((a,b)=>distance(a)-distance(b))[0]||null;
+  return matches.slice().sort((a,b)=>distance(a)-distance(b))[0]||null;
 }
 function wireRegistryPlayerRows(year,members){
   const root=ge('regTabBody'); if(!root) return;
   (members||[]).forEach(m=>{
     const idx=Number(m?.__idx); if(!Number.isFinite(idx)) return;
     let editBtn=null, delBtn=null;
-    try{
-      editBtn=root.querySelector(`[onclick*="quickEditRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickEditRegistryMember(${Number(year)},${idx})"]`);
-      delBtn=root.querySelector(`[onclick*="quickDeleteRegistryMember(${Number(year)}, ${idx})"], [onclick*="quickDeleteRegistryMember(${Number(year)},${idx})"]`);
-    }catch(_e){}
     const nameEl=findRegistryPlayerNameElement(root,m?.name||'',m?.club||'');
     if(editBtn){ editBtn.style.display='none'; editBtn.setAttribute('aria-hidden','true'); }
     if(delBtn){ delBtn.style.display='none'; delBtn.setAttribute('aria-hidden','true'); }
@@ -25372,6 +25435,7 @@ async function renderRegistryMgr(){
     escapeHtml:esc
   });
   ensureRegistryMgrSearchUI();
+  ensurePlayerViewRefreshButton('manager');
   if(ge('rmgrSearchInput')) ge('rmgrSearchInput').value=searchValue;
   decorateRegistryAge65Controls(year,members);
   decorateRegistryGenderControls(year,members);
