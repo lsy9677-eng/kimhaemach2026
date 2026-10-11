@@ -8986,7 +8986,7 @@ function _pastRosterMemberState(name,club){
   if(!name) return {ok:false,required:false};
   const required=!!(t && shouldUsePlayerRegistry(t));
   if(!required) return {ok:true,required:false};
-  return {ok:!!findMemberRegistry2026(name,club),required:true};
+  return {ok:!!findMemberRegistry2026(name,club,_m26YearFromTournament(t)||2026),required:true};
 }
 function _pastRosterAddNames(names=[],club='',mode='append',preferredDiv=''){
   const clean=[...new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))];
@@ -19928,11 +19928,9 @@ function getRegAutocompleteYear(){
   return REG_YEAR >= 2026 ? REG_YEAR : 2026;
 }
 function getRegistryRowsForAutocomplete(year){
-  // G.meta.memberRegistry2026은 레거시 호환용 - REG_YEAR와 같을 때만 사용
-  if(year===REG_YEAR && year===2026 && Array.isArray(G.meta?.memberRegistry2026) && G.meta.memberRegistry2026.length){
-    return G.meta.memberRegistry2026;
-  }
-  return (window.G_REGISTRY && Array.isArray(G_REGISTRY[year])) ? G_REGISTRY[year] : [];
+  // PHASE208: use the same authoritative memory as registration validation.
+  if(Array.isArray(G_REGISTRY[year]))return G_REGISTRY[year];
+  return Number(year)===2026?getMemberRegistry2026():[];
 }
 
 function selectRegistrationPlayerSuggestion(num,name,club,playerId=""){
@@ -24861,7 +24859,12 @@ async function loadRegistry(year,force=false){
       }
     }catch(e){}
   }
-  if(REGISTRY_LOAD_REQUESTS.has(year))return REGISTRY_LOAD_REQUESTS.get(year);
+  if(REGISTRY_LOAD_REQUESTS.has(year)){
+    const pending=REGISTRY_LOAD_REQUESTS.get(year);
+    if(!force||pending.registryServer)return pending;
+    try{await pending;}catch(e){}
+    return loadRegistry(year,true);
+  }
   const request=(async()=>{
     const raw=await (force?getDocFromServer:getDoc)(doc(db,'memberRegistries',String(year)));
     const members=raw.exists()?(raw.data().members||[]):[];
@@ -24871,6 +24874,7 @@ async function loadRegistry(year,force=false){
     if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
     persistRegistryViewCache(year);return members;
   })().finally(()=>REGISTRY_LOAD_REQUESTS.delete(year));
+  request.registryServer=force;
   REGISTRY_LOAD_REQUESTS.set(year,request);return request;
 }
 async function saveRegistry(year){
