@@ -8205,7 +8205,7 @@ async function ensureDivisionRuleCache(tid){
     }
     const byName=new Map();
     records.forEach(r=>r.players.forEach(name=>{
-      const nn=normName(name); if(!nn) return;
+      const nn=transferName(name); if(!nn) return;
       if(!byName.has(nn)) byName.set(nn,[]);
       byName.get(nn).push(r);
     }));
@@ -8218,7 +8218,7 @@ async function ensureDivisionRuleCache(tid){
 }
 function _divisionRuleProfileFromCache(cache,name,club){
   if(!cache) return null;
-  const nn=normName(name); if(!nn) return null;
+  const nn=transferName(name); if(!nn) return null;
   let recs=(cache.byName.get(nn)||[]).slice();
   if(!recs.length) return null;
 
@@ -8231,7 +8231,7 @@ function _divisionRuleProfileFromCache(cache,name,club){
     allowedClubs.add(c); const b=baseClub(c)||c; if(b) allowedClubs.add(b);
   };
   addClub(club);
-  const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>normName(r?.name||'')===nn);
+  const currentRows=_ruleRegistryRowsSync(cache.currentYear).filter(r=>transferName(r?.name||'')===nn);
   // PHASE163: 동명이인이면 현재 선택 클럽과 연결되는 공식명단 행만 사용한다.
   // 다른 클럽 동명이인의 과거 부서가 현재 선수의 기준부서로 섞이면 승격/하향 판정이 틀어진다.
   let identityRows=currentRows;
@@ -9286,7 +9286,7 @@ function mountRegisterFormInline(div){
 function renderRL(){
   const tid=ge('regTS').value,div=ge('regDS').value;
   if(tid && !DIVISION_RULE_CACHE.has(String(tid)) && !DIVISION_RULE_PROMISE.has(String(tid))){
-    ensureDivisionRuleCache(tid).then(()=>{ try{ if(ge('regTS')?.value===tid) renderRL(); }catch(e){} });
+    ensureDivisionRuleCache(tid).then(()=>{ try{ if(ge('regTS')?.value===tid){renderRL();refreshDivisionRuleFormBadges('register');} }catch(e){} });
   }
   updateFilterBtnUI('register', MY_CLUB_FILTER);
   renderRegisterDivisionOverview();
@@ -9587,6 +9587,8 @@ async function beginUnifiedTeamEdit(key,idx){
     const clubEl=ge('regClub');if(clubEl)clubEl.value=original.club;
     onRegClubChange();updateRegisterSlots();
     (original.players||[]).forEach((name,i)=>{const el=ge('p'+(i+1));if(el){el.value=name;el.dataset.playerId=registrationPlayerIdentity(original,name,i);el.dataset.registryClub=original.club;el.dataset.registryName=normName(name);}});
+    refreshDivisionRuleFormBadges('register');
+    ensureDivisionRuleCache(tid).then(()=>{if(UNIFIED_TEAM_EDIT?.id===original._id)refreshDivisionRuleFormBadges('register');}).catch(e=>console.warn('edit badge load failed',e));
     const host=ge('aoReg');
     if(host){
       let notice=ge('unifiedTeamEditNotice');if(!notice){notice=document.createElement('div');notice.id='unifiedTeamEditNotice';host.prepend(notice);}
@@ -9655,6 +9657,7 @@ async function saveUnifiedTeamEdit(){
     try{const removed=div!==edit.div||club!==edit.original.club?edit.original.players:(edit.original.players||[]).filter(n=>!names.includes(n));if(removed.length)await _removePlayerHistory(removed,edit.original.club,tid,edit.div);await Promise.all(names.map(n=>regP(n,club,tid,div)));}catch(e){console.warn('team history sync failed',e);}
     UNIFIED_TEAM_EDIT=null;ge('unifiedTeamEditNotice')?.remove();
     for(let i=1;i<=12;i++){const el=ge('p'+i);if(el){el.value='';delete el.dataset.playerId;}}
+    refreshDivisionRuleFormBadges('register');
     savePlayersToLocalCache();try{cacheTournamentBundleFromMemory(tid);}catch(e){}
     renderRL();renderAllP();toast('수정 내용 저장 완료 ✅','success');
   }catch(e){toast('수정 실패: '+e.message,'error');}
@@ -19904,6 +19907,7 @@ function selectRegistrationPlayerSuggestion(num,name,club,playerId=""){
     inp.dataset.registryClub=selectedClub||rowClub||'';
     inp.dataset.registryName=normName(name||'');
     inp.dataset.playerId=playerId;
+    refreshDivisionRuleFormBadges('register');
   }
   const hint=ge('h'+num);
   if(hint) hint.innerHTML='';
