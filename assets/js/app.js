@@ -2729,7 +2729,7 @@ function transferYear(t){
   const year=Number(date.slice(0,4));return year>=2000&&year<=2200?year:0;
 }
 function registrationClubIdentityKey(value){
-  const raw=normalizeClub(String(value||'').trim());
+  const raw=_m26Club(String(value||'').trim());
   const club=String(baseClub(raw)||raw).replace(/\s+/g,'').replace(/(?:테니스클럽|테니스동호회|클럽)$/,'').replace(/(?:tennisclub|club)$/i,'');
   return club.toLocaleLowerCase('ko-KR');
 }
@@ -2741,7 +2741,7 @@ function transferIdentityParts(n){
 function transferName(n){return normName(transferIdentityParts(n).name);}
 function resolveLegacyTransferIdentity(name,club,year){
   const parts=transferIdentityParts(name),wanted=transferClub(club);
-  const candidates=(G_REGISTRY[year]||[]).filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(',')].some(c=>transferClub(c)===wanted));
+  const candidates=(G_REGISTRY[year]||[]).filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(/[,，]/)].some(c=>transferClub(c)===wanted));
   const tagged=parts.tag?candidates.filter(r=>String(r.identityTag||transferIdentityParts(r.name).tag).toUpperCase()===parts.tag):candidates;
   return tagged.length===1?tagged[0]:null;
 }
@@ -7486,7 +7486,7 @@ async function syncRegistryMembersToPlayers(rows){
     if(!Array.isArray(p.clubs)) p.clubs=[];
     const clubSet = new Set((p.clubs||[]).map(c=>normalizeClub(c)).filter(Boolean));
     clubSet.add(normalizeClub(club));
-    (String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean)).forEach(sc=>clubSet.add(sc));
+    (String(r.subClub||'').split(/[,，]/).map(s=>normalizeClub(s.trim())).filter(Boolean)).forEach(sc=>clubSet.add(sc));
     p.clubs = [...clubSet];
     if((r.phone||'').trim()) p.phone=(r.phone||'').trim();
     keys.push(key);
@@ -19902,7 +19902,7 @@ function allPlayerNames(){
     const club=normalizeClub(r.club||'');
     if(name){
       set.add(club ? pKey(name, club) : name);
-      String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean).forEach(sc=>set.add(pKey(name, sc)));
+      String(r.subClub||'').split(/[,，]/).map(s=>normalizeClub(s.trim())).filter(Boolean).forEach(sc=>set.add(pKey(name, sc)));
     }
   });
   return [...set];
@@ -19974,6 +19974,7 @@ function phint(inp,num){
   if(inp?.dataset?.registryName && normName(v)!==inp.dataset.registryName){
     delete inp.dataset.registryName;
     delete inp.dataset.registryClub;
+    delete inp.dataset.playerId;
   }
   if(!v){ h.innerHTML=''; return; }
 
@@ -19996,7 +19997,7 @@ function phint(inp,num){
     const disp = cleanName(r.name||'');
     const mainClub = normalizeClub(r.club||'');
     const subClubs = [...new Set(
-      String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean)
+      String(r.subClub||'').split(/[,，]/).map(s=>normalizeClub(s.trim())).filter(Boolean)
     )].filter(c=>c && !isSameRegistrationClub(c,mainClub));
 
     const mainMatch = !!(selectedClub && mainClub && isSameRegistrationClub(selectedClub,mainClub));
@@ -20168,7 +20169,7 @@ function getPlayerRegistryRow(name,p,preferClub=''){
 
   const pick=candidates.find(r=>{
     const main=normalizeClub(r.club||'');
-    const subs=String(r.subClub||'').split(',').map(s=>normalizeClub(s.trim())).filter(Boolean);
+    const subs=String(r.subClub||'').split(/[,，]/).map(s=>normalizeClub(s.trim())).filter(Boolean);
     return preferSet.has(main) || subs.some(sc=>preferSet.has(sc));
   });
 
@@ -24835,7 +24836,7 @@ function attachRegistrationIdentities(team,tid){
   const t=(G.tournaments||[]).find(t=>t.id===tid),year=transferYear(t)||2026;
   const rows=getRegistryRowsForAutocomplete(year);
   team.playerIdentities=snapshotRosterNames(team).map((name,index)=>{
-    const candidates=rows.filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(',')].some(c=>transferClub(c)===transferClub(team.club)));
+    const candidates=rows.filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(/[,，]/)].some(c=>transferClub(c)===transferClub(team.club)));
     const prior=(team.playerIdentities||[]).find(p=>transferName(p.name)===transferName(name));
     const selected=['p','ep'].map(prefix=>ge(prefix+(index+1))).find(el=>el&&transferName(el.value)===transferName(name)&&el.dataset.playerId);
     const tag=transferIdentityParts(name).tag;
