@@ -7908,7 +7908,7 @@ async function submitAge65CertificationRequest(){
 async function _age65LoadAdminRequests(){
   if(!AD) return [];
   try{
-    const snap=await getDocs(collection(db,'age65CertificationRequests'));
+    const snap=await getDocsFromServer(collection(db,'age65CertificationRequests'));
     AGE65_ADMIN_REQUESTS=snap.docs.map(d=>({id:d.id,...(d.data()||{})})).sort((a,b)=>String(b.createdAtText||'').localeCompare(String(a.createdAtText||'')));
     return AGE65_ADMIN_REQUESTS;
   }catch(e){ console.warn('[Age65] admin requests load failed',e); return []; }
@@ -7943,24 +7943,41 @@ async function openAge65AdminCenter(){
   ensureAge65AdminCenter(); om('mAge65AdminCenter');
   const body=ge('age65AdminCenterBody'); if(body) body.innerHTML='<div style="padding:20px;text-align:center">인증 요청 불러오는 중...</div>';
   const arr=await _age65LoadAdminRequests();
-  const pending=arr.filter(x=>x.status==='pending'), rejected=arr.filter(x=>x.status==='rejected').slice(0,10);
+  const pending=arr.filter(x=>x.status==='pending'), approved=arr.filter(x=>x.status==='approved'), rejected=arr.filter(x=>x.status==='rejected');
   const card=x=>`<div style="border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-bottom:10px;background:#fff">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><b style="font-size:.95rem">${esc(x.name||'-')}</b> <span style="font-size:.72rem;color:#64748b">${esc(x.club||'')}</span><div style="font-size:.75rem;color:#475569;margin-top:3px">${esc(x.tournamentName||'')} · ${esc(_ruleDivLabel(x.targetDivision)||x.targetDivision||'')}</div></div><span style="font-size:.68rem;font-weight:900;color:${x.status==='pending'?'#b45309':'#b91c1c'}">${x.status==='pending'?'인증대기':'반려'}</span></div>
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><b style="font-size:.95rem">${esc(x.name||'-')}</b> <span style="font-size:.72rem;color:#64748b">${esc(x.club||'')}</span><div style="font-size:.75rem;color:#475569;margin-top:3px">${esc(x.tournamentName||'')} · ${esc(_ruleDivLabel(x.targetDivision)||x.targetDivision||'')}</div></div><span style="font-size:.68rem;font-weight:900;color:${x.status==='pending'?'#b45309':x.status==='approved'?'#15803d':'#b91c1c'}">${x.status==='pending'?'인증대기':x.status==='approved'?'승인완료':'반려'}</span></div>
     <div style="margin-top:8px;font-size:.72rem;font-weight:900;color:#7c2d12">예외 사유: ${x.requestType==='female'?'여성':'남성 만65세 이상'}</div>
-    <div style="margin-top:5px;font-size:.72rem;font-weight:800;color:${x.photoURL?'#0369a1':'#64748b'}">${x.photoURL?'📷 증빙 사진 첨부':'👤 사진 없음 · 관리자 직접 확인 요청'}</div>
+    <div style="margin-top:5px;font-size:.72rem;font-weight:800;color:${x.photoURL?'#0369a1':'#64748b'}">${x.photoURL?'📷 증빙 사진 첨부':x.photoWasAttached?'📷 승인 시 증빙 확인 · 사진 삭제 완료':'👤 사진 없음 · 관리자 직접 확인 요청'}</div>
     ${x.photoURL?`<a href="${esc(x.photoURL)}" target="_blank" rel="noopener"><img src="${esc(x.photoURL)}" alt="인증사진" style="display:block;width:100%;max-height:260px;object-fit:contain;background:#f8fafc;border-radius:10px;margin-top:8px;border:1px solid #e2e8f0"></a>`:''}
+    <div style="margin-top:6px;font-size:.72rem;color:#64748b">요청일: ${esc(x.createdAtText||'-')}</div>
+    ${x.status!=='pending'?`<div style="margin-top:5px;font-size:.72rem;color:#475569">처리일: ${esc(x.approvedAtText||x.rejectedAtText||'-')} · 처리자: ${esc(x.approvedBy||x.rejectedBy||'관리자')}<br>${esc(x.approvalReason||x.rejectReason||'')}</div><button type="button" class="btn btn-outline" style="margin-top:8px;color:#b91c1c" onclick="deleteAge65ApprovalHistory('${x.id}')">이력 삭제</button>`:''}
     ${x.rejectReason?`<div style="margin-top:8px;font-size:.74rem;color:#b91c1c">반려사유: ${esc(x.rejectReason)}</div>`:''}
     ${x.status==='pending'?`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;background:#15803d;font-weight:900" onclick="approveAge65CertificationRequest('${x.id}')">✅ 승인</button><button class="btn btn-outline" style="flex:1;border-color:#dc2626;color:#b91c1c;font-weight:900" onclick="rejectAge65CertificationRequest('${x.id}')">반려</button></div>`:''}
   </div>`;
-  if(body) body.innerHTML=`<div style="font-size:.78rem;color:#64748b;margin-bottom:10px">사진은 선택사항입니다. 관리자가 예외 사유를 알고 있으면 바로 승인할 수 있습니다. 여성 승인 시 등록명단 성별을 여성으로 표시하고, 65세 승인 시 65+ 인증상태를 영구 저장합니다.</div>${pending.length?pending.map(card).join(''):'<div style="padding:24px;text-align:center;color:#64748b">대기 중인 인증 요청이 없습니다.</div>'}${rejected.length?`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800;color:#64748b">최근 반려 ${rejected.length}건</summary><div style="margin-top:8px">${rejected.map(card).join('')}</div></details>`:''}`;
+  if(body) body.innerHTML=`<div style="font-size:.78rem;color:#64748b;margin-bottom:10px">사진은 선택사항입니다. 관리자가 예외 사유를 알고 있으면 바로 승인할 수 있습니다. 여성 승인 시 등록명단 성별을 여성으로 표시하고, 65세 승인 시 65+ 인증상태를 영구 저장합니다. 처리된 요청은 승인·반려 이력에 남습니다. 이력 삭제는 선수 인증을 해제하지 않습니다.</div>${pending.length?pending.map(card).join(''):'<div style="padding:24px;text-align:center;color:#64748b">대기 중인 인증 요청이 없습니다.</div>'}${approved.length?`<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:800;color:#15803d">승인 이력 ${approved.length}건</summary><div style="margin-top:8px">${approved.map(card).join('')}</div></details>`:'<div style="padding:12px;color:#64748b">보관된 승인 이력이 없습니다.</div>'}${rejected.length?`<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800;color:#64748b">반려 이력 ${rejected.length}건</summary><div style="margin-top:8px">${rejected.map(card).join('')}</div></details>`:''}`;
   refreshAge65AdminRequestBadge();
+}
+async function deleteAge65ApprovalHistory(id){
+  if(!AD)return;
+  const refDoc=doc(db,'age65CertificationRequests',id),snap=await getDocFromServer(refDoc);
+  if(!snap.exists())return;
+  const req=snap.data();
+  if(!['approved','rejected'].includes(req.status)){toast('처리 완료된 이력만 삭제할 수 있습니다','info');return;}
+  if(!confirm(`${req.name||'선수'}의 ${req.status==='approved'?'승인':'반려'} 이력을 삭제할까요?\n선수의 65세 인증·여성 인증은 유지됩니다.`))return;
+  sl(true);
+  try{await deleteDoc(refDoc);await _age65DeletePhoto(req);sl(false);toast('이력 삭제 완료','success');await openAge65AdminCenter();}
+  catch(e){sl(false);toast('이력 삭제 실패: '+e.message,'error');}
+}
+async function recordDirectAge65Approval(name,club,source){
+  const when=new Date().toISOString();
+  await addDoc(collection(db,'age65CertificationRequests'),{name,club,requestType:'age65',status:'approved',source:'direct_admin',createdAtText:when,approvedAtText:when,approvedAt:serverTimestamp(),approvedBy:'관리자',approvalActor:registrationAuditActor(),approvalReason:source||'관리자 직접 인증',photoURL:'',storagePath:''});
 }
 async function _age65DeletePhoto(req){ if(req?.storagePath){ try{await deleteObject(ref(storage,req.storagePath));}catch(e){console.warn('[Age65] photo delete skipped',e);} } }
 async function approveAge65CertificationRequest(id){
   if(!AD) return;
   const req=AGE65_ADMIN_REQUESTS.find(x=>x.id===id) || (await _age65LoadAdminRequests()).find(x=>x.id===id); if(!req) return;
   const isFemale=req.requestType==='female';
-  if(!confirm(`${req.name} 선수의 ${isFemale?'여성':'만 65세 이상'} 예외를 승인할까요?\n\n관리자가 직접 확인한 경우 승인하세요.${req.photoURL?'\n첨부 사진과 요청 원본은 승인 후 삭제됩니다.':'\n요청 원본은 승인 후 삭제됩니다.'}`)) return;
+  if(!confirm(`${req.name} 선수의 ${isFemale?'여성':'만 65세 이상'} 예외를 승인할까요?\n\n관리자가 직접 확인한 경우 승인하세요.${req.photoURL?'\n첨부 사진과 요청·승인 이력은 보관됩니다.':'\n요청·승인 이력은 보관됩니다.'}`)) return;
   sl(true);
   try{
     if(isFemale){
@@ -7979,7 +7996,8 @@ async function approveAge65CertificationRequest(id){
         if(changed) try{await saveRegistry(year);}catch(e){console.warn('[Age65] registry mirror save failed',year,e);}
       }
     }
-    await _age65DeletePhoto(req); await deleteDoc(doc(db,'age65CertificationRequests',id));
+    await updateDoc(doc(db,'age65CertificationRequests',id),{status:'approved',approvedAt:serverTimestamp(),approvedAtText:new Date().toISOString(),approvedBy:'관리자',approvalActor:registrationAuditActor(),approvalReason:isFemale?'여성 예외 인증':'만65세 이상 인증',photoWasAttached:!!req.photoURL,photoURL:'',storagePath:''});
+    await _age65DeletePhoto(req);
     await loadAge65Certifications(true); DIVISION_RULE_CACHE.clear();
     sl(false); toast(`${req.name} ${isFemale?'여성 예외':'65+ 인증'} 승인완료 ✅`,'success');
     try{await openAge65AdminCenter();}catch(e){} try{renderRL();}catch(e){} try{await renderRegistryTab(true);}catch(e){} try{await renderRegistryMgr();}catch(e){}
@@ -8000,6 +8018,7 @@ async function directApproveAge65Player(name,club,source='관리자 바로인증
       rows.forEach(r=>{ if(_age65NormName(r?.name||'')===_age65NormName(nm) && (normalizeClub(r?.club||'')===cc || sameName.length===1)){ r.age65Certified=true; r.age65CertifiedAt=new Date().toISOString(); changed=true; } });
       if(changed) try{await saveRegistry(year);}catch(e){console.warn('[Age65] registry mirror save failed',year,e);}
     }
+    await recordDirectAge65Approval(nm,cc,source);
     await loadAge65Certifications(true); DIVISION_RULE_CACHE.clear();
     sl(false); toast(`${nm} 65+ 바로 인증완료 ✅`,'success');
     try{cm('mAge65CertRequest');}catch(e){} try{renderRL();}catch(e){} try{await renderRegistryTab(true);}catch(e){} try{refreshDivisionRuleFormBadges('register');}catch(e){}
@@ -8017,7 +8036,7 @@ async function rejectAge65CertificationRequest(id){
   sl(true);
   try{
     await _age65DeletePhoto(req);
-    await updateDoc(doc(db,'age65CertificationRequests',id),{status:'rejected',rejectReason:reason,rejectedAt:serverTimestamp(),rejectedAtText:new Date().toISOString(),photoURL:'',storagePath:''});
+    await updateDoc(doc(db,'age65CertificationRequests',id),{status:'rejected',rejectReason:reason,rejectedAt:serverTimestamp(),rejectedAtText:new Date().toISOString(),rejectedBy:'관리자',rejectionActor:registrationAuditActor(),photoURL:'',storagePath:''});
     sl(false); toast('인증 요청을 반려했습니다','info'); await openAge65AdminCenter();
   }catch(e){ sl(false); toast('반려 처리 실패: '+e.message,'error'); }
 }
@@ -28139,7 +28158,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
   showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
