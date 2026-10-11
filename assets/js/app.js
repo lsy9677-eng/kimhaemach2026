@@ -2728,7 +2728,12 @@ function transferYear(t){
   const date=String(getTournamentDateKey(t)||t?.date||'');
   const year=Number(date.slice(0,4));return year>=2000&&year<=2200?year:0;
 }
-function transferClub(c){return normalizeClub(baseClub(String(c||''))||String(c||''));}
+function registrationClubIdentityKey(value){
+  const raw=normalizeClub(String(value||'').trim());
+  const club=String(baseClub(raw)||raw).replace(/\s+/g,'').replace(/(?:테니스클럽|테니스동호회|클럽)$/,'').replace(/(?:tennisclub|club)$/i,'');
+  return club.toLocaleLowerCase('ko-KR');
+}
+function transferClub(c){return registrationClubIdentityKey(c);}
 function transferIdentityParts(n){
   const text=cleanName(String(n||'')).trim(),match=text.match(/\s*[([]([A-Z0-9]{1,8})[)\]]\s*$/i);
   return {name:match?text.slice(0,match.index).trim():text,tag:match?match[1].toUpperCase():''};
@@ -8236,7 +8241,7 @@ function _divisionRuleProfileFromCache(cache,name,club){
   // 오판 방지를 위해 자동 하향 판정에서 제외한다.
   const allowedClubs=new Set();
   const addClub=(v)=>{
-    const c=normalizeClub(v||''); if(!c) return;
+    const c=transferClub(v||''); if(!c) return;
     allowedClubs.add(c); const b=baseClub(c)||c; if(b) allowedClubs.add(b);
   };
   addClub(club);
@@ -8245,10 +8250,10 @@ function _divisionRuleProfileFromCache(cache,name,club){
   // 다른 클럽 동명이인의 과거 부서가 현재 선수의 기준부서로 섞이면 승격/하향 판정이 틀어진다.
   let identityRows=currentRows;
   if(currentRows.length>1){
-    const want=normalizeClub(club||''), wantBase=baseClub(want)||want;
+    const want=transferClub(club||''), wantBase=baseClub(want)||want;
     identityRows=currentRows.filter(r=>{
-      const main=normalizeClub(r?.club||''), mainBase=baseClub(main)||main;
-      const subs=String(r?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean);
+      const main=transferClub(r?.club||''), mainBase=baseClub(main)||main;
+      const subs=String(r?.subClub||'').split(',').map(x=>transferClub(x.trim())).filter(Boolean);
       return !!want && (main===want || mainBase===wantBase || subs.some(sc=>sc===want || (baseClub(sc)||sc)===wantBase));
     });
     if(identityRows.length!==1) return null; // 동일인을 확정할 수 없으면 자동 자격판정하지 않음
@@ -8258,7 +8263,7 @@ function _divisionRuleProfileFromCache(cache,name,club){
     String(r?.subClub||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(addClub);
   });
   const linked=recs.filter(r=>{
-    const rc=normalizeClub(r?.club||''), rb=baseClub(rc)||rc;
+    const rc=transferClub(r?.club||''), rb=baseClub(rc)||rc;
     return !rc || allowedClubs.has(rc) || allowedClubs.has(rb);
   });
   if(linked.length){
@@ -8266,7 +8271,7 @@ function _divisionRuleProfileFromCache(cache,name,club){
   }else{
     // 동명이인은 현재 공식명단과 연결되는 과거 기록이 없으면 다른 사람 기록을 가져오지 않는다.
     if(currentRows.length>1) return null;
-    const histClubs=[...new Set(recs.map(r=>baseClub(normalizeClub(r?.club||''))||normalizeClub(r?.club||'')).filter(Boolean))];
+    const histClubs=[...new Set(recs.map(r=>baseClub(transferClub(r?.club||''))||transferClub(r?.club||'')).filter(Boolean))];
     if(histClubs.length>1) return null; // 동일이름 복수 과거클럽: 관리자 검증 전 자동판정 금지
   }
 
@@ -19924,11 +19929,8 @@ function selectRegistrationPlayerSuggestion(num,name,club,playerId=""){
 
 
 function isSameRegistrationClub(a,b){
-  const aa=normalizeClub(a||'');
-  const bb=normalizeClub(b||'');
-  if(!aa || !bb) return false;
-  if(aa===bb) return true;
-  return baseClub(aa)===baseClub(bb);
+  const aa=registrationClubIdentityKey(a),bb=registrationClubIdentityKey(b);
+  return !!aa&&!!bb&&aa===bb;
 }
 
 function phint(inp,num){
