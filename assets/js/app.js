@@ -7443,13 +7443,30 @@ function _m26YearFromTournament(t){
   return m?parseInt(m[0],10):0;
 }
 function needsMemberRegistry2026(t){ return _m26YearFromTournament(t) >= 2026; }
-function findMemberRegistry2026(name, club){
-  const nn=_m26Name(name), cc=_m26Club(club);
-  return getMemberRegistry2026().find(x=>_m26Name(x.name)===nn && _m26Club(x.club)===cc);
+// PHASE207: registry display and registration share the same year and club identity.
+function findMemberRegistry2026(name, club, year=2026){
+  const nn=transferIdentityParts(_m26Name(name)), cc=registrationClubIdentityKey(_m26Club(club));
+  const rows=Array.isArray(G_REGISTRY[year])?G_REGISTRY[year]:(Number(year)===2026?getMemberRegistry2026():[]);
+  if(!nn.name||!cc)return undefined;
+  return rows.find(x=>{
+    const xn=transferIdentityParts(_m26Name(x.name));
+    if(xn.name!==nn.name)return false;
+    if(nn.tag&&String(x.identityTag||xn.tag).toUpperCase()!==nn.tag)return false;
+    return [x.club,...String(x.subClub||'').split(/[,，]/)].some(c=>registrationClubIdentityKey(_m26Club(c))===cc);
+  });
 }
 function missingMembers2026(names, club, t){
   if(!shouldUsePlayerRegistry(t)) return [];
-  return (names||[]).filter(n=>!findMemberRegistry2026(n, club));
+  const year=_m26YearFromTournament(t)||2026;
+  return (names||[]).filter(n=>!findMemberRegistry2026(n, club,year));
+}
+async function verifiedMissingRegistryMembers(names,club,t){
+  if(!shouldUsePlayerRegistry(t))return [];
+  // Only a failed cached lookup triggers a server refresh; typing remains local.
+  if(!missingMembers2026(names,club,t).length)return [];
+  try{await loadRegistry(_m26YearFromTournament(t)||2026,true);}
+  catch(e){throw new Error('최신 등록명단을 확인하지 못했습니다. 연결 상태를 확인하고 다시 저장해 주세요.');}
+  return missingMembers2026(names,club,t);
 }
 function showMissingMembers2026(missing){
   const uniq=[...new Set((missing||[]).map(x=>(x||'').trim()).filter(Boolean))];
@@ -9648,7 +9665,8 @@ async function saveUnifiedTeamEdit(){
   if(!check.ok){toast(check.error,'error');return;}
   const capacity=validateRegistrationCapacity({currentCount:others.length,maxTeams:getDivisionMaxTeams(tid,div),isIndividual:false});
   if(!capacity.ok){toast(capacity.error,'error');return;}
-  const tournament=G.tournaments.find(t=>t.id===tid),missing=missingMembers2026(names,club,tournament);
+  const tournament=G.tournaments.find(t=>t.id===tid);
+  let missing;try{missing=await verifiedMissingRegistryMembers(names,club,tournament);}catch(e){toast(e.message,"error");return;}
   if(missing.length){showMissingMembers2026(missing);return;}
   const rules=await validateTeamDivisionRules({tid,div,club,names,excludeKey:edit.key,excludeIdx:(G.teams[edit.key]||[]).findIndex(t=>t._id===edit.id)});
   if(!rules.ok){alert(rules.error);return;}
@@ -9802,7 +9820,7 @@ async function registerTeam(){
       makePlayerKey:pKey
     });
     if(!teamCheck.ok){ toast(teamCheck.error,'error'); return; }
-    const missing2026=missingMembers2026(names, club, t);
+    let missing2026;try{missing2026=await verifiedMissingRegistryMembers(names,club,t);}catch(e){toast(e.message,"error");return;}
     if(missing2026.length){showMissingMembers2026(missing2026);return;}
     const divRuleCheck=await validateTeamDivisionRules({tid,div,club,names});
     if(!divRuleCheck.ok){ alert(divRuleCheck.error); toast('부서 자격 규정을 확인해 주세요','error'); return; }
@@ -10228,7 +10246,7 @@ async function saveETeam(){
   const tid = CE_key.split('_')[0];
   const tournament = G.tournaments.find(t=>t.id===tid);
 
-  const missing2026 = missingMembers2026(np, newClub, tournament);
+  let missing2026;try{missing2026=await verifiedMissingRegistryMembers(np,newClub,tournament);}catch(e){toast(e.message,"error");return;}
   if(missing2026.length){
     showMissingMembers2026(missing2026);
     return;
@@ -24834,12 +24852,12 @@ function persistRegistryViewCache(year){
 }
 async function loadRegistry(year,force=false){
   year=Number(year);
-  if(!force&&REGISTRY_YEARS_LOADED.includes(year))return G_REGISTRY[year]||[];
+  if(!force&&REGISTRY_YEARS_LOADED.includes(year)){if(year===2026)G.meta.memberRegistry2026=G_REGISTRY[year]||[];return G_REGISTRY[year]||[];}
   if(!force){
     try{
       const cache=JSON.parse(localStorage.getItem('OAI_REGISTRY_VIEW_V198_'+year)||'null');
       if(Array.isArray(cache?.members)){
-        G_REGISTRY[year]=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
+        G_REGISTRY[year]=cache.members;if(year===2026)G.meta.memberRegistry2026=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
       }
     }catch(e){}
   }
@@ -24849,6 +24867,7 @@ async function loadRegistry(year,force=false){
     const members=raw.exists()?(raw.data().members||[]):[];
     if(!Array.isArray(members))throw new Error('선수 명단 형식이 올바르지 않습니다.');
     G_REGISTRY[year]=members;
+    if(year===2026)G.meta.memberRegistry2026=members;
     if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
     persistRegistryViewCache(year);return members;
   })().finally(()=>REGISTRY_LOAD_REQUESTS.delete(year));
