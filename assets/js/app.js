@@ -8027,16 +8027,24 @@ function _ruleDivLevel(v){ return ({bronze:1,silver:2,gold:3})[_ruleDivKey(v)]||
 function _ruleDivLabel(v){ return ({gold:'금배부',silver:'은배부',bronze:'동배부'})[_ruleDivKey(v)]||String(v||''); }
 function _ruleTournamentYear(t){ return _m26YearFromTournament(t); }
 function _rulePrevTournaments(currentT){
-  const y=_ruleTournamentYear(currentT)-1;
-  if(!y) return [];
-  const all=[...(G.tournaments||[]),...(HIST_DATA||[])];
-  const uniq=new Map();
-  all.forEach(t=>{ if(t?.id && _ruleTournamentYear(t)===y && !isIndividualTournament(t)) uniq.set(String(t.id),t); });
+  const currentYear=_ruleTournamentYear(currentT),previousYear=currentYear-1;
+  if(!previousYear)return [];
+  const currentDate=String(getTournamentDateKey(currentT)||currentT?.date||'').slice(0,10);
+  const all=[...(HIST_DATA||[]),...(G.tournaments||[])],uniq=new Map();
+  all.forEach(t=>{
+    if(!t?.id||String(t.id)===String(currentT.id)||isIndividualTournament(t))return;
+    const year=_ruleTournamentYear(t),date=String(getTournamentDateKey(t)||t.date||'').slice(0,10);
+    const priorYear=year===previousYear;
+    // Same-year records count only from completed competitions earlier than this one.
+    // A withdrawn/current application is never a qualification source.
+    const hasFinalResults=t.status==='finished'||!!getPastArchive(t.id)||(HIST_DATA||[]).some(h=>String(h.id)===String(t.id)&&(h.teams||[]).some(tm=>Number(tm.rank||0)>0));
+    const completedEarlier=year===currentYear&&isPastArchiveTournament(t)&&hasFinalResults&&date&&currentDate&&date<currentDate;
+    if(priorYear||completedEarlier)uniq.set(String(t.id),t);
+  });
   let arr=[...uniq.values()];
-  const designated=arr.filter(t=>/시장기|협회장기/.test(String(t?.name||'')));
-  if(designated.length) arr=designated;
-  arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-  return arr;
+  const designated=arr.filter(t=>/시장기|협회장기/.test(String(t.name||'')));
+  if(designated.length)arr=designated;
+  return arr.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
 }
 function _ruleRegistryRowsSync(year){
   return (G_REGISTRY?.[year]||((year===REG_YEAR)?getMemberRegistry2026():[])||[]);
@@ -8172,7 +8180,8 @@ function decorateRegistryAge65Controls(year,members){
 async function ensureDivisionRuleCache(tid){
   tid=String(tid||'');
   if(!tid) return null;
-  if(DIVISION_RULE_CACHE.has(tid)) return DIVISION_RULE_CACHE.get(tid);
+  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===204)return DIVISION_RULE_CACHE.get(tid);
+  DIVISION_RULE_CACHE.delete(tid);
   if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
   const promise=(async()=>{
     const currentT=(G.tournaments||[]).find(t=>String(t.id)===tid);
@@ -8209,7 +8218,7 @@ async function ensureDivisionRuleCache(tid){
       if(!byName.has(nn)) byName.set(nn,[]);
       byName.get(nn).push(r);
     }));
-    const cache={tid,currentYear,prevTs,records,byName};
+    const cache={tid,currentYear,prevTs,records,byName,basisVersion:204};
     DIVISION_RULE_CACHE.set(tid,cache);
     return cache;
   })().finally(()=>DIVISION_RULE_PROMISE.delete(tid));
@@ -8264,7 +8273,7 @@ function _divisionRuleProfileFromCache(cache,name,club){
   let baseline=0, promoted=false, won=[];
   recs.forEach(r=>{
     const lv=_ruleDivLevel(r.div); baseline=Math.max(baseline,lv);
-    if(Number(r.rank)===1){ promoted=true; baseline=Math.max(baseline,Math.min(3,lv+1)); won.push(r); }
+    if(Number(r.rank)===1&&Number(String(r.date||'').slice(0,4))===cache.currentYear-1){ promoted=true; baseline=Math.max(baseline,Math.min(3,lv+1)); won.push(r); }
   });
   if(!baseline) return null;
   const key=({1:'bronze',2:'silver',3:'gold'})[baseline];
@@ -8350,7 +8359,7 @@ function _divisionRuleReasonLines(tid,div,name,club){
     <div style="margin-top:10px;padding:11px 12px;border-radius:12px;background:${mv.isDowngrade?'#fff7ed':'#f0fdf4'};border:1px solid ${mv.isDowngrade?'#fdba74':'#86efac'};font-weight:900;color:${mv.isDowngrade?'#9a3412':'#166534'}">${esc(result)}</div>
     ${exception?`<div style="margin-top:8px;color:#166534;font-weight:850">예외 자격: ${esc(exception)}</div>`:''}
     ${reason}
-    <div style="margin-top:10px;font-size:.74rem;color:#64748b">※ 과거 참가 부서는 참고자료이며, 전년도 지정대회 우승 승격 규칙과 동일인 확인 결과를 기준으로 판정합니다.</div>`};
+    <div style="margin-top:10px;font-size:.74rem;color:#64748b">※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.</div>`};
 }
 function openDivisionRuleReason(name,club,tid,div){
   ensureDivisionRuleReasonModal();
