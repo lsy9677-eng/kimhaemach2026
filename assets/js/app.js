@@ -2729,14 +2729,39 @@ function transferYear(t){
   const year=Number(date.slice(0,4));return year>=2000&&year<=2200?year:0;
 }
 function transferClub(c){return normalizeClub(baseClub(String(c||''))||String(c||''));}
-function transferName(n){return normName(cleanName(String(n||'')));}
+function transferIdentityParts(n){
+  const text=cleanName(String(n||'')).trim(),match=text.match(/\s*[([]([A-Z0-9]{1,8})[)\]]\s*$/i);
+  return {name:match?text.slice(0,match.index).trim():text,tag:match?match[1].toUpperCase():''};
+}
+function transferName(n){return normName(transferIdentityParts(n).name);}
+function resolveLegacyTransferIdentity(name,club,year){
+  const parts=transferIdentityParts(name),wanted=transferClub(club);
+  const candidates=(G_REGISTRY[year]||[]).filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(',')].some(c=>transferClub(c)===wanted));
+  const tagged=parts.tag?candidates.filter(r=>String(r.identityTag||transferIdentityParts(r.name).tag).toUpperCase()===parts.tag):candidates;
+  return tagged.length===1?tagged[0]:null;
+}
 function transferConflicts(team,rows,year){
   const club=transferClub(team.club),out=[];
   for(const [index,name] of snapshotRosterNames(team).entries()){
     const playerId=registrationPlayerIdentity(team,name,index);
     const identity=transferName(name);
-    const hits=rows.filter(r=>r.year===year-1&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>transferName(n)===identity&&(!playerId||!registrationPlayerIdentity(r,n,j)||playerId===registrationPlayerIdentity(r,n,j))));
-    if(hits.length)out.push({name,clubs:[...new Set(hits.map(r=>transferClub(r.club)))],sources:[...new Set(hits.map(r=>r.tournamentName||''))].filter(Boolean)});
+    const current=resolveLegacyTransferIdentity(name,club,year);
+    const effectiveId=playerId||current?.playerId||'';
+    const sameClubEvidence=rows.some(r=>r.year===year-1&&transferClub(r.club)===club&&snapshotRosterNames(r).some(n=>transferName(n)===identity));
+    const hits=rows.filter(r=>r.year===year-1&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>{
+      if(transferName(n)!==identity)return false;
+      const recordedId=registrationPlayerIdentity(r,n,j);
+      if(effectiveId&&recordedId)return effectiveId===recordedId;
+      // Legacy names carry no ID. Resolve only an explicitly distinguished duplicate
+      // or one corroborated by last year's participation in the current club.
+      const other=resolveLegacyTransferIdentity(n,r.club,year);
+      const currentTag=current?.identityTag||transferIdentityParts(current?.name||name).tag;
+      const otherTag=other?.identityTag||transferIdentityParts(other?.name||n).tag;
+      const separated=currentTag&&otherTag&&currentTag!==otherTag;
+      if(effectiveId&&other?.playerId&&other.playerId!==effectiveId&&(separated||sameClubEvidence))return false;
+      return true;
+    }));
+    if(hits.length)out.push({name,playerId:effectiveId,clubs:[...new Set(hits.map(r=>transferClub(r.club)))],sources:[...new Set(hits.map(r=>r.tournamentName||''))].filter(Boolean)});
   }
   return out;
 }
@@ -2757,7 +2782,7 @@ async function validatePriorYearClubTransfer(tid,div,teams){
   for(const team of teams){
     if(team.tournamentType==='individual_pair')continue;
     for(const hit of transferConflicts(team,rows,year)){
-      const club=transferClub(team.club),id=encodeURIComponent(JSON.stringify([year,transferName(hit.name),club]));
+      const club=transferClub(team.club),id=encodeURIComponent(JSON.stringify([year,hit.playerId||transferName(hit.name),club]));
       const ref=doc(db,'transferApprovals',id),approved=await getDoc(ref);
       if(approved.exists()&&approved.data().approved===true&&approved.data().year===year&&approved.data().club===club)continue;
       const message=`${hit.name}: ${year-1}년 ${hit.clubs.join(', ')} 출전 → ${year}년 ${club} 신청. 타클럽 이적 제한으로 저장할 수 없습니다.`;
@@ -2765,7 +2790,7 @@ async function validatePriorYearClubTransfer(tid,div,teams){
       if(!confirm(message+'\n규정상 예외나 동명이인·자료 오류가 확인된 경우에만 승인할 수 있습니다. 예외 승인하시겠습니까?'))throw new Error(message);
       const reason=String(prompt('예외 승인 사유를 입력하세요. 예: 여성클럽+일반클럽 병행등록, 동명이인, 동일 클럽 명칭 변경, 입회 2개월 예외')||'').trim();
       if(!reason)throw new Error('승인 사유가 없어 저장을 중단했습니다.');
-      await setDoc(ref,{approved:true,year,club,name:hit.name,previousClubs:hit.clubs,sources:hit.sources,reason,approvedBy:'관리자',approvedAt:new Date().toISOString(),tournamentId:tid,division:div});
+      await setDoc(ref,{approved:true,year,club,name:hit.name,playerId:hit.playerId||'',previousClubs:hit.clubs,sources:hit.sources,reason,approvedBy:'관리자',approvedAt:new Date().toISOString(),tournamentId:tid,division:div});
     }
   }
 }
@@ -24668,9 +24693,10 @@ function attachRegistrationIdentities(team,tid){
   const rows=getRegistryRowsForAutocomplete(year);
   team.playerIdentities=snapshotRosterNames(team).map((name,index)=>{
     const candidates=rows.filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(',')].some(c=>transferClub(c)===transferClub(team.club)));
-    const prior=(team.playerIdentities||[])[index];
+    const prior=(team.playerIdentities||[]).find(p=>transferName(p.name)===transferName(name));
     const selected=['p','ep'].map(prefix=>ge(prefix+(index+1))).find(el=>el&&transferName(el.value)===transferName(name)&&el.dataset.playerId);
-    const chosen=candidates.find(r=>r.playerId===(selected?.dataset.playerId||prior?.playerId))||(candidates.length===1?candidates[0]:null);
+    const tag=transferIdentityParts(name).tag;
+    const chosen=candidates.find(r=>r.playerId===(selected?.dataset.playerId||prior?.playerId))||(tag?candidates.find(r=>String(r.identityTag||transferIdentityParts(r.name).tag).toUpperCase()===tag):null)||(candidates.length===1?candidates[0]:null);
     if(candidates.length>1&&!chosen)throw new Error(name+'는 같은 클럽의 동명이인입니다. 구분 표시가 있는 등록선수를 선택해 주세요.');
     return {name,playerId:chosen?.playerId||'',identityTag:chosen?.identityTag||''};
   });
@@ -25041,13 +25067,13 @@ function ensureRegistryPlayerAdminHub(){
   o=document.createElement('div');
   o.id='registryPlayerAdminHub';
   o.style.cssText='display:none;position:fixed;inset:0;z-index:10120;background:rgba(15,23,42,.62);align-items:center;justify-content:center;padding:14px';
-  o.innerHTML=`<div style="width:min(720px,96vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden" onclick="event.stopPropagation()">
+  o.innerHTML=`<div style="width:min(720px,96vw);max-height:calc(100dvh - 32px - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:#0f1e3a;color:#fff">
       <div id="registryPlayerAdminHubTitle" style="font-size:1rem;font-weight:900">👤 선수 관리</div>
       <button type="button" onclick="closeRegistryPlayerAdminHub()" style="border:0;border-radius:999px;width:34px;height:34px;background:rgba(255,255,255,.16);color:#fff;font-size:1.2rem;cursor:pointer">✕</button>
     </div>
-    <div id="registryPlayerAdminHubBody" style="padding:14px 16px;overflow:auto;flex:1"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc">
+    <div id="registryPlayerAdminHubBody" style="padding:14px 16px;overflow:auto;flex:1;min-height:0"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;flex-shrink:0">
       <button id="registryPlayerAdminHubEdit" class="btn btn-primary" style="font-weight:900;flex:1;min-width:120px">✏️ 선수정보 수정</button>
       <button id="registryPlayerAdminHubDelete" class="btn" style="font-weight:900;flex:1;min-width:110px;background:#dc2626;color:#fff">🗑 명단에서 삭제</button>
       <button class="btn btn-gray" onclick="closeRegistryPlayerAdminHub()">닫기</button>
@@ -27073,7 +27099,7 @@ function ensureMobileBottomMore(){
       body{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important;}
       .main-content{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))!important;}
       #kimhaeMobileBottomNav{
-        position:fixed!important;left:10px!important;right:10px!important;bottom:calc(18px + env(safe-area-inset-bottom,0px))!important;z-index:2147482000!important;
+        position:fixed!important;left:10px!important;right:10px!important;bottom:calc(18px + env(safe-area-inset-bottom,0px))!important;z-index:10000!important;
         display:grid;grid-template-columns:repeat(var(--kmb-count,6),minmax(0,1fr));align-items:stretch;
         min-height:64px;padding:6px 5px;border-radius:22px;background:#10234a;
         box-shadow:0 10px 28px rgba(2,13,35,.32),0 0 0 1px rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
