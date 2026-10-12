@@ -8598,6 +8598,13 @@ function getRegDoublesCount(){
 function isUnifiedTeamRoster(div,dbl){
   return Number(dbl)===5 || ['테린이','테린이부','terinee'].includes(String(div||''));
 }
+// PHASE210: short rosters use fixed reserve input IDs 11/12.
+function teamRosterInputNumbers(mainCount){
+  return [...Array.from({length:Math.min(10,Number(mainCount))},(_,i)=>i+1),11,12];
+}
+function readTeamRosterInputs(prefix,mainCount){
+  return teamRosterInputNumbers(mainCount).map(i=>String(ge(prefix+i)?.value||'').trim()).filter(Boolean);
+}
 function updateRegisterSlots(){
   const div=ge('regDS')?.value||'';
   const tid=ge('regTS')?.value||'';
@@ -9636,7 +9643,9 @@ async function beginUnifiedTeamEdit(key,idx){
     ge('regTS').value=tid;onRegTC();ge('regDS').value=div;renderRL();
     const clubEl=ge('regClub');if(clubEl)clubEl.value=original.club;
     onRegClubChange();updateRegisterSlots();
-    (original.players||[]).forEach((name,i)=>{const el=ge('p'+(i+1));if(el){el.value=name;el.dataset.playerId=registrationPlayerIdentity(original,name,i);el.dataset.registryClub=original.club;el.dataset.registryName=normName(name);}});
+    for(let j=1;j<=12;j++){const input=ge('p'+j);if(input){input.value='';delete input.dataset.playerId;delete input.dataset.registryName;delete input.dataset.registryClub;}}
+    const editSlots=teamRosterInputNumbers(div==='여성부'?6:Number(getRegDoublesCount())*2);
+    (original.players||[]).forEach((name,i)=>{const el=ge('p'+editSlots[i]);if(el){el.value=name;el.dataset.playerId=registrationPlayerIdentity(original,name,i);el.dataset.registryClub=original.club;el.dataset.registryName=normName(name);}});
     refreshDivisionRuleFormBadges('register');
     ensureDivisionRuleCache(tid).then(()=>{if(UNIFIED_TEAM_EDIT?.id===original._id)refreshDivisionRuleFormBadges('register');}).catch(e=>console.warn('edit badge load failed',e));
     const host=ge('aoReg');
@@ -9658,7 +9667,7 @@ async function saveUnifiedTeamEdit(){
   const current=(G.teams[edit.key]||[]).find(t=>t._id===edit.id);
   const access=getTeamRegistrationManageAccess(tid,current);if(!current||!access.ok){toast(access.reason||'기존 팀을 찾을 수 없습니다','error');return;}
   const doublesCount=getRegDoublesCount(),mainPlayerCount=div==='여성부'?6:doublesCount*2,names=[];
-  for(let i=1;i<=mainPlayerCount+2;i++){const value=ge('p'+i)?.value.trim();if(value)names.push(value);}
+  names.push(...readTeamRosterInputs('p',mainPlayerCount));
   const nextKey=tid+'_'+div;
   const others=(G.teams[nextKey]||[]).filter(t=>t._id!==edit.id);
   const check=validateTeamRegistration({names,club,maxPlayers:mainPlayerCount+2,existingTeams:others,makePlayerKey:pKey});
@@ -9811,7 +9820,7 @@ async function registerTeam(){
     const isRegW=(div==='여성부'), isRegT=(div==='테린이'||div==='terinee');
     regMainCount=isRegW?6:mainCount;
     const regTotal=regMainCount+2;
-    for(let i=1;i<=regTotal;i++){const v=ge('p'+i)?.value.trim();if(v)names.push(v);}
+    names.push(...readTeamRosterInputs('p',regMainCount));
     const teamCheck=validateTeamRegistration({
       names,
       club,
@@ -10225,13 +10234,7 @@ async function saveETeam(){
   const mainCount = isEW ? 6 : dbl * 2;
   const totalSlots=mainCount+2;
   const np = [];
-  for(let i=1;i<=totalSlots;i++){
-    const el = ge('ep'+i);
-    if(el){
-      const v = el.value.trim();
-      if(v) np.push(v);
-    }
-  }
+  for(let i=1;i<=totalSlots;i++){const value=String(ge('ep'+i)?.value||'').trim();if(value)np.push(value);}
 
   const editCheck=validateTeamEdit({
     players:np,
@@ -24838,7 +24841,7 @@ function attachRegistrationIdentities(team,tid){
   team.playerIdentities=snapshotRosterNames(team).map((name,index)=>{
     const candidates=rows.filter(r=>transferName(r.name)===transferName(name)&&[r.club,...String(r.subClub||'').split(/[,，]/)].some(c=>transferClub(c)===transferClub(team.club)));
     const prior=(team.playerIdentities||[]).find(p=>transferName(p.name)===transferName(name));
-    const selected=['p','ep'].map(prefix=>ge(prefix+(index+1))).find(el=>el&&transferName(el.value)===transferName(name)&&el.dataset.playerId);
+    const selected=['p','ep'].flatMap(prefix=>Array.from({length:12},(_,i)=>ge(prefix+(i+1)))).find(el=>el&&transferName(el.value)===transferName(name)&&el.dataset.playerId);
     const tag=transferIdentityParts(name).tag;
     const chosen=candidates.find(r=>r.playerId===(selected?.dataset.playerId||prior?.playerId))||(tag?candidates.find(r=>String(r.identityTag||transferIdentityParts(r.name).tag).toUpperCase()===tag):null)||(candidates.length===1?candidates[0]:null);
     if(candidates.length>1&&!chosen)throw new Error(name+'는 같은 클럽의 동명이인입니다. 구분 표시가 있는 등록선수를 선택해 주세요.');
