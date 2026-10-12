@@ -28121,10 +28121,23 @@ function outputCenterCss(){
   .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
   @page{size:A4 landscape;margin:7mm}@media print{body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}`;
 }
+// PHASE218: output pyramids reuse the bracket page's fit and pinch controls.
+function initMobileOutputPyramidZoom(box){
+  if(!box||window.innerWidth>768)return;
+  box.querySelectorAll('.pyramid-scroll-content').forEach(content=>{
+    if(content.parentElement?.classList.contains('output-pyramid-viewport'))return;
+    const viewport=document.createElement('div');
+    viewport.className='output-pyramid-viewport mobile-bracket-hscroll';
+    viewport.style.cssText='width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch';
+    content.parentNode.insertBefore(viewport,content);viewport.appendChild(content);
+  });
+  initMobileBracketHorizontalScroll(box);
+}
 function renderOutputPreview(){
   const box=ge('outputPreview');if(!box)return;
   try{box.innerHTML=`<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
+  requestAnimationFrame(()=>initMobileOutputPyramidZoom(box));
 }
 async function ensureHtml2CanvasForExport(){
   if(window.html2canvas)return;
@@ -28142,6 +28155,9 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
     const sw=Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.max(el.scrollHeight||0,el.clientHeight||0);
     const canvas=await html2canvas(el,{scale:3.5,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0,
       onclone:(doc)=>{
+        doc.querySelectorAll('.mobile-bracket-zoom-tools').forEach(n=>n.remove());
+        doc.querySelectorAll('.output-pyramid-viewport').forEach(n=>{n.style.overflow='visible';n.style.maxWidth='none';});
+        doc.querySelectorAll('.output-pyramid-viewport .pyramid-scroll-content').forEach(n=>{n.style.zoom='1';});
         doc.querySelectorAll('[data-pyramid-op]').forEach(n=>{ n.style.display='none'; });
         doc.querySelectorAll('.pyramid-team-name').forEach(n=>{
           n.style.fontWeight='800';n.style.overflow='visible';
