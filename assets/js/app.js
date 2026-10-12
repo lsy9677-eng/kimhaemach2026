@@ -2548,6 +2548,7 @@ async function loadMeta(){
       G.meta.memberRegistry2026=members; // 레거시 호환 유지
       if(!window.G_REGISTRY) window.G_REGISTRY={};
       G_REGISTRY[REG_YEAR]=members;
+      REGISTRY_SAVE_BASELINES.set(Number(REG_YEAR),JSON.parse(JSON.stringify(members)));
       if(!REGISTRY_YEARS_LOADED.includes(REG_YEAR)) REGISTRY_YEARS_LOADED.push(REG_YEAR);
     }else{
       G.meta.memberRegistry2026=[];
@@ -2731,7 +2732,8 @@ function transferYear(t){
 function registrationClubIdentityKey(value){
   const raw=_m26Club(String(value||'').trim());
   const club=String(baseClub(raw)||raw).replace(/\s+/g,'').replace(/(?:테니스클럽|테니스동호회|클럽)$/,'').replace(/(?:tennisclub|club)$/i,'');
-  return club.toLocaleLowerCase('ko-KR');
+  const identity=club.toLocaleLowerCase('ko-KR');
+  return identity==='포티폴'?'포티올':identity;
 }
 function transferClub(c){return registrationClubIdentityKey(c);}
 function transferIdentityParts(n){
@@ -7508,10 +7510,18 @@ async function verifiedMissingRegistryMembers(names,club,t){
   catch(e){throw new Error('최신 등록명단을 확인하지 못했습니다. 연결 상태를 확인하고 다시 저장해 주세요.');}
   return missingMembers2026(names,club,t);
 }
-function showMissingMembers2026(missing){
-  const uniq=[...new Set((missing||[]).map(x=>(x||'').trim()).filter(Boolean))];
-  const msg=`등록 선수 제한이 켜져 있어 명단 등록 후 출전 가능합니다` + (uniq.length?('\n\n미등록 선수: '+uniq.join(', ')): '');
-  alert(msg);
+// PHASE216: distinguish absent registry members from affiliation mismatches.
+function showMissingMembers2026(missing,club='',t=null){
+  const year=_m26YearFromTournament(t)||2026;
+  const rows=Array.isArray(G_REGISTRY[year])?G_REGISTRY[year]:getMemberRegistry2026();
+  const uniq=[...new Set((missing||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+  const details=uniq.map(name=>{
+    const found=rows.filter(r=>transferName(r.name)===transferName(name));
+    if(!found.length)return name+': 공식 등록명단에 이름 없음';
+    const clubs=[...new Set(found.flatMap(r=>[r.club,...String(r.subClub||'').split(/[,，]/)]).filter(Boolean))];
+    return name+': 등록 소속 '+clubs.join(' / ')+(found.length>1?' (동명이인 확인 필요)':'');
+  });
+  alert(`${year}년 등록선수 자격 확인으로 저장이 중단됐습니다.\n신청 클럽: ${club||'선택 클럽'}\n\n${details.join('\n')}\n\n공식 등록명단의 주클럽·부클럽과 신청 클럽을 확인해 주세요. 기존 팀은 삭제할 필요가 없습니다.`);
 }
 async function syncRegistryMembersToPlayers(rows){
   const keys=[];
@@ -9716,7 +9726,7 @@ async function saveUnifiedTeamEdit(){
   if(!capacity.ok){toast(capacity.error,'error');return;}
   const tournament=G.tournaments.find(t=>t.id===tid);
   let missing;try{missing=await verifiedMissingRegistryMembers(names,club,tournament);}catch(e){toast(e.message,"error");return;}
-  if(missing.length){showMissingMembers2026(missing);return;}
+  if(missing.length){showMissingMembers2026(missing,club,tournament);return;}
   const rules=await validateTeamDivisionRules({tid,div,club,names,excludeKey:edit.key,excludeIdx:(G.teams[edit.key]||[]).findIndex(t=>t._id===edit.id)});
   if(!rules.ok){alert(rules.error);return;}
   const next={...edit.original,...buildTeamEditPayload({club,players:names,doublesCount,mainPlayerCount}),division:div,tournamentId:tid};
@@ -9870,7 +9880,7 @@ async function registerTeam(){
     });
     if(!teamCheck.ok){ toast(teamCheck.error,'error'); return; }
     let missing2026;try{missing2026=await verifiedMissingRegistryMembers(names,club,t);}catch(e){toast(e.message,"error");return;}
-    if(missing2026.length){showMissingMembers2026(missing2026);return;}
+    if(missing2026.length){showMissingMembers2026(missing2026,club,t);return;}
     const divRuleCheck=await validateTeamDivisionRules({tid,div,club,names});
     if(!divRuleCheck.ok){ alert(divRuleCheck.error); toast('부서 자격 규정을 확인해 주세요','error'); return; }
   }
@@ -10291,7 +10301,7 @@ async function saveETeam(){
 
   let missing2026;try{missing2026=await verifiedMissingRegistryMembers(np,newClub,tournament);}catch(e){toast(e.message,"error");return;}
   if(missing2026.length){
-    showMissingMembers2026(missing2026);
+    showMissingMembers2026(missing2026,newClub,tournament);
     return;
   }
   const divRuleCheck=await validateTeamDivisionRules({tid,div,club:newClub,names:np,excludeKey:CE_key,excludeIdx:CE_idx});
@@ -24928,17 +24938,19 @@ function attachRegistrationIdentities(team,tid){
   });
 }
 const REGISTRY_LOAD_REQUESTS=new Map();
+const REGISTRY_SAVE_BASELINES=new Map();
+const REGISTRY_SAVE_LOCKS=new Set();
 function persistRegistryViewCache(year){
   try{localStorage.setItem('OAI_REGISTRY_VIEW_V198_'+year,JSON.stringify({members:G_REGISTRY[year]||[],ts:Date.now()}));}catch(e){}
 }
 async function loadRegistry(year,force=false){
   year=Number(year);
-  if(!force&&REGISTRY_YEARS_LOADED.includes(year)){if(year===2026)G.meta.memberRegistry2026=G_REGISTRY[year]||[];return G_REGISTRY[year]||[];}
+  if(!force&&REGISTRY_YEARS_LOADED.includes(year)){if(!REGISTRY_SAVE_BASELINES.has(year))REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(G_REGISTRY[year]||[])));if(year===2026)G.meta.memberRegistry2026=G_REGISTRY[year]||[];return G_REGISTRY[year]||[];}
   if(!force){
     try{
       const cache=JSON.parse(localStorage.getItem('OAI_REGISTRY_VIEW_V198_'+year)||'null');
       if(Array.isArray(cache?.members)){
-        G_REGISTRY[year]=cache.members;if(year===2026)G.meta.memberRegistry2026=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
+        G_REGISTRY[year]=cache.members;REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(cache.members)));if(year===2026)G.meta.memberRegistry2026=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
       }
     }catch(e){}
   }
@@ -24953,6 +24965,7 @@ async function loadRegistry(year,force=false){
     const members=raw.exists()?(raw.data().members||[]):[];
     if(!Array.isArray(members))throw new Error('선수 명단 형식이 올바르지 않습니다.');
     G_REGISTRY[year]=members;
+    REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(members)));
     if(year===2026)G.meta.memberRegistry2026=members;
     if(!REGISTRY_YEARS_LOADED.includes(year))REGISTRY_YEARS_LOADED.push(year);
     persistRegistryViewCache(year);return members;
@@ -24960,12 +24973,46 @@ async function loadRegistry(year,force=false){
   request.registryServer=force;
   REGISTRY_LOAD_REQUESTS.set(year,request);return request;
 }
+// PHASE217: registry conflict guard and complete before/after backup in one transaction.
+function registrySnapshotChunks(rows){
+  const chunks=[];let current=[];
+  for(const row of rows){
+    const single=JSON.stringify(row);
+    if(new TextEncoder().encode(single).length>400000)throw new Error('선수 한 건의 정보가 너무 큽니다.');
+    if(current.length&&new TextEncoder().encode(JSON.stringify([...current,row])).length>400000){chunks.push(JSON.stringify(current));current=[];}
+    current.push(row);
+  }
+  chunks.push(JSON.stringify(current));return chunks;
+}
 async function saveRegistry(year){
-  const members=ensureRegistryPlayerIdentities(G_REGISTRY[year]||[]);
-  await setDoc(doc(db,'memberRegistries',String(year)),{year,members,version:_registryVersion(year),updatedAt:serverTimestamp()},{merge:true});
-  persistRegistryViewCache(year);
-  PLAYER_SEARCH_MODEL=null;
-  if(Number(year)===2026)G.meta.memberRegistry2026=members;
+  year=Number(year);
+  if(REGISTRY_SAVE_LOCKS.has(year))throw new Error('명단 저장 중입니다. 완료 후 다시 시도하세요.');
+  const baseline=REGISTRY_SAVE_BASELINES.get(year);
+  if(!baseline)throw new Error('선수명단 새로고침 후 다시 변경해 주세요. 이전 명단으로 덮어쓰기를 차단했습니다.');
+  const members=JSON.parse(JSON.stringify(ensureRegistryPlayerIdentities(G_REGISTRY[year]||[])));
+  const beforeChunks=registrySnapshotChunks(baseline),afterChunks=registrySnapshotChunks(members);
+  if(beforeChunks.length+afterChunks.length>450)throw new Error('명단 백업 저장 한도를 초과했습니다. 저장을 중단합니다.');
+  const ref=doc(db,'memberRegistries',String(year)),backup=doc(collection(db,'registrySnapshots'));
+  const parts=[...beforeChunks.map((json,index)=>({side:'before',index,json})),...afterChunks.map((json,index)=>({side:'after',index,json}))];
+  const partRefs=parts.map(part=>doc(collection(backup,'parts')));
+  const when=new Date().toISOString(),actor=registrationAuditActor();
+  REGISTRY_SAVE_LOCKS.add(year);
+  try{
+    await runTransaction(db,async tx=>{
+      const latest=await tx.get(ref),server=latest.exists()?(latest.data().members||[]):[];
+      if(!Array.isArray(server)||stableStringify(server)!==stableStringify(baseline))throw new Error('다른 기기에서 공식 명단이 변경됐습니다. 최신 명단을 새로고침한 뒤 다시 추가·수정하세요. 기존 서버 명단은 보존했습니다.');
+      tx.set(backup,{year,type:'official_registry_snapshot',permanent:true,createdAt:when,actor,beforeCount:baseline.length,afterCount:members.length,beforeParts:beforeChunks.length,afterParts:afterChunks.length,complete:true});
+      parts.forEach((part,i)=>tx.set(partRefs[i],part));
+      tx.set(ref,{year,members,version:_registryVersion(year),updatedAt:serverTimestamp(),lastSnapshotId:backup.id},{merge:true});
+    });
+    REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(members)));
+    G_REGISTRY[year]=members;persistRegistryViewCache(year);
+    PLAYER_SEARCH_MODEL=null;
+    if(year===2026)G.meta.memberRegistry2026=members;
+  }catch(e){
+    try{localStorage.setItem('OAI_REGISTRY_UNSAVED_V217_'+year,JSON.stringify({members,attemptedAt:when,error:e.message}));}catch(ignore){}
+    throw e;
+  }finally{REGISTRY_SAVE_LOCKS.delete(year);}
 }
 async function getRegistryYears(){
   try{
