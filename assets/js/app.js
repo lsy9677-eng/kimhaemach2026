@@ -28126,7 +28126,21 @@ function outputCenterCss(){
   .oc-group-title,.oc-round-title{display:flex;justify-content:space-between;background:#e9eef8;padding:5px 7px;font-size:11px;font-weight:900}.oc-teamline{font-size:9px;padding:4px 6px;border-bottom:1px solid #bbb}
   table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #aaa;padding:4px 5px;text-align:center;height:24px}th{background:#f4f5f7;font-weight:900}.oc-score{font-weight:900;white-space:nowrap}.oc-write{min-width:50px}
   .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
-  @page{size:A4 landscape;margin:7mm}@media print{body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}`;
+  @page{size:A4 landscape;margin:7mm}@media print{.mobile-bracket-zoom-tools{display:none!important}body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}`;
+}
+// PHASE220: fit the fixed-width pyramid inside its output frame.
+function fitOutputPyramids(root,force=false){
+  if(!force&&window.innerWidth<=768)return;
+  root.querySelectorAll('.oc-sheet .pyramid-scroll-content').forEach(content=>{
+    const parent=content.parentElement;
+    const view=parent.ownerDocument.defaultView;
+    const style=view.getComputedStyle(parent);
+    const available=parent.clientWidth-parseFloat(style.paddingLeft||0)-parseFloat(style.paddingRight||0);
+    const natural=parseFloat(content.style.width)||content.scrollWidth;
+    if(available<=0||natural<=0)return;
+    content.style.zoom=String(Math.min(1,(available-4)/natural));
+    content.style.marginLeft='auto';content.style.marginRight='auto';
+  });
 }
 // PHASE218: output pyramids reuse the bracket page's fit and pinch controls.
 function initMobileOutputPyramidZoom(box){
@@ -28144,7 +28158,7 @@ function renderOutputPreview(){
   const box=outputElement('outputPreview');if(!box)return;
   try{box.innerHTML=`<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
-  requestAnimationFrame(()=>initMobileOutputPyramidZoom(box));
+  requestAnimationFrame(()=>{fitOutputPyramids(box);initMobileOutputPyramidZoom(box);});
 }
 async function ensureHtml2CanvasForExport(){
   if(window.html2canvas)return;
@@ -28165,6 +28179,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
         doc.querySelectorAll('.mobile-bracket-zoom-tools').forEach(n=>n.remove());
         doc.querySelectorAll('.output-pyramid-viewport').forEach(n=>{n.style.overflow='visible';n.style.maxWidth='none';});
         doc.querySelectorAll('.output-pyramid-viewport .pyramid-scroll-content').forEach(n=>{n.style.zoom='1';});
+        fitOutputPyramids(doc,true);
         doc.querySelectorAll('[data-pyramid-op]').forEach(n=>{ n.style.display='none'; });
         doc.querySelectorAll('.pyramid-team-name').forEach(n=>{
           n.style.fontWeight='800';n.style.overflow='visible';
@@ -28196,7 +28211,7 @@ function printOutputCenter(){
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
   const w=window.open('','_blank','width=1200,height=850');
   if(!w){toast('팝업 차단을 해제해 주세요','info');return;}
-  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>const fitOutputPyramids=${fitOutputPyramids.toString()};setTimeout(()=>{fitOutputPyramids(document,true);window.print();},250)<\/script></body></html>`);w.document.close();
 }
 
 
