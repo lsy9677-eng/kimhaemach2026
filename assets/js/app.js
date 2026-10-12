@@ -2494,7 +2494,7 @@ if(!window.__kimhaeFirestoreCleanupBound){
 
 async function loadMeta(){
   // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
-  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
+  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
   try{
     const s=await getDoc(doc(db,'meta','config'));
     if(s.exists()){
@@ -2750,6 +2750,10 @@ function correctedHistoricalClub(club,year){
   return Number(year)>=2000&&Number(year)<2026&&transferClub(club)==='아테'?'어메이징':club;
 }
 function dissolvedClubTransferException(club,year){return Number(year)===2026&&transferClub(club)==='어메이징';}
+// PHASE215: Hanaro renamed Gimhae, then merged into The One; Suro is unrelated.
+function mergedClubTransferException(previousClub,currentClub,year){
+  return Number(year)===2026&&['하나로','김해'].includes(transferClub(previousClub))&&transferClub(currentClub)==='더원';
+}
 function transferConflicts(team,rows,year){
   const club=transferClub(team.club),out=[];
   rows=rows.map(r=>({...r,club:correctedHistoricalClub(r.club,r.year)}));
@@ -2759,7 +2763,7 @@ function transferConflicts(team,rows,year){
     const current=resolveLegacyTransferIdentity(name,club,year);
     const effectiveId=playerId||current?.playerId||'';
     const sameClubEvidence=rows.some(r=>r.year===year-1&&transferClub(r.club)===club&&snapshotRosterNames(r).some(n=>transferName(n)===identity));
-    const hits=rows.filter(r=>r.year===year-1&&!dissolvedClubTransferException(r.club,year)&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>{
+    const hits=rows.filter(r=>r.year===year-1&&!dissolvedClubTransferException(r.club,year)&&!mergedClubTransferException(r.club,team.club,year)&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>{
       if(transferName(n)!==identity)return false;
       const recordedId=registrationPlayerIdentity(r,n,j);
       if(effectiveId&&recordedId)return effectiveId===recordedId;
