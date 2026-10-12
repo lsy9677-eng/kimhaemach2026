@@ -7480,7 +7480,7 @@ async function syncRegistryMembersToPlayers(rows){
     const club=_m26Club(r.club||'');
     if(!name || !club) return;
     const key=pKey(name,club);
-    if(!G.players[key]) G.players[key]={key,name,club,clubs:[club],history:[],wins:0,losses:0,phone:(r.phone||'').trim()};
+    if(!hasRegistryNamesakeInClub(members,members[members.length-1])&&!G.players[key]) G.players[key]={key,name,club,clubs:[club],history:[],wins:0,losses:0,phone:(r.phone||'').trim()};
     const p=G.players[key];
     p.key=key; p.name=name; p.club=club;
     if(!Array.isArray(p.clubs)) p.clubs=[];
@@ -24904,6 +24904,7 @@ function mergeRegistryIntoPlayersMemory(rows){
   for(const raw of (rows||[])){
     const name=cleanName(raw?.name||''),club=normalizeClub(raw?.club||'');
     if(!name||!club)continue;
+    if((rows||[]).filter(r=>transferName(r.name)===transferName(name)&&isSameRegistrationClub(r.club,club)).length>1)continue;
     const key=pKey(name,club),prev=G.players[key]||{};
     if(!G.players[key]){
       G.players[key]={key,name,club,clubs:[club],phone:String(raw?.phone||'').trim(),history:[],wins:0,losses:0};
@@ -25649,6 +25650,29 @@ async function renderRegistryMgr(){
   rebuildRegistryMgrSearchIndex();
   applyRegistryMgrSearch();
 }
+// PHASE211: explicit same-name registration with separate immutable registry IDs.
+function prepareRegistryNamesake(members,name,club){
+  const same=members.filter(r=>transferName(r.name)===transferName(name));
+  const inClub=same.filter(r=>isSameRegistrationClub(r.club,club));
+  if(!inClub.length)return {name,club,playerId:'rp_'+crypto.randomUUID(),identityTag:''};
+  if(!confirm(`${name}(${club}) 회원이 이미 있습니다.\n기존 회원과 다른 동명이인을 새로 등록하는 경우에만 확인을 누르세요.`))return null;
+  const used=new Set(same.map(r=>String(r.identityTag||transferIdentityParts(r.name).tag||'').toUpperCase()).filter(Boolean));
+  const labels=new Map();
+  const nextTag=()=>{for(let i=0;i<26;i++){const tag=String.fromCharCode(65+i);if(!used.has(tag)){used.add(tag);return tag;}}let i=1;while(used.has('P'+i))i++;const tag='P'+i;used.add(tag);return tag;};
+  same.forEach(r=>{if(!r.identityTag)labels.set(r,nextTag());});
+  const suggested=nextTag();
+  const answer=prompt('새 동명이인의 관리자 구분값을 입력하세요. (영문·숫자 1~8자)',suggested);
+  if(answer===null)return null;
+  const tag=String(answer).trim().toUpperCase();
+  const reserved=new Set([...same.map(r=>String(r.identityTag||transferIdentityParts(r.name).tag||'').toUpperCase()),...labels.values()]);
+  if(!/^[A-Z0-9]{1,8}$/.test(tag)||reserved.has(tag)){toast('구분값이 잘못되었거나 이미 사용 중입니다','error');return null;}
+  labels.forEach((value,row)=>{row.identityTag=value;});
+  ensureRegistryPlayerIdentities(members);
+  return {name,club,playerId:'rp_'+crypto.randomUUID(),identityTag:tag};
+}
+function hasRegistryNamesakeInClub(rows,row){
+  return rows.some(r=>r!==row&&r.playerId!==row.playerId&&transferName(r.name)===transferName(row.name)&&isSameRegistrationClub(r.club,row.club));
+}
 // 선수 등록 현황 탭 — 빠른 추가
 async function registryTabQuickAdd(){
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
@@ -25659,8 +25683,8 @@ async function registryTabQuickAdd(){
   if(!club){ toast('클럽을 선택하세요','error'); return; }
   const year=parseInt(ge('regYearSel')?.value||2026);
   const members=await loadRegistry(year);
-  if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}),'quick-add'));
+  const identity=prepareRegistryNamesake(members,name,club);if(!identity)return;
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{...identity,region:resolveClubRegionForRegistry(club,members),subClub:subClub||''}),'quick-add'));
   if(!window.G_REGISTRY) window.G_REGISTRY={};
   G_REGISTRY[year]=members;
   // G.players에도 추가
@@ -25668,7 +25692,7 @@ async function registryTabQuickAdd(){
   if(!G.players[key]) G.players[key]={key,name,club,clubs:[club].concat(subClub?subClub.split(',').map(s=>normalizeClub(s.trim())).filter(Boolean):[]),history:[],wins:0,losses:0,phone:''};
   sl(true);
   try{
-    await stP(key);
+    if(!hasRegistryNamesakeInClub(members,members[members.length-1]))await stP(key);
     await saveRegistry(year);
     await fbLog(`선수추가: ${name}(${club})`,'👤');
     sl(false);
@@ -25778,7 +25802,7 @@ async function saveRegistryQuickEditModal(){
   const newAge65=!!ge('rqemAge65')?.checked;
   if(!newName||!newClub){toast('이름과 주 클럽을 확인해 주세요','error');return;}
   const duplicate=members.some((r,i)=>i!==idx&&normName(cleanName(r.name||''))===normName(newName)&&canonicalRegistryClub(r.club||'')===newClub);
-  if(duplicate){toast('같은 이름과 클럽으로 이미 등록된 선수가 있습니다','error');return;}
+  if(duplicate&&!identityTag){toast('같은 클럽의 동명이인은 A/B 구분값을 입력하세요','error');return;}
   if(oldAge65!==newAge65){
     const q=newAge65?`${newName} 선수를 만 65세 이상 인증완료로 저장할까요?`:`${newName} 선수의 65세 이상 인증을 해제할까요?`;
     if(!confirm(q)) return;
@@ -25789,6 +25813,12 @@ async function saveRegistryQuickEditModal(){
   try{
     members[idx]={...m,identityTag,name:newName,club:newClub,subClub:newSubClub,region:newRegion,gender:newGender,age65Certified:newAge65,age65CertifiedAt:newAge65?(m.age65CertifiedAt||new Date().toISOString()):''};
     G_REGISTRY[year]=members;await saveRegistry(year);
+    if(hasRegistryNamesakeInClub(members,members[idx])){
+      PLAYER_SEARCH_MODEL=null;DIVISION_RULE_CACHE.clear();
+      closeRegistryQuickEditModal();sl(false);toast('동명이인 정보 저장 완료 ✅','success');
+      await renderRegistryTab(true);try{await renderRegistryMgr();}catch(e){}return;
+    }
+
 
     // 65+ 영구 인증은 클럽/이름 변경과 함께 현재 선수키로 이동한다.
     const oldCertId=_age65CertDocId(oldName,oldClub), newCertId=_age65CertDocId(newName,newClub);
@@ -25852,6 +25882,7 @@ async function syncOfficialRegistryRowsToPlayers(rows){
     const name=cleanName(raw?.name||'');
     const club=normalizeClub(raw?.club||'');
     if(!name||!club) continue;
+    if(Object.values(G_REGISTRY).some(list=>Array.isArray(list)&&list.filter(r=>transferName(r.name)===transferName(name)&&isSameRegistrationClub(r.club,club)).length>1))continue;
     const key=pKey(name,club);
     const prev=G.players[key]||{};
     const clubs=[...new Set([club,...(Array.isArray(prev.clubs)?prev.clubs:[]),...(String(raw?.subClub||'').split(',').map(x=>normalizeClub(x.trim())).filter(Boolean))].filter(Boolean))];
@@ -25878,8 +25909,8 @@ async function addRegistryRow(){
   if(!name||!club){ toast('이름과 클럽은 필수입니다','error'); return; }
   const members=await loadRegistry(year);
   if(!region) region=resolveClubRegionForRegistry(club,members);
-  if(members.find(m=>m.name===name&&m.club===club)){ toast('이미 등록된 선수입니다','info'); return; }
-  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{name,club,region,subClub}),'admin-manual')); sl(true);
+  const identity=prepareRegistryNamesake(members,name,club);if(!identity)return;
+  members.push(stampRegistryAddedMeta(applyClubDefaultRegion(G.meta,{...identity,region,subClub}),'admin-manual')); sl(true);
   try{
     await saveRegistry(year);
     await syncOfficialRegistryRowsToPlayers([members[members.length-1]]);
