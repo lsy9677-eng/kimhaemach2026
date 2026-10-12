@@ -27074,6 +27074,13 @@ function outputEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','
 function isMobileOutputCenter(){
   try{return window.matchMedia('(max-width: 768px)').matches;}catch(e){return window.innerWidth<=768;}
 }
+// PHASE219: resolve controls within the visible output center, never hidden duplicates.
+function outputElement(id){
+  const mobile=document.getElementById('mMobileOutputCenter');
+  if(mobile?.classList.contains('open'))return mobile.querySelector('#'+id);
+  const desktop=document.getElementById('page-output');
+  return desktop?.querySelector('#'+id)||document.getElementById(id);
+}
 function outputCenterInnerHtml(){
   return `
     <div class="sec-title">🖨️ 출력센터 <span style="font-size:.72rem;font-weight:500;color:var(--text2)">— 일반 회원도 조회·인쇄 가능</span></div>
@@ -27579,7 +27586,7 @@ function outputDefaultTournamentId(){
 }
 function initOutputCenter(){
   installPublicOutputCenter();
-  const ts=ge('outTS');if(!ts)return;
+  const ts=outputElement('outTS');if(!ts)return;
   const prev=ts.value;
   const outTours=outputSortedTournaments();
   ts.innerHTML=outTours.map(t=>`<option value="${outputEsc(t.id)}">${outputEsc(t.name||'대회')}</option>`).join('');
@@ -27587,8 +27594,8 @@ function initOutputCenter(){
   outputTournamentChanged();
 }
 async function outputTournamentChanged(){
-  const tid=ge('outTS')?.value||'';
-  const ds=ge('outDS');if(!ds)return;
+  const tid=outputElement('outTS')?.value||'';
+  const ds=outputElement('outDS');if(!ds)return;
   const old=ds.value;
   const t=(G.tournaments||[]).find(x=>x.id===tid);
   ds.innerHTML='<option value="">⏳ 실제 저장 데이터 확인 중...</option>';
@@ -28102,7 +28109,7 @@ function initMobileBracketHorizontalScroll(root=document){
 }
 
 function outputCenterBody(){
-  const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.value||'prelim-current';
+  const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.value||'prelim-current';
   if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
   if(type==='prelim-current')return outputPrelimHtml(tid,div,false);
   if(type==='prelim-blank')return outputPrelimHtml(tid,div,true);
@@ -28134,7 +28141,7 @@ function initMobileOutputPyramidZoom(box){
   initMobileBracketHorizontalScroll(box);
 }
 function renderOutputPreview(){
-  const box=ge('outputPreview');if(!box)return;
+  const box=outputElement('outputPreview');if(!box)return;
   try{box.innerHTML=`<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
   requestAnimationFrame(()=>initMobileOutputPyramidZoom(box));
@@ -28164,13 +28171,17 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
           n.querySelectorAll('span').forEach(sp=>{sp.style.lineHeight='1.4';sp.style.height='1.4em';sp.style.overflow='visible';});
         });
       }});
-    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=filename;a.click();
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('PNG 파일 생성 실패')),'image/png'));
+    if(!blob.size)throw new Error('이미지 파일이 비어 있습니다.');
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
     toast('고화질 이미지 저장 완료 🖼️','success');
   }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
 }
 async function saveOutputCenterHighResImage(){
-  const el=ge('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
-  const tid=ge('outTS')?.value||'',div=ge('outDS')?.value||'',type=ge('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
+  if(!outputElement('outTS')?.value||!outputElement('outDS')?.value){toast('대회와 부서를 선택하세요','info');return;}
+  renderOutputPreview();
+  const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
+  const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
   const t=G.tournaments.find(x=>x.id===tid);
   await saveHighResElement(el,`출력센터_${t?.name||'대회'}_${dl(div)}_${type}_${new Date().toISOString().slice(0,10)}.png`);
 }
@@ -28180,6 +28191,7 @@ async function saveMainPyramidHighResImage(tid,div){
   await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
 }
 function printOutputCenter(){
+  if(!outputElement('outTS')?.value||!outputElement('outDS')?.value){toast('대회와 부서를 선택하세요','info');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
   const w=window.open('','_blank','width=1200,height=850');
