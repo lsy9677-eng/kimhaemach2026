@@ -2494,7 +2494,7 @@ if(!window.__kimhaeFirestoreCleanupBound){
 
 async function loadMeta(){
   // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
-  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','어메이징':'아테','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
+  const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','김해':'수로','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
   try{
     const s=await getDoc(doc(db,'meta','config'));
     if(s.exists()){
@@ -2745,15 +2745,21 @@ function resolveLegacyTransferIdentity(name,club,year){
   const tagged=parts.tag?candidates.filter(r=>String(r.identityTag||transferIdentityParts(r.name).tag).toUpperCase()===parts.tag):candidates;
   return tagged.length===1?tagged[0]:null;
 }
+// PHASE214: Amazing dissolved; Ate is a distinct club founded in 2026.
+function correctedHistoricalClub(club,year){
+  return Number(year)>=2000&&Number(year)<2026&&transferClub(club)==='아테'?'어메이징':club;
+}
+function dissolvedClubTransferException(club,year){return Number(year)===2026&&transferClub(club)==='어메이징';}
 function transferConflicts(team,rows,year){
   const club=transferClub(team.club),out=[];
+  rows=rows.map(r=>({...r,club:correctedHistoricalClub(r.club,r.year)}));
   for(const [index,name] of snapshotRosterNames(team).entries()){
     const playerId=registrationPlayerIdentity(team,name,index);
     const identity=transferName(name);
     const current=resolveLegacyTransferIdentity(name,club,year);
     const effectiveId=playerId||current?.playerId||'';
     const sameClubEvidence=rows.some(r=>r.year===year-1&&transferClub(r.club)===club&&snapshotRosterNames(r).some(n=>transferName(n)===identity));
-    const hits=rows.filter(r=>r.year===year-1&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>{
+    const hits=rows.filter(r=>r.year===year-1&&!dissolvedClubTransferException(r.club,year)&&transferClub(r.club)!==club&&transferClub(r.club)&&snapshotRosterNames(r).some((n,j)=>{
       if(transferName(n)!==identity)return false;
       const recordedId=registrationPlayerIdentity(r,n,j);
       if(effectiveId&&recordedId)return effectiveId===recordedId;
@@ -2799,6 +2805,36 @@ async function validatePriorYearClubTransfer(tid,div,teams){
     }
   }
 }
+async function repairAmazingHistoricalRecords(){
+  if(!AD)return;
+  if(!confirm('2025년 이전 아테로 잘못 저장된 대회 소속을 어메이징으로 정정합니다. 현재 등록명단과 2026년 아테 기록은 유지합니다. 정정 전 원본도 보관합니다.'))return;
+  sl(true);let changed=0;
+  try{
+    const tours=new Map((G.tournaments||[]).map(t=>[String(t.id),transferYear(t)]));
+    const regs=await getDocsFromServer(collection(db,'registrations'));
+    const players=await getDocsFromServer(collection(db,'players'));
+    const jobs=[];
+    for(const d of regs.docs){const data=d.data(),year=tours.get(String(data.tournamentId));if(correctedHistoricalClub(data.club,year)!==data.club)jobs.push({ref:d.ref,patch:{club:'어메이징'},tid:data.tournamentId});}
+    for(const d of players.docs){const data=d.data();if(!Array.isArray(data.history))continue;const history=data.history.map(h=>{const year=Number(String(h.date||'').slice(0,4))||tours.get(String(h.tid));const club=correctedHistoricalClub(h.club,year);return club!==h.club?{...h,club}:h;});if(JSON.stringify(history)!==JSON.stringify(data.history))jobs.push({ref:d.ref,patch:{history}});}
+    const affected=new Set();
+    for(const job of jobs){
+      const backup=doc(collection(db,'restorePoints'));
+      await runTransaction(db,async tx=>{
+        const latest=await tx.get(job.ref);if(!latest.exists())throw new Error('정정 대상 기록이 변경되었습니다. 다시 실행하세요.');
+        const original=latest.data();
+        if(job.patch.history){job.patch={history:(original.history||[]).map(h=>({...h,club:correctedHistoricalClub(h.club,Number(String(h.date||'').slice(0,4))||tours.get(String(h.tid)))}))};}
+        else if(correctedHistoricalClub(original.club,tours.get(String(original.tournamentId)))===original.club)return;
+        tx.set(backup,{type:'historical_club_correction',reason:'어메이징/아테 잘못된 소속 정정',permanent:true,createdAt:new Date().toISOString(),sourcePath:job.ref.path,beforeJson:JSON.stringify(original),afterPatchJson:JSON.stringify(job.patch),actor:registrationAuditActor()});
+        tx.update(job.ref,job.patch);
+      });changed++;if(job.tid)affected.add(job.tid);
+    }
+    for(const tid of affected){await updateDoc(doc(db,'tournaments',String(tid)),{pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);}
+    PLAYER_REG_HISTORY_CACHE.clear();PLAYER_SEARCH_MODEL=null;
+    toast(`과거소속 정정 ${changed}건 완료. 새로고침해 주세요`,'success');
+  }catch(e){toast(`정정 ${changed}건 처리 후 중단: ${e.message}. 다시 실행할 수 있습니다`,'error');}finally{sl(false);}
+}
+window.repairAmazingHistoricalRecords=repairAmazingHistoricalRecords;
+
 function registrationAuditActor(){
   const role=AD?'관리자':OP?'진행자':REG?'경기이사':'시스템';
   // Use the active login, never the target club selected for proxy registration.
@@ -20493,7 +20529,7 @@ function buildPH(name,p){
           <div class="hist-yr">${h.date.substring(0,4)}</div>
           <div class="hist-detail">
             <div style="font-weight:600;font-size:.82rem">${formatTournamentTitle(h.tname, h.date)}${srcBadge}</div>
-            <div style="font-size:.7rem;color:var(--text2);margin-top:1px">${h.club} · <span class="dpill ${dc(normDiv)}" style="font-size:.58rem;padding:1px 4px">${dl(normDiv)}</span></div>
+            <div style="font-size:.7rem;color:var(--text2);margin-top:1px">${correctedHistoricalClub(h.club,String(h.date||'').slice(0,4))} · <span class="dpill ${dc(normDiv)}" style="font-size:.58rem;padding:1px 4px">${dl(normDiv)}</span></div>
           </div>
           <div><span class="badge ${badgeCls}" style="white-space:nowrap;font-size:.72rem">${rankStr}</span></div>
         </div>`;
@@ -20520,7 +20556,7 @@ function buildPH(name,p){
       <div class="psm"><div class="psm-val">${totalGames}</div><div class="psm-label">총참가</div></div>
     </div>
     <div style="font-size:.78rem;font-weight:700;color:var(--primary-dark);margin-bottom:6px">📋 대회 이력 및 순위</div>
-    <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">${histHtml}</div>`;
+    <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">${histHtml}</div>${AD?'<button class="btn btn-outline" style="margin-top:10px" onclick="repairAmazingHistoricalRecords()">어메이징 과거소속 정정 저장</button>':''}`;
 }
 function popCF(){const el=ge('pfClub');if(!el)return;const cur=el.value;el.innerHTML='<option value="">전체 클럽</option>'+G.clubs.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');}
 
@@ -24268,7 +24304,7 @@ function _parseMultiTournamentExcel(grid){
   function normClub(c){
     if(!c) return '';
     c = String(c).replace(/\s*[A-Da-d]$/, '').trim();
-    const m={'한별':'테사모','위드':'불사조','한울':'하모니','더블폴트':'로패','어메이징':'아테','LT':'LTC'};
+    const m={'한별':'테사모','위드':'불사조','한울':'하모니','더블폴트':'로패','LT':'LTC'};
     return m[c]||c;
   }
   function rankNum(s){
