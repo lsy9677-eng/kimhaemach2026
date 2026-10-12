@@ -27614,13 +27614,19 @@ function outputGeneratedTree(tid,div,blank=true){
   const t=(G.tournaments||[]).find(x=>x.id===tid);
   return outputHeader(t,div,blank?'가지형 본선 대진표 · 현장 수기용':'가지형 본선 대진표 · 추첨 전')+outputPreDrawPyramidSkeleton(tid,div);
 }
+// PHASE213: print skeleton uses the saved exact group configuration.
 function outputPreDrawMainSize(tid,div){
-  const key=tid+'_'+div, draw=G.draws?.[key], t=(G.tournaments||[]).find(x=>x.id===tid), cfg=gDS(t,div)||{};
+  const key=tid+'_'+div,draw=G.draws?.[key],t=(G.tournaments||[]).find(x=>x.id===tid),cfg=gDS(t,div)||{};
+  const ds=t?.divSettings||{},divisionKey=Object.keys(ds).find(d=>outputNormalizeDiv(d)===outputNormalizeDiv(div));
+  const saved=ds[div]?.prelimDrawSettings||ds[divisionKey]?.prelimDrawSettings;
   const groups=Array.isArray(draw?.groups)?draw.groups:[];
-  const advance=Math.max(1,Number(draw?.advance||cfg.advance||2));
   const regs=outputHistoricalRegs(tid,div);
+  const count=regs.length||(G.teams?.[key]||[]).length;
+  const validSaved=saved&&validPrelimGroupSizes(saved.groupSizes,Number(saved.teamCount))&&(!count||count===Number(saved.teamCount));
+  const advance=Math.max(1,Number(groups.length?draw?.advance||cfg.advance||2:validSaved?saved.advance:cfg.advance||2));
   const groupSize=Math.max(2,Number(cfg.grpSize||t?.grpSize||4));
-  const entrants=Math.max(2,groups.length?groups.length*advance:Math.ceil(regs.length/groupSize)*advance);
+  const groupCount=groups.length||(validSaved?saved.groupSizes.length:Math.ceil(count/groupSize));
+  const entrants=Math.max(2,groupCount*advance);
   let n=2;while(n<entrants)n*=2;
   return n;
 }
