@@ -13915,6 +13915,7 @@ function openDraw(tid,div){
   ge('confirmDrawBtn').onclick=startDraw;
   ge('confirmDrawBtn').disabled=teams.length<2;
   _ensureManualPrelimButton();
+  ensurePrelimConfigSaveControls();
   om('mDraw');
 }
 
@@ -13935,11 +13936,15 @@ function calcGroupPresets(n){
 function buildDrawPresets(n,t,div){
   const cfg=gDS(t,div);
   const presets=calcGroupPresets(n);
+  const saved=t?.divSettings?.[div]?.prelimDrawSettings;
+  const savedSizes=saved?.teamCount===n?saved.groupSizes:null;
+  if(Array.isArray(savedSizes)&&savedSizes.length&&savedSizes.every(x=>Number.isInteger(x)&&x>=2)&&savedSizes.reduce((a,b)=>a+b,0)===n&&!presets.some(p=>p.sizes.join(',')===savedSizes.join(',')))presets.unshift({label:savedSizes.join('+')+'팀 → '+savedSizes.length+'조',groups:savedSizes.length,sizes:savedSizes});
   const presetsEl=ge('grpPresets');const advEl=ge('advancePresets');
   presetsEl.innerHTML='';
-  let defaultIdx=presets.findIndex(p=>p.sizes[0]===(cfg.grpSize||4));if(defaultIdx<0)defaultIdx=Math.floor(presets.length/2);
+  if(!presets.length){DW.cfg={groups:0,grpSizes:[],advance:1};ge('advancePresets').innerHTML='';return;}
+  let defaultIdx=Array.isArray(savedSizes)?presets.findIndex(p=>p.sizes.join(',')===savedSizes.join(',')):presets.findIndex(p=>p.sizes[0]===(cfg.grpSize||4));if(defaultIdx<0)defaultIdx=Math.floor(presets.length/2);
   const sel=presets[defaultIdx]||presets[0];
-  DW.cfg.groups=sel.groups;DW.cfg.grpSizes=sel.sizes;DW.cfg.advance=cfg.advance||2;
+  DW.cfg.groups=sel.groups;DW.cfg.grpSizes=sel.sizes;DW.cfg.advance=Math.min(Math.min(...sel.sizes),Number(saved?.advance||cfg.advance||2));
   presets.forEach((p,i)=>{
     const btn=document.createElement('span');
     btn.className='grp-preset'+(i===defaultIdx?' active':'');
@@ -13950,11 +13955,43 @@ function buildDrawPresets(n,t,div){
   updateAdvPresets(n);
 }
 
+// PHASE212: persist configuration without drawing teams or changing match data.
+function ensurePrelimConfigSaveControls(){
+  let box=ge('prelimConfigSaveControls');
+  if(!box){box=document.createElement('div');box.id='prelimConfigSaveControls';ge('grpPresets')?.parentElement?.appendChild(box);}
+  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 조추첨 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">설정 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택하세요. 본선 구조는 조 수와 진출 수로 자동 계산됩니다.</div>';
+}
+function validPrelimGroupSizes(sizes,count){return Array.isArray(sizes)&&sizes.length>0&&sizes.every(x=>Number.isInteger(x)&&x>=2&&x<=6)&&sizes.reduce((a,b)=>a+b,0)===count;}
+function setCustomPrelimGroupSizes(){
+  if(!canManageBracket()||!DW?.key)return;
+  const raw=prompt('각 조의 팀 수를 쉼표로 입력하세요. (조당 2~6팀, 등록팀 전체와 합계 일치) 예: 3,3,2',(DW.cfg.grpSizes||[]).join(','));
+  if(raw===null)return;
+  const sizes=raw.split(/[,，+]/).map(x=>Number(x.trim()));
+  if(!validPrelimGroupSizes(sizes,DW.teams.length)){toast('조별 팀 수와 전체 등록팀 합계를 확인하세요','error');return;}
+  DW.cfg.groups=sizes.length;DW.cfg.grpSizes=sizes;
+  ge('grpPresets')?.querySelectorAll('.grp-preset').forEach(x=>x.classList.remove('active'));
+  updateAdvPresets(DW.teams.length);
+}
+async function savePrelimDrawSettings(){
+  if(!canManageBracket()||!DW?.key){toast('설정 권한이 없습니다','error');return;}
+  const {tid,div,teams,cfg}=DW,t=G.tournaments.find(x=>x.id===tid);
+  if(!t||!validPrelimGroupSizes(cfg.grpSizes,teams.length)||!Number.isInteger(cfg.advance)||cfg.advance<1||cfg.advance>Math.min(...cfg.grpSizes)){toast('조 구성과 진출 수를 확인하세요','error');return;}
+  const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,savedAt:new Date().toISOString()};
+  const next={...(t.divSettings?.[div]||{}),grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings};
+  sl(true);try{
+    await setDoc(doc(db,'tournaments',tid),{divSettings:{[div]:next}},{merge:true});
+    t.divSettings={...(t.divSettings||{}),[div]:next};
+    toast('조추첨 설정 저장 완료 ✅','success');
+  }catch(e){toast('설정 저장 실패: '+e.message,'error');}finally{sl(false);}
+}
+window.setCustomPrelimGroupSizes=setCustomPrelimGroupSizes;window.savePrelimDrawSettings=savePrelimDrawSettings;
+
 function updateAdvPresets(n){
   const {groups,grpSizes}=DW.cfg;
   ge('grpConfigDisplay').textContent=`${grpSizes.join('+')}팀 × ${groups}조`;
   const advEl=ge('advancePresets');advEl.innerHTML='';
   const maxAdv=Math.min(...grpSizes);
+  DW.cfg.advance=Math.max(1,Math.min(maxAdv,Number(DW.cfg.advance)||1));
   for(let a=1;a<=maxAdv;a++){
     const total=a*groups;const np=nextPow2(total);const byes=np-total;
     const btn=document.createElement('span');
@@ -15852,8 +15889,10 @@ function swapManualDrawSlots(kind){
 }
 
 async function saveManualPrelimDraw(){
+  if(!canManageBracket()||!DW?.key){toast('추첨 권한이 없습니다','error');return;}
+  if((G.draws[DW.key]?.groups||[]).length||(G.matches[DW.key]||[]).length){toast('기존 대진이 있습니다. 기존 예선 초기화 기능으로 정리한 뒤 추첨해 주세요','error');return;}
   const sizes=DW.cfg?.grpSizes||[], groups=[], used=[];
-  for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===''){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
+  for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===undefined||v===''||!Number.isInteger(Number(v))||Number(v)<0||Number(v)>=DW.teams.length){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
   if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
   if(used.length!==DW.teams.length){toast('모든 팀을 한 번씩 배치해야 합니다','error');return;}
   if(!confirm('현장 수동 추첨 결과를 예선 대진으로 확정할까요?'))return;
