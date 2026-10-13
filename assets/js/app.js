@@ -11763,6 +11763,8 @@ window.toggleIndividualAutoCourtAssign = async function toggleIndividualAutoCour
   }
 }
 
+// PHASE229: preserve Korean division identity in multi-division menu IDs.
+function bracketDivisionDomId(key){return Array.from(String(key)).map(c=>c.codePointAt(0).toString(16)).join('_');}
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
   if(!bracketPhasePublished(tid,'prelim')&&!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('prelim')+bracketPublicationNotice('main');
@@ -11807,8 +11809,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
   const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
   const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
-  const prelimMenuWrapId = `prelimMenuWrap_${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
-  const mainMenuWrapId = `mainMenuWrap_${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+  const prelimMenuWrapId = `prelimMenuWrap_${bracketDivisionDomId(key)}`;
+  const mainMenuWrapId = `mainMenuWrap_${bracketDivisionDomId(key)}`;
   const topActions=`<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:100%">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <div class="login-menu-wrap js-mini-menu" id="${prelimMenuWrapId}">
@@ -13919,6 +13921,7 @@ function prepareDrawExternalPlan(forceNew=false){
 let DW={key:null,tid:null,div:null,teams:[],cfg:{},isRunning:false,seed:1,seedMethod:'time',seedSourceLabel:'',seedSnapshotLabel:'',seedPreparedAt:'',nthPick:1,candidates:[],drawAudit:null,plan:null};
 
 function openDraw(tid,div){
+  if(DW.isRunning){toast('진행 중인 추첨을 먼저 완료하세요','info');return;}
   if(!canManageBracket()){ toast('예선 추첨은 관리자 또는 경기진행자만 실행할 수 있습니다','error'); return; }
   const key=tid+'_'+div;
   const teams=G.teams[key]||[];
@@ -13926,6 +13929,7 @@ function openDraw(tid,div){
   // 개인전은 전용 추첨 UI로 분기
   if(isIndividualTournament(t)){ openIndividualDraw(tid,div); return; }
   DW={key,tid,div,teams,cfg:{},isRunning:false};
+  const modalTitle=ge('mDraw')?.querySelector('.modal-header h3');if(modalTitle)modalTitle.textContent=`🎲 ${dl(div)} 예선 조 추첨`;
   const hasSameClub=checkSameClub(teams);
   ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
   buildDrawPresets(teams.length,t,div);
