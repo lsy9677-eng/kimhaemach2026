@@ -14881,15 +14881,7 @@ function renderMainCandidatePreviewCards(){
   </div>`;
 }
 
-function renderMainBracketPreviewHTML(key, plan, teams){
-  try{
-    const prev = ge('mainBracketPreview')?.innerHTML || '';
-    const box = document.createElement('div');
-    box.innerHTML = prev || '';
-    if(box.innerHTML.trim()) return box.innerHTML;
-  }catch(e){}
-  return `<div style="font-size:.82rem;line-height:1.7">${compactMainSummaryFromPlan(plan||[]).replace(/\n/g,'<br>')}</div>`;
-}
+function renderMainBracketPreviewHTML(key,plan,teams){return renderMainPreviewHTML(plan?.matchSlots||[],plan?.n||0,false,plan?.playInMatches||[]);}
 
 function renderMainCandidateStage(index, candidate, chosen){
   return `<div style="width:100%;display:flex;flex-direction:column;gap:10px;align-items:stretch">
@@ -15063,6 +15055,20 @@ function renderSavedPrelimNeutralPyramid(mainSize, savedSlots=[]){
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+86}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div></div>`;
 }
+
+async function applySavedMainDrawToLive(id,key){
+  if(!canManageBracket()){toast('본선 적용 권한이 없습니다','error');return;}
+  const entry=(G.drawHistories[key]||[]).find(x=>x.id===id||x._id===id);if(!entry){toast('추첨 기록을 다시 불러오세요','info');return;}
+  const norm=normalizeDrawHistoryEntry(entry),plan=norm.plan||{n:norm.mainSize,matchSlots:norm.mainPreviewSlots||[]};
+  if(!plan.n||!plan.matchSlots?.length){toast('저장된 본선 배정 정보가 없습니다','error');return;}
+  if((G.matches[key]||[]).some(m=>(m.phase==='main'||m.phase==='playin')&&getMatchResultState(key,m).done&&!m.bye)){toast('진행된 본선 결과가 있어 적용을 중단했습니다','error');return;}
+  if(!confirm('저장된 이 추첨 결과를 실제 본선 대진에 적용할까요? 기존 본선 배정은 교체되고 예선 결과는 유지됩니다.'))return;
+  const matches=buildMainMatches(plan.matchSlots,plan.n,plan.playInMatches||[]),next=[...(G.matches[key]||[]).filter(m=>m.phase!=='main'&&m.phase!=='playin'),...matches];
+  const before=G.matches[key],beforeDraw=G.draws[key];G.matches[key]=next;G.draws[key]={...(beforeDraw||{}),mainPlan:cloneMainDrawPlan(plan),mainAudit:{mode:'saved_record_applied',sourceHistoryId:id,confirmedAt:new Date().toISOString()},mainUpdatedAt:new Date().toISOString()};
+  sl(true);try{await stD(key);G.matches[key]=next;syncIndividualMainBracketFromPrelim(key);await stM(key);setMainSectionCollapsed(key,false);cm('mDrawHistoryView');renderBracket();toast('저장된 추첨 결과를 실제 본선에 적용했습니다','success');}catch(e){G.matches[key]=before;G.draws[key]=beforeDraw;toast('본선 적용 실패: '+e.message,'error');}finally{sl(false);}
+}
+window.applySavedMainDrawToLive=applySavedMainDrawToLive;
+
 function renderSavedDrawView(entry){
   const norm=normalizeDrawHistoryEntry(entry);
   if(!bracketPhasePublished(norm.tournamentId||String(norm.key||'').split('_')[0],norm.mode==='main'?'main':'prelim')){toast('대진표 공개 전입니다','info');return;}
@@ -15118,6 +15124,7 @@ function renderSavedDrawView(entry){
       <div>
         <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">${leftTitle}</div>
         ${leftHtml}
+        ${isMainMode&&norm.isTest&&canManageBracket()?`<button class="btn btn-primary" style="margin-top:12px" onclick="applySavedMainDrawToLive('${norm.id||norm._id||entry.id||entry._id}','${norm.key||entry.key}')">이 결과를 실제 본선에 적용</button>`:''}
       </div>
       <div>
         <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${isMainMode ? '본선 추첨 결과' : '본선 빈 피라미드'}</div>
@@ -17141,167 +17148,17 @@ async function startMainDraw(){
     MD.isRunning=false;
   }
 }
+// PHASE235: draw animations and saved results share a bottom-up pyramid.
 function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
-  // ── 상수 ──────────────────────────────────────────────
-  const CARD_H   = 72;
-  const CARD_W   = 158;
-  const COL_GAP  = 48;
-  const ROW_GAP  = 14;  // renderBracketTree와 동일
-  const COL_W    = CARD_W + COL_GAP;
-  const TITLE_H  = 28;
-
-  const rounds = Math.max(1, Math.log2(n));
-  const firstCount = Math.max(1, n / 2);
-
-  // ── 각 라운드별 카드 수 계산 ──────────────────────────
-  const colCounts = [];
-  let cnt = firstCount;
-  for(let r = 0; r < rounds; r++){
-    colCounts.push(cnt);
-    cnt = Math.max(1, Math.ceil(cnt / 2));
-  }
-
-  // ── 각 라운드별 카드 Y 중심 좌표 계산 ────────────────
-  // renderBracketTree와 동일 로직: 첫 라운드 절대 배치 → 후속 라운드는 pair 중간값
-  const firstCenters = Array.from({length: firstCount}, (_, i) =>
-    i * (CARD_H + ROW_GAP) + CARD_H / 2
-  );
-  const centersByRound = [firstCenters];
-  for(let r = 1; r < rounds; r++){
-    const prev = centersByRound[r - 1];
-    const cur  = [];
-    for(let i = 0; i < prev.length; i += 2){
-      const y1 = prev[i];
-      const y2 = (i + 1 < prev.length) ? prev[i + 1] : y1;
-      cur.push((y1 + y2) / 2);
-    }
-    centersByRound.push(cur.slice(0, colCounts[r]));
-  }
-
-  // ── 전체 SVG 캔버스 크기 ──────────────────────────────
-  const totalH = firstCount * CARD_H + Math.max(0, firstCount - 1) * ROW_GAP;
-  const svgW = rounds * COL_W - COL_GAP + 4;
-  const svgH = totalH + TITLE_H + 16;
-
-  // ── SVG 선 생성 ───────────────────────────────────────
-  // 각 라운드 카드에서 다음 라운드 카드로 연결
-  let svgLines = '';
-  for(let r = 0; r < rounds - 1; r++){
-    const curCenters  = centersByRound[r];
-    const nextCenters = centersByRound[r + 1];
-    const xRight = r * COL_W + CARD_W;          // 현 라운드 카드 오른쪽 끝 X
-    const xLeft  = (r + 1) * COL_W;             // 다음 라운드 카드 왼쪽 끝 X
-    const xMid   = xRight + COL_GAP / 2;        // 중간 X (수직선 위치)
-
-    // 2개씩 묶어서 다음 라운드 1개에 연결
-    for(let i = 0; i < curCenters.length; i += 2){
-      const y1 = curCenters[i]  + TITLE_H + 4;
-      const y2 = i + 1 < curCenters.length ? curCenters[i + 1] + TITLE_H + 4 : y1;
-      const nextIdx = Math.floor(i / 2);
-      const yNext  = nextCenters[nextIdx] + TITLE_H + 4;
-      const yMidV  = (y1 + y2) / 2;  // 수직선 중심 Y
-
-      // 왼쪽 카드 → 수평선 → 수직선
-      svgLines += `<line x1="${xRight}" y1="${y1}" x2="${xMid}" y2="${y1}" stroke="#c8d4e8" stroke-width="2"/>`;
-      if(i + 1 < curCenters.length){
-        svgLines += `<line x1="${xRight}" y1="${y2}" x2="${xMid}" y2="${y2}" stroke="#c8d4e8" stroke-width="2"/>`;
-      }
-      // 수직선 (두 카드를 잇는 선)
-      svgLines += `<line x1="${xMid}" y1="${y1}" x2="${xMid}" y2="${y2}" stroke="#c8d4e8" stroke-width="2"/>`;
-      // 수직선 중심 → 다음 라운드 카드
-      svgLines += `<line x1="${xMid}" y1="${yMidV}" x2="${xLeft}" y2="${yNext}" stroke="#c8d4e8" stroke-width="2"/>`;
-    }
-  }
-
-  // ── 카드 HTML 생성 (position:absolute) ───────────────
-  let cardsHtml = '';
-
-  // 첫 번째 라운드: matchSlots 기반
-  for(let i = 0; i < firstCount; i++){
-    const ms = matchSlots[i] || {};
-    const cy = centersByRound[0][i] + TITLE_H + 4;
-    const top = cy - CARD_H / 2;
-
-    const isBye = !!ms.bye;
-    const topLabel = (ms.source1Label||'') || (ms.t1 ? (getMainEntryBracketLabel(ms.t1) || '추첨 대기') : '추첨 대기');
-    const botLabel = isBye ? '부전승' : ((ms.source2Label||'') || (ms.t2 ? (getMainEntryBracketLabel(ms.t2) || '추첨 대기') : '추첨 대기'));
-
-    const topBg   = ms.t1 ? '#eef4ff' : '#f8fafc';
-    const botBg   = isBye ? '#fff8e6' : (ms.t2 ? '#f0fdf4' : '#f8fafc');
-    const topClr  = ms.t1 ? 'var(--primary-dark)' : '#94a3b8';
-    const botClr  = isBye ? '#92400e' : (ms.t2 ? '#166534' : '#94a3b8');
-    const botItal = (!isBye && !ms.t2) ? 'italic' : 'normal';
-
-    cardsHtml += `<div style="position:absolute;left:0;top:${top}px;width:${CARD_W}px;border:1.5px solid #d5dbea;border-radius:7px;overflow:hidden;background:white;box-shadow:0 1px 6px rgba(15,30,58,.07)">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;min-height:34px;background:${topBg};border-bottom:1px solid #e5eaf3;gap:4px">
-        <span style="font-size:.76rem;font-weight:${ms.t1?700:400};color:${topClr};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${topLabel}</span>
-        <span style="font-size:.6rem;color:#b0bac9;flex-shrink:0">${i+1}-1</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;min-height:34px;background:${botBg};gap:4px">
-        <span style="font-size:.76rem;font-weight:${(isBye||ms.t2)?700:400};color:${botClr};font-style:${botItal};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${botLabel}</span>
-        <span style="font-size:.6rem;color:#b0bac9;flex-shrink:0">${isBye?'🏅':i+1+'-2'}</span>
-      </div>
-    </div>`;
-  }
-
-  // 이후 라운드: "승자 진출" 카드
-  for(let r = 1; r < rounds; r++){
-    const xLeft   = r * COL_W;
-    const centers = centersByRound[r];
-    const isFinal = r === rounds - 1;
-    for(let i = 0; i < centers.length; i++){
-      const cy  = centers[i] + TITLE_H + 4;
-      const top = cy - CARD_H / 2;
-      const borderClr = isFinal ? 'var(--accent)' : '#d5dbea';
-      const leftBar   = isFinal ? '3px solid var(--accent)' : '3px solid #c8d4e8';
-      cardsHtml += `<div style="position:absolute;left:${xLeft}px;top:${top}px;width:${CARD_W}px;border:1.5px solid ${borderClr};border-radius:7px;overflow:hidden;background:white;box-shadow:0 1px 6px rgba(15,30,58,.07)">
-        <div style="display:flex;align-items:center;padding:5px 8px;min-height:34px;background:#f1f5f9;border-bottom:1px solid #e5eaf3;border-left:${leftBar}">
-          <span style="font-size:.74rem;color:#94a3b8;font-style:italic">승자 진출</span>
-        </div>
-        <div style="display:flex;align-items:center;padding:5px 8px;min-height:34px;background:#f1f5f9;border-left:${leftBar}">
-          <span style="font-size:.74rem;color:#94a3b8;font-style:italic">승자 진출</span>
-        </div>
-      </div>`;
-    }
-  }
-
-  // ── 라운드 타이틀 ─────────────────────────────────────
-  let titlesHtml = '';
-  for(let r = 0; r < rounds; r++){
-    const x      = r * COL_W;
-    const isFin  = r === rounds - 1;
-    const lbl    = isFin ? '결승' : r === rounds - 2 && rounds > 2 ? '준결승' : `${n / Math.pow(2, r)}강`;
-    const bg     = isFin ? 'var(--accent)' : '#0f1e3a';
-    const clr    = isFin ? 'var(--text)' : 'white';
-    titlesHtml += `<div style="position:absolute;left:${x}px;top:0;width:${CARD_W}px;background:${bg};color:${clr};text-align:center;padding:5px 4px;border-radius:4px 4px 0 0;font-size:.7rem;font-weight:700">${lbl}</div>`;
-  }
-
-  const specInfo=computeMainBracketSpec((matchSlots?.length||0)*2 + ((playInMatches?.length||0)*2>0 ? 2 : 0));
-  const playInHtml=(playInMatches&&playInMatches.length)?`<div style="margin-bottom:12px">
-      <div style="font-size:.76rem;font-weight:800;color:#92400e;margin-bottom:6px">🪣 진출전(똥통) 자리</div>
-      <div style="font-size:.72rem;color:#7c6f57;line-height:1.6;margin-bottom:8px">직행 팀들은 바로 본선으로 들어가고, 아래 ${playInMatches.length}경기의 승자만 본선에 합류합니다.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px">
-        ${playInMatches.map((pm,idx)=>`
-          <div style="border:1.5px solid #f5c26b;border-radius:10px;background:linear-gradient(135deg,#fff8e6,#fffdf7);overflow:hidden">
-            <div style="padding:6px 10px;background:#fff1c7;font-size:.72rem;font-weight:900;color:#92400e">진출전 ${idx+1}경기</div>
-            <div style="padding:9px 10px;border-top:1px solid #fde7b0;font-size:.78rem;color:#7c2d12">${pm?.t1?.nm||'2위팀'}</div>
-            <div style="padding:9px 10px;border-top:1px solid #fde7b0;font-size:.78rem;color:#7c2d12">${pm?.t2?.nm||'2위팀'}</div>
-            <div style="padding:8px 10px;border-top:1px dashed #f5c26b;font-size:.72rem;color:#92400e;font-weight:800">${pm?.winnerLabel||'본선 합류'}</div>
-          </div>`).join('')}
-      </div>
-    </div>`:'';
-
-  return `<div style="overflow-x:auto;padding-bottom:8px">
-    ${playInHtml}
-    <div style="position:relative;width:${svgW}px;height:${svgH}px;min-width:${svgW}px">
-      ${titlesHtml}
-      <svg style="position:absolute;left:0;top:0;width:${svgW}px;height:${svgH}px;overflow:visible;pointer-events:none" xmlns="http://www.w3.org/2000/svg">
-        ${svgLines}
-      </svg>
-      ${cardsHtml}
-    </div>
-  </div>`;
+  n=Number(n)||Math.max(2,(matchSlots||[]).length*2);if(n<2)return '';
+  const width=Math.max(720,Math.min(1500,n*65)),levels=Math.ceil(Math.log2(n)),baseY=levels*64+32,height=baseY+125,x=i=>(i+.5)*width/n;
+  let paths='',labels='';
+  for(let level=0;level<levels;level++){const group=2**(level+1),y0=baseY-level*64,y1=y0-64;for(let g=0;g<n;g+=group){const l=x(g+group/4-.5),r=x(g+3*group/4-.5),mid=(l+r)/2;paths+=`<path d="M ${l} ${y0} V ${y1} H ${r} V ${y0} M ${mid} ${y1} V ${y1-16}" fill="none" stroke="#a9b8cc" stroke-width="1.5"/>`;}const count=n/(2**level);labels+=`<text x="8" y="${y1-5}" font-size="10" fill="#64748b">${count===2?'결승':count+'강'}</text>`;}
+  const leaves=Array.from({length:n},(_,i)=>{const slot=matchSlots?.[Math.floor(i/2)]||{},entry=i%2?slot.t2:slot.t1,bye=!!slot.bye&&!entry,source=i%2?slot.source2Label:slot.source1Label;const text=bye?'부전승':entry?.nm||source||'추첨 대기';return `<div style="position:absolute;left:${x(i)}px;top:${baseY+4}px;transform:translateX(-50%);width:${Math.max(28,Math.min(52,width/n-8))}px;height:104px;border:1.5px solid ${bye?'#d4a017':'#91afd8'};border-radius:7px;background:${bye?'#fff8dc':'#f3f7ff'};display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:900;line-height:1.2;color:#10213d">${outputEsc(String(text))}</span></div>`;}).join('');
+  const playins=(playInMatches||[]).length?`<div style="padding:8px">진출전: ${(playInMatches||[]).map(m=>outputEsc(String(m.t1?.nm||m.source1Label||'미정'))+' vs '+outputEsc(String(m.t2?.nm||m.source2Label||'미정'))).join(' / ')}</div>`:'';
+  return `<div style="overflow-x:auto"><div class="pyramid-scroll-content" style="position:relative;width:${width}px;min-width:${width}px;height:${height}px;margin:auto"><svg style="position:absolute;inset:0" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${paths}${labels}</svg>${leaves}</div>${playins}</div>`;
 }
+
 function renderMainPreview(matchSlots,n,teams,key,final,playInMatches=[]){
   ge('mainBracketPreview').innerHTML=renderMainPreviewHTML(matchSlots,n,false,playInMatches);
 }
