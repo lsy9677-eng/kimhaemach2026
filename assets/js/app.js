@@ -27706,7 +27706,7 @@ function outputMainTableHtml(tid,div,blank=false){
     const rm=ms.filter(m=>Number(m.round||0)===r);
     const label=(typeof getMainRoundLabelByRoundIndex==='function'?getMainRoundLabelByRoundIndex(r,key):'')||`${ri+1}R`;
     return `<section class="oc-round"><div class="oc-round-title">${outputEsc(label)}</div><table><thead><tr><th>No</th><th>팀1</th><th>결과</th><th>팀2</th><th>코트/기록</th></tr></thead><tbody>${
-      rm.map((m,i)=>`<tr><td>${i+1}</td><td>${outputEsc(outputTeamName(key,m.t1))}</td><td class="oc-score">${outputEsc(outputScoreText(key,m,blank))}</td><td>${outputEsc(outputTeamName(key,m.t2))}</td><td class="oc-write">${blank?'':outputEsc((m.courts||[]).join('/')||m.court||'')}</td></tr>`).join('')
+      rm.map((m,i)=>`<tr><td>${i+1}</td><td>${blank?'':outputEsc(outputTeamName(key,m.t1))}</td><td class="oc-score">${outputEsc(outputScoreText(key,m,blank))}</td><td>${blank?'':outputEsc(outputTeamName(key,m.t2))}</td><td class="oc-write">${blank?'':outputEsc((m.courts||[]).join('/')||m.court||'')}</td></tr>`).join('')
     }</tbody></table></section>`;
   }).join('');
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
@@ -27739,6 +27739,8 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     }
   });
   if(!entrants.length)return '';
+  // PHASE245: handwritten main sheets retain geometry only, never live entrants or qualifier labels.
+  if(blank)entrants.forEach(e=>{e.name='';e.team=null;e.sourceLabel='';e.byeSlot=false;e.byeWinner=false;});
   let n=1;while(n<entrants.length)n*=2;while(entrants.length<n)entrants.push({name:'',team:null});
 
   // A4 가로 폭 최적화: 8/16/32팀 모두 한 장 폭에 맞도록 슬롯 폭을 제한
@@ -27825,7 +27827,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     const qTitle=quickEditable?'title="눌러서 팀/부전승 선택"':'';
     const editBadge=quickEditable?`<div style="position:absolute;right:-5px;bottom:-5px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
     return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:visible;padding:4px 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
-      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:76px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name||'빈슬롯')}</div>
+      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:76px;overflow:visible;text-shadow:0 0 .01px currentColor">${blank?'':verticalName(e.name||'빈슬롯')}</div>
     </div>`;
   }).join('');
 
