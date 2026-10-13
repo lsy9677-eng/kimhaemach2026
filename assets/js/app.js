@@ -17808,7 +17808,9 @@ function openM3(key,mid,forceEdit=false){
       hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진을 저장하면 OCR이 등록 명단과 자동 대조해 상세기록 초안을 채웁니다. OCR 초안은 최종 확인 전까지 공식 선수기록에 반영되지 않습니다.</div>');
       if(m?.orderOcrDraft?.needsReview){
         const s1=m.orderOcrDraft?.side1?.applied||0,s2=m.orderOcrDraft?.side2?.applied||0;
-        hint.insertAdjacentHTML('beforebegin', `<div style="margin:0 0 7px;padding:8px 10px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:.68rem;font-weight:800">🤖 OCR 초안 확인 필요 · ${esc(dn1)} ${s1}명 / ${esc(dn2)} ${s2}명 자동입력</div>`);
+        const fuzzy=[...(m.orderOcrDraft?.side1?.uncertain||[]),...(m.orderOcrDraft?.side2?.uncertain||[])].filter(x=>x.selected).map(x=>`${Number(x.row)+1}복식 ${x.selected}`);
+        const fuzzyHint=fuzzy.length?`<div style="margin-top:4px;font-weight:600">유사 이름으로 선택 · 확인 필요: ${fuzzy.map(esc).join(' / ')}</div>`:'';
+        hint.insertAdjacentHTML('beforebegin', `<div style="margin:0 0 7px;padding:8px 10px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:.68rem;font-weight:800">🤖 OCR 초안 확인 필요 · ${esc(dn1)} ${s1}명 / ${esc(dn2)} ${s2}명 자동입력${fuzzyHint}</div>`);
       }
     }
   }
@@ -18190,7 +18192,7 @@ async function saveM3Core(){
 
   if(validScoreCount===0){
     if(prevW!=null && !m.bye){matchResultSaveNotice('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
-    if(!pairChanged){matchResultSaveNotice('저장된 내용과 동일합니다. 변경 사항이 없습니다.','info');return;}
+    if(!pairChanged){matchResultSaveNotice(m.orderOcrDraft||m.orderPhotoStore?'사진·OCR 명단은 자동 저장되어 있습니다. 경기 결과 저장은 복식 점수를 입력한 뒤 눌러 주세요.':'저장된 내용과 동일합니다. 변경 사항이 없습니다.','info');return;}
     m.rubbers=newRb;
     m.winner=null;
     sl(true);
@@ -26098,9 +26100,10 @@ function _sanitizeOrderPhotoStore(raw){
     const v=raw[k];
     if(!v || typeof v!=='object' || Array.isArray(v)) return;
     const dataUrl=typeof v.dataUrl==='string' ? v.dataUrl : '';
-    if(!dataUrl) return;
+    const downloadURL=typeof v.downloadURL==='string'?v.downloadURL:'';
+    if(!dataUrl&&!downloadURL)return;
     out[k]={
-      dataUrl,
+      ...(downloadURL?{downloadURL,storagePath:String(v.storagePath||''),hasPhoto:true}:{dataUrl}),
       updatedAt: typeof v.updatedAt==='string' ? v.updatedAt : '',
       source: typeof v.source==='string' ? v.source : 'upload',
       side: String(k==='side1'?1:2),
@@ -26113,8 +26116,8 @@ function _sanitizeOrderPhotoStore(raw){
 function _safeStorageSeg(v){
   return encodeURIComponent(String(v||'').replace(/[\/]+/g,'_').trim() || 'unknown');
 }
-async function persistOrderPhoto(side, imageDataUrl, source){
-  const key=CM_key, mid=CM_id; if(!key||!mid||!imageDataUrl) return null;
+async function persistOrderPhoto(side, imageDataUrl, source,context=null){
+  const key=context?.key||CM_key, mid=context?.mid||CM_id; if(!key||!mid||!imageDataUrl) return null;
   const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid || x._id===mid); if(!m) return null;
   const teams=G.teams[key]||[];
   const team=side===1?teams[m.t1]:teams[m.t2];
@@ -26140,7 +26143,7 @@ async function persistOrderPhoto(side, imageDataUrl, source){
   if(blob.size > 5 * 1024 * 1024) throw new Error('이미지가 너무 큽니다. 5MB 이하로 다시 시도해 주세요');
 
   // ── 2. Firebase Storage에 업로드 ──
-  const storagePath = `orderPhotos/${_safeStorageSeg(tid)}/${_safeStorageSeg(div)}/${_safeStorageSeg(matchDocId)}/${base}.jpg`;
+  const storagePath = `orderPhotos/${_safeStorageSeg(tid)}/${_safeStorageSeg(div)}/${_safeStorageSeg(matchDocId)}/${base}_${Date.now()}.jpg`;
   const fileRef = ref(storage, storagePath);
   await uploadBytes(fileRef, blob, {
     contentType: 'image/jpeg',
@@ -26166,9 +26169,6 @@ async function persistOrderPhoto(side, imageDataUrl, source){
     savedBy: String(AD?'관리자':(OP?'경기진행자':(REG_CLUB||'경기이사'))),
     hasPhoto: true
   };
-  if(!m.orderPhotoStore) m.orderPhotoStore = {};
-  m.orderPhotoStore[base] = meta;
-
   try {
     await updateDoc(doc(db,'matches', matchDocId), {
       [`orderPhotoStore.${base}`]: meta,
@@ -26176,12 +26176,27 @@ async function persistOrderPhoto(side, imageDataUrl, source){
     });
   } catch(e) {
     console.warn('match orderPhotoStore meta update failed', e);
-    throw new Error('사진 저장 중 오류가 발생했습니다. 다시 시도해 주세요');
+    throw new Error('사진 주소 저장 실패: '+(e?.message||e));
   }
 
-  // 메모리 캐시에는 dataUrl도 임시 보관 (뷰어 즉시 열기용)
-  m.orderPhotoStore[base] = { ...meta, dataUrl: imageDataUrl };
-  return m.orderPhotoStore[base];
+  // Keep only durable Storage metadata: raw camera base64 must never enter match snapshots.
+  const live=(G.matches[key]||[]).find(x=>x.id===mid||x._id===mid)||m;
+  live.orderPhotoStore={...(live.orderPhotoStore||{}),[base]:meta};
+  m.orderPhotoStore={...(m.orderPhotoStore||{}),[base]:meta};
+  try{cacheTournamentBundleFromMemory(tid);}catch(e){}
+  return meta;
+}
+function showOrderPhotoImage(saved){
+  const url=saved?.downloadURL||saved?.dataUrl||'';
+  if(!url){toast('사진 주소가 없습니다. 다시 첨부해 주세요.','error');return;}
+  document.getElementById('orderPhotoImageOverlay')?.remove();
+  const overlay=document.createElement('div');overlay.id='orderPhotoImageOverlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.9);display:flex;flex-direction:column;padding:14px;overflow:auto';
+  const close=document.createElement('button');close.textContent='✕ 사진 닫기';close.style.cssText='align-self:flex-end;padding:10px;background:white;border-radius:8px';close.onclick=()=>overlay.remove();
+  const status=document.createElement('div');status.textContent='사진 불러오는 중…';status.style.cssText='color:white;text-align:center;padding:10px';
+  const img=document.createElement('img');img.alt='첨부된 오더지';img.style.cssText='max-width:100%;height:auto;object-fit:contain;margin:auto';
+  img.onload=()=>status.textContent='';img.onerror=()=>{status.textContent='사진을 불러오지 못했습니다. 사진 주소 또는 저장소 권한을 확인해 주세요.';};
+  overlay.append(close,status,img);document.body.appendChild(overlay);img.src=url;
 }
 async function openOrderPhotoViewer(side){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
@@ -26189,9 +26204,7 @@ async function openOrderPhotoViewer(side){
   const saved=_orderPhotoGetSaved(m,side);
   if(!saved){toast('저장된 오더지 사진이 없습니다','info');return;}
   if(!_orderPhotoCanView(m,side)){toast('사진 열람 권한이 없습니다','error');return;}
-  const url=saved.dataUrl||saved.downloadURL||'';
-  if(!url){toast('사진 주소를 찾을 수 없습니다','error');return;}
-  window.open(url,'_blank','noopener,noreferrer');
+  showOrderPhotoImage(saved);
 }
 
 function _tapOrderUsedPlayers(slots){
@@ -26423,7 +26436,7 @@ function _orderPhotoGetContext(side){
   const tObj=G.tournaments.find(t=>t.id===tid);
   const cfg=gDS(tObj,div);
   const dbl=cfg.doublesCount||(team.doublesCount)||5;
-  return {key,mid,match:m,team,dbl,candidates:(team.players||[]).filter(Boolean)};
+  return {key,mid,match:m,team,dbl,candidates:getMatchRegisteredRoster(key,team)};
 }
 function _orderPhotoSetStatus(side,msg,isWarn=false){
   const el=ge('orderPhotoStatus'+side);
@@ -26449,80 +26462,35 @@ function _orderPhotoBestCandidate(sourceText, unused, lineText=''){
   });
   return {best,bestScore};
 }
+// PHASE248: tolerate imperfect handwriting within the registered team only.
 function _orderPhotoAssign(lines,candidates,dbl,options={}){
-  const strict=!!options.strict;
-  const segMin=strict?0.40:0.28;
-  const tokenMin=strict?0.45:0.34;
-  const lineMin=strict?0.38:0.24;
-  const usable=(candidates||[]).filter(Boolean);
-  const maxPlayers=Math.min(usable.length, dbl*2);
-  const orderedLines=(lines||[]).slice().sort((a,b)=>(a.y??0)-(b.y??0)).slice(0, Math.max(dbl+2,dbl));
-  const assignments=Array.from({length:dbl},()=>[]);
-  const lineMeta=Array.from({length:dbl},(_,i)=>orderedLines[i]||null);
-  const unused=new Set(usable);
-  const seen=new Set();
-  for(let row=0; row<dbl; row++){
-    const lineObj=lineMeta[row];
-    if(!lineObj) continue;
-    const lineText=String(lineObj.text||'');
-    const segments=_orderPhotoSplitPairSegments(lineText);
-    const chosen=[];
-    segments.forEach(seg=>{
-      if(chosen.length>=2) return;
-      const {best,bestScore}=_orderPhotoBestCandidate(seg, unused, lineText);
-      if(best && bestScore>=segMin && !seen.has(best)){
-        chosen.push(best); seen.add(best); unused.delete(best);
-      }
-    });
-    if(chosen.length<2){
-      const tokens=_orderPhotoExtractTokens(lineText);
-      tokens.forEach(tok=>{
-        if(chosen.length>=2) return;
-        const {best,bestScore}=_orderPhotoBestCandidate(tok, unused, lineText);
-        if(best && bestScore>=tokenMin && !seen.has(best)){
-          chosen.push(best); seen.add(best); unused.delete(best);
-        }
-      });
-    }
-    if(chosen.length<2){
-      const ranked=[...unused].map(cand=>({cand,score:_orderPhotoScore(lineText,cand,lineText)})).sort((a,b)=>b.score-a.score);
-      ranked.forEach(item=>{
-        if(chosen.length>=2) return;
-        if(item.score<lineMin) return;
-        if(!seen.has(item.cand)){
-          chosen.push(item.cand); seen.add(item.cand); unused.delete(item.cand);
-        }
-      });
-    }
-    assignments[row]=chosen.slice(0,2);
+  const usable=[...new Set((candidates||[]).filter(Boolean))],unused=new Set(usable);
+  const assignments=Array.from({length:dbl},()=>[]),uncertain=[];
+  const header=/^(오더|선수명|성명|클럽|복식|대회|김해시|테니스|감독|서명|일시|코트|점수|스코어)/;
+  const rows=[];let nextRow=0;
+  for(const line of (lines||[]).slice().sort((a,b)=>(a.y??0)-(b.y??0))){
+    const text=String(line.text||'');
+    const tokens=_orderPhotoExtractTokens(text).map(_orderPhotoNorm).filter(t=>/^[가-힣]{2,4}$/.test(t)&&(!header.test(t)||usable.includes(t)));
+    // Handle two handwritten names with no separator, using registered names' lengths.
+    for(const chunk of text.match(/[가-힣]{5,8}/g)||[]){for(const cut of [2,3,4]){const left=chunk.slice(0,cut),right=chunk.slice(cut);if(right.length>=2&&right.length<=4){tokens.push(left,right);}}}
+    const viable=tokens.filter(tok=>usable.some(c=>_orderPhotoScore(tok,c)>=0.45));
+    if(!viable.length)continue;
+    const numbered=text.match(/^\s*([1-9])\s*(?:[.、):]|복식|번)/);
+    const row=numbered?Number(numbered[1])-1:nextRow++;
+    if(numbered)nextRow=Math.max(nextRow,row+1);
+    if(row<0||row>=dbl)continue;
+    rows.push({row,tokens:[...new Set(viable)]});
   }
-  // 자동 OCR 초안(strict=true)은 확신이 낮은 빈칸을 임의 선수로 채우지 않는다.
-  // 기존 온라인 오더 OCR은 기존 동작을 유지한다.
-  if(!strict){
-    const allLineTexts=orderedLines.map(x=>String(x.text||''));
-    for(let row=0; row<dbl; row++){
-      const lineText=String((lineMeta[row]&&lineMeta[row].text)||'');
-      while(assignments[row].length<2 && seen.size<maxPlayers){
-        let ranked=[...unused].map(cand=>{
-          let score=_orderPhotoScore(lineText,cand,lineText);
-          if(!lineText){
-            allLineTexts.forEach(txt=>{ score=Math.max(score,_orderPhotoScore(txt,cand,txt)); });
-          }
-          return {cand,score};
-        }).sort((a,b)=>b.score-a.score);
-        let next=ranked.find(x=>!seen.has(x.cand));
-        if(!next){
-          next=usable.find(c=>!seen.has(c)) ? {cand:usable.find(c=>!seen.has(c)),score:0} : null;
-        }
-        if(!next) break;
-        assignments[row].push(next.cand);
-        seen.add(next.cand);
-        unused.delete(next.cand);
-      }
-    }
+  // Exact matches first so a fuzzy name cannot consume another clearly read player's name.
+  for(const pass of [0,1])for(const item of rows)for(const token of item.tokens){
+    if(assignments[item.row].length>=2)break;
+    const ranked=[...unused].map(c=>({name:c,score:_orderPhotoScore(token,c)})).sort((a,b)=>b.score-a.score);
+    const best=ranked[0];if(!best)continue;
+    if(pass===0? _orderPhotoNorm(best.name)!==token : best.score<0.45)continue;
+    assignments[item.row].push(best.name);unused.delete(best.name);
+    if(pass===1)uncertain.push({row:item.row,token,selected:best.name,score:Math.round(best.score*100)/100,candidates:ranked.slice(0,2).map(x=>x.name),needsReview:true});
   }
-  const assignedCount=assignments.reduce((n,row)=>n+row.length,0);
-  return {assignments, assignedCount, unused:[...unused]};
+  return {assignments,assignedCount:assignments.reduce((n,r)=>n+r.length,0),unused:[...unused],uncertain};
 }
 function _orderPhotoReadFile(file){
   return new Promise((resolve,reject)=>{
@@ -26568,43 +26536,45 @@ function _orderPhotoBuildVariant(img, mode='gray'){
   return canvas;
 }
 async function _ensureOrderPhotoTesseract(){
-  if(window.Tesseract) return window.Tesseract;
-  if(__orderPhotoTesseractPromise) return __orderPhotoTesseractPromise;
-  __orderPhotoTesseractPromise = new Promise((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.async=true;
-    s.onload=()=>window.Tesseract?resolve(window.Tesseract):reject(new Error('OCR 라이브러리 로드 실패'));
-    s.onerror=()=>reject(new Error('OCR 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'));
-    document.head.appendChild(s);
-  });
+  if(window.Tesseract)return window.Tesseract;
+  if(__orderPhotoTesseractPromise)return __orderPhotoTesseractPromise;
+  __orderPhotoTesseractPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>{script.remove();reject(new Error('OCR 라이브러리 로딩 시간 초과'));},20000);
+    script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';script.async=true;
+    script.onload=()=>{clearTimeout(timer);window.Tesseract?resolve(window.Tesseract):reject(new Error('OCR 라이브러리 로드 실패'));};
+    script.onerror=()=>{clearTimeout(timer);reject(new Error('OCR 라이브러리 다운로드 실패'));};
+    document.head.appendChild(script);
+  }).catch(e=>{__orderPhotoTesseractPromise=null;throw e;});
   return __orderPhotoTesseractPromise;
 }
-async function _orderPhotoRecognizeBest(Tesseract, imageSrc){
-  const img=await _orderPhotoLoadImage(imageSrc);
-  const variants=[
-    {name:'orig', src:imageSrc},
-    {name:'gray', src:_orderPhotoBuildVariant(img,'gray').toDataURL('image/png')},
-    {name:'contrast', src:_orderPhotoBuildVariant(img,'contrast').toDataURL('image/png')},
-    {name:'binary', src:_orderPhotoBuildVariant(img,'binary').toDataURL('image/png')}
-  ];
-  let best=null;
-  for(const variant of variants){
-    try{
-      const result=await Tesseract.recognize(variant.src,'kor+eng',{
-        tessedit_pageseg_mode: 6,
-        preserve_interword_spaces: 1
-      });
-      const lines=_orderPhotoExtractStructuredLines(result);
-      const hangulChars=String(result?.data?.text||'').replace(/[^가-힣]/g,'').length;
-      const score=(lines.length*8)+hangulChars;
-      if(!best || score>best.score){
-        best={result,lines,score,name:variant.name};
-      }
-    }catch(err){}
-  }
-  if(!best) throw new Error('글자 인식 실패');
-  return best;
+async function _orderPhotoRecognizeBest(Tesseract,imageSrc,context=null){
+  let worker=null,timer=null,expired=false;
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{expired=true;if(worker)Promise.resolve(worker.terminate()).catch(()=>{});reject(new Error('OCR 분석 시간 초과. 사진은 보관되어 있으며 직접 명단 입력이 가능합니다.'));},120000);});
+  const run=(async()=>{
+    const img=await _orderPhotoLoadImage(imageSrc);
+    const src=_orderPhotoBuildVariant(img,'contrast').toDataURL('image/png');
+    worker=await Tesseract.createWorker('kor+eng');
+    if(expired){await worker.terminate();throw new Error('OCR 분석 시간 초과');}
+    await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
+    const result=await worker.recognize(src);
+    let best={result,lines:_orderPhotoExtractStructuredLines(result),name:'contrast'};
+    const quality=x=>context?_orderPhotoAssign(x.lines,context.candidates,context.dbl).assignedCount:String(x.result?.data?.text||'').replace(/[^가-힣]/g,'').length;
+    if(context&&quality(best)<Math.min(context.candidates.length,context.dbl*2)){
+      await worker.setParameters({tessedit_pageseg_mode:'11'});
+      const second=await worker.recognize(_orderPhotoBuildVariant(img,'gray').toDataURL('image/png'));
+      const alternate={result:second,lines:_orderPhotoExtractStructuredLines(second),name:'gray'};
+      if(quality(alternate)>quality(best))best=alternate;
+    }
+    return best;
+  })();
+  try{return await Promise.race([run,timeout]);}
+  finally{clearTimeout(timer);if(worker)Promise.resolve(worker.terminate()).catch(()=>{});}
+}
+function _refreshOrderPhotoDraftView(ctx){
+  if(CM_key!==ctx.key||CM_id!==ctx.mid)return;
+  openM3(ctx.key,ctx.mid,true);
+  setOfflineResultEntryMode('detail');
 }
 async function _processOrderPhoto(side,file){
   const ctx=_orderPhotoGetContext(side);
@@ -26613,11 +26583,11 @@ async function _processOrderPhoto(side,file){
   if(currentRows.length && !confirm('현재 선택된 오더를 사진 인식 결과로 덮어쓸까요?')) return;
   _orderPhotoSetStatus(side,'이미지 읽는 중…');
   try{
-    const Tesseract=await _ensureOrderPhotoTesseract();
     const image=await _orderPhotoReadFile(file);
-    await persistOrderPhoto(side, image, file?.__captureSource||'upload');
+    await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
     _orderPhotoSetStatus(side,'사진 저장 완료 · 명단 기반으로 사진 분석 중…');
-    const best=await _orderPhotoRecognizeBest(Tesseract, image);
+    const Tesseract=await _ensureOrderPhotoTesseract();
+    const best=await _orderPhotoRecognizeBest(Tesseract,image,ctx);
     const lines=(best&&best.lines)||[];
     if(!lines.length){ _orderPhotoSetStatus(side,'글자를 찾지 못했습니다',true); toast('글자를 찾지 못했습니다','error'); return; }
     const assigned=_orderPhotoAssign(lines,ctx.candidates,ctx.dbl);
@@ -26633,20 +26603,23 @@ async function _processOrderPhoto(side,file){
     toast('사진 인식 실패: '+(err?.message||err), 'error');
   }
 }
-function _mergeSimpleOcrDraft(ctx,side,assignments,sourceLabel='OCR'){
+function _mergeSimpleOcrDraft(ctx,side,assignments,sourceLabel='OCR',uncertain=[]){
   const m=ctx?.match;if(!m)return {applied:0,skipped:0};
   const rubbers=Array.isArray(m.rubbers)?m.rubbers.map(rb=>rb&&typeof rb==='object'?{...rb}:{}):[];
   while(rubbers.length<ctx.dbl)rubbers.push({});
   const field=Number(side)===1?'players1':'players2';
   let applied=0,skipped=0;
+  const used=new Set(rubbers.flatMap(rb=>Array.isArray(rb[field])?rb[field]:[]));
   (assignments||[]).forEach((players,idx)=>{
     const picked=(players||[]).filter(Boolean).slice(0,2);
     if(!picked.length)return;
     const existing=Array.isArray(rubbers[idx]?.[field])?rubbers[idx][field].filter(Boolean):[];
     // 사람이 이미 기록한 명단은 OCR이 덮어쓰지 않는다.
     if(existing.length){skipped+=existing.length;return;}
-    rubbers[idx]={...(rubbers[idx]||{}),[field]:picked};
-    applied+=picked.length;
+    const unique=picked.filter(n=>!used.has(n));if(!unique.length)return;
+    unique.forEach(n=>used.add(n));
+    rubbers[idx]={...(rubbers[idx]||{}),[field]:unique};
+    applied+=unique.length;
   });
   m.rubbers=rubbers;
   const now=new Date().toISOString();
@@ -26661,6 +26634,7 @@ function _mergeSimpleOcrDraft(ctx,side,assignments,sourceLabel='OCR'){
       applied,
       skipped,
       source:String(sourceLabel||'OCR'),
+      uncertain:Array.isArray(uncertain)?uncertain:[],
       updatedAt:now
     }
   };
@@ -26674,38 +26648,41 @@ async function _persistSimpleOcrDraft(ctx){
     orderOcrDraft:m.orderOcrDraft||{},
     updatedAt:new Date().toISOString()
   });
+  const live=(G.matches[ctx.key]||[]).find(x=>x.id===ctx.mid||x._id===ctx.mid);
+  if(live){live.rubbers=m.rubbers;live.orderOcrDraft=m.orderOcrDraft;}
 }
+
 async function _processSimpleOrderPhoto(side,file){
   const ctx=_orderPhotoGetContext(side);
   if(!ctx){toast('경기 정보를 찾을 수 없습니다','error');return;}
   let photoSaved=false;
   try{
     const image=await _orderPhotoReadFile(file);
-    await persistOrderPhoto(side,image,file?.__captureSource||'upload');
+    await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
     photoSaved=true;
     toast('📷 사진 저장 완료 · OCR 자동 분석 중…','info');
     const Tesseract=await _ensureOrderPhotoTesseract();
-    const best=await _orderPhotoRecognizeBest(Tesseract,image);
+    const best=await _orderPhotoRecognizeBest(Tesseract,image,ctx);
     const lines=(best&&best.lines)||[];
     if(!lines.length){
       toast('사진은 저장됐지만 OCR에서 이름을 찾지 못했습니다. 상세기록에서 직접 확인해 주세요.','info');
-      if(CM_key&&CM_id)openM3(CM_key,CM_id);
+      _refreshOrderPhotoDraftView(ctx);
       return;
     }
     // 현장 간편모드는 보수적 자동매칭: 확신이 있는 선수만 초안에 넣고 나머지는 비워둔다.
     const assigned=_orderPhotoAssign(lines,ctx.candidates,ctx.dbl,{strict:true});
-    const merged=_mergeSimpleOcrDraft(ctx,side,assigned.assignments,best?.name||'OCR');
+    const merged=_mergeSimpleOcrDraft(ctx,side,assigned.assignments,best?.name||'OCR',assigned.uncertain);
     await _persistSimpleOcrDraft(ctx);
     const msg=merged.applied
-      ? `📷 저장 + OCR 초안 ${merged.applied}명 자동입력 · 최종 확인 필요`
-      : '📷 사진 저장 완료 · 확실히 판독된 선수는 없어 상세기록 확인이 필요합니다.';
+      ? `📷 저장 + OCR 초안 ${merged.applied}명 자동입력${assigned.uncertain?.length?` · 유사 이름 ${assigned.uncertain.length}건 확인 필요`:' · 최종 확인 필요'}`
+      : '📷 사진 저장 완료 · 명단과 연결할 이름을 읽지 못했습니다. 직접 입력해 주세요.';
     toast(msg,merged.applied?'success':'info');
-    if(CM_key&&CM_id)openM3(CM_key,CM_id);
+    _refreshOrderPhotoDraftView(ctx);
   }catch(err){
     console.error(err);
     if(photoSaved){
-      toast('사진은 저장됐지만 OCR 자동입력에 실패했습니다. 상세기록에서 직접 확인해 주세요.','info');
-      if(CM_key&&CM_id)openM3(CM_key,CM_id);
+      toast('사진 저장 완료 · OCR 자동입력 실패: '+(err?.message||err),'error');
+      _refreshOrderPhotoDraftView(ctx);
     }else toast('오더지 사진 저장 실패: '+(err?.message||err),'error');
   }
 }
@@ -26798,7 +26775,7 @@ function openPendingDetailPhoto(index,side){
   const x=(window.__pendingDetailRows||[])[Number(index)];if(!x)return;
   const saved=_orderPhotoGetSaved(x.m,Number(side));if(!saved){toast('저장된 오더지 사진이 없습니다','info');return;}
   const url=saved.dataUrl||saved.downloadURL||'';if(!url){toast('사진 주소를 찾을 수 없습니다','error');return;}
-  window.open(url,'_blank','noopener,noreferrer');
+  showOrderPhotoImage(saved);
 }
 function openPendingDetailMatch(index){
   const x=(window.__pendingDetailRows||[])[Number(index)];if(!x)return;
