@@ -28232,18 +28232,18 @@ function outputRaffleParticipants(tid){
 }
 function outputRaffleSlipsHtml(tid){
   const rows=outputRaffleParticipants(tid);if(!rows.length)return '<div class="oc-empty">저장된 참가자 명단이 없습니다. 대회 명단을 불러온 뒤 다시 확인하세요.</div>';
-  const pages=[];for(let start=0;start<rows.length;start+=80){const chunk=rows.slice(start,start+80);pages.push(`<section class="raffle-page">${Array.from({length:80},(_,i)=>{const r=chunk[i];return `<div class="raffle-slip ${r?'':'raffle-unused'}"><div class="raffle-label">${r?`<span>${outputEsc(r.club)}</span><strong>${outputEsc(r.label)}</strong>`:''}</div><div class="raffle-fold"></div></div>`;}).join('')}</section>`);}
+  const pages=[];for(let start=0;start<rows.length;start+=160){const chunk=rows.slice(start,start+160);pages.push(`<section class="raffle-page">${Array.from({length:chunk.length},(_,i)=>{const r=chunk[i];return `<div class="raffle-slip ${r?'':'raffle-unused'}"><div class="raffle-label">${r?`<span>${outputEsc(r.club)}</span><strong>${outputEsc(r.label)}</strong>`:''}</div></div>`;}).join('')}</section>`);}
   return `<style>
     .raffle-guide{padding:10px;font-size:13px;color:#334155;margin-bottom:12px}
-    .raffle-page{width:287mm;height:198mm;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(10,minmax(0,1fr));background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12px}
+    .raffle-page{width:287mm;height:198mm;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(20,minmax(0,1fr));background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12px}
     .raffle-page:last-child{break-after:auto;page-break-after:auto}
     .raffle-slip{position:relative;border:.15mm solid #888;box-sizing:border-box;overflow:hidden;min-width:0}
-    .raffle-label{height:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5mm;padding:0 1mm;font-size:9pt;line-height:1.1;white-space:nowrap;color:#111}
+    .raffle-label{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5mm;padding:0 1mm;font-size:9pt;line-height:1.1;white-space:nowrap;color:#111}
     .raffle-label strong{font-weight:800}.raffle-fold{position:absolute;top:50%;left:0;right:0;border-top:.15mm dashed #bbb}
     .raffle-unused .raffle-fold{display:none}
     @page{size:A4 landscape;margin:5mm}
     @media print{.oc-sheet{padding:0!important}.raffle-guide{display:none}.raffle-page{margin:0!important}body{background:white}}
-  </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · A4 가로 / 배율 100% / 여백 5mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 점선을 따라 한 번 접어 글씨가 안쪽으로 들어가게 넣으세요. 마지막 장의 빈 칸은 사용하지 마세요. 후보를 포함한 저장 명단 기준입니다.</div>${pages.join('')}`;
+  </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · A4 가로 / 배율 100% / 여백 5mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 글씨가 안쪽으로 들어가게 넣으세요. A4 한 장에 최대 160명이며 빈 쪽지는 출력하지 않습니다. 후보를 포함한 저장 명단 기준입니다.</div>${pages.join('')}`;
 }
 
 function outputCenterBody(){
