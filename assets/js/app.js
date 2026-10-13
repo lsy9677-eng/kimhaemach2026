@@ -27182,6 +27182,7 @@ function outputCenterInnerHtml(){
         <label class="form-group"><span class="form-label">대회</span><select class="form-select" id="outTS" onchange="outputTournamentChanged()"></select></label>
         <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="renderOutputPreview()"></select></label>
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
+          <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
           <option value="prelim-current">예선 대진표 · 현재상황</option>
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
@@ -28206,8 +28207,48 @@ function initMobileBracketHorizontalScroll(root=document){
   });
 }
 
+
+// PHASE226: equal-size raffle slips, all registered tournament players.
+function outputRaffleParticipants(tid){
+  const raw=window.__OUTPUT_RAW_REGS?.[tid];
+  const regs=Array.isArray(raw)?raw.filter(r=>!r._historyRecovered):Object.entries(G.teams||{}).filter(([key])=>key.startsWith(tid+'_')).flatMap(([,teams])=>teams||[]);
+  const rows=[];
+  regs.forEach(team=>{
+    const club=baseClub(team.club||'')||String(team.club||'').trim();
+    (team.players||[]).forEach((value,i)=>{
+      const name=String(typeof value==='object'?value?.name||'':value||'').trim();if(!name)return;
+      const indexed=team.playerIdentities?.[i];
+      const identity=(indexed&&transferName(indexed.name)===transferName(name)?indexed:(team.playerIdentities||[]).find(p=>transferName(p.name)===transferName(name)))||{};
+      const parts=transferIdentityParts(name),tag=String(identity.identityTag||parts.tag||'').toUpperCase();
+      rows.push({club,name:parts.base||name,tag,id:String(identity.playerId||''),legacy:registrationClubIdentityKey(club)+'|'+transferName(parts.base||name)+'|'+tag});
+    });
+  });
+  const known=new Map();rows.filter(r=>r.id).forEach(r=>{if(!known.has(r.legacy))known.set(r.legacy,new Set());known.get(r.legacy).add(r.id);});
+  const unique=new Map();rows.forEach(r=>{const ids=known.get(r.legacy);const id=r.id||((ids?.size===1)?[...ids][0]:'');const key=id?'id:'+id:'legacy:'+r.legacy;if(!unique.has(key))unique.set(key,r);});
+  const result=[...unique.values()].sort((a,b)=>a.club.localeCompare(b.club,'ko')||a.name.localeCompare(b.name,'ko')||a.tag.localeCompare(b.tag));
+  const counts=new Map();result.forEach(r=>{const k=r.club+'|'+r.name;counts.set(k,(counts.get(k)||0)+1);});
+  result.forEach(r=>{r.label=r.name+((counts.get(r.club+'|'+r.name)>1&&r.tag)?' ('+r.tag+')':'');});
+  return result;
+}
+function outputRaffleSlipsHtml(tid){
+  const rows=outputRaffleParticipants(tid);if(!rows.length)return '<div class="oc-empty">저장된 참가자 명단이 없습니다. 대회 명단을 불러온 뒤 다시 확인하세요.</div>';
+  const pages=[];for(let start=0;start<rows.length;start+=80){const chunk=rows.slice(start,start+80);pages.push(`<section class="raffle-page">${Array.from({length:80},(_,i)=>{const r=chunk[i];return `<div class="raffle-slip ${r?'':'raffle-unused'}"><div class="raffle-label">${r?`<span>${outputEsc(r.club)}</span><strong>${outputEsc(r.label)}</strong>`:''}</div><div class="raffle-fold"></div></div>`;}).join('')}</section>`);}
+  return `<style>
+    .raffle-guide{padding:10px;font-size:13px;color:#334155;margin-bottom:12px}
+    .raffle-page{width:287mm;height:198mm;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(10,minmax(0,1fr));background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12px}
+    .raffle-page:last-child{break-after:auto;page-break-after:auto}
+    .raffle-slip{position:relative;border:.15mm solid #888;box-sizing:border-box;overflow:hidden;min-width:0}
+    .raffle-label{height:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5mm;padding:0 1mm;font-size:9pt;line-height:1.1;white-space:nowrap;color:#111}
+    .raffle-label strong{font-weight:800}.raffle-fold{position:absolute;top:50%;left:0;right:0;border-top:.15mm dashed #bbb}
+    .raffle-unused .raffle-fold{display:none}
+    @page{size:A4 landscape;margin:5mm}
+    @media print{.oc-sheet{padding:0!important}.raffle-guide{display:none}.raffle-page{margin:0!important}body{background:white}}
+  </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · A4 가로 / 배율 100% / 여백 5mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 점선을 따라 한 번 접어 글씨가 안쪽으로 들어가게 넣으세요. 마지막 장의 빈 칸은 사용하지 마세요. 후보를 포함한 저장 명단 기준입니다.</div>${pages.join('')}`;
+}
+
 function outputCenterBody(){
   const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.value||'prelim-current';
+  if(type==='raffle-slips')return tid?outputRaffleSlipsHtml(tid):'<div class="oc-empty">대회를 선택하세요.</div>';
   if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
   if(type==='prelim-current')return outputPrelimHtml(tid,div,false);
   if(type==='prelim-blank')return outputPrelimHtml(tid,div,true);
@@ -28254,6 +28295,7 @@ function initMobileOutputPyramidZoom(box){
 }
 function renderOutputPreview(){
   const box=outputElement('outputPreview');if(!box)return;
+  const raffle=outputElement('outType')?.value==='raffle-slips';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle;
   try{box.innerHTML=`<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
   requestAnimationFrame(()=>{fitOutputPyramids(box);initMobileOutputPyramidZoom(box);});
@@ -28291,7 +28333,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
   }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
 }
 async function saveOutputCenterHighResImage(){
-  if(!outputElement('outTS')?.value||!outputElement('outDS')?.value){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
   renderOutputPreview();
   const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
   const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
@@ -28304,7 +28346,7 @@ async function saveMainPyramidHighResImage(tid,div){
   await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
 }
 function printOutputCenter(){
-  if(!outputElement('outTS')?.value||!outputElement('outDS')?.value){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
   const w=window.open('','_blank','width=1200,height=850');
