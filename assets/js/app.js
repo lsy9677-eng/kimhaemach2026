@@ -559,7 +559,7 @@ function renderPersonalMatchBanner(tid, targetDivs=[]){
   if(!t || getTournamentTypeById(tid)!=='individual_pair') return '';
   const digits=getPersonalMatchPhone();
   const saved=formatPhoneLoose(digits);
-  const rows=digits?getPersonalizedIndividualMatches(tid,targetDivs,digits):[];
+  const rows=digits?getPersonalizedIndividualMatches(tid,targetDivs,digits).filter(m=>bracketPhasePublished(tid,m.phase==='group'?'prelim':'main')):[];
   const headerBtns=`<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="my-match-toggle-btn" onclick="event.stopPropagation();promptPersonalMatchPhone()" style="border:1px solid #2563eb;border-radius:999px;background:white;color:#1d4ed8;cursor:pointer">${saved?'📱 번호 변경':'📱 전화번호 입력'}</button>${saved?'<button class="my-match-toggle-btn" onclick="event.stopPropagation();clearPersonalMatchPhone()" style="border:1px solid #64748b;border-radius:999px;background:white;color:#475569;cursor:pointer">초기화</button>':''}</div>`;
   if(!saved){
     return `<div style="padding:10px 12px;background:linear-gradient(135deg,#eef4ff,#fffdf5);border:1.5px solid #93c5fd;border-radius:10px;margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><div class="my-match-panel-title">📱 개인전 내 경기 찾기</div><div style="font-size:.82rem;color:#1e3a8a;margin-top:4px;line-height:1.6">참가 등록 때 입력한 전화번호를 저장하면 이 기기에서 <b>내 경기만 바로 모아보기</b>가 됩니다.</div></div>${headerBtns}</div></div>`;
@@ -3583,11 +3583,11 @@ function setOperationViewMode(key, mode){
 }
 function shouldShowPrelimByOperationMode(key){
   const mode=getOperationViewMode(key);
-  return mode==='all' || mode==='group';
+  return bracketKeyPublished(key,'prelim') && (mode==='all' || mode==='group');
 }
 function shouldShowMainByOperationMode(key){
   const mode=getOperationViewMode(key);
-  return mode==='all' || mode==='main';
+  return bracketKeyPublished(key,'main') && (mode==='all' || mode==='main');
 }
 function renderOperationViewButtons(key){
   const mode=getOperationViewMode(key);
@@ -11765,6 +11765,7 @@ window.toggleIndividualAutoCourtAssign = async function toggleIndividualAutoCour
 
 function renderBracketHTMLForDiv(tid,div,isAll){
   const key=tid+'_'+div;
+  if(!bracketPhasePublished(tid,'prelim')&&!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('prelim')+bracketPublicationNotice('main');
   const showPrelimSection = shouldShowPrelimByOperationMode(key);
   const showMainSection = shouldShowMainByOperationMode(key);
   if(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()){
@@ -11773,11 +11774,12 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     ensureIndividualAutoCourtAssignmentsForKey(key);
   }
   const teams=G.teams[key]||[];
-  const draw=G.draws[key];
+  const rawDraw=G.draws[key];
+  const draw=showPrelimSection?rawDraw:(rawDraw?{...rawDraw,groups:[]}:null);
   const t=G.tournaments.find(t=>t.id===tid);
   const cfg=gDS(t,div);
 
-  const allMs=G.matches[key]||[];
+  const allMs=(G.matches[key]||[]).filter(m=>bracketPhasePublished(tid,m.phase==='group'?'prelim':'main'));
   const gMs=allMs.filter(m=>m.phase==='group');
   const playInMs=allMs.filter(m=>m.phase==='playin');
   const mMs=allMs.filter(m=>m.phase==='main');
@@ -12409,6 +12411,7 @@ function toggleCompactMatchDetail(id){
 }
 
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
+  if(!bracketKeyPublished(key,m.phase==='group'?'prelim':'main'))return '';
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
   const rbs=m.rubbers||[];
   const indivMode=isIndividualByKey(key);
@@ -12649,6 +12652,7 @@ function switchBVTab(div){
 
 function renderCombinedBracketSection(tid, div){
   const key = tid+'_'+div;
+  if(!bracketPhasePublished(tid,'prelim')&&!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('prelim')+bracketPublicationNotice('main');
   const teams = G.teams[key] || [];
   const draw = G.draws[key];
   const t = G.tournaments.find(t=>t.id===tid);
@@ -12699,7 +12703,7 @@ function renderCombinedBracketSection(tid, div){
   }
 
   let groupsHTML = '';
-  if(draw.groups?.length){
+  if(draw.groups?.length && bracketPhasePublished(tid,'prelim')){
     groupsHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px">`;
     draw.groups.forEach((grp, gi)=>{
       const grpMs = gMs.filter(m=>m.group===gi);
@@ -12741,6 +12745,8 @@ function renderCombinedBracketSection(tid, div){
     groupsHTML = `<div class="card" style="margin:0"><div class="empty-state" style="padding:24px"><p>예선 조별 데이터가 없습니다</p></div></div>`;
   }
 
+  if(!bracketPhasePublished(tid,'prelim'))groupsHTML=bracketPublicationNotice('prelim');
+  if(!bracketPhasePublished(tid,'main'))mainHTML=bracketPublicationNotice('main');
   const rightTitle = mMs.length ? '🏆 본선 피라미드 대진표' : '🏆 본선 빈 피라미드';
 
   return `<div style="background:linear-gradient(180deg,#f8fbff,#ffffff);border-radius:18px;padding:16px;border:1px solid #dbeafe;box-shadow:0 8px 24px rgba(0,0,0,.07);margin-bottom:18px">
@@ -12851,6 +12857,7 @@ function getRoundCardTheme(roundIndex,totalRounds){
 }
 
 function renderBracketTree(key,mMs,teams){
+  if(!bracketKeyPublished(key,'main'))return bracketPublicationNotice('main');
   // round 값이 문자열/숫자 혼용으로 저장될 수 있으므로 Number()로 정규화
   let normalizedMs = mMs.map(m=>({...m, round: Number(m.round||0), slot: Number(m.slot||0)}));
 
@@ -13973,12 +13980,46 @@ function openDraw(tid,div){
 
 // PHASE223: administrator-only session settings. No condition metadata is persisted.
 const ADMIN_OPERATIONAL_EXCLUSIONS=new Map();
+
+// PHASE225: tournament-wide preliminary/main publication, dates in Korea.
+function bracketPhasePublishedDefault(t){const date=String(t?.date||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(date)&&date<=bracketPublicationDate();}
+function bracketPublicationDate(){return new Date(Date.now()+9*3600000).toISOString().slice(0,10);}
+function bracketPhasePublished(tid,phase){
+  if(AD)return true;
+  const t=(G.tournaments||[]).find(t=>t.id===tid);if(!t)return false;
+  const c=t.bracketPublication?.[phase];
+  if(!c){const date=String(t.date||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(date)&&date<=bracketPublicationDate();}
+  if(c.mode==='hidden')return false;
+  if(c.mode==='public')return true;
+  return /^\d{4}-\d{2}-\d{2}$/.test(c.date||'')&&c.date<=bracketPublicationDate();
+}
+function bracketKeyPublished(key,phase){const t=(G.tournaments||[]).find(t=>(t.divisions||[]).some(d=>t.id+'_'+d===key));return bracketPhasePublished(t?.id,phase);}
+function bracketPublicationNotice(phase){return `<div class="card" style="text-align:center;padding:24px;color:#64748b">${phase==='prelim'?'예선':'본선'} 대진표는 아직 공개되지 않았습니다.</div>`;}
+function openBracketPublicationSettings(){
+  if(!AD)return;
+  let m=ge('mBracketPublication');if(!m){m=document.createElement('div');m.id='mBracketPublication';m.className='modal-overlay';m.innerHTML='<div class="modal-box"><div class="modal-header"><h3>대진표 공개 관리</h3><button class="modal-close" onclick="cm(\'mBracketPublication\')">×</button></div><div class="modal-body"><label>대회<select id="pubTournament" class="form-select" onchange="renderBracketPublicationSettings()"></select></label><div id="pubSettings"></div></div></div>';document.body.appendChild(m);}
+  ge('pubTournament').innerHTML=(G.tournaments||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  const active=ge('brTS')?.value||ge('regTS')?.value;if((G.tournaments||[]).some(t=>t.id===active))ge('pubTournament').value=active;
+  renderBracketPublicationSettings();om('mBracketPublication');
+}
+function renderBracketPublicationSettings(){
+  if(!AD)return;const t=(G.tournaments||[]).find(t=>t.id===ge('pubTournament')?.value);if(!t)return;
+  ge('pubSettings').innerHTML='<p>공개일은 한국시간 당일 0시부터 적용됩니다. 테스트 중에는 비공개를 선택하세요. 공개 전에도 관리자는 확인할 수 있습니다. 대회의 모든 부서에 적용됩니다.</p>'+['prelim','main'].map(phase=>{const c=t.bracketPublication?.[phase]||{mode:bracketPhasePublishedDefault(t)?'public':'hidden',date:''};return `<label class="form-group">${phase==='prelim'?'예선':'본선'} 공개<select class="form-select" id="pubMode_${phase}">${[['hidden','비공개'],['scheduled','공개일에 자동 공개'],['public','즉시 공개']].map(([v,l])=>`<option value="${v}" ${c.mode===v?'selected':''}>${l}</option>`).join('')}</select><input class="form-input" type="date" id="pubDate_${phase}" value="${esc(c.date||'')}"></label>`;}).join('')+'<button class="btn btn-primary" onclick="saveBracketPublicationSettings()">공개 설정 저장</button>';
+}
+async function saveBracketPublicationSettings(){
+  if(!AD)return;const tid=ge('pubTournament')?.value;const t=(G.tournaments||[]).find(t=>t.id===tid);if(!t)return;
+  const config={};for(const phase of ['prelim','main']){const mode=ge('pubMode_'+phase).value,date=ge('pubDate_'+phase).value;if(mode==='scheduled'&&!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast('공개일을 선택하세요','error');return;}config[phase]={mode,date};}
+  try{await updateDoc(doc(db,'tournaments',tid),{bracketPublication:config});t.bracketPublication=config;toast('대진표 공개 설정 저장 완료','success');try{renderBracket();renderOutputPreview();}catch(e){} }
+  catch(e){toast('공개 설정 저장 실패: '+(e?.message||e),'error');}
+}
+Object.assign(window,{openBracketPublicationSettings,renderBracketPublicationSettings,saveBracketPublicationSettings});
+
 function ensureAdminOperationalExclusionButton(){
   if(!AD)return;
   const body=document.querySelector('#mAdminSettings .modal-body');if(!body)return;
   let wrap=ge('adminOperationalExclusionEntry');
   if(!wrap){wrap=document.createElement('div');wrap.id='adminOperationalExclusionEntry';wrap.style.cssText='margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:10px';body.prepend(wrap);}
-  wrap.innerHTML='<button type="button" class="btn btn-outline" style="width:100%" onclick="openAdminOperationalExclusions()">특수 운영 설정 · 조 배정 제외</button><div style="font-size:.75rem;margin-top:6px">같은 기기에서 다음 예선 추첨 1회에 적용합니다. 새로고침하면 해제됩니다.</div>';
+  wrap.innerHTML='<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="openBracketPublicationSettings()">예선·본선 대진표 공개 관리</button><button type="button" class="btn btn-outline" style="width:100%" onclick="openAdminOperationalExclusions()">특수 운영 설정 · 조 배정 제외</button><div style="font-size:.75rem;margin-top:6px">같은 기기에서 다음 예선 추첨 1회에 적용합니다. 새로고침하면 해제됩니다.</div>';
 }
 function openAdminOperationalExclusions(){
   if(!AD)return;
@@ -15090,6 +15131,7 @@ function renderSavedPrelimNeutralPyramid(mainSize, savedSlots=[]){
 }
 function renderSavedDrawView(entry){
   const norm=normalizeDrawHistoryEntry(entry);
+  if(!bracketPhasePublished(norm.tournamentId||String(norm.key||'').split('_')[0],norm.mode==='main'?'main':'prelim')){toast('대진표 공개 전입니다','info');return;}
   const body=ge('drawHistoryViewBody');
   if(!body) return;
   const infoDate = new Date(norm.createdAt||Date.now());
@@ -15168,6 +15210,7 @@ function openSavedDrawHistory(id, key){
   renderSavedDrawView(entry);
 }
 async function openDrawHistory(tid,div,mode='prelim'){
+  if(!bracketPhasePublished(tid,mode==='main'?'main':'prelim')){toast('대진표 공개 전입니다','info');return;}
   await ensureDrawHistoryLoaded();
   const key=tid+'_'+div;
   DRAW_HISTORY_CTX_KEY=key;
@@ -15221,6 +15264,7 @@ async function openDrawHistory(tid,div,mode='prelim'){
 }
 
 async function openLatestSavedDraw(tid,div,mode='prelim'){
+  if(!bracketPhasePublished(tid,mode==='main'?'main':'prelim')){toast('대진표 공개 전입니다','info');return;}
   await ensureDrawHistoryLoaded();
   const key=tid+'_'+div;
   const wantMain = String(mode||'prelim')==='main';
@@ -27787,6 +27831,7 @@ function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   <table><thead><tr><th>No</th><th>팀</th><th>${blank?'수기 결과':'저장 결과'}</th><th>기록</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 function outputPrelimHtml(tid,div,blank=false){
+  if(!bracketPhasePublished(tid,'prelim'))return bracketPublicationNotice('prelim');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),draw=G.draws?.[key]||{};
   const groups=Array.isArray(draw.groups)?draw.groups:[];
   const allMs=G.matches?.[key]||[];
@@ -27815,6 +27860,7 @@ function outputPrelimHtml(tid,div,blank=false){
   return outputHeader(t,div,blank?'예선 대진표 · 현장 수기용':'예선 대진표 · 현재상황')+`<div class="oc-groups">${cards}</div>`;
 }
 function outputMainTableHtml(tid,div,blank=false){
+  if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null)).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
@@ -27830,6 +27876,7 @@ function outputMainTableHtml(tid,div,blank=false){
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
 function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
+  if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div, all=(G.matches?.[key]||[]).filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
@@ -28024,6 +28071,7 @@ function outputPreDrawPyramidSkeleton(tid,div){
     </div></div></div>`;
 }
 function outputMainTreeHtml(tid,div,blank=false){
+  if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
@@ -28033,6 +28081,7 @@ function outputMainTreeHtml(tid,div,blank=false){
     `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 팀 배치 · 승리팀은 굵은 가지선으로 위 단계까지 연결</div>${tree}`;
 }
 function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
+  if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const key=tid+'_'+div, allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
