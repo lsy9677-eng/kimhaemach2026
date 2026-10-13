@@ -17938,17 +17938,21 @@ async function saveSimpleMatchResultCore(score1,score2){
 
 function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 // 스코어 버튼 클릭 핸들러
-function setRbSc(inputId, val){
-  const inp = ge(inputId);
-  if(!inp) return;
-  inp.value = val;
+// PHASE247: enter the losing rubber score once; fill the winner with six.
+function setRbSc(inputId,val,autoOpponent=true){
+  const inp=ge(inputId);if(!inp)return;
+  const score=val===''||val==null?null:Number(val);
+  inp.value=score==null?'':score;
   for(let n=0;n<=6;n++){
-    const btn = ge(inputId+'_btn'+n);
-    if(!btn) continue;
-    const active = n===val;
-    btn.style.background = active?'var(--primary)':'white';
-    btn.style.color = active?'white':'var(--text)';
-    btn.style.borderColor = active?'var(--primary)':'var(--border)';
+    const btn=ge(inputId+'_btn'+n);if(!btn)continue;
+    const active=n===score;
+    btn.style.background=active?'var(--primary)':'white';
+    btn.style.color=active?'white':'var(--text)';
+    btn.style.borderColor=active?'var(--primary)':'var(--border)';
+  }
+  const row=String(inputId).match(/^rs([12])_(\d+)$/);
+  if(autoOpponent&&row&&Number.isInteger(score)&&score>=0&&score<6&&!isIndividualByKey(CM_key)){
+    setRbSc('rs'+(row[1]==='1'?'2':'1')+'_'+row[2],6,false);
   }
 }
 
@@ -18007,8 +18011,8 @@ function syncGhostScoreFromPickers(cid){
   const prev=(Array.isArray(m.rubbers)?m.rubbers:[])[r]||{};
   const plan=getGhostScorePlan(sel1,sel2,prev,in1.value,in2.value);
   if(plan.action==='set'){
-    setRbSc('rs1_'+r,plan.score1);
-    setRbSc('rs2_'+r,plan.score2);
+    setRbSc('rs1_'+r,plan.score1,false);
+    setRbSc('rs2_'+r,plan.score2,false);
   }else if(plan.action==='clear'){
     in1.value=''; in2.value='';
     for(let n=0;n<=6;n++){
