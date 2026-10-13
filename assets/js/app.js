@@ -13954,7 +13954,7 @@ function openDraw(tid,div){
     seedWrap.innerHTML=`
       <div style="margin-bottom:12px;padding:12px 14px;background:linear-gradient(135deg,#fff8df,#eef4ff);border:1.5px solid var(--accent);border-radius:12px">
         <div style="font-weight:900;font-size:.88rem;color:var(--primary-dark);margin-bottom:6px">🎯 예선 단계 본선 시드 설정</div>
-        <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:8px">관리자만 설정합니다. 형식은 <b>팀번호=시드번호</b>, 최대 8번까지 입력합니다. 입력한 시드팀은 예선에서 서로 다른 조로 자동 분산됩니다. 예: <code>12=1, 7=2, 3=3, 9=4</code></div>
+        <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:8px">관리자만 설정합니다. 형식은 <b>팀번호=시드번호</b>, 최대 8번까지 입력합니다. 시드는 본선에만 적용합니다. 예선은 같은클럽 분리 조건으로 무작위 배정합니다. 예: <code>12=1, 7=2, 3=3, 9=4</code></div>
         <input class="form-input" id="drawMainManualSeedsInput" placeholder="예: 12=1, 7=2, 3=3, 9=4" value="${savedSeedRaw.replace(/"/g,'&quot;')}" oninput="updatePrelimSeedSummary()">
         <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:8px">
           <button type="button" class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;min-height:34px" onclick="savePrelimSeedConfigFromModal()">💾 시드 저장</button>
@@ -14092,12 +14092,7 @@ function prelimExclusionsSatisfied(groups,exclusions,teams){
 }
 function getOperationalPrelimGroups(indices,teams,sizes,seeds){
   assertAdminOperationalContext();
-  const exclusions=DW.cfg.operationalExclusions||[];
-  for(let attempt=0;attempt<(exclusions.length?200:1);attempt++){
-    const groups=getPrelimSeedDistributedGroups(indices,teams,sizes,seeds);
-    if(prelimExclusionsSatisfied(groups,exclusions,teams))return groups;
-  }
-  throw new Error('운영 제약을 만족하는 배정을 찾지 못했습니다. 제외 조와 시드 조건을 확인하세요.');
+  return getPrelimSeedDistributedGroups(indices,teams,sizes,seeds,DW.cfg.operationalExclusions||[]);
 }
 
 
@@ -14259,7 +14254,7 @@ function updatePrelimSeedSummary(){
     return sa-sb;
   });
   summary.innerHTML = pairs.length
-    ? `설정됨: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">설정한 시드팀은 예선 추첨에서도 서로 다른 조로 우선 분산되고, 본선에서도 1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 유지됩니다.</span>`
+    ? `설정됨: <b>${pairs.join(' / ')}</b><br><span style="color:#8a6412">예선은 시드 우선 배정 없이 무작위로 추첨합니다. 본선에서는 1·2 시드는 결승 전까지, 상위 시드는 최대한 늦게 만나도록 유지됩니다.</span>`
     : '저장된 시드가 없으면 일반 본선 추첨으로 진행됩니다. 관리자 저장 후에는 추첨을 안 해도 계속 유지됩니다.';
 }
 
@@ -14312,86 +14307,22 @@ function buildSnakeOrder(grps,opt){
 
 
 
-function getPrelimSeedDistributedGroups(indices, teams, grpSizes, seedMap){
-  const groups=(grpSizes||[]).map((size,gi)=>({gi,size,teams:[]}));
-  if(!groups.length) return [];
-
-  const sm=seedMap||{};
-  const seededEntries=(indices||[])
-    .filter(ti=>sm[Number(ti)]>=1 && sm[Number(ti)]<=8)
-    .map(ti=>({ti:Number(ti), seedNo:Number(sm[Number(ti)])}))
-    .sort((a,b)=>a.seedNo-b.seedNo);
-
-  const usedSeedNos=new Set();
-  const seeded=[];
-  seededEntries.forEach(e=>{
-    if(!usedSeedNos.has(e.seedNo)){
-      usedSeedNos.add(e.seedNo);
-      seeded.push(e);
-    }
-  });
-
-  const seededSet=new Set(seeded.map(e=>e.ti));
-  const rest=(indices||[]).filter(ti=>!seededSet.has(Number(ti)));
-
-  const emptySlots=g=>Math.max(0, Number(g.size||0) - Number((g.teams||[]).length||0));
-  const teamClubs=(ti)=>getTeamClubTokens(teams?.[ti]||{});
-  const sameClubCount=(group, ti)=>{
-    const tokens=teamClubs(ti);
-    return (group.teams||[]).reduce((cnt,idx)=>{
-      const gt=getTeamClubTokens(teams?.[idx]||{});
-      return cnt + (tokens.some(t=>gt.includes(t)) ? 1 : 0);
-    }, 0);
-  };
-
-  // 시드팀은 서로 다른 조에 우선 분산
-  seeded.forEach((entry, seedIdx)=>{
-    let candidates=groups.filter(g=>emptySlots(g)>0);
-    candidates.sort((a,b)=>{
-      const sameDiff=sameClubCount(a, entry.ti)-sameClubCount(b, entry.ti);
-      if(sameDiff!==0) return sameDiff;
-      const lenDiff=(a.teams.length||0)-(b.teams.length||0);
-      if(lenDiff!==0) return lenDiff;
-      return a.gi-b.gi;
-    });
-    const fallback=groups[seedIdx % groups.length];
-    const best=candidates[0] || fallback;
-    if(best && emptySlots(best)>0) best.teams.push(entry.ti);
-  });
-
-  // 나머지 팀은 같은 클럽 최소화 + 빈칸 균형 배치
-  const byClub={};
-  rest.forEach(ti=>{
-    const clubs=teamClubs(ti);
-    const club=String(clubs[0]||teams?.[ti]?.club||`__${ti}`);
-    if(!byClub[club]) byClub[club]=[];
-    byClub[club].push(Number(ti));
-  });
-  Object.values(byClub).forEach(arr=>shuffle(arr));
-  const clubEntries=Object.entries(byClub).sort((a,b)=>{
-    if(b[1].length!==a[1].length) return b[1].length-a[1].length;
-    return Math.random()<0.5 ? -1 : 1;
-  });
-
-  for(const [club, teamIdxs] of clubEntries){
-    for(const ti of teamIdxs){
-      let candidates=groups.filter(g=>emptySlots(g)>0 && sameClubCount(g, ti)===0);
-      if(!candidates.length) candidates=groups.filter(g=>emptySlots(g)>0);
-      candidates.sort((a,b)=>{
-        const sameDiff=sameClubCount(a, ti)-sameClubCount(b, ti);
-        if(sameDiff!==0) return sameDiff;
-        const lenDiff=(a.teams.length||0)-(b.teams.length||0);
-        if(lenDiff!==0) return lenDiff;
-        const roomDiff=emptySlots(b)-emptySlots(a);
-        if(roomDiff!==0) return roomDiff;
-        return Math.random()<0.5 ? -1 : 1;
-      });
-      const best=candidates[0];
-      if(best) best.teams.push(Number(ti));
-    }
+// PHASE230: uniform shuffled slot assignments conditioned only on club separation
+// and any explicit operational exclusions. No greedy balancing or seed priority.
+function getPrelimSeedDistributedGroups(indices, teams, grpSizes, seedMap, exclusions=[]){
+  const ids=[...(indices||[])],sizes=(grpSizes||[]).map(Number);
+  if(!sizes.length)return [];
+  if(sizes.some(n=>!Number.isInteger(n)||n<1)||sizes.reduce((a,b)=>a+b,0)!==ids.length||new Set(ids).size!==ids.length)throw new Error('조별 인원과 등록팀 수가 일치하지 않습니다.');
+  const tokens=new Map(ids.map(i=>[i,[...new Set(getTeamClubTokens(teams?.[i]||{}))]]));
+  const counts=new Map();tokens.forEach(ts=>ts.forEach(t=>counts.set(t,(counts.get(t)||0)+1)));
+  if([...counts.values()].some(n=>n>sizes.length))throw new Error('같은 클럽의 팀 수가 조 수보다 많아 분리 배정할 수 없습니다. 조 구성을 변경하세요.');
+  for(let attempt=0;attempt<50000;attempt++){
+    const order=shuffle(ids.slice());let pos=0;
+    const groups=sizes.map((size,gi)=>({gi,size,teams:order.slice(pos,pos+=size)}));
+    const valid=groups.every(g=>{const seen=new Set();for(const i of g.teams){for(const t of tokens.get(i)){if(seen.has(t))return false;seen.add(t);}}return true;});
+    if(valid&&prelimExclusionsSatisfied(groups,exclusions,teams))return groups;
   }
-
-  return improveBalancedGroups(groups, teams);
+  throw new Error('같은클럽 분리 조건을 만족하는 무작위 배정을 찾지 못했습니다. 조 구성과 운영 제외 조건을 확인하세요. 같은클럽 중복 배정으로 대체하지 않습니다.');
 }
 function buildGreedyBalancedGroups(indices, teams, grpSizes){
   const groups=(grpSizes||[]).map((size,gi)=>({gi,size,teams:[]}));
@@ -15752,7 +15683,7 @@ async function startIndividualDraw(){
   const groupData=runGroups.map(g=>({teams:[...g.teams],courts:[],memo:''}));
   G.draws[key]={groups:groupData,advance:2,indivMode:true,grpSize:gs,mainMode,
     mainSeedRaw:prelimSeedRaw,mainSeedMap:prelimSeedMap,
-    groupDrawAudit:{mode:'seeded_balanced',modeLabel:'시드 자동분산 + 같은클럽 회피',loggedAt:drawTime.toISOString()}};
+    groupDrawAudit:{mode:'club_separated_random',modeLabel:'같은클럽 분리 조건 무작위',loggedAt:drawTime.toISOString()}};
 
   // 예선 경기 생성 (2팀 조: 1경기, 3팀 조: 3경기)
   const mlist=[];
@@ -16092,10 +16023,10 @@ async function startDraw(){
   }
 
   ge('drawProgressBar').style.width='100%';
-  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 시드 자동분산 + 같은클럽 회피 추첨</div>`;
+  ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 같은클럽 분리 조건 무작위 추첨</div>`;
   await sleep(400);
 
-  const audit={mode:'seeded_balanced',modeLabel:'시드 자동분산 + 같은클럽 회피',loggedAt:drawTime.toISOString()};
+  const audit={mode:'club_separated_random',modeLabel:'같은클럽 분리 조건 무작위',loggedAt:drawTime.toISOString()};
   DW.drawAudit=audit;
   const groupData=grps.map(g=>({teams:g.teams,courts:[],memo:''}));
   G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit,mainSeedRaw:prelimSeedRaw,mainSeedMap:prelimSeedMap,allowedCourts};
