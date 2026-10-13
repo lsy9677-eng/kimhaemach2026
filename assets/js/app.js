@@ -2994,10 +2994,15 @@ async function stT(key,{allowDelete=false}={}){
 }
 
 
+// PHASE239: reduce redundant writes; keep atomic recovery.
+const MATCH_RECOVERY_CLEANUP_TIMES=new Map();
+function scheduleMatchRestoreCleanup(tid){const now=Date.now();if(now-(MATCH_RECOVERY_CLEANUP_TIMES.get(tid)||0)<60000)return;MATCH_RECOVERY_CLEANUP_TIMES.set(tid,now);cleanupOldTournamentRestorePoints(tid).catch(()=>{});}
+
 // PHASE232: full tournament recovery before/after match writes, committed atomically.
 function matchRecoveryActor(){const a=registrationAuditActor();return {...a,uid:String(typeof auth!=='undefined'?auth?.currentUser?.uid||'':''),email:String(typeof auth!=='undefined'?auth?.currentUser?.email||'':'')};}
+function matchWriteComparable(m){const x={...m};['_id','updatedAt','createdAt','resultAudit','tournamentId','division'].forEach(k=>delete x[k]);return stableStringify(x);}
 function matchRecoveryProjection(m){return JSON.stringify({t1:m?.t1,t2:m?.t2,winner:m?.winner??null,rubbers:m?.rubbers||[],simpleResult:m?.simpleResult||null});}
-async function stageMatchRecoveryPoints(batch,key,writes,deleted=[]){
+async function stageMatchRecoveryPoints(batch,key,writes,deleted=[],drawOverride=null){
   if(__autoRestoreSuppressed)return null;
   const {tid,div}=_k2td(key),actor=matchRecoveryActor(),when=new Date().toISOString();
   const [regSnap,matchSnap]=await Promise.all([
@@ -3009,6 +3014,8 @@ async function stageMatchRecoveryPoints(batch,key,writes,deleted=[]){
   if(writes.length+deleted.length+keys.length*2+3>450)throw new Error('전체 복구점과 경기 저장이 일괄 저장 한도를 초과했습니다. 저장을 중단했습니다.');
   const draws=await Promise.all(keys.map(async k=>{const d=await getDocFromServer(doc(db,'draws',k.key));return d.exists()?d.data():{};}));
   const old=new Map(matches.map(m=>[m._id,m])),changes=[];
+  const dirtyIds=new Set(writes.filter(w=>!old.has(w._id)||matchWriteComparable(old.get(w._id))!==matchWriteComparable(w)).map(w=>w._id));
+  if(!dirtyIds.size&&!deleted.length&&drawOverride===null)return {dirtyIds,noop:true};
   for(const w of writes){const prev=old.get(w._id);if(!prev||matchRecoveryProjection(prev)!==matchRecoveryProjection(w)){
     w.resultAudit={actor,updatedAt:when};changes.push({id:w.id||w._id,division:div,phase:w.phase||'',t1:w.t1??null,t2:w.t2??null,before:prev?{winner:prev.winner??null,simpleResult:prev.simpleResult||null,rubbers:prev.rubbers||[]}:null,after:{winner:w.winner??null,simpleResult:w.simpleResult||null,rubbers:w.rubbers||[]}});
   }}
@@ -3018,12 +3025,12 @@ async function stageMatchRecoveryPoints(batch,key,writes,deleted=[]){
     const ref=doc(collection(db,'restorePoints'));
     if(new TextEncoder().encode(JSON.stringify(changes)).length>650000)throw new Error('경기 변경 이력이 저장 한도를 초과했습니다. 경기 저장을 중단했습니다.');
     batch.set(ref,{tournamentId:tid,tournamentName:t?.name||tid,type:'auto',reason:(stage==='before'?'경기 저장 전':'경기 저장 후')+' · '+dl(div),createdAt:when,createdAtMs:Date.now(),actor,createdBy:[actor.role,actor.club,actor.email].filter(Boolean).join(' · '),permanent:false,version:232,complete:true,recoveryStage:stage,isTest,changes});
-    keys.forEach((k,i)=>{const part={division:k.div,teams:regs.filter(r=>String(r.division||'')===k.div).sort((a,b)=>{const order=(G.teams[k.key]||[]).map(t=>t._id);const ai=order.indexOf(a._id),bi=order.indexOf(b._id);return (ai<0?1e9:ai)-(bi<0?1e9:bi);}),draw:draws[i],matches:rows.filter(r=>String(r.division||'')===k.div),savedAt:when};if(new TextEncoder().encode(JSON.stringify(part)).length>700000)throw new Error('부서 전체 복구점이 저장 한도를 초과했습니다. 경기 저장을 중단했습니다.');batch.set(doc(db,'restorePoints',ref.id,'parts',encodeURIComponent(k.div)),part);});
+    keys.forEach((k,i)=>{const part={division:k.div,teams:regs.filter(r=>String(r.division||'')===k.div).sort((a,b)=>{const order=(G.teams[k.key]||[]).map(t=>t._id);const ai=order.indexOf(a._id),bi=order.indexOf(b._id);return (ai<0?1e9:ai)-(bi<0?1e9:bi);}),draw:stage==='after'&&k.key===key&&drawOverride!==null?drawOverride:draws[i],matches:rows.filter(r=>String(r.division||'')===k.div),savedAt:when};if(new TextEncoder().encode(JSON.stringify(part)).length>700000)throw new Error('부서 전체 복구점이 저장 한도를 초과했습니다. 경기 저장을 중단했습니다.');batch.set(doc(db,'restorePoints',ref.id,'parts',encodeURIComponent(k.div)),part);});
   }
-  return {actor,when};
+  return {actor,when,dirtyIds,beforeMatches:matches.filter(m=>String(m.division||'')===div),beforeDraw:draws[keys.findIndex(k=>k.key===key)]||{}};
 }
 
-async function stM(key){
+async function stM(key,{drawOverride=null}={}){
   const {tid,div}=_k2td(key);
   const cur=G.matches[key]||[];
   cur.forEach(x=>{ if(!x._id) x._id=_mid(); });
@@ -3039,11 +3046,13 @@ async function stM(key){
     return normalizeMatchPayloadForHash(payload);
   });
   const hashPayload={ docs: docsForHash, ids:[...curIds].sort(), deleted:[...toDel].sort() };
-  if(isSameFbWrite('matches', key, hashPayload)) return;
+  if(drawOverride===null&&isSameFbWrite('matches', key, hashPayload)) return;
 
   const batch=writeBatch(db);
-  const recovery=await stageMatchRecoveryPoints(batch,key,cur,toDel);
+  const recovery=await stageMatchRecoveryPoints(batch,key,cur,toDel,drawOverride);
+  if(recovery?.noop)return;
   cur.forEach(x=>{
+    if(recovery?.dirtyIds&&!recovery.dirtyIds.has(x._id))return;
     const docId=x._id;
     const payload={...x};
     delete payload._id;
@@ -3054,13 +3063,15 @@ async function stM(key){
     batch.set(doc(db,'matches',docId), payload, {merge:true});
   });
   toDel.forEach(id=>batch.delete(doc(db,'matches',id)));
+  if(drawOverride!==null)batch.set(doc(db,'draws',key),{...drawOverride,_u:new Date().toISOString()});
   pastArchiveMutation(batch,tid);
-  await batch.commit();
+  try{await batch.commit();}catch(e){if(recovery?.beforeMatches)G.matches[key]=recovery.beforeMatches;if(drawOverride!==null&&recovery?.beforeDraw)G.draws[key]=recovery.beforeDraw;throw e;}
   pastArchiveLocalInvalidation(tid);
-  if(!__autoRestoreSuppressed)cleanupOldTournamentRestorePoints(tid).catch(()=>{});
+  if(!__autoRestoreSuppressed)scheduleMatchRestoreCleanup(tid);
   markFbWriteCache('matches', key, hashPayload);
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=[...curIds];
+  if(drawOverride!==null){G.draws[key]=drawOverride;markFbWriteCache('draws',key,drawOverride);}
   try{ cacheTournamentBundleFromMemory(_k2td(key).tid); }catch(e){}
 }
 
@@ -3094,7 +3105,7 @@ async function persistSingleMatchDoc(key, matchObj){
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=ids;
   try{ cacheTournamentBundleFromMemory(tid); }catch(e){}
-  if(!__autoRestoreSuppressed)cleanupOldTournamentRestorePoints(tid).catch(()=>{});
+  if(!__autoRestoreSuppressed)scheduleMatchRestoreCleanup(tid);
 }
 const __PLAYER_WRITE_QUEUE = new Set();
 let __PLAYER_WRITE_TIMER = null;
@@ -10780,9 +10791,10 @@ async function resetMainDrawOnly(key){
 - 관리자 저장 시드는 유지
 
 계속할까요?`)) return;
+  const originalMatches=(G.matches[key]||[]).slice();
   sl(true);
   try{
-    await resetMatchRecords(key,{phases:['main','playin','bronze'],preserveDraw:true});
+
     const preservedSeedDraw=getPreservedSeedDrawState(key);
     const preservedDraw={...draw, ...preservedSeedDraw};
     delete preservedDraw.mainPlan;
@@ -10790,8 +10802,8 @@ async function resetMainDrawOnly(key){
     delete preservedDraw.mainUpdatedAt;
     G.draws[key]=preservedDraw;
     G.matches[key]=(G.matches[key]||[]).filter(m=>m.phase==='group');
-    await stM(key);
-    await stD(key);
+    await stM(key,{drawOverride:preservedDraw});
+    await resetMatchRecords(key,{phases:['main','playin','bronze'],preserveDraw:true,records:originalMatches,statsOnly:true});
     try{
       if(window.BRACKET_MAIN_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_MAIN_TOGGLE,key)){
         delete window.BRACKET_MAIN_TOGGLE[key];
@@ -13544,16 +13556,12 @@ function syncIndividualMainBracketFromPrelim(key){
     if(side==='t1'){
       if(m.t1!==resolved.ti){ m.t1=resolved.ti; changed=true; }
       if(m.phase==='playin'){
-        if(String(m.source1Label||'')!==resolved.name){ m.source1Label=resolved.name; changed=true; }
-      }else if(String(m.source1Label||'')){
-        m.source1Label=''; changed=true;
+        m.qualifierSource1=m.qualifierSource1||label;
       }
     }else{
       if(m.t2!==resolved.ti){ m.t2=resolved.ti; changed=true; }
       if(m.phase==='playin'){
-        if(String(m.source2Label||'')!==resolved.name){ m.source2Label=resolved.name; changed=true; }
-      }else if(String(m.source2Label||'').trim()!=='부전승' && String(m.source2Label||'')){
-        m.source2Label=''; changed=true;
+        m.qualifierSource2=m.qualifierSource2||label;
       }
     }
   };
@@ -15066,7 +15074,7 @@ async function applySavedMainDrawToLive(id,key){
   if(!confirm('저장된 이 추첨 결과를 실제 본선 대진에 적용할까요? 기존 본선 배정은 교체되고 예선 결과는 유지됩니다.'))return;
   const matches=buildMainMatches(plan.matchSlots,plan.n,plan.playInMatches||[]),next=[...(G.matches[key]||[]).filter(m=>m.phase!=='main'&&m.phase!=='playin'),...matches];
   const before=G.matches[key],beforeDraw=G.draws[key];G.matches[key]=next;G.draws[key]={...(beforeDraw||{}),mainPlan:cloneMainDrawPlan(plan),mainAudit:{mode:'saved_record_applied',sourceHistoryId:id,confirmedAt:new Date().toISOString()},mainUpdatedAt:new Date().toISOString()};
-  sl(true);try{await stD(key);G.matches[key]=next;syncIndividualMainBracketFromPrelim(key);await stM(key);setMainSectionCollapsed(key,false);cm('mDrawHistoryView');try{renderBracket();}catch(e){console.warn('본선 저장 완료 후 화면 갱신 실패',e);}toast('저장된 추첨 결과를 실제 본선에 적용했습니다','success');}catch(e){G.matches[key]=before;G.draws[key]=beforeDraw;toast('본선 적용 실패: '+e.message,'error');}finally{sl(false);}
+  sl(true);try{G.matches[key]=next;syncIndividualMainBracketFromPrelim(key);await stM(key,{drawOverride:G.draws[key]});setMainSectionCollapsed(key,false);cm('mDrawHistoryView');try{renderBracket();}catch(e){console.warn('본선 저장 완료 후 화면 갱신 실패',e);}toast('저장된 추첨 결과를 실제 본선에 적용했습니다','success');}catch(e){G.matches[key]=before;G.draws[key]=beforeDraw;toast('본선 적용 실패: '+e.message,'error');}finally{sl(false);}
 }
 window.applySavedMainDrawToLive=applySavedMainDrawToLive;
 
@@ -15969,7 +15977,7 @@ async function saveManualPrelimDraw(){
   const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
   G.draws[key]={...(G.draws[key]||{}),groups,shuffled:used.slice(),advance,groupDrawAudit:audit,allowedCourts,manualDraw:true,manualConfirmedAt:now.toISOString()};
   const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=ms;
-  sl(true);try{await stD(key);await stM(key);await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');ADMIN_OPERATIONAL_EXCLUSIONS.delete(key);delete DW.cfg.operationalExclusions;toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
+  sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');ADMIN_OPERATIONAL_EXCLUSIONS.delete(key);delete DW.cfg.operationalExclusions;toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
 async function startDraw(){
@@ -16053,7 +16061,7 @@ async function startDraw(){
   }
   sl(true);
   try{
-    await stD(key); await stM(key);
+    await stM(key,{drawOverride:G.draws[key]});
     const preview=buildPreviewMainSlots(G.draws[key],{advance});
     await saveDrawHistoryEntry({
       key,
@@ -16464,7 +16472,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   const rnd=seededMainRng(seed, tid, div, total);
   const manualSeedMap=getMainManualSeedMap(entries);
 
-  const toSeeded = (list)=> (list||[]).map(e=>({...e, seedNo:manualSeedMap[Number(e?.ti)]||null}));
+  const toSeeded = (list)=> (list||[]).map(e=>({...e, seedNo:e.placeholder?null:(manualSeedMap[Number(e?.ti)]||null)}));
   const allSeeded=toSeeded(entries);
   let playInEntries=[];
   let mainPool=[];
@@ -16472,7 +16480,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   if(spec.playInTeams>0){
     const manualProtected=new Set(Object.keys(manualSeedMap).map(v=>Number(v)));
     const candidates=shuffleSeeded(
-      allSeeded.filter(e=>!manualProtected.has(Number(e?.ti))).sort((a,b)=>{
+      allSeeded.filter(e=>e.placeholder||!manualProtected.has(Number(e?.ti))).sort((a,b)=>{
         const ra=Number(a?.rk||99), rb=Number(b?.rk||99);
         if(ra!==rb) return rb-ra; // 2위 우선 진출전
         return Number(a?.gn||0)-Number(b?.gn||0);
@@ -17048,7 +17056,7 @@ async function saveManualMainDraw(){
   const matchSlots=[];for(let i=0;i<n;i+=2){const a=positions[i],b=positions[i+1];matchSlots.push({t1:a||null,t2:b||null,bye:!!((a&&!b)||(!a&&b)),source1Label:a?.nm||'BYE',source2Label:b?.nm||'BYE'});}
   const plan={n,matchSlots,playInMatches:[],manual:true,byeMode:mode},mainMatches=buildMainMatches(matchSlots,n,[]),prev=Array.isArray(G.matches[MD.key])?G.matches[MD.key]:[],nonMain=prev.filter(m=>m.phase!=='main'&&m.phase!=='playin');
   G.matches[MD.key]=[...nonMain,...mainMatches];const audit={mode:'manual_full',modeLabel:'현장 완전수동',byeMode:mode,confirmedAt:new Date().toISOString()};G.draws[MD.key]={...(G.draws[MD.key]||{}),mainPlan:getMainDrawPlanStorageValue(plan,false),mainAudit:audit,mainUpdatedAt:audit.confirmedAt};
-  sl(true);try{await stD(MD.key);await stM(MD.key);await fbLog(`본선 현장 완전수동 추첨 확정: ${dl(MD.div)} / ${n}강 / BYE ${bye} / ${mode==='fixed'?'BYE 고정':'BYE 수동'}`,'✋');sl(false);cm('mManualMainDraw');toast('수동 본선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
+  sl(true);try{await stM(MD.key,{drawOverride:G.draws[MD.key]});await fbLog(`본선 현장 완전수동 추첨 확정: ${dl(MD.div)} / ${n}강 / BYE ${bye} / ${mode==='fixed'?'BYE 고정':'BYE 수동'}`,'✋');sl(false);cm('mManualMainDraw');toast('수동 본선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
 async function startMainDraw(){
@@ -17106,10 +17114,8 @@ async function startMainDraw(){
         mainBracketMode:String(MD.mainBracketMode||'auto'),
         mainUpdatedAt:new Date().toISOString()
       };
-      await stD(key);
-      // A draw snapshot may refresh memory before the match batch starts.
       G.matches[key] = committedMainMatches;
-      await stM(key);
+      await stM(key,{drawOverride:G.draws[key]});
       try{
         setMainSectionCollapsed(key,false);
         const selectedMain=getSelectedMainMatchFilters(key)||[];
@@ -18302,8 +18308,8 @@ async function saveM3(){
 /**
  * key(대회_부서)의 매치 기록에서 선수 승패 차감 + 메모리 초기화
  */
-async function resetMatchRecords(key,{phases=null,preserveDraw=false}={}){
-  const original=G.matches[key]||[];
+async function resetMatchRecords(key,{phases=null,preserveDraw=false,records=null,statsOnly=false}={}){
+  const original=records||G.matches[key]||[];
   const matches=phases?original.filter(m=>phases.includes(m.phase)):original;
   const teams=G.teams[key]||[];
   const affected=new Set();
@@ -18314,8 +18320,8 @@ async function resetMatchRecords(key,{phases=null,preserveDraw=false}={}){
     (lt?.players||[]).forEach(n=>{const k=getPlayerKey(n,baseClub(lt?.club||''));if(G.players[k]){G.players[k].losses=Math.max(0,(G.players[k].losses||0)-1);affected.add(k);}});
   }
   if(affected.size>0) enqueuePlayerPersist([...affected], 4000);
-  G.matches[key]=phases?original.filter(m=>!phases.includes(m.phase)):[];
-  if(!preserveDraw)delete G.draws[key];
+  if(!statsOnly){G.matches[key]=phases?original.filter(m=>!phases.includes(m.phase)):[];
+  if(!preserveDraw)delete G.draws[key];}
 }
 
 /**
@@ -22128,28 +22134,15 @@ async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저�
   if(type==='auto'&&!force&&now-last<AUTO_RESTORE_MIN_MS)return null;
   __autoRestoreBusy=true;
   try{
-    const rp=await addDoc(collection(db,'restorePoints'),{
-      tournamentId:tid,
-      tournamentName:t.name||t.title||tid,
-      type,
-      reason:String(reason||'').slice(0,160),
-      createdAt:new Date().toISOString(),
-      createdAtMs:now,
-      actor:registrationAuditActor(),
-      createdBy:Object.values(registrationAuditActor()).slice(0,3).filter(Boolean).join(' · '),
-      permanent:false,
-      version:1
-    });
-    const parts=_restorePointKeys(tid);
+    const rp=doc(collection(db,'restorePoints')),batch=writeBatch(db),parts=_restorePointKeys(tid);
+    batch.set(rp,{tournamentId:tid,tournamentName:t.name||t.title||tid,type,reason:String(reason||'').slice(0,160),createdAt:new Date().toISOString(),createdAtMs:now,actor:registrationAuditActor(),createdBy:Object.values(registrationAuditActor()).slice(0,3).filter(Boolean).join(' · '),permanent:false,version:239,complete:true,divisions:parts.map(p=>p.div)});
+    if(parts.length>440)throw new Error('복구점 부서 수가 저장 한도를 초과했습니다.');
     for(const {div,key} of parts){
-      await setDoc(doc(db,'restorePoints',rp.id,'parts',encodeURIComponent(div)),{
-        division:div,
-        teams:_restorePointClone(G.teams[key]||[]),
-        draw:_restorePointClone(G.draws[key]||{}),
-        matches:_restorePointClone(G.matches[key]||[]),
-        savedAt:new Date().toISOString()
-      });
+      const part={division:div,teams:_restorePointClone(G.teams[key]||[]),draw:_restorePointClone(G.draws[key]||{}),matches:_restorePointClone(G.matches[key]||[]),savedAt:new Date().toISOString()};
+      if(new TextEncoder().encode(JSON.stringify(part)).length>700000)throw new Error('전체 부서 복구점이 저장 한도를 초과했습니다.');
+      batch.set(doc(db,'restorePoints',rp.id,'parts',encodeURIComponent(div)),part);
     }
+    await batch.commit();
     localStorage.setItem(lastKey,String(now));
     if(type==='auto') cleanupOldTournamentRestorePoints(tid).catch(()=>{});
     return rp.id;
@@ -22228,18 +22221,23 @@ async function restoreTournamentRestorePoint(id,phase='after'){
     }
     const ps=await getDocs(collection(db,'restorePoints',id,'parts'));
     if(!ps.docs.length)throw new Error('복구점에 전체 데이터가 없습니다. 복원을 중단했습니다.');
-    for(const d of ps.docs){
-      const part=d.data(),div=String(part.division||'');if(!div)continue;
-      const key=`${tid}_${div}`;
-      await _replaceCollectionForRestore('registrations',tid,div,part.teams||[]);
-      await _replaceCollectionForRestore('matches',tid,div,part.matches||[]);
-      await setDoc(doc(db,'draws',key),part.draw||{},{merge:false});
-      G.teams[key]=_restorePointClone(part.teams||[]);
-      G.matches[key]=_restorePointClone(part.matches||[]);
-      G.draws[key]=_restorePointClone(part.draw||{});
-      if(G._regIdsByKey)G._regIdsByKey[key]=(G.teams[key]||[]).map(x=>x._id).filter(Boolean);
-      if(G._matchIdsByKey)G._matchIdsByKey[key]=(G.matches[key]||[]).map(x=>x._id).filter(Boolean);
+    const parts=ps.docs.map(d=>d.data());
+    if(meta.divisions&&meta.divisions.some(div=>!parts.some(p=>p.division===div)))throw new Error('누락된 부서가 있는 복구점입니다. 복원을 중단했습니다.');
+    const restoreBatch=writeBatch(db);let operations=0;
+    for(const part of parts){
+      const div=String(part.division||'');if(!div)throw new Error('복구 부서 정보가 누락되었습니다.');
+      const key=tid+'_'+div;
+      for(const [name,rows] of [['registrations',part.teams||[]],['matches',part.matches||[]]]){
+        const current=await getDocsFromServer(query(collection(db,name),where('tournamentId','==',tid),where('division','==',div)));
+        const ids=new Set(rows.map(row=>row._id).filter(Boolean));
+        for(const d of current.docs)if(!ids.has(d.id)){restoreBatch.delete(d.ref);operations++;}
+        for(const row of rows){const payload={...row},rid=payload._id||(name==='matches'?_mid():_rid());delete payload._id;payload.tournamentId=tid;payload.division=div;restoreBatch.set(doc(db,name,rid),payload);operations++;}
+      }
+      restoreBatch.set(doc(db,'draws',key),part.draw||{});operations++;
     }
+    if(operations>450)throw new Error('전체 복원 데이터가 일괄 저장 한도를 초과했습니다. 현재 데이터는 변경하지 않았습니다.');
+    await restoreBatch.commit();
+    for(const part of parts){const key=tid+'_'+part.division;G.teams[key]=_restorePointClone(part.teams||[]);G.matches[key]=_restorePointClone(part.matches||[]);G.draws[key]=_restorePointClone(part.draw||{});if(G._regIdsByKey)G._regIdsByKey[key]=G.teams[key].map(x=>x._id).filter(Boolean);if(G._matchIdsByKey)G._matchIdsByKey[key]=G.matches[key].map(x=>x._id).filter(Boolean);}
     Object.keys(__FB_WRITE_CACHE.draws).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.draws[k]});
     Object.keys(__FB_WRITE_CACHE.teams).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.teams[k]});
     Object.keys(__FB_WRITE_CACHE.matches).forEach(k=>{if(_k2td(k).tid===tid)delete __FB_WRITE_CACHE.matches[k]});
