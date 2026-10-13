@@ -22724,11 +22724,27 @@ function closeRegSaveMenu44(){
 }
 
 // ── 팀 등록 명단 내보내기 (로그인 불필요) ────────────────────────────────
+// PHASE221: administrators choose a private or public roster export.
+function chooseRosterExportAudience(){
+  if(!AD)return Promise.resolve(false);
+  return new Promise(resolve=>{
+    const overlay=document.createElement('div');
+    overlay.style.cssText='position:fixed;inset:0;background:#0008;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML='<div role="dialog" aria-modal="true" aria-label="출력 대상 선택" style="width:100%;max-width:380px;background:#fff;color:#10213d;border-radius:14px;padding:22px"><b style="font-size:1.1rem">출력 대상 선택</b><p style="font-size:.85rem">관리자용에는 첫 출전자 표시가 포함됩니다. 일반 공유용에는 표시되지 않습니다.</p><button type="button" data-public class="btn btn-primary" style="width:100%;margin-bottom:10px">일반 공유용</button><button type="button" data-admin class="btn btn-outline" style="width:100%;margin-bottom:10px">관리자용 · 첫 출전자 표시</button><button type="button" data-cancel class="btn btn-gray" style="width:100%">취소</button></div>';
+    const done=value=>{overlay.remove();resolve(value);};
+    overlay.querySelector('[data-public]').onclick=()=>done(false);
+    overlay.querySelector('[data-admin]').onclick=()=>done(true);
+    overlay.querySelector('[data-cancel]').onclick=()=>done(null);
+    document.body.appendChild(overlay);overlay.querySelector('[data-public]').focus();
+  });
+}
 async function _buildRegListEl44(){
   const tid=ge('regTS')?.value||'';
   const selDiv=ge('regDS')?.value||'';
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t){toast('대회를 먼저 선택해 주세요','info');return null;}
+  const audience=await chooseRosterExportAudience();if(audience===null)return null;
+  const showFirst=!!AD&&audience===true;
   const allDivs=[...(t.divisions||[])].sort((a,b)=>divOrder44(a)-divOrder44(b));
   const targetDivs=(selDiv&&allDivs.includes(selDiv))?[selDiv]:allDivs;
   const wrap=document.createElement('div');
@@ -22754,7 +22770,7 @@ async function _buildRegListEl44(){
       html+=`<div style="font-size:.78rem;color:#888;padding:4px 6px">등록된 팀 없음</div>`;
     }else{
       // 첫 출전 선수 안내 문구
-      if(AD) html+=`<div style="margin-bottom:8px;padding:5px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:8px;font-size:.76rem;font-weight:700;color:#92400e">★ 첫 출전자 표시는 관리자에게만 보입니다.</div>`;
+      if(showFirst) html+=`<div style="margin-bottom:8px;padding:5px 10px;background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1.5px solid #f59e0b;border-radius:8px;font-size:.76rem;font-weight:700;color:#92400e">관리자용 · 노란색은 첫 출전자 표시입니다. 공유 시 일반 공유용으로 저장하세요.</div>`;
       sorted.forEach(({team,i})=>{
         const teamName=tdn(team,key,i);
         const players=(team.players||[]).filter(Boolean);
@@ -22769,11 +22785,11 @@ async function _buildRegListEl44(){
           </div>
           <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px">
             ${main.map((p,idx)=>{
-              const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=showFirst && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f0f4fa'};border:${isD?'1.5px solid #f59e0b':'1px solid #cdd5e0'};border-radius:6px;padding:3px 9px;font-size:.82rem;font-weight:${isD?'800':'600'};color:${isD?'#92400e':'inherit'};display:inline-flex;align-items:center;gap:4px"><span style="width:18px;height:18px;background:${isD?'#f59e0b':'#0f1e3a'};color:#fff;border-radius:50%;font-size:.6rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</span>${p}</span>`;
             }).join('')}
             ${sub.map(p=>{
-              const isD=!!AD && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
+              const isD=showFirst && !!FIRST_APPEARANCE_READY && isFirstAppearancePlayer(p,team.club||'',tid);
               return`<span style="background:${isD?'linear-gradient(135deg,#fff7ed,#fef3c7)':'#f8f9fa'};border:${isD?'1.5px solid #f59e0b':'1px dashed #b0b8c8'};border-radius:6px;padding:3px 9px;font-size:.78rem;color:${isD?'#92400e':'#666'};font-weight:${isD?'800':'400'}">후보. ${p}</span>`;
             }).join('')}
           </div>
