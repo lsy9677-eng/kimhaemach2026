@@ -17874,42 +17874,66 @@ function toggleSimpleResultDetail(){
   const wrap=ge('simpleResultDetailWrap');if(!wrap)return;
   setOfflineResultEntryMode(wrap.style.display==='none'?'detail':'quick');
 }
-async function saveMainWinnerOnly(side){
+// PHASE246: all result entry actions share a lock and visible save feedback.
+let matchResultSaveBusy=false;
+function matchResultSaveNotice(message,type){
+  const status=ge('matchResultSaveStatus');
+  if(status){status.textContent=message;status.style.color=type==='error'?'#b91c1c':'#166534';}
+  toast(message,type);
+}
+async function withMatchResultSaveLock(run){
+  if(matchResultSaveBusy)return;
+  matchResultSaveBusy=true;
+  const modal=ge('mM3');
+  const buttons=Array.from(modal?.querySelectorAll('button')||[]).filter(b=>/saveM3|saveSimpleMatchResult|saveMainWinnerOnly/.test(b.getAttribute('onclick')||''));
+  const previous=buttons.map(b=>({b,disabled:b.disabled,text:b.textContent}));
+  let status=ge('matchResultSaveStatus');
+  if(!status&&modal){status=document.createElement('div');status.id='matchResultSaveStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.style.cssText='padding:10px;text-align:center;font-weight:800;color:#1565c0';const parent=buttons[0]?.parentElement||modal;parent.appendChild(status);}
+  if(status){status.textContent='⏳ 저장 중입니다. 잠시 기다려 주세요.';status.style.color='#1565c0';}
+  previous.forEach(({b})=>{b.disabled=true;b.textContent='⏳ 저장 중…';});
+  try{await run();}
+  catch(e){sl(false);matchResultSaveNotice('저장 실패: '+e.message,'error');}
+  finally{matchResultSaveBusy=false;previous.forEach(({b,disabled,text})=>{b.disabled=disabled;b.textContent=text;});if(status?.textContent.startsWith('⏳'))status.textContent='입력 내용을 확인해 주세요.';}
+}
+async function saveMainWinnerOnly(side){return withMatchResultSaveLock(()=>saveMainWinnerOnlyCore(side));}
+async function saveSimpleMatchResult(score1,score2){return withMatchResultSaveLock(()=>saveSimpleMatchResultCore(score1,score2));}
+async function saveM3(){return withMatchResultSaveLock(()=>saveM3Core());}
+async function saveMainWinnerOnlyCore(side){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
-  if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
+  if(!isSimpleResultMode(G.meta)){matchResultSaveNotice('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
   if(m.simpleResult?.confirmed && !(AD||OP)){
-    toast('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
+    matchResultSaveNotice('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
   }
-  if(m.phase!=='main'){toast('승리팀만 확정 기능은 본선에서만 사용할 수 있습니다','info');return;}
-  if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
+  if(m.phase!=='main'){matchResultSaveNotice('승리팀만 확정 기능은 본선에서만 사용할 수 있습니다','info');return;}
+  if(!canEditMatchByClubMember(key,m)){matchResultSaveNotice('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const winner=Number(side)===1?m.t1:Number(side)===2?m.t2:null;if(winner==null)return;
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2',winnerName=Number(side)===1?dn1:dn2;
   if(!confirm(`${winnerName} 승리로 확정하시겠습니까?\n\n스코어 없이 바로 다음 라운드로 진출합니다.\n스코어와 선수 상세기록은 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
   m.winner=winner;m.detailStatsApplied=false;m.simpleResult={confirmed:true,winnerOnly:true,winnerSide:Number(side),scorePending:true,detailsPending:true,confirmedAt:new Date().toISOString(),confirmedBy:String(AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사')),phase:'main'};
   sl(true);
-  try{await persistSingleMatchDoc(key,m);await autoAdv(key,m.id);await fbLog(`본선 초간편 결과: ${winnerName} 승리 · 스코어 미입력`,'⚡');sl(false);cm('mM3');toast(`${winnerName} 승리 확정 ✅`,'success');renderBracket();}
-  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);toast('승리팀 저장 실패: '+e.message,'error');}
+  try{await persistSingleMatchDoc(key,m);await autoAdv(key,m.id);await fbLog(`본선 초간편 결과: ${winnerName} 승리 · 스코어 미입력`,'⚡');sl(false);cm('mM3');matchResultSaveNotice(`${winnerName} 승리 확정 ✅`,'success');renderBracket();}
+  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('승리팀 저장 실패: '+e.message,'error');}
 }
-async function saveSimpleMatchResult(score1,score2){
+async function saveSimpleMatchResultCore(score1,score2){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
-  if(!isSimpleResultMode(G.meta)){toast('현재는 온라인 오더 제출 방식입니다','info');return;}
+  if(!isSimpleResultMode(G.meta)){matchResultSaveNotice('현재는 온라인 오더 제출 방식입니다','info');return;}
   const m=(G.matches[key]||[]).find(x=>x.id===mid);if(!m)return;
   if(m.simpleResult?.confirmed && !(AD||OP)){
-    toast('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
+    matchResultSaveNotice('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
   }
-  if(!canEditMatchByClubMember(key,m)){toast('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
-  const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers,m.phase);if(!normalized){toast('경기 결과 점수를 확인해주세요','error');return;}
-  const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers,m.phase);if(winner==null){toast('승리팀을 확인할 수 없습니다','error');return;}
+  if(!canEditMatchByClubMember(key,m)){matchResultSaveNotice('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
+  const totalRubbers=getMatchDoublesCount(key,m),normalized=normalizeSimpleResult({score1,score2},totalRubbers,m.phase);if(!normalized){matchResultSaveNotice('경기 결과 점수를 확인해주세요','error');return;}
+  const winner=getSimpleResultWinnerTeam(normalized,m.t1,m.t2,totalRubbers,m.phase);if(winner==null){matchResultSaveNotice('승리팀을 확인할 수 없습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
   if(!confirm(`${dn1} ${normalized.score1} : ${normalized.score2} ${dn2}\n\n이 결과로 경기 완료 처리하시겠습니까?\n선수 상세 오더는 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
   m.detailStatsApplied=false;m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
   // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
   sl(true);
-  try{await persistSingleMatchDoc(key,m);if(m.phase==='group'&&syncIndividualMainBracketFromPrelim(key))await stM(key);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
-  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);toast('결과 저장 실패: '+e.message,'error');}
+  try{await persistSingleMatchDoc(key,m);if(m.phase==='group'&&syncIndividualMainBracketFromPrelim(key))await stM(key);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');matchResultSaveNotice(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
+  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('결과 저장 실패: '+e.message,'error');}
 }
 
 function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
@@ -18083,7 +18107,7 @@ function tC(cid,player){
   else choosePlayerFromDropdown(cid,player);
 }
 
-async function saveM3(){
+async function saveM3Core(){
   const prevCourtState=captureCourtNotificationState();
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   const list=G.matches[key]||[];const idx=list.findIndex(m=>m.id===mid);if(idx<0)return;
@@ -18093,8 +18117,8 @@ async function saveM3(){
   const canStandardEdit=isIndividualByKey(key)?(AD||OP||canEditMatchByDirector(key,m)):canEditMatchByClubMember(key,m);
   let participantWinnerAuth=null;
   if(isIndividualByKey(key) && !canStandardEdit){
-    if(!indivAuth.allowed){toast('참가자 등록 비밀번호가 설정되지 않아 결과를 저장할 수 없습니다','error');return;}
-  }else if(!canStandardEdit){toast('해당 경기 참가 클럽 로그인 후 저장할 수 있습니다','error');return;}
+    if(!indivAuth.allowed){matchResultSaveNotice('참가자 등록 비밀번호가 설정되지 않아 결과를 저장할 수 없습니다','error');return;}
+  }else if(!canStandardEdit){matchResultSaveNotice('해당 경기 참가 클럽 로그인 후 저장할 수 있습니다','error');return;}
   const {t1,t2}=getMatchTeamObjects(key,m); if(!t1 && !t2) return;
   const [tid,div]=key.split('_');
   const tObj=G.tournaments.find(t=>t.id===tid);
@@ -18130,7 +18154,7 @@ async function saveM3(){
     if(prev1!==cur1||prev2!==cur2) pairChanged=true;
     const ownChanged = mySide===1 ? (prev1!==cur1) : mySide===2 ? (prev2!==cur2) : ((prev1!==cur1)||(prev2!==cur2));
     if(G.meta.onlineOrderEnabled && !AD && !OP && orderState.bothSubmitted && ownChanged){
-      toast('양팀 제출 완료 후에는 오더를 수정할 수 없습니다. 관리자만 초기화할 수 있습니다','error');
+      matchResultSaveNotice('양팀 제출 완료 후에는 오더를 수정할 수 없습니다. 관리자만 초기화할 수 있습니다','error');
       return;
     }
 
@@ -18147,7 +18171,7 @@ async function saveM3(){
 
     const scoreResult=analyzeRubberScore(s1v,s2v);
     const scoreError=getRubberScoreErrorMessage(scoreResult,r+1);
-    if(scoreError){toast(scoreError,'error');return;}
+    if(scoreError){matchResultSaveNotice(scoreError,'error');return;}
     const s1=scoreResult.score1, s2=scoreResult.score2, w=scoreResult.winner;
     if(w===0) sc1++; else sc2++;
     validScoreCount++;
@@ -18161,16 +18185,16 @@ async function saveM3(){
   const prevW=(m.detailStatsApplied===false)?null:m.winner;
 
   if(validScoreCount===0){
-    if(prevW!=null && !m.bye){toast('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
-    if(!pairChanged){toast('변경된 페어가 없습니다','info');return;}
+    if(prevW!=null && !m.bye){matchResultSaveNotice('이미 결과가 확정된 경기는 점수 없이 저장할 수 없습니다','error');return;}
+    if(!pairChanged){matchResultSaveNotice('저장된 내용과 동일합니다. 변경 사항이 없습니다.','info');return;}
     m.rubbers=newRb;
     m.winner=null;
     sl(true);
     try{
       await persistSingleMatchDoc(key, m);
       saveLastOrderFromPicker(key, m);
-      sl(false);cm('mM3');toast('페어 저장 완료 ✅','success');renderBracket();
-    }catch(e){sl(false);toast('저장 실패: '+e.message,'error');}
+      sl(false);cm('mM3');matchResultSaveNotice('페어 저장 완료 ✅','success');renderBracket();
+    }catch(e){sl(false);matchResultSaveNotice('저장 실패: '+e.message,'error');}
     return;
   }
 
@@ -18184,25 +18208,25 @@ async function saveM3(){
 
   if(isIndividualByKey(key) && !canStandardEdit){
     if(!hasFinalWinner){
-      toast('개인전 참가자 입력은 승패가 확정된 결과만 저장할 수 있습니다','error');
+      matchResultSaveNotice('개인전 참가자 입력은 승패가 확정된 결과만 저장할 수 있습니다','error');
       return;
     }
     const scoreText=getIndividualActualScoreText({rubbers:newRb}) || `${sc1}:${sc2}`;
     const winnerSide=getIndividualWinnerSideByScoreText(scoreText) || (sc1>sc2?1:2);
     const inputPw=String(prompt('참가자 등록 시 입력한 비밀번호 4자리를 입력하세요')||'').replace(/\D/g,'').slice(0,4);
     if(inputPw.length!==4){
-      toast('비밀번호 4자리를 정확히 입력해야 합니다','error');
+      matchResultSaveNotice('비밀번호 4자리를 정확히 입력해야 합니다','error');
       return;
     }
     const pw1=String(indivAuth.pw1||'').replace(/\D/g,'');
     const pw2=String(indivAuth.pw2||'').replace(/\D/g,'');
     const authSide=inputPw===pw1?1:inputPw===pw2?2:0;
     if(!authSide){
-      toast('비밀번호가 일치하지 않습니다','error');
+      matchResultSaveNotice('비밀번호가 일치하지 않습니다','error');
       return;
     }
     if(authSide!==winnerSide){
-      toast('승리팀 참가자 비밀번호일 때만 결과 저장할 수 있습니다','error');
+      matchResultSaveNotice('승리팀 참가자 비밀번호일 때만 결과 저장할 수 있습니다','error');
       return;
     }
     participantWinnerAuth={authSide, scoreText};
@@ -18211,13 +18235,13 @@ async function saveM3(){
   const calculatedWinner=resolveWinnerTeamIndex({team1Index:m.t1,team2Index:m.t2,outcome:resultOutcome});
   if(m.simpleResult?.confirmed && !m.simpleResult?.winnerOnly){
     const officialS1=Number(m.simpleResult.score1),officialS2=Number(m.simpleResult.score2);
-    if(Number.isFinite(officialS1)&&Number.isFinite(officialS2) && (officialS1!==Number(w1)||officialS2!==Number(w2))){
-      toast(`공식 결과 점수(${officialS1}:${officialS2})와 상세기록 계산(${w1}:${w2})이 다릅니다. 관리자 확인이 필요합니다.`,'error');
+    if(Number.isFinite(officialS1)&&Number.isFinite(officialS2) && (officialS1!==Number(sc1)||officialS2!==Number(sc2))){
+      matchResultSaveNotice(`공식 결과 점수(${officialS1}:${officialS2})와 상세기록 계산(${sc1}:${sc2})이 다릅니다. 관리자 확인이 필요합니다.`,'error');
       return;
     }
   }
   const existingSimple=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
-  if(isSimpleResultMode(G.meta)&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=m.simpleResult?.winnerOnly?m.winner:(existingSimple?getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers,m.phase):null);if(officialWinner!=null&&calculatedWinner!==officialWinner){const officialLabel=m.simpleResult?.winnerOnly?'승리팀만 확정':`${existingSimple.score1}:${existingSimple.score2}`;toast(`현장 확정 결과(${officialLabel})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
+  if(isSimpleResultMode(G.meta)&&m.simpleResult?.confirmed&&hasFinalWinner){const officialWinner=m.simpleResult?.winnerOnly?m.winner:(existingSimple?getSimpleResultWinnerTeam(existingSimple,m.t1,m.t2,totalRubbers,m.phase):null);if(officialWinner!=null&&calculatedWinner!==officialWinner){const officialLabel=m.simpleResult?.winnerOnly?'승리팀만 확정':`${existingSimple.score1}:${existingSimple.score2}`;matchResultSaveNotice(`현장 확정 결과(${officialLabel})와 상세 입력의 승리팀이 다릅니다. 공식 결과는 변경되지 않았습니다.`,'error');return;}}
   m.rubbers=newRb;
   if(isOnlineOrderMode(G.meta) && orderState.bothSubmitted) syncRevealedOrderIntoMatchRubbers(key,m);
   m.winner=calculatedWinner;
@@ -18279,7 +18303,7 @@ async function saveM3(){
     dispatchAlerts:dispatchLocalCourtNotificationAlerts,
     previousNotificationState:prevCourtState,
     closeModal:()=>cm('mM3'),
-    notify:toast,
+    notify:matchResultSaveNotice,
     successMessage:buildResultSaveLabel(resultOutcome),
     render:renderBracket,
     enqueuePlayerPersist,
