@@ -2993,6 +2993,36 @@ async function stT(key,{allowDelete=false}={}){
   scheduleTournamentAutoRestorePoint(key,'팀등록/명단 변경');
 }
 
+
+// PHASE232: full tournament recovery before/after match writes, committed atomically.
+function matchRecoveryActor(){const a=registrationAuditActor();return {...a,uid:String(typeof auth!=='undefined'?auth?.currentUser?.uid||'':''),email:String(typeof auth!=='undefined'?auth?.currentUser?.email||'':'')};}
+function matchRecoveryProjection(m){return JSON.stringify({t1:m?.t1,t2:m?.t2,winner:m?.winner??null,rubbers:m?.rubbers||[],simpleResult:m?.simpleResult||null});}
+async function stageMatchRecoveryPoints(batch,key,writes,deleted=[]){
+  if(__autoRestoreSuppressed)return null;
+  const {tid,div}=_k2td(key),actor=matchRecoveryActor(),when=new Date().toISOString();
+  const [regSnap,matchSnap]=await Promise.all([
+    getDocsFromServer(query(collection(db,'registrations'),where('tournamentId','==',tid))),
+    getDocsFromServer(query(collection(db,'matches'),where('tournamentId','==',tid)))
+  ]);
+  const regs=regSnap.docs.map(d=>({_id:d.id,...d.data()})),matches=matchSnap.docs.map(d=>({_id:d.id,...d.data()}));
+  const keys=_restorePointKeys(tid);for(const row of [...regs,...matches]){const d=String(row.division||'');if(d&&!keys.some(k=>k.div===d))keys.push({div:d,key:tid+'_'+d});}
+  if(writes.length+deleted.length+keys.length*2+3>450)throw new Error('전체 복구점과 경기 저장이 일괄 저장 한도를 초과했습니다. 저장을 중단했습니다.');
+  const draws=await Promise.all(keys.map(async k=>{const d=await getDocFromServer(doc(db,'draws',k.key));return d.exists()?d.data():{};}));
+  const old=new Map(matches.map(m=>[m._id,m])),changes=[];
+  for(const w of writes){const prev=old.get(w._id);if(!prev||matchRecoveryProjection(prev)!==matchRecoveryProjection(w)){
+    w.resultAudit={actor,updatedAt:when};changes.push({id:w.id||w._id,division:div,phase:w.phase||'',t1:w.t1??null,t2:w.t2??null,before:prev?{winner:prev.winner??null,simpleResult:prev.simpleResult||null,rubbers:prev.rubbers||[]}:null,after:{winner:w.winner??null,simpleResult:w.simpleResult||null,rubbers:w.rubbers||[]}});
+  }}
+  const after=new Map(matches.map(m=>[m._id,m]));deleted.forEach(id=>after.delete(id));writes.forEach(w=>after.set(w._id,{...(after.get(w._id)||{}),...w,tournamentId:tid,division:div}));
+  const t=_restorePointTournament(tid),isTest=!!(G.draws[key]?.isTest||G.draws[key]?.drawIsTest||(G.drawHistories[key]||[]).filter(h=>!h.deleted).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]?.isTest);
+  for(const [stage,rows] of [['before',matches],['after',[...after.values()]]]){
+    const ref=doc(collection(db,'restorePoints'));
+    if(new TextEncoder().encode(JSON.stringify(changes)).length>650000)throw new Error('경기 변경 이력이 저장 한도를 초과했습니다. 경기 저장을 중단했습니다.');
+    batch.set(ref,{tournamentId:tid,tournamentName:t?.name||tid,type:'auto',reason:(stage==='before'?'경기 저장 전':'경기 저장 후')+' · '+dl(div),createdAt:when,createdAtMs:Date.now(),actor,createdBy:[actor.role,actor.club,actor.email].filter(Boolean).join(' · '),permanent:false,version:232,complete:true,recoveryStage:stage,isTest,changes});
+    keys.forEach((k,i)=>{const part={division:k.div,teams:regs.filter(r=>String(r.division||'')===k.div).sort((a,b)=>{const order=(G.teams[k.key]||[]).map(t=>t._id);const ai=order.indexOf(a._id),bi=order.indexOf(b._id);return (ai<0?1e9:ai)-(bi<0?1e9:bi);}),draw:draws[i],matches:rows.filter(r=>String(r.division||'')===k.div),savedAt:when};if(new TextEncoder().encode(JSON.stringify(part)).length>700000)throw new Error('부서 전체 복구점이 저장 한도를 초과했습니다. 경기 저장을 중단했습니다.');batch.set(doc(db,'restorePoints',ref.id,'parts',encodeURIComponent(k.div)),part);});
+  }
+  return {actor,when};
+}
+
 async function stM(key){
   const {tid,div}=_k2td(key);
   const cur=G.matches[key]||[];
@@ -3012,6 +3042,7 @@ async function stM(key){
   if(isSameFbWrite('matches', key, hashPayload)) return;
 
   const batch=writeBatch(db);
+  const recovery=await stageMatchRecoveryPoints(batch,key,cur,toDel);
   cur.forEach(x=>{
     const docId=x._id;
     const payload={...x};
@@ -3026,6 +3057,7 @@ async function stM(key){
   pastArchiveMutation(batch,tid);
   await batch.commit();
   pastArchiveLocalInvalidation(tid);
+  if(!__autoRestoreSuppressed)cleanupOldTournamentRestorePoints(tid).catch(()=>{});
   markFbWriteCache('matches', key, hashPayload);
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=[...curIds];
@@ -3043,6 +3075,8 @@ async function persistSingleMatchDoc(key, matchObj){
   payload.updatedAt=new Date().toISOString();
   if(!payload.createdAt) payload.createdAt=payload.updatedAt;
   const archiveBatch=writeBatch(db);
+  await stageMatchRecoveryPoints(archiveBatch,key,[matchObj]);
+  if(matchObj.resultAudit)payload.resultAudit=matchObj.resultAudit;
   archiveBatch.set(doc(db,'matches',matchObj._id),payload,{merge:true});
   pastArchiveMutation(archiveBatch,tid);
   await archiveBatch.commit();
@@ -3060,7 +3094,7 @@ async function persistSingleMatchDoc(key, matchObj){
   if(!G._matchIdsByKey) G._matchIdsByKey={};
   G._matchIdsByKey[key]=ids;
   try{ cacheTournamentBundleFromMemory(tid); }catch(e){}
-  scheduleTournamentAutoRestorePoint(key,'경기 결과 변경');
+  if(!__autoRestoreSuppressed)cleanupOldTournamentRestorePoints(tid).catch(()=>{});
 }
 const __PLAYER_WRITE_QUEUE = new Set();
 let __PLAYER_WRITE_TIMER = null;
@@ -13387,6 +13421,8 @@ function getAdvT(key,draw,teams,cfg){
   if(draw.indivMode){
     const res=[];
     (draw.groups||[]).forEach((grp,gi)=>{
+      const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
+      if(!matches.length||!matches.every(m=>getMatchResultState(key,m).done))return;
       const gs=calcGS(key,gi,grp.teams,teams);
       const grpSize=grp.teams.length;
       const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
@@ -13396,6 +13432,8 @@ function getAdvT(key,draw,teams,cfg){
   }
   const res=[];
   (draw.groups||[]).forEach((grp,gi)=>{
+      const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
+      if(!matches.length||!matches.every(m=>getMatchResultState(key,m).done))return;
     const grpSize=(grp?.teams||[]).length||0;
     const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
     calcGS(key,gi,grp.teams,teams).slice(0,advCount).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
@@ -13413,47 +13451,8 @@ function getPreviewAdvSlots(draw,cfg){
 }
 
 const AUTO_MAIN_BUILDING = {};
-async function ensureAutoTeamMainBracketIfReady(tid,div){
-  const key=tid+'_'+div;
-  const t=G.tournaments.find(x=>x.id===tid);
-  const draw=G.draws[key];
-  if(!t || !draw || isIndividualTournament(t)) return false;
-  const cfg=gDS(t,div);
-  const isGroupKO = (cfg.format==='group_knockout');
-  if(!isGroupKO) return false;
-  const allMs=G.matches[key]||[];
-  if(allMs.some(m=>m && (m.phase==='main' || m.phase==='playin'))) return false;
-  const gMs=allMs.filter(m=>m && m.phase==='group');
-  if(!gMs.length) return false;
-  const allDone=gMs.every(m=>getMatchResultState(key,m).done);
-  if(!allDone) return false;
-  if(AUTO_MAIN_BUILDING[key]) return false;
-
-  const teams=G.teams[key]||[];
-  const advT=getAdvT(key,draw,teams,cfg);
-  if((advT||[]).length < 2) return false;
-  const pv=buildPreviewMainSlots(draw, cfg);
-  if(!(pv && Number(pv.n||0) >= 2 && Array.isArray(pv.matchSlots) && pv.matchSlots.length)) return false;
-
-  AUTO_MAIN_BUILDING[key]=true;
-  try{
-    const nonMain=allMs.filter(m=>m && m.phase!=='main' && m.phase!=='playin');
-    const built=buildMainMatches(pv.matchSlots||[], pv.n||0, pv.playInMatches||[]);
-    if(!built.length) return false;
-    G.matches[key]=[...nonMain, ...built];
-    G.draws[key]={...(G.draws[key]||{}), autoMainBuiltAt:new Date().toISOString()};
-    try{ setMainSectionCollapsed(key,false); }catch(e){}
-    await stD(key);
-    await stM(key);
-    toast('예선 완료로 본선 대진표를 자동 생성했습니다 ✅','success');
-    return true;
-  }catch(e){
-    console.error('ensureAutoTeamMainBracketIfReady failed', e);
-    return false;
-  }finally{
-    AUTO_MAIN_BUILDING[key]=false;
-  }
-}
+// PHASE233: preliminary completion must never perform a main draw implicitly.
+async function ensureAutoTeamMainBracketIfReady(tid,div){return false;}
 
 function getPrelimResolvedLabelMap(key){
   try{
@@ -13468,6 +13467,8 @@ function getPrelimResolvedLabelMap(key){
 
     (draw.groups||[]).forEach((grp,gi)=>{
       const tids=Array.isArray(grp?.teams)?grp.teams:[];
+      const groupMatches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
+      if(!groupMatches.length||!groupMatches.every(m=>getMatchResultState(key,m).done))return;
       if(!tids.length) return;
       const stats=calcGS(key,gi,tids,teams)||[];
       if(!stats.length) return;
@@ -13534,7 +13535,7 @@ function propagateResolvedMainAdvancements(key){
   return changed;
 }
 function syncIndividualMainBracketFromPrelim(key){
-  if(!isIndividualByKey(key)) return false;
+  // PHASE234: pre-drawn qualifier positions resolve for team events too.
   const labelMap=getPrelimResolvedLabelMap(key);
   if(!Object.keys(labelMap).length) return false;
   const list=G.matches[key]||[];
@@ -14868,6 +14869,7 @@ function renderDrawCandidateStage(index, candidate, chosen){
   </div>`;
 }
 function renderMainCandidatePreviewCards(){
+  if(!MD.isRunning){const box=ge('mainCandidatePreview');if(box)box.innerHTML='본선 추첨 시작 전입니다.';return;}
   const el=ge('mainCandidatePreview');
   if(!el) return;
   const nth=MD.nthPick||1;
@@ -16279,6 +16281,7 @@ function updateMainManualSeeds(){
 }
 
 function prepareMainExternalDraw(forceNew=false){
+  if(!MD.isRunning)return null;
   if(!MD.advT || !MD.advT.length) return null;
   const method=getMainSeedMethod();
   const nth=getMainNth();
@@ -16688,12 +16691,10 @@ function renderMainSeedSummary(plan, seed){
   }
 }
 function updateMainSeedPreview(){
-  if(!MD.advT || !MD.advT.length) return;
-  const plan=prepareMainExternalDraw(false);
-  if(ge('mainSeedPreview')){
-    ge('mainSeedPreview').innerHTML=renderMainPreviewHTML((plan?.matchSlots)||[], MD.bracketSize, true);
-  }
-  renderMainCandidatePreviewCards();
+  if(!MD.advT || !MD.advT.length || MD.isRunning)return;
+  MD.plan=null;MD.candidates=[];
+  const box=ge('mainSeedPreview');if(box)box.innerHTML=renderSavedPrelimNeutralPyramid(MD.bracketSize,[]);
+  const cards=ge('mainCandidatePreview');if(cards)cards.innerHTML='본선 추첨 시작 전입니다. 배정 위치는 추첨 시작 후 표시합니다.';
 }
 
 function getMainDrawDefaultTitle(){
@@ -16825,8 +16826,11 @@ function openMainDraw(tid,div){
   const key=tid+'_'+div, t=G.tournaments.find(t=>t.id===tid),
         draw=G.draws[key], teams=G.teams[key]||[], cfg=gDS(t,div);
 
-  let advT=getAdvT(key,draw,teams,cfg);
-  let previewOnly=false;
+  if(!draw){toast('예선 추첨을 먼저 진행하세요','info');return;}
+  const prelimMatches=(G.matches[key]||[]).filter(m=>m.phase==='group');
+  const prelimComplete=prelimMatches.length>0&&prelimMatches.every(m=>getMatchResultState(key,m).done);
+  let advT=prelimComplete?getAdvT(key,draw,teams,cfg):getPreviewAdvSlots(draw,cfg);
+  let previewOnly=!prelimComplete;
   if(advT.length<2){
     advT=getPreviewAdvSlots(draw,cfg);
     previewOnly=true;
@@ -16846,10 +16850,10 @@ function openMainDraw(tid,div){
 
   ge('mainAdvTeams').innerHTML=`
     <div style="padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#dce8fb);border-radius:var(--radius-lg);border:1.5px solid var(--success);margin-bottom:10px">
-      <div style="font-weight:700;font-size:.88rem;margin-bottom:8px">🏆 본선 진출팀 (${advT.length}팀)</div>
+      <div style="font-weight:700;font-size:.88rem;margin-bottom:8px">🏆 ${previewOnly?'본선 진출 자리 · 실제 팀 미정':'확정 본선 진출팀'} (${advT.length}${previewOnly?'자리':'팀'})</div>
       ${spec.playInMatches>0?`<div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:8px"><b>직행 ${spec.directCount}팀</b>은 바로 ${spec.mainSize}강, <b>진출전 ${spec.playInTeams}팀</b>은 ${spec.playInMatches}경기 후 <b>승자 ${spec.winnersNeeded}팀</b>이 ${spec.mainSize}강 합류</div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${advT.map(a=>`<span class="badge" style="background:${a.rk===1?'linear-gradient(135deg,#fff7dd,#f6d365)':'linear-gradient(135deg,#eef2f7,#d8e0ea)'};color:${a.rk===1?'#7a5600':'#425466'};border:1px solid ${a.rk===1?'#d4a017':'#b8c3d1'};font-size:.78rem">#${Number(a.ti)+1} ${a.rk===1?'👑':'🥈'} ${a.nm} <small style="opacity:.8">(${(a.gn!=null?grpLabel(a.gn):'?')} ${a.rk}위)</small></span>`).join('')}
+        ${advT.map(a=>`<span class="badge" style="background:${a.rk===1?'linear-gradient(135deg,#fff7dd,#f6d365)':'linear-gradient(135deg,#eef2f7,#d8e0ea)'};color:${a.rk===1?'#7a5600':'#425466'};border:1px solid ${a.rk===1?'#d4a017':'#b8c3d1'};font-size:.78rem">${previewOnly?'':'#'+(Number(a.ti)+1)+' '} ${a.rk===1?'👑':'🥈'} ${a.nm} <small style="opacity:.8">(${(a.gn!=null?grpLabel(a.gn-1):'?')} ${a.rk}위)</small></span>`).join('')}
       </div>
     </div>`;
 
@@ -17043,8 +17047,16 @@ async function startMainDraw(){
   if(!canManageBracket()){ toast('본선 추첨 권한이 없습니다','error'); return; }
   if(MD.isRunning)return;
   const meta = getMainDrawMetaValues();
+  const currentDraw=G.draws[MD.key],currentTeams=G.teams[MD.key]||[],tournament=G.tournaments.find(t=>t.id===MD.tid),cfg=gDS(tournament,MD.div);
+  const prelim=(G.matches[MD.key]||[]).filter(m=>m.phase==='group');
+  const complete=prelim.length>0&&prelim.every(m=>getMatchResultState(MD.key,m).done);
+  MD.advT=complete?getAdvT(MD.key,currentDraw,currentTeams,cfg):getPreviewAdvSlots(currentDraw,cfg);
+  MD.previewOnly=!complete;
+  if(MD.advT.length<2){toast('본선 진출팀 또는 진출 자리가 부족합니다','error');return;}
+  if(complete&&MD.advT.some(e=>e.ti==null||!currentTeams[e.ti])){toast('확정 진출팀을 찾을 수 없습니다. 예선 순위를 확인하세요','error');return;}
+  MD.spec=computeMainBracketSpec(MD.advT.length,MD.mainBracketMode||'auto');MD.bracketSize=MD.spec.mainSize;
   MD.isRunning=true;
-  const planPrepared=prepareMainExternalDraw(false);
+  const planPrepared=prepareMainExternalDraw(true);
   MD.plan=planPrepared || MD.plan;
   ge('mainStageMeta').innerHTML='시드보호 본선 재추첨 진행 중...';
 
@@ -17074,9 +17086,11 @@ async function startMainDraw(){
 
     if(!meta.isTest){
       const mainMatches = buildMainMatches((plan?.matchSlots)||[], plan?.n||0, (plan?.playInMatches)||[]);
+      if(!MD.previewOnly){const entrants=mainMatches.filter(m=>m.phase==='playin'||(m.phase==='main'&&m.round===0)).flatMap(m=>[m.t1,m.t2]).filter(i=>i!=null);if(entrants.length!==MD.advT.length||new Set(entrants).size!==MD.advT.length)throw new Error('본선 진출팀 배정이 누락되거나 중복되어 저장을 중단했습니다.');}
       const prevMatches = Array.isArray(G.matches[key]) ? G.matches[key] : [];
       const nonMainMatches = prevMatches.filter(m=>m.phase!=='main' && m.phase!=='playin');
-      G.matches[key] = [...nonMainMatches, ...mainMatches];
+      const committedMainMatches = [...nonMainMatches, ...mainMatches];
+      G.matches[key] = committedMainMatches;
       G.draws[key]={
         ...(G.draws[key]||{}),
         mainPlan:getMainDrawPlanStorageValue(plan,false),
@@ -17085,6 +17099,8 @@ async function startMainDraw(){
         mainUpdatedAt:new Date().toISOString()
       };
       await stD(key);
+      // A draw snapshot may refresh memory before the match batch starts.
+      G.matches[key] = committedMainMatches;
       await stM(key);
       try{
         setMainSectionCollapsed(key,false);
@@ -18025,7 +18041,7 @@ async function saveSimpleMatchResult(score1,score2){
   m.detailStatsApplied=false;m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
   // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
   sl(true);
-  try{await persistSingleMatchDoc(key,m);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
+  try{await persistSingleMatchDoc(key,m);if(m.phase==='group'&&syncIndividualMainBracketFromPrelim(key))await stM(key);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');toast(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
   catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);toast('결과 저장 실패: '+e.message,'error');}
 }
 
@@ -22352,6 +22368,7 @@ async function restoreTournamentRestorePoint(id,phase='after'){
       closeAutoRestoreCenter();return;
     }
     const ps=await getDocs(collection(db,'restorePoints',id,'parts'));
+    if(!ps.docs.length)throw new Error('복구점에 전체 데이터가 없습니다. 복원을 중단했습니다.');
     for(const d of ps.docs){
       const part=d.data(),div=String(part.division||'');if(!div)continue;
       const key=`${tid}_${div}`;
@@ -22397,6 +22414,13 @@ function closeRegistrationSnapshotViewer(){
   const el=ge('registrationSnapshotViewer');if(el)el.classList.remove('open');
   window.__registrationSnapshotViewRequest=(window.__registrationSnapshotViewRequest||0)+1;
 }
+
+function renderRecoveryMatches(part,meta){
+  const teams=part.teams||[],matches=part.matches||[],label=i=>i==null?'미정':String(teams[i]?.club||'팀 '+(Number(i)+1));
+  const rows=matches.map(m=>{const sr=m.simpleResult,score=sr?.confirmed?`${sr.score1??'-'}:${sr.score2??'-'}`:`${rbSc(m,0)}:${rbSc(m,1)}`;const a=m.resultAudit?.actor;return `<div style="padding:8px;border-bottom:1px solid #dbe3ef">${esc(m.phase==='group'?'예선':'본선')} · ${esc(label(m.t1))} ${esc(score)} ${esc(label(m.t2))}<div style="font-size:.72rem;color:#64748b">입력: ${esc(a?[a.role,a.club,a.email].filter(Boolean).join(' · '):'이전 기록 · 입력자 미기록')}${m.resultAudit?.updatedAt?' · '+esc(new Date(m.resultAudit.updatedAt).toLocaleString()):''}</div></div>`;}).join('');
+  return `<details style="margin:10px 0"><summary>${esc(dl(part.division||''))} 대진·경기 결과 ${matches.length}건</summary>${rows||'저장된 경기 없음'}</details>`;
+}
+
 async function openRegistrationSnapshotViewer(id){
   if(!AD){toast('관리자 로그인 필요','info');return;}
   let modal=ge('registrationSnapshotViewer');
@@ -22420,7 +22444,7 @@ async function openRegistrationSnapshotViewer(id){
       sections=renderRegistrationChanges(meta.changes||registrationRosterChanges(JSON.parse(meta.beforeJson),JSON.parse(meta.afterJson)))+`<div style="margin-top:10px;color:#64748b">${meta.fullAfterJson?'대회 전체 부서 명단 보관':'이전 버전 기록: 해당 부서만 보관'} · 복원 버튼은 해당 부서 전체를 복원합니다.</div>`+divs.map(div=>'<details><summary>'+esc(dl(div))+' 전체 명단</summary>'+renderSnapshotRosterSection('저장 후 명단',after.filter(t=>t.division===div),div)+renderSnapshotRosterSection('변경 전 명단',before.filter(t=>t.division===div),div)+'</details>').join('');
     }else{
       const parts=await getDocs(collection(db,'restorePoints',id,'parts'));
-      sections=parts.docs.map(d=>{const part=d.data();return renderSnapshotRosterSection(dl(part.division||'')+' 저장 명단',part.teams||[],part.division||'');}).join('')||'<div style="padding:12px;color:#64748b">이 복구점에는 저장된 부서 명단이 없습니다.</div>';
+      sections=parts.docs.map(d=>{const part=d.data();return renderSnapshotRosterSection(dl(part.division||'')+' 저장 명단',part.teams||[],part.division||'')+renderRecoveryMatches(part,meta);}).join('')||'<div style="padding:12px;color:#64748b">이 복구점에는 저장된 부서 명단이 없습니다.</div>';
     }
     if(window.__registrationSnapshotViewRequest!==request)return;
     body.innerHTML=`<div style="font-weight:900;color:#10264b">${esc(meta.tournamentName||meta.tournamentId||'대회')}</div><div style="margin-top:5px;font-size:.76rem;color:#64748b">저장 시각: ${esc(new Date(meta.createdAt||meta.createdAtMs).toLocaleString())}</div>${meta.createdBy?`<div style="margin-top:4px;font-size:.76rem;color:#64748b">저장 담당: ${esc(meta.createdBy)}${meta.actor?.identitySource==='shared_login_self_reported'?' (이전 기록·이름 직접 입력)':''}</div>`:''}<div style="margin-top:10px;padding:9px;background:#e0f2fe;color:#075985;border-radius:8px;font-size:.76rem">열람 전용입니다. 현재 등록 명단과 경기결과는 변경되지 않습니다.</div>${sections}`;
@@ -22475,17 +22499,17 @@ async function openAutoRestoreCenter(){
     const t=_restorePointTournament(tid);
     const rows=arr.length?arr.map(x=>{
       const permanent=x.permanent===undefined?x.type==='registration_snapshot':x.permanent===true;
-      const tag=x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
+      const tag=x.version===232?((x.isTest?'테스트 · ':'')+(x.recoveryStage==='before'?'경기 저장 전':'경기 저장 후')):x.type==='auto'?'자동':x.type==='safety'?'복원전 안전':x.type==='registration_snapshot'?'팀명단 영구기록':'수동';
       return `<div class="restore-point-card"><div class="restore-point-info">
         <span class="restore-point-tag" style="font-size:.68rem;font-weight:900;padding:3px 7px;border-radius:999px;background:${x.type==='auto'?'#e0f2fe':'#fef3c7'}">${tag}</span>
         <div class="restore-point-meta"><b style="font-size:.78rem">${new Date(x.createdAt||x.createdAtMs).toLocaleString()}</b><div class="restore-point-reason" style="font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.reason||'-')}</div><div style="font-size:.7rem">담당: ${esc(x.createdBy||[x.actor?.role,x.actor?.club,x.actor?.name].filter(Boolean).join(' · ')||'기존 기록: 담당자 미기록')}</div></div></div><div class="restore-point-actions">
         <button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="toggleRestorePointPermanent('${x.id}')">${permanent?'🔒 영구보관 해제':'영구보관 설정'}</button>
-        <button class="btn btn-primary" style="padding:5px 9px;font-size:.7rem" onclick="openRegistrationSnapshotViewer('${x.id}')">명단 상세보기</button>
+        <button class="btn btn-primary" style="padding:5px 9px;font-size:.7rem" onclick="openRegistrationSnapshotViewer('${x.id}')">${x.version===232?'명단·결과 상세':'명단 상세보기'}</button>
         ${x.type==='registration_snapshot'?`<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}','before')">변경 전 명단 복원</button>`:''}<button class="btn btn-outline" style="padding:5px 9px;font-size:.7rem" onclick="restoreTournamentRestorePoint('${x.id}')">이 시점으로 복원</button>
       </div></div>`;
     }).join(''):'<div style="padding:18px;text-align:center;color:#64748b">아직 저장된 복구점이 없습니다.</div>';
     body.innerHTML=`<div style="font-size:.82rem;font-weight:900">${t?.name||t?.title||tid}</div>
-      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">팀명단 저장 시 전체 부서 명단·변경 내역 보관 · 영구보관은 관리자 선택 · 영구보관 해제 기록 및 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
+      <div style="font-size:.7rem;color:#64748b;margin:5px 0 10px">경기 저장 시 전체 부서 명단·대진·결과를 저장 전/후 자동 보관 · 입력 계정 및 시간 기록 · 영구보관은 관리자 선택 · 영구보관 해제 기록 및 자동 복구점은 7일 후 정리 · 최대 ${AUTO_RESTORE_MAX_PER_TOURNAMENT}개 보관</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" onclick="manualTournamentRestorePoint('${tid}')">💾 지금 복구점 저장</button><button class="btn btn-outline" onclick="cleanupOldTournamentRestorePoints('${tid}').then(openAutoRestoreCenter)">🧹 오래된 자동 복구점 정리</button></div>${rows}`;
   }catch(e){body.innerHTML=`<div style="color:#b91c1c">복구점 조회 실패: ${e.message}</div>`;}
 }
