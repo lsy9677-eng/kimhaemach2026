@@ -776,7 +776,7 @@ import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPl
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment,deleteField}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
 const _app=initializeApp(FB);
@@ -17793,6 +17793,8 @@ function openM3(key,mid,forceEdit=false){
     <div id="offlineResultEntryHint" style="font-size:.67rem;color:#64748b;margin:0 2px 8px">필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.</div>
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
+  renderOrderPhotoBlankReview(key,m);
+  renderOrderPhotoManage(key,m);
   const body = ge('mM3B');
   // PHASE92: 현장 간편결과 화면의 중복 상세입력 진입 버튼 정리.
   // simple-result-ui에서 렌더되는 기존 '상세 명단·점수 입력(선택)'과
@@ -26440,10 +26442,30 @@ function _orderPhotoGetContext(side){
 }
 function _orderPhotoSetStatus(side,msg,isWarn=false){
   const el=ge('orderPhotoStatus'+side);
-  if(!el) return;
-  el.textContent=msg;
-  el.style.color=isWarn?'#b45309':'var(--text2)';
+  if(el){el.textContent=msg;el.style.color=isWarn?'#b45309':'var(--text2)';}
+  let panel=ge('orderPhotoProgressPanel');
+  if(!panel&&ge('mM3B')){panel=document.createElement('div');panel.id='orderPhotoProgressPanel';panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');panel.style.cssText='position:sticky;top:0;z-index:20;padding:15px;margin-bottom:10px;border:2px solid #1565c0;border-radius:12px;background:#e8f2ff;color:#123f78;font-size:1rem;font-weight:900;box-shadow:0 3px 10px #0002';ge('mM3B').prepend(panel);}
+  if(panel){panel.textContent=`📷 ${Number(side)===1?'홈팀':'원정팀'} · ${msg}`;panel.style.borderColor=isWarn?'#d97706':'#1565c0';}
 }
+let __orderPhotoJobBusy=false;
+async function _runOrderPhotoJob(side,run){
+  if(__orderPhotoJobBusy||matchResultSaveBusy){toast('현재 저장 또는 사진 분석이 진행 중입니다. 완료 후 다시 눌러 주세요.','info');return;}
+  __orderPhotoJobBusy=true;matchResultSaveBusy=true;
+  const started=Date.now();let stage='사진 읽기·업로드 중';
+  const controls=Array.from(ge('mM3')?.querySelectorAll('button')||[]).filter(b=>/trigger.*OrderPhoto|deleteOrderPhoto|saveM3|saveSimpleMatchResult|saveMainWinnerOnly/.test(b.getAttribute('onclick')||''));
+  const prev=controls.map(b=>({b,disabled:b.disabled}));prev.forEach(x=>x.b.disabled=true);
+  __orderPhotoOcrProgress=info=>{
+    const recognizing=String(info.status||'').includes('recognizing');
+    stage=recognizing?`OCR 이름 판독 ${Math.round((info.progress||0)*100)}%`:'OCR 엔진·한글 자료 준비 중 (첫 실행은 시간이 걸립니다)';
+    _orderPhotoSetStatus(side,`⏳ ${stage} · ${Math.floor((Date.now()-started)/1000)}초`);
+  };
+  _orderPhotoSetStatus(side,'⏳ 사진 읽기·업로드 중');
+  const ticker=setInterval(()=>_orderPhotoSetStatus(side,`⏳ ${stage} · ${Math.floor((Date.now()-started)/1000)}초`),1000);
+  try{await run();}
+  finally{clearInterval(ticker);__orderPhotoOcrProgress=null;__orderPhotoJobBusy=false;matchResultSaveBusy=false;prev.forEach(x=>x.b.disabled=x.disabled);const panel=ge('orderPhotoProgressPanel');if(panel?.textContent.includes('⏳'))_orderPhotoSetStatus(side,'처리가 종료되었습니다. 사진과 명단을 확인해 주세요.');}
+}
+async function _processOrderPhoto(side,file){return _runOrderPhotoJob(side,()=>_processOrderPhotoCore(side,file));}
+async function _processSimpleOrderPhoto(side,file){return _runOrderPhotoJob(side,()=>_processSimpleOrderPhotoCore(side,file));}
 function _orderPhotoApplySelection(side, assignments){
   assignments.forEach((players,idx)=>{
     setPickerSelected(`rp${side}_${idx}`, (players||[]).slice(0,2));
@@ -26509,7 +26531,7 @@ function _orderPhotoLoadImage(src){
   });
 }
 function _orderPhotoBuildVariant(img, mode='gray'){
-  const maxW=1600;
+  const maxW=1200;
   const scale=Math.min(1.8, maxW/Math.max(img.width,1));
   const w=Math.max(1, Math.round(img.width*scale));
   const h=Math.max(1, Math.round(img.height*scale));
@@ -26548,35 +26570,39 @@ async function _ensureOrderPhotoTesseract(){
   }).catch(e=>{__orderPhotoTesseractPromise=null;throw e;});
   return __orderPhotoTesseractPromise;
 }
+// PHASE251: one cached Korean OCR worker, one recognition pass, live progress.
+let __orderPhotoWorkerPromise=null,__orderPhotoOcrProgress=null;
 async function _orderPhotoRecognizeBest(Tesseract,imageSrc,context=null){
   let worker=null,timer=null,expired=false;
-  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{expired=true;if(worker)Promise.resolve(worker.terminate()).catch(()=>{});reject(new Error('OCR 분석 시간 초과. 사진은 보관되어 있으며 직접 명단 입력이 가능합니다.'));},120000);});
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{
+    expired=true;const pending=__orderPhotoWorkerPromise;__orderPhotoWorkerPromise=null;
+    if(pending)pending.then(w=>w.terminate()).catch(()=>{});
+    reject(new Error('OCR 분석 시간 초과. 사진은 저장되어 있으며 직접 명단 입력이 가능합니다.'));
+  },60000);});
   const run=(async()=>{
     const img=await _orderPhotoLoadImage(imageSrc);
     const src=_orderPhotoBuildVariant(img,'contrast').toDataURL('image/png');
-    worker=await Tesseract.createWorker('kor+eng');
-    if(expired){await worker.terminate();throw new Error('OCR 분석 시간 초과');}
+    if(!__orderPhotoWorkerPromise){
+      __orderPhotoWorkerPromise=Tesseract.createWorker('kor',1,{logger:info=>{
+        if(__orderPhotoOcrProgress)__orderPhotoOcrProgress(info);
+      }}).catch(e=>{__orderPhotoWorkerPromise=null;throw e;});
+    }
+    worker=await __orderPhotoWorkerPromise;
+    if(expired)throw new Error('OCR 분석 시간 초과');
     await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
     const result=await worker.recognize(src);
-    let best={result,lines:_orderPhotoExtractStructuredLines(result),name:'contrast'};
-    const quality=x=>context?_orderPhotoAssign(x.lines,context.candidates,context.dbl).assignedCount:String(x.result?.data?.text||'').replace(/[^가-힣]/g,'').length;
-    if(context&&quality(best)<Math.min(context.candidates.length,context.dbl*2)){
-      await worker.setParameters({tessedit_pageseg_mode:'11'});
-      const second=await worker.recognize(_orderPhotoBuildVariant(img,'gray').toDataURL('image/png'));
-      const alternate={result:second,lines:_orderPhotoExtractStructuredLines(second),name:'gray'};
-      if(quality(alternate)>quality(best))best=alternate;
-    }
-    return best;
+    return {result,lines:_orderPhotoExtractStructuredLines(result),name:'contrast'};
   })();
   try{return await Promise.race([run,timeout]);}
-  finally{clearTimeout(timer);if(worker)Promise.resolve(worker.terminate()).catch(()=>{});}
+  catch(e){const pending=__orderPhotoWorkerPromise;__orderPhotoWorkerPromise=null;if(pending)pending.then(w=>w.terminate()).catch(()=>{});throw e;}
+  finally{clearTimeout(timer);}
 }
 function _refreshOrderPhotoDraftView(ctx){
   if(CM_key!==ctx.key||CM_id!==ctx.mid)return;
   openM3(ctx.key,ctx.mid,true);
   setOfflineResultEntryMode('detail');
 }
-async function _processOrderPhoto(side,file){
+async function _processOrderPhotoCore(side,file){
   const ctx=_orderPhotoGetContext(side);
   if(!ctx){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
   const currentRows=Array.from({length:ctx.dbl},(_,i)=>getPickerSelected(`rp${side}_${i}`)).flat();
@@ -26591,7 +26617,7 @@ async function _processOrderPhoto(side,file){
     const lines=(best&&best.lines)||[];
     if(!lines.length){ _orderPhotoSetStatus(side,'글자를 찾지 못했습니다',true); toast('글자를 찾지 못했습니다','error'); return; }
     const assigned=_orderPhotoAssign(lines,ctx.candidates,ctx.dbl);
-    _orderPhotoApplySelection(side, assigned.assignments);
+    if(CM_key===ctx.key&&CM_id===ctx.mid)_orderPhotoApplySelection(side, assigned.assignments);
     const rowsMatched=assigned.assignments.filter(row=>row.length>0).length;
     const totalNeed=Math.min(ctx.candidates.length, ctx.dbl*2);
     const warn = assigned.assignedCount < totalNeed;
@@ -26603,6 +26629,73 @@ async function _processOrderPhoto(side,file){
     toast('사진 인식 실패: '+(err?.message||err), 'error');
   }
 }
+// PHASE250: unresolved photo rows require visual confirmation before becoming a blank order.
+function renderOrderPhotoManage(key,m){
+  const body=ge('mM3B');if(!body)return;
+  const panel=document.createElement('div');const rows=[];
+  for(const side of [1,2]){
+    if(!_orderPhotoGetSaved(m,side)||!_orderPhotoCanView(m,side))continue;
+    const trigger=isSimpleResultMode(G.meta)?'triggerSimpleOrderPhoto':'triggerOrderPhoto';
+    rows.push(`<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0"><b>${side===1?'홈팀':'원정팀'} 오더지</b><button type="button" class="btn btn-outline" onclick="openOrderPhotoViewer(${side})">사진 보기</button><button type="button" class="btn btn-outline" onclick="${trigger}(${side},'camera')">다시 촬영</button><button type="button" class="btn btn-outline" onclick="${trigger}(${side},'upload')">사진 교체</button><button type="button" class="btn btn-outline" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button></div>`);
+  }
+  if(!rows.length)return;panel.style.cssText='padding:10px;background:#f1f5f9;border-radius:10px;margin-bottom:10px;font-size:.75rem';panel.innerHTML=rows.join('');body.prepend(panel);
+}
+async function deleteOrderPhoto(side,button){
+  if(__orderPhotoJobBusy||matchResultSaveBusy){toast('사진 분석·저장 완료 후 삭제해 주세요.','info');return;}
+  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!_orderPhotoCanView(ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match))return;
+  const base=_orderPhotoStoreKey(ctx.match,Number(side));if(!_orderPhotoGetSaved(ctx.match,Number(side)))return;
+  if(!confirm('첨부된 오더지 사진을 삭제하시겠습니까? 입력된 선수 명단과 경기 결과는 유지됩니다.'))return;
+  if(button){button.disabled=true;button.textContent='삭제 중…';}
+  matchResultSaveBusy=true;
+  try{
+    await updateDoc(doc(db,'matches',ctx.match._id||ctx.match.id),{[`orderPhotoStore.${base}`]:deleteField(),updatedAt:new Date().toISOString()});
+    const live=(G.matches[ctx.key]||[]).find(x=>x.id===ctx.mid||x._id===ctx.mid)||ctx.match;
+    if(live.orderPhotoStore)delete live.orderPhotoStore[base];
+    if(ctx.match.orderPhotoStore)delete ctx.match.orderPhotoStore[base];
+    try{cacheTournamentBundleFromMemory(_k2td(ctx.key).tid);}catch(e){}
+    _refreshOrderPhotoDraftView(ctx);toast('사진 삭제 완료','success');
+  }catch(e){toast('사진 삭제 실패: '+e.message,'error');if(button){button.disabled=false;button.textContent='사진 삭제';}}
+  finally{matchResultSaveBusy=false;}
+}
+window.deleteOrderPhoto=deleteOrderPhoto;
+function orderPhotoUnresolvedRows(match,side,dbl){
+  const field=Number(side)===1?'players1':'players2',flag=Number(side)===1?'blankOrder1':'blankOrder2';
+  return Array.from({length:dbl},(_,r)=>r).filter(r=>{
+    const rb=match.rubbers?.[r]||{};
+    return !rb[flag]&&!(rb[field]||[]).filter(Boolean).length;
+  });
+}
+function renderOrderPhotoBlankReview(key,m){
+  const body=ge('mM3B');if(!body||isIndividualByKey(key))return;
+  const dbl=getMatchDoublesCount(key,m),wrap=document.createElement('div');
+  const rows=[];
+  for(const side of [1,2]){
+    if(!_orderPhotoGetSaved(m,side)||!_orderPhotoCanView(m,side))continue;
+    for(const row of orderPhotoUnresolvedRows(m,side,dbl))rows.push(`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><span>${side===1?'홈팀':'원정팀'} ${row+1}복식 · 명단 확인 필요</span><button type="button" class="btn btn-outline" onclick="openOrderPhotoViewer(${side})">사진 확인</button><button type="button" class="btn btn-outline" onclick="confirmOrderPhotoBlank(${side},${row},this)">빈칸 확인 · 공오더 확정</button></div>`);
+  }
+  if(!rows.length)return;
+  wrap.style.cssText='padding:10px;border:1px solid #f59e0b;background:#fffbeb;border-radius:10px;margin:8px 0;font-size:.75rem';
+  wrap.innerHTML='<b>사진 명단 확인 필요</b><div>인식하지 못한 칸입니다. 사진에 이름이 있으면 직접 선택하고, 실제 빈칸인 경우에만 공오더로 확정하세요.</div>'+rows.join('');body.prepend(wrap);
+}
+async function confirmOrderPhotoBlank(side,row,button){
+  const ctx=_orderPhotoGetContext(Number(side));if(!ctx)return;
+  if(!_orderPhotoCanView(ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match)){toast('해당 팀의 오더 수정 권한이 필요합니다','error');return;}
+  if(!orderPhotoUnresolvedRows(ctx.match,side,ctx.dbl).includes(Number(row))){toast('선수가 입력된 칸은 공오더로 확정할 수 없습니다','info');return;}
+  if(!confirm(`${Number(row)+1}복식 사진에 선수 이름이 없는 빈칸이 맞습니까?\n\n공오더로 저장하고 해당 복식은 0:6 처리됩니다. 글씨를 못 읽은 경우에는 취소 후 선수를 선택하세요.`))return;
+  if(button?.disabled)return;if(button){button.disabled=true;button.textContent='공오더 저장 중…';}
+  const m=ctx.match,field=Number(side)===1?'players1':'players2',flag=Number(side)===1?'blankOrder1':'blankOrder2';
+  const rubbers=JSON.parse(JSON.stringify(m.rubbers||[]));while(rubbers.length<ctx.dbl)rubbers.push({});
+  rubbers[row]={...(rubbers[row]||{}),[field]:[],[flag]:true};applyBlankOrderAutoScore(rubbers[row]);
+  const sideKey=Number(side)===1?'side1':'side2',now=new Date().toISOString();
+  const draft=JSON.parse(JSON.stringify(m.orderOcrDraft||{}));
+  draft.needsReview=true;draft.updatedAt=now;
+  draft[sideKey]={...(draft[sideKey]||{}),blankConfirmed:{...(draft[sideKey]?.blankConfirmed||{}),[row]:{confirmedAt:now,confirmedBy:String(AD?'관리자':OP?'경기진행자':REG_CLUB||'경기이사')}}};
+  try{
+    await _persistSimpleOcrDraft({...ctx,match:{...m,rubbers,orderOcrDraft:draft}});
+    toast(`${Number(row)+1}복식 공오더 저장 완료`,'success');_refreshOrderPhotoDraftView(ctx);
+  }catch(e){toast('공오더 저장 실패: '+e.message,'error');if(button){button.disabled=false;button.textContent='빈칸 확인 · 공오더 확정';}}
+}
+window.confirmOrderPhotoBlank=confirmOrderPhotoBlank;
 function _mergeSimpleOcrDraft(ctx,side,assignments,sourceLabel='OCR',uncertain=[]){
   const m=ctx?.match;if(!m)return {applied:0,skipped:0};
   const rubbers=Array.isArray(m.rubbers)?m.rubbers.map(rb=>rb&&typeof rb==='object'?{...rb}:{}):[];
@@ -26652,7 +26745,7 @@ async function _persistSimpleOcrDraft(ctx){
   if(live){live.rubbers=m.rubbers;live.orderOcrDraft=m.orderOcrDraft;}
 }
 
-async function _processSimpleOrderPhoto(side,file){
+async function _processSimpleOrderPhotoCore(side,file){
   const ctx=_orderPhotoGetContext(side);
   if(!ctx){toast('경기 정보를 찾을 수 없습니다','error');return;}
   let photoSaved=false;
@@ -26660,6 +26753,7 @@ async function _processSimpleOrderPhoto(side,file){
     const image=await _orderPhotoReadFile(file);
     await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
     photoSaved=true;
+    _orderPhotoSetStatus(side,'⏳ 사진 저장 완료 · OCR 자동 분석 중…');
     toast('📷 사진 저장 완료 · OCR 자동 분석 중…','info');
     const Tesseract=await _ensureOrderPhotoTesseract();
     const best=await _orderPhotoRecognizeBest(Tesseract,image,ctx);
@@ -26667,6 +26761,7 @@ async function _processSimpleOrderPhoto(side,file){
     if(!lines.length){
       toast('사진은 저장됐지만 OCR에서 이름을 찾지 못했습니다. 상세기록에서 직접 확인해 주세요.','info');
       _refreshOrderPhotoDraftView(ctx);
+      _orderPhotoSetStatus(side,'사진 저장 완료 · 이름 판독 실패, 직접 입력해 주세요.',true);
       return;
     }
     // 현장 간편모드는 보수적 자동매칭: 확신이 있는 선수만 초안에 넣고 나머지는 비워둔다.
@@ -26678,12 +26773,14 @@ async function _processSimpleOrderPhoto(side,file){
       : '📷 사진 저장 완료 · 명단과 연결할 이름을 읽지 못했습니다. 직접 입력해 주세요.';
     toast(msg,merged.applied?'success':'info');
     _refreshOrderPhotoDraftView(ctx);
+    _orderPhotoSetStatus(side,msg,!merged.applied);
   }catch(err){
     console.error(err);
     if(photoSaved){
       toast('사진 저장 완료 · OCR 자동입력 실패: '+(err?.message||err),'error');
       _refreshOrderPhotoDraftView(ctx);
-    }else toast('오더지 사진 저장 실패: '+(err?.message||err),'error');
+      _orderPhotoSetStatus(side,'사진 저장 완료 · OCR 실패: '+(err?.message||err),true);
+    }else{toast('오더지 사진 저장 실패: '+(err?.message||err),'error');_orderPhotoSetStatus(side,'사진 저장 실패: '+(err?.message||err),true);}
   }
 }
 function triggerSimpleOrderPhoto(side,source){
