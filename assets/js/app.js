@@ -17149,7 +17149,7 @@ async function startMainDraw(){
     ge('mainDrawBtn').textContent='🎲 다시 추첨';
     ge('mainDrawBtn').onclick=startMainDraw;
     toast(meta.isTest ? '테스트 본선 추첨 저장 완료 ✅' : '본선 추첨 저장 및 본선 시합 생성 완료 ✅','success');
-    try{ openDrawHistory(tid, div); }catch(e){}
+    try{ openDrawHistory(tid, div, 'main'); }catch(e){}
   }catch(e){
     console.error(e);
     toast('본선 추첨 실패: '+(e?.message||e),'error');
