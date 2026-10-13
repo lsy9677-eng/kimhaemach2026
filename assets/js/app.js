@@ -10616,7 +10616,7 @@ function buildBracketPreviewFromConfig(cfg, teams, draw){
       <span class="badge" style="background:var(--accent);color:#fff;font-size:.72rem">예상 ${fakeDraw.groups.length}조 / 조당 ${grpSize}팀 / ${Number(fakeDraw.advance||cfg.advance||2)}팀 진출</span>
     </div>
     <div style="font-size:.76rem;color:var(--text2);margin-bottom:10px">관리자가 저장한 설정 기준의 본선 구조 예시입니다. 예선 종료 후 실제 팀이 추첨으로 배정됩니다.</div>
-    ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
+    ${renderSavedPrelimNeutralPyramid(pv.n, [])}
   </div>`;
 }
 async function saveBracketDivisionSettings(tid,div){
@@ -14236,7 +14236,7 @@ function updateDrawMainPreview(){
   pvCont.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
     <div style="font-size:.8rem;color:var(--text2)">예시 구조 — 실제 본선 자리는 예선 종료 후 추첨으로 확정</div>
     ${badgeHtml}
-  </div><div style="font-size:.74rem;color:var(--text2);margin-bottom:8px">${DW.seedSourceLabel||'외부값'} · <b>${DW.nthPick||1}번째 결과</b> · 계산시각 ${preparedTxt}</div>${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}`;
+  </div><div style="font-size:.74rem;color:var(--text2);margin-bottom:8px">${DW.seedSourceLabel||'외부값'} · <b>${DW.nthPick||1}번째 결과</b> · 계산시각 ${preparedTxt}</div>${renderSavedPrelimNeutralPyramid(pv.n, [])}`;
 }
 
 function nextPow2(n){let p=1;while(p<n)p*=2;return p;}
@@ -14807,71 +14807,14 @@ function switchToRunScreen(){
   if(src&&dst) dst.innerHTML=src.innerHTML;
 }
 
-// 추첨 완료 후 오른쪽 패널 갱신
+// PHASE224: prelim draw completion reveals structure only, never qualifier positions.
 function refreshRunPreview(key){
   const freshDraw=G.draws[key];
   const dst=ge('drawRunPreviewContent');
   if(!freshDraw||!dst) return;
   const pv=buildPreviewMainSlots(freshDraw,{});
-  if(pv.n<2){ dst.innerHTML=''; return; }
-
-  const spec=pv.spec||computeMainBracketSpec((freshDraw.advance||2)*(freshDraw.groups?.length||0));
-  const adv=freshDraw.advance||2;
-  const gc=freshDraw.groups?.length||0;
-
-  // 각 조 1,2위가 어느 본선 슬롯으로 가는지 매핑
-  const slotAssignHtml = (()=>{
-    const slots=pv.matchSlots||[];
-    const playIns=pv.playInMatches||[];
-    // playIn 배정
-    const playInMap={}; // nm → "진출전 N경기"
-    playIns.forEach((pm,i)=>{
-      if(pm.t1) playInMap[pm.t1.nm]=`🪣 진출전(똥통) ${i+1}경기`;
-      if(pm.t2) playInMap[pm.t2.nm]=`🪣 진출전(똥통) ${i+1}경기`;
-    });
-    // 본선 슬롯 배정
-    const mainMap={}; // nm → "N번 슬롯"
-    slots.forEach((ms,si)=>{
-      if(ms.t1) mainMap[ms.t1.nm]=`본선 ${si+1}번 슬롯`;
-      if(ms.t2) mainMap[ms.t2.nm]=`본선 ${si+1}번 슬롯`;
-    });
-
-    const rows=(freshDraw.groups||[]).map((grp,gi)=>{
-      const entries=[];
-      const grpSz=grp.teams?.length||0;
-      const advCount=grpSz<=2?grpSz:2;
-      for(let rk=1;rk<=advCount;rk++){
-        const nm=`${grpLabel(gi)} ${rk}위`;
-        const dest=playInMap[nm]||mainMap[nm]||'—';
-        const isPlayIn=!!playInMap[nm];
-        const color=rk===1?'#1565c0':'#e67e22';
-        const destClr=isPlayIn?'#92400e':'#166534';
-        const destBg=isPlayIn?'#fff8e6':'#f0fdf4';
-        entries.push(`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:.72rem;font-weight:700;background:${destBg};color:${destClr}">${rk}위→<b>${dest}</b></span>`);
-      }
-      return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;border-bottom:1px solid #f1f5f9">
-        <span style="font-size:.76rem;font-weight:800;color:#0f1e3a;min-width:32px">${grpLabel(gi)}</span>
-        ${entries.join('')}
-      </div>`;
-    }).join('');
-
-    return rows ? `<div style="margin-top:10px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:white">
-      <div style="padding:6px 10px;background:#f8fafc;font-size:.72rem;font-weight:700;color:#475569;border-bottom:1px solid #e2e8f0">📌 조별 본선 배정 위치</div>
-      ${rows}
-    </div>` : '';
-  })();
-
-  const specBadge=spec.playInMatches>0
-    ? `${adv}팀×${gc}조→${spec.mainSize}강+진출전${spec.playInMatches}경기`
-    : `${adv}팀×${gc}조→${pv.n}강`;
-
-  dst.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-    <div style="font-size:.78rem;font-weight:700;color:var(--primary-dark)">⏳ 본선 시드보호 재추첨 대기</div>
-    <span class="badge" style="background:var(--accent);color:#fff;font-size:.7rem">${specBadge}</span>
-  </div>
-  <div style="font-size:.74rem;color:var(--text2);margin-bottom:8px">지금은 구조만 표시됩니다. 실제 배정은 본선 추첨 후 확정됩니다.</div>
-  ${renderMainPreviewHTML(pv.matchSlots,pv.n,true)}
-  ${slotAssignHtml}`;
+  if(pv.n<2){dst.innerHTML='';return;}
+  dst.innerHTML=renderSavedPrelimNeutralPyramid(pv.n, []);
 }
 
 // 추첨 스테이지 초기화
