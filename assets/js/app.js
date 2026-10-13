@@ -27790,16 +27790,19 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     const border=e.byeSlot?'#e0a400':'#9fb4cf';
     const color=e.byeSlot?'#9a6700':'#10213d';
     const src=String(e.sourceLabel||'').trim();
-    const srcBadge=src?`<div style="position:absolute;top:2px;left:2px;right:2px;border-radius:4px;background:#1565c0;color:#fff;font-size:${n>=32?'5.8':'6.8'}px;font-weight:900;line-height:1.25;padding:2px 1px;white-space:normal">${outputEsc(src)}</div>`:'';
+    // PHASE240: readable group/rank badges, distinct first/second colors.
+    const rankParts=src.match(/^(.*?)\s*([12])위$/);
+    const rankOne=rankParts?.[2]==='1';
+    const srcBadge=src?`<div style="position:absolute;top:-36px;left:50%;transform:translateX(-50%);min-width:${n>=32?'38':'46'}px;z-index:7;border:1px solid ${rankOne?'#c69016':'#367dc4'};border-radius:6px;background:${rankOne?'#fff2c2':'#e6f1ff'};color:${rankOne?'#785100':'#124d8f'};font-weight:950;line-height:1.15;padding:3px 3px;white-space:nowrap;text-align:center">${rankParts?`<span style="display:block;font-size:10px">${outputEsc(rankParts[1].trim())}</span><strong style="display:block;font-size:${n>=32?'13':'15'}px">${rankParts[2]}위</strong>`:`<span style="font-size:10px">${outputEsc(src)}</span>`}</div>`:'';
     const nameLen=Array.from(pyramidDisplayTeamName(e.name)).length;
     const teamFont=nameLen<=3?(n>=32?14:18):nameLen<=5?(n>=32?11.5:14.5):(n>=32?9.2:11.5);
     const maxReadableFont=Math.max(24,Math.min(40,bw-2));
     const quickEditable=interactive&&!blank&&(AD||OP)&&e.matchId&&e.side;
     const qClick=quickEditable?`onclick="event.stopPropagation();openPyramidSlotQuickEdit('${key}','${String(e.matchId).replace(/'/g,"\\'")}',${Number(e.side)})"`:'';
     const qTitle=quickEditable?'title="눌러서 팀/부전승 선택"':'';
-    const editBadge=quickEditable?`<div style="position:absolute;right:-5px;top:-7px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
-    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:${src?'19px':'4px'} 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
-      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:${src?'63':'76'}px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name||'빈슬롯')}</div>
+    const editBadge=quickEditable?`<div style="position:absolute;right:-5px;bottom:-5px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
+    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;align-items:${src?'flex-end':'center'};justify-content:center;text-align:center;overflow:visible;padding:4px 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
+      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:76px;overflow:visible;text-shadow:0 0 .01px currentColor">${verticalName(e.name||'빈슬롯')}</div>
     </div>`;
   }).join('');
 
