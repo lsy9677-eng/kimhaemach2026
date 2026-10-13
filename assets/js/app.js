@@ -13209,20 +13209,17 @@ function calcGS(key,gi,tidxs,teams){
     const tm=teams[ti];let w=0,l=0,gw=0,gl=0,played=0;
     (G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi&&(m.t1===ti||m.t2===ti)).forEach(m=>{
       const isT1=m.t1===ti;
-      const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
-      const hasRealScore=rubbers.some(rb=>rb&&((rb.score1!=null&&rb.score1!=='')||(rb.score2!=null&&rb.score2!=='')));
-      if(!hasRealScore) return;
+      // PHASE231: standings use the same confirmed result as match cards,
+      // including simple results with no rubber-by-rubber score details.
+      const state=getMatchResultState(key,m);
+      if(!state.done || state.winner==null)return;
       played++;
-      if(indivMode){
-        const rb=rubbers[0]||{};
-        const sFor=Number(isT1?(rb.score1||0):(rb.score2||0));
-        const sAg=Number(isT1?(rb.score2||0):(rb.score1||0));
-        gw+=sFor; gl+=sAg;
-      }else{
-        const sc=rbSc(m,isT1?0:1),scO=rbSc(m,isT1?1:0);
-        gw+=sc; gl+=scO;
-      }
-      if(m.winner===ti) w++; else if(m.winner!=null) l++;
+      const score1=Number(indivMode?state.disp1:state.sc1)||0;
+      const score2=Number(indivMode?state.disp2:state.sc2)||0;
+      gw+=isT1?score1:score2;
+      gl+=isT1?score2:score1;
+      if(state.winner===ti)w++;else l++;
+
     });
     return{ti,teamIdx:ti,nm:tdn(tm,key,ti),w,l,gw,gl,pf:gw,pa:gl,diff:gw-gl,slot:slotIdx+1,played,age:getIndividualTieAge(tm),rank:null,rankLabel:'',tiePending:false};
   });
