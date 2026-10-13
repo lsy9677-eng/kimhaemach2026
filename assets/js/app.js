@@ -2578,6 +2578,7 @@ async function saveMeta(){
     adminFloatingNotice:(G.meta.adminFloatingNotice||''),
     adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,
     onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
+    orderPhotoOcrEnabled:G.meta.orderPhotoOcrEnabled===true,
     operatorPw:(G.meta.operatorPw||'2026court'),
     individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,
     usePlayerRegistry:!!G.meta.usePlayerRegistry,
@@ -14028,6 +14029,8 @@ function ensureAdminOperationalExclusionButton(){
   let wrap=ge('adminOperationalExclusionEntry');
   if(!wrap){wrap=document.createElement('div');wrap.id='adminOperationalExclusionEntry';wrap.style.cssText='margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:10px';body.prepend(wrap);}
   wrap.innerHTML='<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="openBracketPublicationSettings()">예선·본선 대진표 공개 관리</button><button type="button" class="btn btn-outline" style="width:100%" onclick="openAdminOperationalExclusions()">특수 운영 설정 · 조 배정 제외</button><div style="font-size:.75rem;margin-top:6px">같은 기기에서 다음 예선 추첨 1회에 적용합니다. 새로고침하면 해제됩니다.</div>';
+  const ocr=document.createElement('div');ocr.style.cssText='margin-top:12px;padding-top:10px;border-top:1px solid #cbd5e1';
+  ocr.innerHTML=`<b>오더지 OCR 보조 기능</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminOrderPhotoOcrEnabled" ${isOrderPhotoOcrEnabled()?'checked':''}> OCR 분석 버튼 사용 허용</label><div style="font-size:.75rem;line-height:1.5">기본은 꺼짐입니다. 켜도 사진 첨부 시 자동 분석하지 않으며, 사진 영역의 ‘OCR 분석(선택)’을 눌렀을 때만 실행됩니다. 수기 글씨는 인식이 부정확할 수 있어 명단 확인이 필요합니다.</div><button type="button" class="btn btn-outline" style="margin-top:8px" onclick="saveOrderPhotoOcrSetting(this)">OCR 설정 저장</button>`;wrap.appendChild(ocr);
 }
 function openAdminOperationalExclusions(){
   if(!AD)return;
@@ -17807,7 +17810,7 @@ function openM3(key,mid,forceEdit=false){
     });
     const hint=ge('offlineResultEntryHint');
     if(hint){
-      hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진을 저장하면 OCR이 등록 명단과 자동 대조해 상세기록 초안을 채웁니다. OCR 초안은 최종 확인 전까지 공식 선수기록에 반영되지 않습니다.</div>');
+      hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진은 오더지 기록으로 보관됩니다. 선수 명단을 직접 선택해 주세요. OCR 보조 기능은 관리자 허용 시 분석 버튼으로 선택 실행할 수 있습니다.</div>');
 
     }
   }
@@ -26603,11 +26606,12 @@ async function _processOrderPhotoCore(side,file){
   const ctx=_orderPhotoGetContext(side);
   if(!ctx){ toast('경기 정보를 찾을 수 없습니다','error'); return; }
   const currentRows=Array.from({length:ctx.dbl},(_,i)=>getPickerSelected(`rp${side}_${i}`)).flat();
-  if(currentRows.length && !confirm('현재 선택된 오더를 사진 인식 결과로 덮어쓸까요?')) return;
+  if(file?.__runOcr&&currentRows.length && !confirm('현재 선택된 오더를 사진 인식 결과로 덮어쓸까요?')) return;
   _orderPhotoSetStatus(side,'이미지 읽는 중…');
   try{
     const image=await _orderPhotoReadFile(file);
-    await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
+    if(!file?.__skipUpload)await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
+    if(!isOrderPhotoOcrEnabled()||!file?.__runOcr){_refreshOrderPhotoDraftView(ctx);_orderPhotoSetStatus(side,'사진 저장 완료 · 선수 명단은 직접 선택해 주세요.');toast('사진 저장 완료','success');return;}
     _orderPhotoSetStatus(side,'사진 저장 완료 · 명단 기반으로 사진 분석 중…');
     const Tesseract=await _ensureOrderPhotoTesseract();
     const best=await _orderPhotoRecognizeBest(Tesseract,image,ctx);
@@ -26627,6 +26631,36 @@ async function _processOrderPhotoCore(side,file){
   }
 }
 // PHASE250: unresolved photo rows require visual confirmation before becoming a blank order.
+function isOrderPhotoOcrEnabled(){return G.meta?.orderPhotoOcrEnabled===true;}
+async function saveOrderPhotoOcrSetting(button){
+  if(!AD)return;
+  const enabled=!!ge('adminOrderPhotoOcrEnabled')?.checked;
+  if(button){button.disabled=true;button.textContent='저장 중…';}
+  try{
+    await updateDoc(doc(db,'meta','config'),{orderPhotoOcrEnabled:enabled});
+    G.meta.orderPhotoOcrEnabled=enabled;
+    toast(enabled?'OCR 보조 기능 사용 허용 · 분석 버튼을 눌러 실행합니다.':'OCR 보조 기능 사용 안 함 · 사진 기능은 유지됩니다.','success');
+  }catch(e){toast('OCR 설정 저장 실패: '+e.message,'error');}
+  finally{if(button){button.disabled=false;button.textContent='OCR 설정 저장';}}
+}
+async function analyzeStoredOrderPhoto(side){
+  if(!isOrderPhotoOcrEnabled()){toast('관리자 설정에서 OCR 보조 기능을 켜야 사용할 수 있습니다.','info');return;}
+  if(__orderPhotoJobBusy||matchResultSaveBusy){toast('현재 처리가 완료된 후 다시 눌러 주세요.','info');return;}
+  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!_orderPhotoCanView(ctx.match,Number(side)))return;
+  const saved=_orderPhotoGetSaved(ctx.match,Number(side));if(!saved)return;
+  const run=async()=>{
+    try{
+      const response=await fetch(saved.downloadURL||saved.dataUrl);if(!response.ok)throw new Error('사진을 불러오지 못했습니다.');
+      const file=await response.blob();file.__runOcr=true;file.__skipUpload=true;
+      if(CM_key!==ctx.key||CM_id!==ctx.mid)throw new Error('다른 경기 화면으로 이동했습니다. 원래 경기에서 다시 분석해 주세요.');
+      if(isSimpleResultMode(G.meta))await _processSimpleOrderPhotoCore(Number(side),file);
+      else await _processOrderPhotoCore(Number(side),file);
+    }catch(e){_orderPhotoSetStatus(side,'OCR 실행 실패: '+e.message,true);toast('OCR 실행 실패: '+e.message,'error');}
+  };
+  return _runOrderPhotoJob(Number(side),run);
+}
+window.saveOrderPhotoOcrSetting=saveOrderPhotoOcrSetting;
+window.analyzeStoredOrderPhoto=analyzeStoredOrderPhoto;
 function renderOrderPhotoManage(key,m){
   const body=ge('mM3B');if(!body)return;
   const originalButtons=Array.from(body.querySelectorAll('button'));
@@ -26644,6 +26678,7 @@ function renderOrderPhotoManage(key,m){
     const controls=document.createElement('div');controls.style.cssText='display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:5px';
     const trigger=isSimpleResultMode(G.meta)?'triggerSimpleOrderPhoto':'triggerOrderPhoto';
     controls.innerHTML=`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="${trigger}(${side},'upload')">사진 수정</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button>`.replace('사진 수정','사진 수정');
+    if(isOrderPhotoOcrEnabled())controls.insertAdjacentHTML('beforeend',`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="analyzeStoredOrderPhoto(${side})">OCR 분석(선택)</button>`);
     parent.appendChild(controls);
   }
 }
@@ -26763,8 +26798,9 @@ async function _processSimpleOrderPhotoCore(side,file){
   let photoSaved=false;
   try{
     const image=await _orderPhotoReadFile(file);
-    await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
+    if(!file?.__skipUpload)await persistOrderPhoto(side,image,file?.__captureSource||'upload',ctx);
     photoSaved=true;
+    if(!isOrderPhotoOcrEnabled()||!file?.__runOcr){_refreshOrderPhotoDraftView(ctx);_orderPhotoSetStatus(side,'사진 저장 완료 · 선수 명단은 직접 선택해 주세요.');toast('사진 저장 완료','success');return;}
     _orderPhotoSetStatus(side,'⏳ 사진 저장 완료 · OCR 자동 분석 중…');
     toast('📷 사진 저장 완료 · OCR 자동 분석 중…','info');
     const Tesseract=await _ensureOrderPhotoTesseract();
