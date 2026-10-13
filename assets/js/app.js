@@ -11140,6 +11140,11 @@ function getPrelimCollapsedState(key, hasMain, mainFinished){
   }catch(e){}
   return false;
 }
+// PHASE236: shared setter used after main-draw saves and saved-plan application.
+function setMainSectionCollapsed(key,collapsed){
+  window.BRACKET_MAIN_TOGGLE=window.BRACKET_MAIN_TOGGLE||{};
+  window.BRACKET_MAIN_TOGGLE[String(key)]=!!collapsed;
+}
 function getMainCollapsedState(key){
   window.BRACKET_MAIN_TOGGLE = window.BRACKET_MAIN_TOGGLE || {};
   if(Object.prototype.hasOwnProperty.call(window.BRACKET_MAIN_TOGGLE, key)){
@@ -15065,7 +15070,7 @@ async function applySavedMainDrawToLive(id,key){
   if(!confirm('저장된 이 추첨 결과를 실제 본선 대진에 적용할까요? 기존 본선 배정은 교체되고 예선 결과는 유지됩니다.'))return;
   const matches=buildMainMatches(plan.matchSlots,plan.n,plan.playInMatches||[]),next=[...(G.matches[key]||[]).filter(m=>m.phase!=='main'&&m.phase!=='playin'),...matches];
   const before=G.matches[key],beforeDraw=G.draws[key];G.matches[key]=next;G.draws[key]={...(beforeDraw||{}),mainPlan:cloneMainDrawPlan(plan),mainAudit:{mode:'saved_record_applied',sourceHistoryId:id,confirmedAt:new Date().toISOString()},mainUpdatedAt:new Date().toISOString()};
-  sl(true);try{await stD(key);G.matches[key]=next;syncIndividualMainBracketFromPrelim(key);await stM(key);setMainSectionCollapsed(key,false);cm('mDrawHistoryView');renderBracket();toast('저장된 추첨 결과를 실제 본선에 적용했습니다','success');}catch(e){G.matches[key]=before;G.draws[key]=beforeDraw;toast('본선 적용 실패: '+e.message,'error');}finally{sl(false);}
+  sl(true);try{await stD(key);G.matches[key]=next;syncIndividualMainBracketFromPrelim(key);await stM(key);setMainSectionCollapsed(key,false);cm('mDrawHistoryView');try{renderBracket();}catch(e){console.warn('본선 저장 완료 후 화면 갱신 실패',e);}toast('저장된 추첨 결과를 실제 본선에 적용했습니다','success');}catch(e){G.matches[key]=before;G.draws[key]=beforeDraw;toast('본선 적용 실패: '+e.message,'error');}finally{sl(false);}
 }
 window.applySavedMainDrawToLive=applySavedMainDrawToLive;
 
