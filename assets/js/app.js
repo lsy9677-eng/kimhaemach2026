@@ -10782,7 +10782,7 @@ async function resetMainDrawOnly(key){
 계속할까요?`)) return;
   sl(true);
   try{
-    await resetMatchRecords(key);
+    await resetMatchRecords(key,{phases:['main','playin','bronze'],preserveDraw:true});
     const preservedSeedDraw=getPreservedSeedDrawState(key);
     const preservedDraw={...draw, ...preservedSeedDraw};
     delete preservedDraw.mainPlan;
@@ -13509,7 +13509,8 @@ function propagateResolvedMainAdvancements(key){
     if(!m || Number(m.round||0)!==0) return;
     const hasOnlyOne=(m.t1!=null && m.t2==null) || (m.t1==null && m.t2!=null);
     const isByeLabel=String(m.source2Label||'').trim()==='부전승';
-    if(hasOnlyOne || isByeLabel){
+    // PHASE238: an unresolved qualifier is never a bye.
+    if(m.bye || isByeLabel){
       const winnerTi=(m.t1!=null)?m.t1:m.t2;
       if(winnerTi!=null){
         if(m.t1==null){ m.t1=winnerTi; changed=true; }
@@ -18301,8 +18302,9 @@ async function saveM3(){
 /**
  * key(대회_부서)의 매치 기록에서 선수 승패 차감 + 메모리 초기화
  */
-async function resetMatchRecords(key){
-  const matches=G.matches[key]||[];
+async function resetMatchRecords(key,{phases=null,preserveDraw=false}={}){
+  const original=G.matches[key]||[];
+  const matches=phases?original.filter(m=>phases.includes(m.phase)):original;
   const teams=G.teams[key]||[];
   const affected=new Set();
   for(const m of matches){
@@ -18312,8 +18314,8 @@ async function resetMatchRecords(key){
     (lt?.players||[]).forEach(n=>{const k=getPlayerKey(n,baseClub(lt?.club||''));if(G.players[k]){G.players[k].losses=Math.max(0,(G.players[k].losses||0)-1);affected.add(k);}});
   }
   if(affected.size>0) enqueuePlayerPersist([...affected], 4000);
-  G.matches[key]=[];
-  delete G.draws[key];
+  G.matches[key]=phases?original.filter(m=>!phases.includes(m.phase)):[];
+  if(!preserveDraw)delete G.draws[key];
 }
 
 /**
