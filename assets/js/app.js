@@ -15067,6 +15067,7 @@ async function applySavedMainDrawToLive(id,key){
   const entry=(G.drawHistories[key]||[]).find(x=>x.id===id||x._id===id);if(!entry){toast('추첨 기록을 다시 불러오세요','info');return;}
   const norm=normalizeDrawHistoryEntry(entry),plan=norm.plan||{n:norm.mainSize,matchSlots:norm.mainPreviewSlots||[]};
   if(!plan.n||!plan.matchSlots?.length){toast('저장된 본선 배정 정보가 없습니다','error');return;}
+  if(plan.matchSlots.some(s=>Number(s.t1?.rk)===1&&Number(s.t2?.rk)===1)){toast('이전 기록에 1위끼리 대결이 있습니다. 본선을 다시 추첨하세요.','error');return;}
   const info=_k2td(key),tour=G.tournaments.find(t=>t.id===info.tid);const expected=getPreviewAdvSlots(G.draws[key]||{},gDS(tour,info.div));
   const actual=[...plan.matchSlots.flatMap(x=>[x.t1,x.t2]),...(plan.playInMatches||[]).flatMap(x=>[x.t1,x.t2])].filter(x=>x&&!x.playInPlaceholder);
   if(actual.length!==expected.length){toast('이전 추첨에 미완료 조의 진출 자리가 누락되었습니다. 본선을 다시 추첨하세요.','error');return;}
@@ -16516,8 +16517,8 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     .sort((a,b)=>a.seedNo-b.seedNo);
 
   const remaining=(mainPool||[]).filter(e=>e.placeholder || e.seedNo==null);
-  const rank1=shuffleSeeded(remaining.filter(a=>!a.placeholder && a.rk===1), rnd);
-  const others=shuffleSeeded(remaining.filter(a=>a.placeholder || a.rk!==1), rnd);
+  const rank1=shuffleSeeded(remaining.filter(a=>Number(a.rk)===1), rnd);
+  const others=shuffleSeeded(remaining.filter(a=>Number(a.rk)!==1), rnd);
 
   const leaves=Array.from({length:mainSize},()=>null);
   const stdOrder=buildStandardSeedLeafOrder(mainSize);
@@ -16532,11 +16533,12 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
 
   const getOpenPositions=()=>leaves.map((v,i)=>v?null:i).filter(v=>v!=null);
   [...rank1, ...others].forEach(entry=>{
-    const opens=getOpenPositions();
-    if(!opens.length) return;
-    const pos=entry.placeholder
-      ? opens[Math.floor(rnd()*opens.length)]
-      : chooseBestMainLeaf(opens, entry, leaves, mainSize, rnd);
+    let opens=getOpenPositions();
+    if(!opens.length)throw new Error('본선 배정 자리가 부족합니다.');
+    if(Number(entry.rk)===1){opens=opens.filter(pos=>Number(leaves[pos%2===0?pos+1:pos-1]?.rk)!==1);}
+    else{const againstFirst=opens.filter(pos=>Number(leaves[pos%2===0?pos+1:pos-1]?.rk)===1);if(againstFirst.length)opens=againstFirst;}
+    if(!opens.length)throw new Error('1위끼리 대결 금지와 시드 조건이 충돌합니다. 시드를 확인하세요.');
+    const pos=chooseBestMainLeaf(opens,entry,leaves,mainSize,rnd);
     if(pos!=null) leaves[pos]={...entry};
   });
 
@@ -16554,6 +16556,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     }
   }
 
+  if(matchSlots.some(slot=>Number(slot.t1?.rk)===1&&Number(slot.t2?.rk)===1))throw new Error('1위끼리의 대결이 발생해 본선 저장을 중단했습니다. 시드를 확인하세요.');
   const byeIdxs=[], normalIdxs=[];
   matchSlots.forEach((slot,idx)=>{ if(slot.bye) byeIdxs.push(idx); else normalIdxs.push(idx); });
   matchSlots.forEach((slot)=>{
@@ -17072,7 +17075,7 @@ async function startMainDraw(){
   if(complete&&MD.advT.some(e=>e.ti==null||!currentTeams[e.ti])){toast('확정 진출팀을 찾을 수 없습니다. 예선 순위를 확인하세요','error');return;}
   MD.spec=computeMainBracketSpec(MD.advT.length,MD.mainBracketMode||'auto');MD.bracketSize=MD.spec.mainSize;
   MD.isRunning=true;
-  const planPrepared=prepareMainExternalDraw(true);
+  let planPrepared;try{planPrepared=prepareMainExternalDraw(true);}catch(e){MD.isRunning=false;toast(e.message,'error');return;}
   MD.plan=planPrepared || MD.plan;
   ge('mainStageMeta').innerHTML='시드보호 본선 재추첨 진행 중...';
 
