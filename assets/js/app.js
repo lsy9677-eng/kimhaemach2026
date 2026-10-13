@@ -27010,7 +27010,7 @@ function outputCenterInnerHtml(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
         <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ A4 가로 인쇄 · PDF</button>
         <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 고화질 이미지 저장</button>
-        <button class="btn btn-outline" onclick="renderOutputPreview()">↻ 현재상황 새로고침</button>
+        <button class="btn btn-outline" onclick="refreshOutputCenter()">↻ 현재상황 새로고침</button>
         <span style="font-size:.73rem;color:var(--text3)">출력센터는 읽기 전용이며 경기 데이터는 변경하지 않습니다.</span>
       </div>
     </div>
@@ -27513,7 +27513,7 @@ async function outputTournamentChanged(){
   let bundle=null;
   try{
     // 출력센터는 과거 대회 선택이 핵심이므로 10분 로컬 캐시를 믿지 않고 실제 Firestore를 다시 읽는다.
-    bundle=isPastArchiveTournament(t)?await ensurePastTournamentArchive(tid):await fetchTournamentBundle(tid,{force:true,acceptStale:true});
+    bundle=isPastArchiveTournament(t)?await ensurePastTournamentArchive(tid):await fetchTournamentBundle(tid,{force:true,acceptStale:false,server:true,bypassPastArchive:true});
   }catch(e){ console.warn('[OutputCenter] forced bundle load failed',e); }
   // registrations는 과거대회 부서 판별의 원본이다. bundle 적용과 별개로 직접 한 번 더 확인한다.
   let rawRegs=Array.isArray(bundle?.regs)?bundle.regs:[];
@@ -27548,9 +27548,25 @@ async function outputTournamentChanged(){
   else if(divs.length)ds.value=divs[0];
   renderOutputPreview();
 }
+// PHASE244: output uses actual stored division keys and explicitly refreshes server data.
+function outputResolveDivision(tid,div){
+  const normalized=outputNormalizeDiv(div),prefix=tid+'_';
+  const keys=[...new Set([...Object.keys(G.matches||{}),...Object.keys(G.draws||{}),...Object.keys(G.teams||{})])].filter(k=>k.startsWith(prefix)&&outputNormalizeDiv(k.slice(prefix.length))===normalized);
+  keys.sort((a,b)=>((G.matches[b]||[]).length-(G.matches[a]||[]).length)||Number(!!G.draws[b])-Number(!!G.draws[a]));
+  return keys.length?keys[0].slice(prefix.length):div;
+}
+async function refreshOutputCenterData(){
+  const tid=outputElement('outTS')?.value;if(!tid)return;
+  const t=G.tournaments.find(t=>t.id===tid);
+  if(isPastArchiveTournament(t))await ensurePastTournamentArchive(tid);
+  else await fetchTournamentBundle(tid,{force:true,acceptStale:false,server:true,bypassPastArchive:true});
+}
+async function refreshOutputCenter(){try{await refreshOutputCenterData();renderOutputPreview();toast('최신 경기 상황 반영 완료','success');}catch(e){toast('최신 경기 조회 실패: '+e.message,'error');}}
+window.refreshOutputCenter=refreshOutputCenter;
+
 function outputNormalizeDiv(v){
   v=String(v||'').trim();
-  const m={'금배':'금','금배부':'금','금':'금','은배':'은','은배부':'은','은':'은','동배':'동','동배부':'동','동':'동','테린이부':'테린이','테린이':'테린이','여성':'여성부','여성부':'여성부'};
+  const m={'gold':'금','silver':'은','bronze':'동','terinee':'테린이','women':'여성부','금배':'금','금배부':'금','금':'금','은배':'은','은배부':'은','은':'은','동배':'동','동배부':'동','동':'동','테린이부':'테린이','테린이':'테린이','여성':'여성부','여성부':'여성부'};
   return m[v]||v;
 }
 function outputAvailableDivisions(tid,t=null,rawRegs=[],bundle=null){
@@ -27620,6 +27636,7 @@ function outputGeneratedTree(tid,div,blank=true){
 }
 // PHASE213: print skeleton uses the saved exact group configuration.
 function outputPreDrawMainSize(tid,div){
+  div=outputResolveDivision(tid,div);
   const key=tid+'_'+div,draw=G.draws?.[key],t=(G.tournaments||[]).find(x=>x.id===tid),cfg=gDS(t,div)||{};
   const ds=t?.divSettings||{},divisionKey=Object.keys(ds).find(d=>outputNormalizeDiv(d)===outputNormalizeDiv(div));
   const saved=ds[div]?.prelimDrawSettings||ds[divisionKey]?.prelimDrawSettings;
@@ -27648,6 +27665,7 @@ function outputHistoricalRegistrationFallback(tid,div,label,blank=false){
   <table><thead><tr><th>No</th><th>팀</th><th>${blank?'수기 결과':'저장 결과'}</th><th>기록</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 function outputPrelimHtml(tid,div,blank=false){
+  div=outputResolveDivision(tid,div);
   if(!bracketPhasePublished(tid,'prelim'))return bracketPublicationNotice('prelim');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid),draw=G.draws?.[key]||{};
   const groups=Array.isArray(draw.groups)?draw.groups:[];
@@ -27677,6 +27695,7 @@ function outputPrelimHtml(tid,div,blank=false){
   return outputHeader(t,div,blank?'예선 대진표 · 현장 수기용':'예선 대진표 · 현재상황')+`<div class="oc-groups">${cards}</div>`;
 }
 function outputMainTableHtml(tid,div,blank=false){
+  div=outputResolveDivision(tid,div);
   if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
@@ -27693,6 +27712,7 @@ function outputMainTableHtml(tid,div,blank=false){
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
 function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
+  div=outputResolveDivision(tid,div);
   if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div, all=(G.matches?.[key]||[]).filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
   if(!all.length)return '';
@@ -27861,6 +27881,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
   </div>`;
 }
 function outputPreDrawPyramidSkeleton(tid,div){
+  div=outputResolveDivision(tid,div);
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const n=outputPreDrawMainSize(tid,div), width=Math.max(900,Math.min(1500,n*46));
   const baseY=330,stepY=57,levels=Math.log2(n),x=i=>(i+.5)*width/n,THIN='#a9b8cc';
@@ -27891,6 +27912,7 @@ function outputPreDrawPyramidSkeleton(tid,div){
     </div></div></div>`;
 }
 function outputMainTreeHtml(tid,div,blank=false){
+  div=outputResolveDivision(tid,div);
   if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   const key=tid+'_'+div,t=(G.tournaments||[]).find(x=>x.id===tid);
   const allMs=G.matches?.[key]||[];
@@ -28173,6 +28195,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
 }
 async function saveOutputCenterHighResImage(){
   if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
+  try{await refreshOutputCenterData();}catch(e){toast('최신 경기 조회 실패: '+e.message,'error');return;}
   renderOutputPreview();
   const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
   const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
@@ -28184,12 +28207,13 @@ async function saveMainPyramidHighResImage(tid,div){
   const t=G.tournaments.find(x=>x.id===tid);
   await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
 }
-function printOutputCenter(){
+async function printOutputCenter(){
   if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
-  let body='';
-  try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
   const w=window.open('','_blank','width=1200,height=850');
   if(!w){toast('팝업 차단을 해제해 주세요','info');return;}
+  try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
+  let body='';
+  try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
   w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>const fitOutputPyramids=${fitOutputPyramids.toString()};setTimeout(()=>{fitOutputPyramids(document,true);window.print();},250)<\/script></body></html>`);w.document.close();
 }
 
