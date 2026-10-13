@@ -13421,29 +13421,21 @@ window.jumpToMainEntryByLabel = jumpToMainEntryByLabel;
 function getMatchCardDomId(key, mid){
   return 'matchCard_'+String(key).replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+String(mid).replace(/[^a-zA-Z0-9_-]/g,'_');
 }
+// PHASE237: every group's qualifier slots survive unfinished results.
 function getAdvT(key,draw,teams,cfg){
-  // 개인전: draw.indivMode 플래그 기반으로 전용 진출팀 계산
-  if(draw.indivMode){
-    const res=[];
-    (draw.groups||[]).forEach((grp,gi)=>{
-      const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
-      if(!matches.length||!matches.every(m=>getMatchResultState(key,m).done))return;
-      const gs=calcGS(key,gi,grp.teams,teams);
-      const grpSize=grp.teams.length;
-      const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
-      gs.slice(0,advCount).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
-    });
-    return res;
-  }
   const res=[];
-  (draw.groups||[]).forEach((grp,gi)=>{
-      const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
-      if(!matches.length||!matches.every(m=>getMatchResultState(key,m).done))return;
-    const grpSize=(grp?.teams||[]).length||0;
-    const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
-    calcGS(key,gi,grp.teams,teams).slice(0,advCount).forEach((s,rk)=>res.push({ti:s.ti,nm:s.nm,gn:gi+1,rk:rk+1,grpSize}));
-  });
-  return res;
+  (draw?.groups||[]).forEach((grp,gi)=>{
+    const tids=grp?.teams||[],grpSize=tids.length;
+    const count=grpSize<=2?grpSize:Math.min(grpSize,Math.max(1,Number(draw?.advance||cfg?.advance||2)));
+    const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&m.group===gi);
+    const done=matches.length>0&&matches.every(m=>getMatchResultState(key,m).done);
+    const stats=done?calcGS(key,gi,tids,teams):[];
+    for(let rk=1;rk<=count;rk++){
+      const row=stats[rk-1];
+      if(row&&row.rank!=null&&!row.tiePending)res.push({ti:row.ti,nm:row.nm,gn:gi+1,rk,grpSize});
+      else res.push({ti:null,nm:`${grpLabel(gi)} ${rk}위`,gn:gi+1,rk,grpSize,placeholder:true});
+    }
+  });return res;
 }
 function getPreviewAdvSlots(draw,cfg){
   const res=[];
@@ -15066,6 +15058,9 @@ async function applySavedMainDrawToLive(id,key){
   const entry=(G.drawHistories[key]||[]).find(x=>x.id===id||x._id===id);if(!entry){toast('추첨 기록을 다시 불러오세요','info');return;}
   const norm=normalizeDrawHistoryEntry(entry),plan=norm.plan||{n:norm.mainSize,matchSlots:norm.mainPreviewSlots||[]};
   if(!plan.n||!plan.matchSlots?.length){toast('저장된 본선 배정 정보가 없습니다','error');return;}
+  const info=_k2td(key),tour=G.tournaments.find(t=>t.id===info.tid);const expected=getPreviewAdvSlots(G.draws[key]||{},gDS(tour,info.div));
+  const actual=[...plan.matchSlots.flatMap(x=>[x.t1,x.t2]),...(plan.playInMatches||[]).flatMap(x=>[x.t1,x.t2])].filter(x=>x&&!x.playInPlaceholder);
+  if(actual.length!==expected.length){toast('이전 추첨에 미완료 조의 진출 자리가 누락되었습니다. 본선을 다시 추첨하세요.','error');return;}
   if((G.matches[key]||[]).some(m=>(m.phase==='main'||m.phase==='playin')&&getMatchResultState(key,m).done&&!m.bye)){toast('진행된 본선 결과가 있어 적용을 중단했습니다','error');return;}
   if(!confirm('저장된 이 추첨 결과를 실제 본선 대진에 적용할까요? 기존 본선 배정은 교체되고 예선 결과는 유지됩니다.'))return;
   const matches=buildMainMatches(plan.matchSlots,plan.n,plan.playInMatches||[]),next=[...(G.matches[key]||[]).filter(m=>m.phase!=='main'&&m.phase!=='playin'),...matches];
@@ -16485,10 +16480,10 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     );
     const playMap=new Set();
     playInEntries=candidates.slice(0, spec.playInTeams).map((e,i)=>{
-      playMap.add(Number(e.ti));
+      playMap.add(getMainEntryBracketLabel(e));
       return {...e, playInId:Math.floor(i/2)+1};
     });
-    mainPool=allSeeded.filter(e=>!playMap.has(Number(e.ti)));
+    mainPool=allSeeded.filter(e=>!playMap.has(getMainEntryBracketLabel(e)));
     const placeholders=Array.from({length:spec.winnersNeeded},(_,i)=>({
       nm:`진출전 승자${i+1}`,
       gn:null,
@@ -16841,7 +16836,7 @@ function openMainDraw(tid,div){
   if(!draw){toast('예선 추첨을 먼저 진행하세요','info');return;}
   const prelimMatches=(G.matches[key]||[]).filter(m=>m.phase==='group');
   const prelimComplete=prelimMatches.length>0&&prelimMatches.every(m=>getMatchResultState(key,m).done);
-  let advT=prelimComplete?getAdvT(key,draw,teams,cfg):getPreviewAdvSlots(draw,cfg);
+  let advT=getAdvT(key,draw,teams,cfg);
   let previewOnly=!prelimComplete;
   if(advT.length<2){
     advT=getPreviewAdvSlots(draw,cfg);
@@ -17062,7 +17057,7 @@ async function startMainDraw(){
   const currentDraw=G.draws[MD.key],currentTeams=G.teams[MD.key]||[],tournament=G.tournaments.find(t=>t.id===MD.tid),cfg=gDS(tournament,MD.div);
   const prelim=(G.matches[MD.key]||[]).filter(m=>m.phase==='group');
   const complete=prelim.length>0&&prelim.every(m=>getMatchResultState(MD.key,m).done);
-  MD.advT=complete?getAdvT(MD.key,currentDraw,currentTeams,cfg):getPreviewAdvSlots(currentDraw,cfg);
+  MD.advT=getAdvT(MD.key,currentDraw,currentTeams,cfg);
   MD.previewOnly=!complete;
   if(MD.advT.length<2){toast('본선 진출팀 또는 진출 자리가 부족합니다','error');return;}
   if(complete&&MD.advT.some(e=>e.ti==null||!currentTeams[e.ti])){toast('확정 진출팀을 찾을 수 없습니다. 예선 순위를 확인하세요','error');return;}
