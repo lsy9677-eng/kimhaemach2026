@@ -17808,12 +17808,7 @@ function openM3(key,mid,forceEdit=false){
     const hint=ge('offlineResultEntryHint');
     if(hint){
       hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진을 저장하면 OCR이 등록 명단과 자동 대조해 상세기록 초안을 채웁니다. OCR 초안은 최종 확인 전까지 공식 선수기록에 반영되지 않습니다.</div>');
-      if(m?.orderOcrDraft?.needsReview){
-        const s1=m.orderOcrDraft?.side1?.applied||0,s2=m.orderOcrDraft?.side2?.applied||0;
-        const fuzzy=[...(m.orderOcrDraft?.side1?.uncertain||[]),...(m.orderOcrDraft?.side2?.uncertain||[])].filter(x=>x.selected).map(x=>`${Number(x.row)+1}복식 ${x.selected}`);
-        const fuzzyHint=fuzzy.length?`<div style="margin-top:4px;font-weight:600">유사 이름으로 선택 · 확인 필요: ${fuzzy.map(esc).join(' / ')}</div>`:'';
-        hint.insertAdjacentHTML('beforebegin', `<div style="margin:0 0 7px;padding:8px 10px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:.68rem;font-weight:800">🤖 OCR 초안 확인 필요 · ${esc(dn1)} ${s1}명 / ${esc(dn2)} ${s2}명 자동입력${fuzzyHint}</div>`);
-      }
+
     }
   }
   if(body && !simpleModeHere){
@@ -18108,6 +18103,8 @@ function refreshOrderChipAvailability(sidePrefix){
 function refreshAllOrderChipAvailability(){
   refreshOrderChipAvailability('rp1_');
   refreshOrderChipAvailability('rp2_');
+  const match=(G.matches[CM_key]||[]).find(x=>x.id===CM_id||x._id===CM_id);
+  if(match)renderOrderPhotoBlankReview(CM_key,match);
 }
 function tC(cid,player){
   const sel=getPickerSelected(cid);
@@ -26444,7 +26441,7 @@ function _orderPhotoSetStatus(side,msg,isWarn=false){
   const el=ge('orderPhotoStatus'+side);
   if(el){el.textContent=msg;el.style.color=isWarn?'#b45309':'var(--text2)';}
   let panel=ge('orderPhotoProgressPanel');
-  if(!panel&&ge('mM3B')){panel=document.createElement('div');panel.id='orderPhotoProgressPanel';panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');panel.style.cssText='position:sticky;top:0;z-index:20;padding:15px;margin-bottom:10px;border:2px solid #1565c0;border-radius:12px;background:#e8f2ff;color:#123f78;font-size:1rem;font-weight:900;box-shadow:0 3px 10px #0002';ge('mM3B').prepend(panel);}
+  if(!panel&&ge('mM3B')){panel=document.createElement('div');panel.id='orderPhotoProgressPanel';panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');panel.style.cssText='padding:8px;margin-top:6px;border:1px solid #1565c0;border-radius:8px;background:#e8f2ff;color:#123f78;font-size:.78rem;font-weight:800';const anchor=Array.from(ge('mM3B').querySelectorAll('button')).find(b=>new RegExp('trigger(?:Simple)?OrderPhoto\\(\\s*'+Number(side)+'\\s*[,)]').test(b.getAttribute('onclick')||''));(anchor?.parentElement||ge('mM3B')).appendChild(panel);}
   if(panel){panel.textContent=`📷 ${Number(side)===1?'홈팀':'원정팀'} · ${msg}`;panel.style.borderColor=isWarn?'#d97706':'#1565c0';}
 }
 let __orderPhotoJobBusy=false;
@@ -26632,13 +26629,23 @@ async function _processOrderPhotoCore(side,file){
 // PHASE250: unresolved photo rows require visual confirmation before becoming a blank order.
 function renderOrderPhotoManage(key,m){
   const body=ge('mM3B');if(!body)return;
-  const panel=document.createElement('div');const rows=[];
+  const originalButtons=Array.from(body.querySelectorAll('button'));
   for(const side of [1,2]){
     if(!_orderPhotoGetSaved(m,side)||!_orderPhotoCanView(m,side))continue;
+    const matchesSide=(b,fn)=>{
+      const code=b.getAttribute('onclick')||'';
+      const match=code.match(/(triggerSimpleOrderPhoto|triggerOrderPhoto|openOrderPhotoViewer)\(\s*['"]?([12])['"]?\s*[,)]/);
+      return !!match&&fn.split('|').includes(match[1])&&Number(match[2])===side;
+    };
+    const anchor=originalButtons.find(b=>matchesSide(b,'triggerSimpleOrderPhoto|triggerOrderPhoto'));
+    const view=originalButtons.find(b=>matchesSide(b,'openOrderPhotoViewer'));
+    const parent=anchor?.parentElement||view?.parentElement;if(!parent)continue;
+    if(view){view.disabled=false;view.onclick=()=>openOrderPhotoViewer(side);}
+    const controls=document.createElement('div');controls.style.cssText='display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:5px';
     const trigger=isSimpleResultMode(G.meta)?'triggerSimpleOrderPhoto':'triggerOrderPhoto';
-    rows.push(`<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0"><b>${side===1?'홈팀':'원정팀'} 오더지</b><button type="button" class="btn btn-outline" onclick="openOrderPhotoViewer(${side})">사진 보기</button><button type="button" class="btn btn-outline" onclick="${trigger}(${side},'camera')">다시 촬영</button><button type="button" class="btn btn-outline" onclick="${trigger}(${side},'upload')">사진 교체</button><button type="button" class="btn btn-outline" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button></div>`);
+    controls.innerHTML=`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="${trigger}(${side},'upload')">사진 수정</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button>`.replace('사진 수정','사진 수정');
+    parent.appendChild(controls);
   }
-  if(!rows.length)return;panel.style.cssText='padding:10px;background:#f1f5f9;border-radius:10px;margin-bottom:10px;font-size:.75rem';panel.innerHTML=rows.join('');body.prepend(panel);
 }
 async function deleteOrderPhoto(side,button){
   if(__orderPhotoJobBusy||matchResultSaveBusy){toast('사진 분석·저장 완료 후 삭제해 주세요.','info');return;}
@@ -26666,16 +26673,21 @@ function orderPhotoUnresolvedRows(match,side,dbl){
   });
 }
 function renderOrderPhotoBlankReview(key,m){
-  const body=ge('mM3B');if(!body||isIndividualByKey(key))return;
-  const dbl=getMatchDoublesCount(key,m),wrap=document.createElement('div');
-  const rows=[];
-  for(const side of [1,2]){
+  if(!ge('mM3B')||isIndividualByKey(key))return;
+  const dbl=getMatchDoublesCount(key,m);
+  for(const side of [1,2])for(let row=0;row<dbl;row++){
+    const picker=ge(`rp${side}_${row}`);if(!picker||picker.style.display==='none')continue;
+    picker.querySelector('.order-photo-row-review')?.remove();
     if(!_orderPhotoGetSaved(m,side)||!_orderPhotoCanView(m,side))continue;
-    for(const row of orderPhotoUnresolvedRows(m,side,dbl))rows.push(`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><span>${side===1?'홈팀':'원정팀'} ${row+1}복식 · 명단 확인 필요</span><button type="button" class="btn btn-outline" onclick="openOrderPhotoViewer(${side})">사진 확인</button><button type="button" class="btn btn-outline" onclick="confirmOrderPhotoBlank(${side},${row},this)">빈칸 확인 · 공오더 확정</button></div>`);
+    const selected=getPickerSelected(`rp${side}_${row}`),sideDraft=m.orderOcrDraft?.['side'+side];
+    const fuzzy=(sideDraft?.uncertain||[]).filter(x=>Number(x.row)===row&&selected.includes(x.selected));
+    const ghost=selected[0]==='__GHOST__'||m.rubbers?.[row]?.['blankOrder'+side];
+    if(ghost||(!fuzzy.length&&selected.length>=2))continue;
+    const notice=document.createElement('div');notice.className='order-photo-row-review';notice.style.cssText='margin-top:5px;padding:5px 7px;background:#fffbeb;color:#92400e;border-radius:6px;font-size:.68rem';
+    notice.innerHTML=fuzzy.length?`⚠ 확인 필요: ${fuzzy.map(x=>esc(x.selected)).join(' / ')} (유사 이름)`:'⚠ 선수 명단 확인 필요 · 사진 확인 후 직접 선택';
+    if(!selected.length)notice.innerHTML+=` <button type="button" class="btn btn-outline" style="font-size:.65rem;padding:3px 6px" onclick="confirmOrderPhotoBlank(${side},${row},this)">빈칸이면 공오더</button>`;
+    picker.appendChild(notice);
   }
-  if(!rows.length)return;
-  wrap.style.cssText='padding:10px;border:1px solid #f59e0b;background:#fffbeb;border-radius:10px;margin:8px 0;font-size:.75rem';
-  wrap.innerHTML='<b>사진 명단 확인 필요</b><div>인식하지 못한 칸입니다. 사진에 이름이 있으면 직접 선택하고, 실제 빈칸인 경우에만 공오더로 확정하세요.</div>'+rows.join('');body.prepend(wrap);
 }
 async function confirmOrderPhotoBlank(side,row,button){
   const ctx=_orderPhotoGetContext(Number(side));if(!ctx)return;
