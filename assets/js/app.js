@@ -27353,7 +27353,7 @@ function outputCenterInnerHtml(){
         <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="renderOutputPreview()"></select></label>
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
           <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
-          <option value="order-sheets">수기 오더지 · 빈 양식</option>
+          <option value="order-sheets">오더지 · 빈 양식</option>
           <option value="prelim-current">예선 대진표 · 현재상황</option>
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
@@ -28516,9 +28516,9 @@ function orderSheetControlsHtml(){
   return `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:#f1f5f9;border-radius:10px"><label>A4 한 장 배치<select id="orderSheetCopies" class="form-select" onchange="updateOrderSheetSettings()">${[4,6,8].map(n=>`<option value="${n}" ${c.copies===n?'selected':''}>${n}장</option>`).join('')}</select></label><label>복식 구성<select id="orderSheetDoubles" class="form-select" onchange="updateOrderSheetSettings()">${[5,3].map(n=>`<option value="${n}" ${c.doubles===n?'selected':''}>${n}복식 (${n*2}명)</option>`).join('')}</select></label><div style="align-self:end;font-size:.76rem;color:#475569">A4 세로 · 배율 100% · 여백 5mm · 머리글/바닥글 끄기<br>점선을 따라 잘라 사용하세요.</div></div>`;
 }
 function outputHandwrittenOrderSheets(tid){
-  const c=orderSheetSettings(),tour=(G.tournaments||[]).find(t=>t.id===tid),name=tour?.name||'테니스 단체전';
+  const c=orderSheetSettings();
   const rowCount=c.copies/2,font=c.copies===8?8.5:10;
-  const card=()=>`<article class="order-sheet-card"><header><strong>수기 오더지 · ${c.doubles}복식</strong><span>${outputEsc(name)}</span></header><div class="order-sheet-meta"><b>클럽 / 팀</b><span></span></div><div class="order-sheet-details">부서: ______________　조 / 경기: __________</div><table><colgroup><col style="width:12%"><col style="width:44%"><col style="width:44%"></colgroup><thead><tr><th>복식</th><th>선수 1</th><th>선수 2</th></tr></thead><tbody>${Array.from({length:c.doubles},(_,i)=>`<tr><th>${i+1}</th><td></td><td></td></tr>`).join('')}</tbody></table><footer>작성자: ______________　확인: ______________</footer></article>`;
+  const card=()=>`<article class="order-sheet-card"><header><strong>오더지 · ${c.doubles}복식</strong></header><div class="order-sheet-meta"><b>클럽 / 팀</b><span></span></div><div class="order-sheet-details">부서: ______________　조 / 경기: __________</div><table><colgroup><col style="width:12%"><col style="width:44%"><col style="width:44%"></colgroup><thead><tr><th>복식</th><th>선수 1</th><th>선수 2</th></tr></thead><tbody>${Array.from({length:c.doubles},(_,i)=>`<tr><th>${i+1}복</th><td></td><td></td></tr>`).join('')}</tbody></table></article>`;
   return `<style>
     .order-sheet-a4{width:200mm;height:285mm;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(${rowCount},minmax(0,1fr));gap:2mm;box-sizing:border-box;background:#fff;margin:0 auto;color:#111}
     .order-sheet-card{min-width:0;min-height:0;padding:3mm;border:.2mm dashed #777;box-sizing:border-box;display:flex;flex-direction:column;break-inside:avoid;font-size:${font}pt;overflow:hidden}
