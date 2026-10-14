@@ -2579,6 +2579,7 @@ async function saveMeta(){
     adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,
     onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
     orderPhotoOcrEnabled:G.meta.orderPhotoOcrEnabled===true,
+    developerToolPassword:G.meta.developerToolPassword||null,
     operatorPw:(G.meta.operatorPw||'2026court'),
     individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,
     usePlayerRegistry:!!G.meta.usePlayerRegistry,
@@ -14011,7 +14012,7 @@ function openDraw(tid,div){
 }
 
 // PHASE223: administrator-only session settings. No condition metadata is persisted.
-const ADMIN_OPERATIONAL_EXCLUSIONS=new Map();
+const DEVELOPER_FIXED_PLACEMENTS=new Map();
 
 // PHASE225: tournament-wide preliminary/main publication, dates in Korea.
 function bracketPhasePublishedDefault(t){const date=String(t?.date||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(date)&&date<=bracketPublicationDate();}
@@ -14051,24 +14052,65 @@ function ensureAdminOperationalExclusionButton(){
   const body=document.querySelector('#mAdminSettings .modal-body');if(!body)return;
   let wrap=ge('adminOperationalExclusionEntry');
   if(!wrap){wrap=document.createElement('div');wrap.id='adminOperationalExclusionEntry';wrap.style.cssText='margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:10px';body.prepend(wrap);}
-  wrap.innerHTML='<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="openBracketPublicationSettings()">예선·본선 대진표 공개 관리</button><button type="button" class="btn btn-outline" style="width:100%" onclick="openAdminOperationalExclusions()">특수 운영 설정 · 조 배정 제외</button><div style="font-size:.75rem;margin-top:6px">같은 기기에서 다음 예선 추첨 1회에 적용합니다. 새로고침하면 해제됩니다.</div>';
+  wrap.innerHTML='<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="openBracketPublicationSettings()">예선·본선 대진표 공개 관리</button>';
+  installDeveloperToolEntry();
   const ocr=document.createElement('div');ocr.style.cssText='margin-top:12px;padding-top:10px;border-top:1px solid #cbd5e1';
   ocr.innerHTML=`<b>오더지 OCR 보조 기능</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminOrderPhotoOcrEnabled" ${isOrderPhotoOcrEnabled()?'checked':''}> OCR 분석 버튼 사용 허용</label><div style="font-size:.75rem;line-height:1.5">기본은 꺼짐입니다. 켜도 사진 첨부 시 자동 분석하지 않으며, 사진 영역의 ‘OCR 분석(선택)’을 눌렀을 때만 실행됩니다. 수기 글씨는 인식이 부정확할 수 있어 명단 확인이 필요합니다.</div><button type="button" class="btn btn-outline" style="margin-top:8px" onclick="saveOrderPhotoOcrSetting(this)">OCR 설정 저장</button>`;wrap.appendChild(ocr);
 }
-function openAdminOperationalExclusions(){
-  if(!AD)return;
-  let modal=ge('mAdminOperationalExclusions');
-  if(!modal){modal=document.createElement('div');modal.id='mAdminOperationalExclusions';modal.className='modal-overlay';modal.innerHTML='<div class="modal-box" style="max-width:650px"><div class="modal-header"><h3>관리자 특수 운영 설정</h3><button class="modal-close" onclick="cm(\'mAdminOperationalExclusions\')">×</button></div><div class="modal-body"><label>대회<select class="form-select" id="opExTournament" onchange="populateAdminOperationalDivisions()"></select></label><label>부서<select class="form-select" id="opExDivision" onchange="renderAdminOperationalExclusions()"></select></label><div id="opExDetails"></div></div></div>';document.body.appendChild(modal);}
-  const tours=(G.tournaments||[]).filter(t=>!isIndividualTournament(t));
-  ge('opExTournament').innerHTML=tours.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
-  const active=ge('regTS')?.value||ge('brTS')?.value;if(tours.some(t=>t.id===active))ge('opExTournament').value=active;
-  populateAdminOperationalDivisions();om('mAdminOperationalExclusions');
+let developerToolUnlockedUntil=0,developerToolTapTimes=[];
+function developerToolAuthorized(){return AD&&Date.now()<developerToolUnlockedUntil;}
+function installDeveloperToolEntry(){
+  const heading=document.querySelector('#mAdminSettings .modal-header h3');if(!heading||heading.dataset.devEntry)return;
+  heading.dataset.devEntry='1';heading.addEventListener('click',()=>{
+    if(!AD)return;const now=Date.now();developerToolTapTimes=developerToolTapTimes.filter(t=>now-t<1500);developerToolTapTimes.push(now);
+    if(developerToolTapTimes.length===3){developerToolTapTimes=[];openDeveloperToolPassword();}
+  });
 }
-function populateAdminOperationalDivisions(){
-  if(!AD)return;
-  const t=G.tournaments.find(t=>t.id===ge('opExTournament')?.value);
-  ge('opExDivision').innerHTML=(t?.divisions||[]).map(d=>`<option value="${esc(d)}">${esc(dl(d))}</option>`).join('');
-  renderAdminOperationalExclusions();
+async function developerPasswordHash(password,salt){
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new Uint8Array(salt),iterations:100000,hash:'SHA-256'},key,256);
+  return Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function openDeveloperToolPassword(change=false){
+  if(!AD||change&&!developerToolAuthorized())return;
+  let m=ge('mDeveloperPassword');if(!m){m=document.createElement('div');m.id='mDeveloperPassword';m.className='modal-overlay';m.innerHTML='<div class="modal-box" style="max-width:400px"><div class="modal-header"><h3 id="devPasswordTitle"></h3><button class="modal-close" onclick="cm(\'mDeveloperPassword\')">×</button></div><div class="modal-body"><input type="password" autocomplete="off" class="form-input" id="devPasswordInput" placeholder="별도 비밀번호"><input type="password" autocomplete="off" class="form-input" id="devPasswordConfirm" placeholder="새 비밀번호 확인"><button class="btn btn-primary" onclick="submitDeveloperToolPassword(this)">확인</button><div id="devPasswordStatus" role="status"></div></div></div>';document.body.appendChild(m);}
+  const setup=change||!G.meta.developerToolPassword;
+  m.dataset.setup=setup?'1':'0';m.dataset.change=change?'1':'0';
+  ge('devPasswordTitle').textContent=setup?'개발자 도구 비밀번호 설정':'개발자 특수 도구 비밀번호';
+  ge('devPasswordInput').value='';ge('devPasswordConfirm').value='';ge('devPasswordConfirm').style.display=setup?'block':'none';ge('devPasswordStatus').textContent='';om('mDeveloperPassword');
+}
+let developerPasswordFailures=0,developerPasswordBlockedUntil=0;
+async function submitDeveloperToolPassword(button){
+  if(!AD||Date.now()<developerPasswordBlockedUntil){ge('devPasswordStatus').textContent='잠시 후 다시 입력하세요.';return;}
+  const modal=ge('mDeveloperPassword'),password=ge('devPasswordInput').value,setup=modal.dataset.setup==='1';
+  if(setup&&(password.length<6||password!==ge('devPasswordConfirm').value)){ge('devPasswordStatus').textContent='6자 이상으로 입력하고 확인값을 맞춰 주세요.';return;}
+  button.disabled=true;
+  try{
+    if(setup){
+      if(modal.dataset.change==='1'&&!developerToolAuthorized())throw new Error('도구 비밀번호를 다시 인증하세요.');
+      const salt=Array.from(crypto.getRandomValues(new Uint8Array(16))),hash=await developerPasswordHash(password,salt),credential={salt,hash};
+      const configRef=doc(db,'meta','config');
+      await runTransaction(db,async tx=>{const server=await tx.get(configRef);if(modal.dataset.change!=='1'&&server.data()?.developerToolPassword)throw new Error('비밀번호가 이미 설정되었습니다. 설정 화면을 다시 열어 주세요.');tx.update(configRef,{developerToolPassword:credential});});
+      G.meta.developerToolPassword=credential;
+    }else{
+      const credential=G.meta.developerToolPassword;
+      if(!credential||await developerPasswordHash(password,credential.salt)!==credential.hash){developerPasswordFailures++;if(developerPasswordFailures>=5){developerPasswordBlockedUntil=Date.now()+30000;developerPasswordFailures=0;}throw new Error('비밀번호가 일치하지 않습니다.');}
+    }
+    developerPasswordFailures=0;developerToolUnlockedUntil=Date.now()+5*60000;cm('mDeveloperPassword');openDeveloperSpecialTools();
+  }catch(e){ge('devPasswordStatus').textContent=e.message;}
+  finally{button.disabled=false;ge('devPasswordInput').value='';ge('devPasswordConfirm').value='';}
+}
+function closeDeveloperSpecialTools(){developerToolUnlockedUntil=0;cm('mDeveloperSpecialTools');}
+function openDeveloperSpecialTools(){
+  if(!developerToolAuthorized())return;
+  let m=ge('mDeveloperSpecialTools');if(!m){m=document.createElement('div');m.id='mDeveloperSpecialTools';m.className='modal-overlay';m.innerHTML='<div class="modal-box" style="max-width:650px"><div class="modal-header"><h3>개발자 특수 도구</h3><button class="modal-close" onclick="closeDeveloperSpecialTools()">×</button></div><div class="modal-body"><label>대회<select id="opExTournament" class="form-select" onchange="populateDeveloperFixedDivisions()"></select></label><label>부서<select id="opExDivision" class="form-select" onchange="renderDeveloperFixedPlacements()"></select></label><div id="opExDetails"></div><button class="btn btn-outline" onclick="openDeveloperToolPassword(true)">특수 도구 비밀번호 변경</button></div></div>';document.body.appendChild(m);}
+  const tours=(G.tournaments||[]).filter(t=>!isIndividualTournament(t));ge('opExTournament').innerHTML=tours.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  const active=ge('brTS')?.value||ge('regTS')?.value;if(tours.some(t=>t.id===active))ge('opExTournament').value=active;
+  populateDeveloperFixedDivisions();om('mDeveloperSpecialTools');
+}
+function populateDeveloperFixedDivisions(){
+  if(!developerToolAuthorized())return;const t=G.tournaments.find(t=>t.id===ge('opExTournament')?.value);
+  ge('opExDivision').innerHTML=(t?.divisions||[]).map(d=>`<option value="${esc(d)}">${esc(dl(d))}</option>`).join('');renderDeveloperFixedPlacements();
 }
 function adminOperationalContext(){
   const tid=ge('opExTournament')?.value||'',div=ge('opExDivision')?.value||'',key=tid+'_'+div;
@@ -14077,53 +14119,48 @@ function adminOperationalContext(){
   const sizes=saved?.teamCount===teams.length&&validPrelimGroupSizes(saved.groupSizes,teams.length)?saved.groupSizes:(presets.find(p=>p.sizes[0]===cfg.grpSize)||presets[Math.floor(presets.length/2)])?.sizes||[];
   return {tid,div,key,teams,sizes};
 }
-function renderAdminOperationalExclusions(){
-  if(!AD)return;
-  const {key,teams,sizes}=adminOperationalContext(),pending=ADMIN_OPERATIONAL_EXCLUSIONS.get(key);
-  const host=ge('opExDetails');if(!host)return;
-  host.innerHTML=`<p style="font-size:.8rem">예상 조 구성: ${sizes.join(' · ')}팀. 추첨에서 구성이 달라지면 재설정이 필요합니다.</p><div style="font-size:.8rem;line-height:1.7">${teams.map((t,i)=>`${i+1}. ${esc(tdn(t,key,i))}`).join('<br>')}</div><label style="display:block;margin-top:12px">팀번호=제외 조번호<input class="form-input" id="opExInput" placeholder="예: 2=4, 5=4" value="${esc((pending?.exclusions||[]).map(x=>`${x.teamIndex+1}=${x.groupIndex+1}`).join(', '))}"></label><p style="font-size:.75rem">관리자 설정에만 표시됩니다. 서버·추첨 로그에 이 설정을 저장하지 않습니다.</p><button type="button" class="btn btn-primary" onclick="saveAdminOperationalExclusions()">이번 추첨에 적용</button> <button type="button" class="btn btn-outline" onclick="clearAdminOperationalExclusions()">설정 해제</button>`;
+function renderDeveloperFixedPlacements(){
+  if(!developerToolAuthorized())return;const {key,teams,sizes}=adminOperationalContext(),pending=DEVELOPER_FIXED_PLACEMENTS.get(key);
+  ge('opExDetails').innerHTML=`<p>조 구성: ${sizes.join(' · ')}팀</p><div style="font-size:.8rem">${teams.map((t,i)=>`${i+1}. ${esc(tdn(t,key,i))}`).join('<br>')}</div><label>팀번호=조번호:자리번호 (최대 3팀)<input class="form-input" id="opExInput" placeholder="예: 1=2:3, 5=1:1" value="${esc((pending?.placements||[]).map(x=>`${x.teamIndex+1}=${x.groupIndex+1}:${x.slotIndex+1}`).join(', '))}"></label><p style="font-size:.75rem">같은 기기의 다음 추첨 1회에 적용합니다. 테스트 추첨도 1회를 사용합니다. 새로고침하면 해제됩니다. 고정팀을 제외한 팀은 같은클럽 분리 조건으로 무작위 배정합니다.</p><button class="btn btn-primary" onclick="saveDeveloperFixedPlacements()">다음 추첨에 적용</button> <button class="btn btn-outline" onclick="clearDeveloperFixedPlacements()">고정 해제</button>`;
 }
-function saveAdminOperationalExclusions(){
-  if(!AD)return;
-  const {key,teams,sizes}=adminOperationalContext();
-  if(teams.length<2||!sizes.length){toast('등록팀과 조 구성을 먼저 확인하세요','error');return;}
-  const raw=String(ge('opExInput')?.value||'').trim(),exclusions=[];
-  if(!raw){clearAdminOperationalExclusions();return;}
-  for(const token of raw.split(',').map(x=>x.trim())){
-    const match=token.match(/^(\d+)\s*=\s*(\d+)$/),ti=match?Number(match[1])-1:-1,gi=match?Number(match[2])-1:-1;
-    if(ti<0||ti>=teams.length||gi<0||gi>=sizes.length){toast('팀번호와 제외 조 번호를 확인하세요','error');return;}
-    if(!exclusions.some(x=>x.teamIndex===ti&&x.groupIndex===gi))exclusions.push({teamIndex:ti,teamId:teams[ti]._id||'',groupIndex:gi});
+function validateDeveloperPlacements(placements,teams,sizes){
+  if(placements.length>3)throw new Error('최대 3팀까지 고정할 수 있습니다.');
+  const teamSet=new Set(),slotSet=new Set(),clubGroups=new Map();
+  for(const x of placements){
+    if(!Number.isInteger(x.teamIndex)||!teams[x.teamIndex]||!Number.isInteger(x.groupIndex)||!Number.isInteger(x.slotIndex)||x.groupIndex<0||x.slotIndex<0||x.groupIndex>=sizes.length||x.slotIndex>=sizes[x.groupIndex])throw new Error('팀번호·조번호·자리번호를 확인하세요.');
+    if(x.teamId&&teams[x.teamIndex]._id!==x.teamId)throw new Error('팀 순서가 변경됐습니다. 다시 설정하세요.');
+    const slot=x.groupIndex+':'+x.slotIndex;if(teamSet.has(x.teamIndex)||slotSet.has(slot))throw new Error('같은 팀 또는 같은 자리는 중복 고정할 수 없습니다.');teamSet.add(x.teamIndex);slotSet.add(slot);
+    const clubSet=clubGroups.get(x.groupIndex)||new Set();for(const token of getTeamClubTokens(teams[x.teamIndex])){if(clubSet.has(token))throw new Error('같은 클럽 팀을 같은 조에 고정할 수 없습니다.');clubSet.add(token);}clubGroups.set(x.groupIndex,clubSet);
   }
-  ADMIN_OPERATIONAL_EXCLUSIONS.set(key,{exclusions,groupSizes:sizes.slice(),teamIds:teams.map(t=>t._id||''),teamClubs:teams.map(t=>t.club||'')});
-  if(DW?.key===key&&!DW.isRunning)applyAdminOperationalExclusionsToDraw();
-  toast('관리자 설정 적용 완료. 같은 기기에서 추첨하세요','success');renderAdminOperationalExclusions();
 }
-function clearAdminOperationalExclusions(){
-  if(!AD)return;const {key}=adminOperationalContext();ADMIN_OPERATIONAL_EXCLUSIONS.delete(key);
-  if(DW?.key===key&&!DW.isRunning)delete DW.cfg.operationalExclusions;
-  renderAdminOperationalExclusions();toast('설정 해제 완료','success');
+function saveDeveloperFixedPlacements(){
+  if(!developerToolAuthorized()){toast('개발자 도구 비밀번호를 다시 인증하세요.','error');return;}
+  const {key,teams,sizes}=adminOperationalContext(),raw=ge('opExInput').value.trim(),placements=[];
+  if(!raw){clearDeveloperFixedPlacements();return;}
+  try{for(const token of raw.split(',')){const m=token.trim().match(/^(\d+)\s*=\s*(\d+)\s*:\s*(\d+)$/);if(!m)throw new Error('형식: 1=2:3 (1번팀을 2조 3번째 자리)');const teamIndex=Number(m[1])-1;placements.push({teamIndex,groupIndex:Number(m[2])-1,slotIndex:Number(m[3])-1,teamId:teams[teamIndex]?._id||''});}validateDeveloperPlacements(placements,teams,sizes);
+    DEVELOPER_FIXED_PLACEMENTS.set(key,{placements,groupSizes:sizes.slice(),teamIds:teams.map(t=>t._id||''),teamClubs:teams.map(t=>t.club||'')});
+    if(DW?.key===key&&!DW.isRunning)applyAdminOperationalExclusionsToDraw();toast('다음 추첨 자리 고정 저장 완료','success');renderDeveloperFixedPlacements();
+  }catch(e){toast(e.message,'error');}
+}
+function clearDeveloperFixedPlacements(){
+  if(!developerToolAuthorized())return;const {key}=adminOperationalContext();DEVELOPER_FIXED_PLACEMENTS.delete(key);if(DW?.key===key&&!DW.isRunning)delete DW.cfg.operationalExclusions;renderDeveloperFixedPlacements();toast('고정 해제 완료','success');
 }
 function applyAdminOperationalExclusionsToDraw(){
-  const pending=ADMIN_OPERATIONAL_EXCLUSIONS.get(DW.key);
-  if(pending)DW.cfg.operationalExclusions=pending.exclusions.map(x=>({...x}));
+  delete DW.cfg.operationalExclusions;const pending=DEVELOPER_FIXED_PLACEMENTS.get(DW.key);
+  if(pending)DW.cfg.operationalExclusions=pending.placements.map(x=>({...x}));
 }
 function assertAdminOperationalContext(){
-  const pending=ADMIN_OPERATIONAL_EXCLUSIONS.get(DW.key);if(!pending)return;
-  if(JSON.stringify(pending.groupSizes)!==JSON.stringify(DW.cfg.grpSizes)||JSON.stringify(pending.teamIds)!==JSON.stringify(DW.teams.map(t=>t._id||''))||JSON.stringify(pending.teamClubs)!==JSON.stringify(DW.teams.map(t=>t.club||'')))throw new Error('등록팀 또는 조 구성이 달라졌습니다. 관리자 특수 운영 설정을 다시 확인하세요.');
+  const pending=DEVELOPER_FIXED_PLACEMENTS.get(DW.key);if(!pending)return;
+  if(JSON.stringify(pending.groupSizes)!==JSON.stringify(DW.cfg.grpSizes)||JSON.stringify(pending.teamIds)!==JSON.stringify(DW.teams.map(t=>t._id||''))||JSON.stringify(pending.teamClubs)!==JSON.stringify(DW.teams.map(t=>t.club||'')))throw new Error('등록팀 또는 조 구성이 변경됐습니다. 개발자 특수 도구에서 다시 설정하세요.');
 }
-Object.assign(window,{openAdminOperationalExclusions,populateAdminOperationalDivisions,renderAdminOperationalExclusions,saveAdminOperationalExclusions,clearAdminOperationalExclusions});
-
-function prelimExclusionsSatisfied(groups,exclusions,teams){
-  return (exclusions||[]).every(x=>{
-    if(!teams[x.teamIndex]||x.groupIndex<0||x.groupIndex>=groups.length)throw new Error('팀 또는 조 구성이 변경됐습니다. 운영 제약을 다시 설정하세요.');
-    if(x.teamId&&teams[x.teamIndex]._id!==x.teamId)throw new Error('팀 순서가 변경됐습니다. 운영 제약을 다시 설정하세요.');
-    return !(groups[x.groupIndex].teams||[]).includes(x.teamIndex);
-  });
+function prelimExclusionsSatisfied(groups,placements,teams){
+  validateDeveloperPlacements(placements||[],teams,groups.map(g=>g.size??g.teams.length));
+  return (placements||[]).every(x=>groups[x.groupIndex].teams[x.slotIndex]===x.teamIndex);
 }
 function getOperationalPrelimGroups(indices,teams,sizes,seeds){
-  assertAdminOperationalContext();
-  return getPrelimSeedDistributedGroups(indices,teams,sizes,seeds,DW.cfg.operationalExclusions||[]);
+  assertAdminOperationalContext();return getPrelimSeedDistributedGroups(indices,teams,sizes,seeds,DW.cfg.operationalExclusions||[]);
 }
+Object.assign(window,{openDeveloperToolPassword,submitDeveloperToolPassword,openDeveloperSpecialTools,closeDeveloperSpecialTools,populateDeveloperFixedDivisions,renderDeveloperFixedPlacements,saveDeveloperFixedPlacements,clearDeveloperFixedPlacements});
 
 
 function checkSameClub(teams){const clubs=teams.map(t=>t.club);return clubs.length!==new Set(clubs).size;}
@@ -14343,16 +14380,20 @@ function getPrelimSeedDistributedGroups(indices, teams, grpSizes, seedMap, exclu
   const ids=[...(indices||[])],sizes=(grpSizes||[]).map(Number);
   if(!sizes.length)return [];
   if(sizes.some(n=>!Number.isInteger(n)||n<1)||sizes.reduce((a,b)=>a+b,0)!==ids.length||new Set(ids).size!==ids.length)throw new Error('조별 인원과 등록팀 수가 일치하지 않습니다.');
+  validateDeveloperPlacements(exclusions,teams,sizes);
+  if(exclusions.some(x=>!ids.includes(x.teamIndex)))throw new Error('고정 팀이 추첨 대상에 없습니다.');
   const tokens=new Map(ids.map(i=>[i,[...new Set(getTeamClubTokens(teams?.[i]||{}))]]));
   const counts=new Map();tokens.forEach(ts=>ts.forEach(t=>counts.set(t,(counts.get(t)||0)+1)));
   if([...counts.values()].some(n=>n>sizes.length))throw new Error('같은 클럽의 팀 수가 조 수보다 많아 분리 배정할 수 없습니다. 조 구성을 변경하세요.');
   for(let attempt=0;attempt<50000;attempt++){
-    const order=shuffle(ids.slice());let pos=0;
-    const groups=sizes.map((size,gi)=>({gi,size,teams:order.slice(pos,pos+=size)}));
+    const fixed=new Map(exclusions.map(x=>[x.groupIndex+':'+x.slotIndex,x.teamIndex]));
+    const pinned=new Set(exclusions.map(x=>x.teamIndex));
+    const order=shuffle(ids.filter(i=>!pinned.has(i)));let pos=0;
+    const groups=sizes.map((size,gi)=>({gi,size,teams:Array.from({length:size},(_,slot)=>fixed.has(gi+':'+slot)?fixed.get(gi+':'+slot):order[pos++])}));
     const valid=groups.every(g=>{const seen=new Set();for(const i of g.teams){for(const t of tokens.get(i)){if(seen.has(t))return false;seen.add(t);}}return true;});
     if(valid&&prelimExclusionsSatisfied(groups,exclusions,teams))return groups;
   }
-  throw new Error('같은클럽 분리 조건을 만족하는 무작위 배정을 찾지 못했습니다. 조 구성과 운영 제외 조건을 확인하세요. 같은클럽 중복 배정으로 대체하지 않습니다.');
+  throw new Error('같은클럽 분리 조건을 만족하는 무작위 배정을 찾지 못했습니다. 조 구성과 자리 고정 조건을 확인하세요. 같은클럽 중복 배정으로 대체하지 않습니다.');
 }
 function buildGreedyBalancedGroups(indices, teams, grpSizes){
   const groups=(grpSizes||[]).map((size,gi)=>({gi,size,teams:[]}));
@@ -15775,7 +15816,7 @@ async function startIndividualDraw(){
     btn.disabled=false;
     IDW.isRunning=false;
     SFX.finale();
-    ADMIN_OPERATIONAL_EXCLUSIONS.delete(key);delete DW.cfg.operationalExclusions;
+    DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;
     toast('추첨 완료 🎲','success');
     refreshRunPreview(key);
   }catch(e){
@@ -15997,14 +16038,14 @@ async function saveManualPrelimDraw(){
   for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===undefined||v===''||!Number.isInteger(Number(v))||Number(v)<0||Number(v)>=DW.teams.length){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
   if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
   if(used.length!==DW.teams.length){toast('모든 팀을 한 번씩 배치해야 합니다','error');return;}
-  try{assertAdminOperationalContext();if(!prelimExclusionsSatisfied(groups,DW.cfg.operationalExclusions||[],DW.teams)){toast('운영 제약의 제외 조에 지정 팀이 있습니다','error');return;}}catch(e){toast(e.message,'error');return;}
+  try{assertAdminOperationalContext();if(!prelimExclusionsSatisfied(groups,DW.cfg.operationalExclusions||[],DW.teams)){toast('개발자 도구에 설정한 고정 자리가 일치하지 않습니다','error');return;}}catch(e){toast(e.message,'error');return;}
   if(!confirm('현장 수동 추첨 결과를 예선 대진으로 확정할까요?'))return;
   const key=DW.key,advance=Number(DW.cfg?.advance||2),now=new Date(),allowedCourts=getDrawAllowedCourtsFromModal();
   await resetMatchRecords(key);
   const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
   G.draws[key]={...(G.draws[key]||{}),groups,shuffled:used.slice(),advance,groupDrawAudit:audit,allowedCourts,manualDraw:true,manualConfirmedAt:now.toISOString()};
   const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=ms;
-  sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');ADMIN_OPERATIONAL_EXCLUSIONS.delete(key);delete DW.cfg.operationalExclusions;toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
+  sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
 async function startDraw(){
@@ -16115,6 +16156,7 @@ async function startDraw(){
     ge('confirmDrawBtn').onclick=()=>{cm('mDraw');renderBracket();};
     ge('confirmDrawBtn').disabled=false;
     DW.isRunning=false;
+    DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;
     SFX.finale();
     toast('추첨 완료 🎲','success');
     refreshRunPreview(key);
