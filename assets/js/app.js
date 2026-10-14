@@ -4446,6 +4446,7 @@ function handleAppPopState(ev){
 window.addEventListener('popstate', handleAppPopState);
 
 function showPage(n){
+  restoreDesktopOutputLayout();
   if(n==='output'){
     installPublicOutputCenter();
     if(isMobileOutputCenter()){
@@ -4474,7 +4475,7 @@ function showPage(n){
   );
   const activeTab=document.querySelector(`.nav-tab[data-page="${n}"]`);
   if(activeTab) activeTab.scrollIntoView({block:'nearest',inline:'center',behavior:'auto'});
-  if(window.goPageSheet) window.goPageSheet(n, ['players','ranking','bracket'].includes(n) || ['players','ranking','bracket'].includes(prev));
+  if(window.goPageSheet&&!(n==='output'&&!isMobileOutputCenter())) window.goPageSheet(n, ['players','ranking','bracket'].includes(n) || ['players','ranking','bracket'].includes(prev));
   if(n==='home')upDash();if(n==='tournament'){renderTL();renderCourtGroupManager('create');}if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();
   if(n==='players'){
@@ -4490,7 +4491,7 @@ function showPage(n){
     }
   }
   if(n==='ranking')popSel();
-  if(n==='output')setTimeout(()=>initOutputCenter(),0);
+  if(n==='output'){normalizeDesktopOutputLayout(true);setTimeout(()=>{initOutputCenter();normalizeDesktopOutputLayout(true);},0);}
 
   if(n==='register'){
     const el=ge('regTS');
@@ -27778,12 +27779,40 @@ function ensureKimhaeMobileNavigation(){
   // PHASE113/114의 헤더 출력 버튼은 새 구조에서는 중복이므로 제거한다.
   ge('mobileOutputCenterHeaderBtn')?.remove();
 }
+// PHASE263: desktop output is outside the legacy page slider; avoid reserved space before it.
+let DESKTOP_OUTPUT_LAYOUT_BACKUP=[];
+function restoreDesktopOutputLayout(){
+  for(const saved of DESKTOP_OUTPUT_LAYOUT_BACKUP){
+    const {node,property,value,priority}=saved;
+    if(value)node.style.setProperty(property,value,priority);else node.style.removeProperty(property);
+  }
+  DESKTOP_OUTPUT_LAYOUT_BACKUP=[];
+}
+function normalizeDesktopOutputLayout(resetScroll=false){
+  if(isMobileOutputCenter())return;
+  const page=ge('page-output'),main=document.querySelector('.main-content');
+  if(!page||!main||!page.classList.contains('active'))return;
+  if(page.parentElement!==main||main.firstElementChild!==page)main.insertBefore(page,main.firstChild);
+  const setTemporary=(node,property,value)=>{
+    if(!DESKTOP_OUTPUT_LAYOUT_BACKUP.some(x=>x.node===node&&x.property===property))DESKTOP_OUTPUT_LAYOUT_BACKUP.push({node,property,value:node.style.getPropertyValue(property),priority:node.style.getPropertyPriority(property)});
+    node.style.setProperty(property,value,'important');
+  };
+  for(const child of Array.from(main.children)){
+    if(child===page)continue;
+    if(child.classList.contains('page')||child.querySelector('.page'))setTemporary(child,'display','none');
+  }
+  setTemporary(main,'height','auto');setTemporary(main,'min-height','0');setTemporary(main,'max-height','none');
+  page.hidden=false;page.style.setProperty('display','block','important');
+  for(const [property,value] of [['position','relative'],['top','auto'],['left','auto'],['transform','none'],['height','auto'],['min-height','0'],['margin-top','0']])page.style.setProperty(property,value,'important');
+  if(resetScroll){page.scrollTop=0;main.scrollTop=0;window.scrollTo({top:0,left:0,behavior:'instant'});}
+}
 function installPublicOutputCenter(){
   const mobile=isMobileOutputCenter();
   let existingTab=document.querySelector('.nav-tab[data-page="output"]');
   const nav=document.querySelector('.nav-tabs');
   const bracketTab=nav?.querySelector('[data-page="bracket"]');
   if(mobile){
+    restoreDesktopOutputLayout();
     // PHASE115: 모바일 하단 네비에는 출력센터를 직접 끼워 넣지 않고 '더보기'에서 연다.
     // 동적 page도 만들지 않아 슬라이더/하단메뉴와 충돌하지 않게 한다.
     existingTab?.remove();
@@ -27816,7 +27845,7 @@ function installPublicOutputCenter(){
   page.hidden=true;
   page.style.setProperty('display','none','important');
   page.innerHTML=outputCenterInnerHtml();
-  main.appendChild(page);
+  main.insertBefore(page,main.firstChild);
 }
 function outputTournamentYear(t){
   const vals=[t?.date,t?.startDate,t?.createdAt,t?.name];
@@ -27849,6 +27878,7 @@ function outputDefaultTournamentId(){
 }
 function initOutputCenter(){
   installPublicOutputCenter();
+  normalizeDesktopOutputLayout();
   const ts=outputElement('outTS');if(!ts)return;
   const prev=ts.value;
   const outTours=outputSortedTournaments();
@@ -28517,6 +28547,7 @@ function initMobileOutputPyramidZoom(box){
   initMobileBracketHorizontalScroll(box);
 }
 function renderOutputPreview(){
+  normalizeDesktopOutputLayout();
   const box=outputElement('outputPreview');if(!box)return;
   const raffle=outputElement('outType')?.value==='raffle-slips';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle;
   try{box.innerHTML=`${raffle?rafflePrintControlsHtml():''}<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
