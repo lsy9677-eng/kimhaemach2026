@@ -10569,6 +10569,8 @@ function renderBracket(){
     const _bp=ge('page-bracket');
     if(_bp) _bp.insertBefore(_bBanner,_bp.firstChild);
   }
+  const divisionChips=ge('brMultiDiv');
+  if(divisionChips&&_bBanner?.parentElement){_bBanner.parentElement.insertBefore(divisionChips,_bBanner);divisionChips.style.marginBottom='10px';}
   const _personalBanner = renderPersonalMatchBanner(tid, targetDivs);
 
   if(MY_CLUB_FILTER&&REG_CLUB){
@@ -10585,7 +10587,7 @@ function renderBracket(){
         const _myMs=_allMs.filter(_m=>{
           const _t1=_tms[_m.t1]??_tms.find(t=>t.id===_m.t1);
           const _t2=_tms[_m.t2]??_tms.find(t=>t.id===_m.t2);
-          return !_m.bye&&((_t1&&baseClub(_t1.club||'')===_mbc)||(_t2&&baseClub(_t2.club||'')===_mbc));
+          return bracketKeyPublished(_key,_m.phase==='group'?'prelim':'main')&&!_m.bye&&((_t1&&baseClub(_t1.club||'')===_mbc)||(_t2&&baseClub(_t2.club||'')===_mbc));
         });
         if(_myMs.length){
           _myMatchCards+=`<div class="my-match-section-label" style="margin:10px 0 6px">${dl(_div)}</div>`;
@@ -10626,7 +10628,7 @@ function renderBracket(){
           <button class="my-match-toggle-btn" onclick="event.stopPropagation();toggleMyClubFilter('bracket')" style="border:1px solid #16a34a;border-radius:999px;background:white;color:#166534;cursor:pointer">전체 보기</button>
         </div>
       </div>
-      ${_myMatchCards||'<div style="font-size:.9rem;color:#166534;font-weight:700">등록된 경기가 없습니다</div>'}
+      ${_myMatchCards||'<div style="font-size:.9rem;color:#166534;font-weight:700">선택한 부서에 공개된 내 경기가 없습니다</div>'}
     </div>`;
   } else {
     _bBanner.innerHTML=_personalBanner||'';
@@ -18975,7 +18977,7 @@ function updateMyClubHomeCard(){
   myTeams.forEach(({team, div, key, idx})=>{
     const allMs = G.matches[key]||[];
     // 내 팀 경기만
-    const myMs = allMs.filter(m=>m && !m.bye && (m.t1===idx || m.t2===idx));
+    const myMs = allMs.filter(m=>m && bracketKeyPublished(key,m.phase==='group'?'prelim':'main') && !m.bye && (m.t1===idx || m.t2===idx));
     const done = myMs.filter(m=>getMatchResultState(key,m).done).length;
     const total = myMs.length;
     const wins = myMs.filter(m=>{
@@ -19056,7 +19058,8 @@ function openMyClubQuickOrder(){
     toast('클럽 로그인 후 사용해 주세요','info');
     return;
   }
-  const at = G.tournaments.find(t=>t.status==='ongoing') ||
+  const selectedTid=getCurrentPageName()==='bracket'?ge('brTS')?.value:'';
+  const at = (selectedTid?G.tournaments.find(t=>t.id===selectedTid):null) || G.tournaments.find(t=>t.status==='ongoing') ||
              G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
   if(!at){
     toast('진행 중인 대회가 없습니다','info');
@@ -19065,7 +19068,8 @@ function openMyClubQuickOrder(){
   const bc = baseClub(club);
   let target = null;
 
-  for(const div of (at.divisions||[])){
+  const divisions=selectedTid?getBracketSelectedDivs(at.id):(at.divisions||[]);
+  for(const div of divisions){
     const key = at.id + '_' + div;
     const teams = G.teams[key] || [];
     const myIdxs = [];
@@ -19074,7 +19078,7 @@ function openMyClubQuickOrder(){
     });
     if(!myIdxs.length) continue;
 
-    const matches = (G.matches[key]||[]).filter(m=>m && !m.bye);
+    const matches = (G.matches[key]||[]).filter(m=>m && !m.bye && bracketKeyPublished(key,m.phase==='group'?'prelim':'main'));
     for(const idx of myIdxs){
       const next = matches.find(m => (m.t1===idx || m.t2===idx) && !getMatchResultState(key,m).done);
       if(next){
@@ -19086,7 +19090,7 @@ function openMyClubQuickOrder(){
   }
 
   if(!target){
-    toast('오더를 입력할 다음 경기가 없습니다','info');
+    toast('선택한 부서에 오더를 작성할 공개된 미완료 경기가 없습니다','info');
     return;
   }
 
@@ -19095,7 +19099,7 @@ function openMyClubQuickOrder(){
   if(brTS){ brTS.value = at.id; onBrTC(); }
   setTimeout(()=>{
     try{ toggleMyClubFilter('bracket', true); }catch(e){}
-    try{ openM3(target.key, target.mid); }catch(e){ toast('오더창을 여는 중 오류가 발생했습니다','error'); }
+    try{ setBracketSelectedDivs([target.div],target.tid);renderBracket();openM3(target.key, target.mid); }catch(e){ toast('오더창을 여는 중 오류가 발생했습니다','error'); }
   }, 350);
 }
 
@@ -19403,6 +19407,8 @@ function getMyClubOrderDraftBadgeHTML(key,m,myBaseClub=''){
 
 function openMyMatchOrderFromCard(tid,div,mid){
   const key=tid+'_'+div;
+  const match=(G.matches[key]||[]).find(m=>String(m.id)===String(mid));
+  if(!match||!bracketKeyPublished(key,match.phase==='group'?'prelim':'main')){toast('대진표 공개 후 오더를 작성할 수 있습니다','info');return;}
   showPage('bracket');
   const brTS=ge('brTS');
   if(brTS){ brTS.value=tid; onBrTC(); }
