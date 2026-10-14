@@ -1796,7 +1796,7 @@ function getAutoAssignedGroupsForCourt(key, court){
 }
 function getCourtStatusSnapshot(key){
   const selectedCourts=getDisplayCourtFilters(key)||[];
-  const usedCourts=getUsedCourtsForKey(key);
+  const usedCourts=[...new Set([...getUsedCourtsForKey(key),...getGroupCourtBoardAssignments(key).flatMap(g=>g.courts)])];
   const targetCourts=(selectedCourts.length && isIndividualByKey(key))
     ? [...new Set([...selectedCourts, ...usedCourts])]
     : usedCourts;
@@ -2111,9 +2111,27 @@ function getVisibleSharedWaitingOrderForAssign(key){
   }
 }
 
+// PHASE257: group court allocations are display-only and never create live matches/queues.
+function courtStatusBoardEnabled(){return G.meta?.courtStatusBoardEnabled!==false;}
+function getGroupCourtBoardAssignments(key,court=null){
+  return (G.draws?.[key]?.groups||[]).flatMap((g,gi)=>{
+    const courts=[...new Set((Array.isArray(g.courts)?g.courts:g.court?[g.court]:[]).filter(Boolean).map(String))];
+    if(!courts.length||court!=null&&!courts.includes(String(court)))return [];
+    return [{gi,courts,teams:(g.teams||[]).map(ti=>({index:ti,name:tdn((G.teams[key]||[])[ti],key,ti)}))}];
+  });
+}
+async function saveCourtStatusBoardSetting(button){
+  if(!AD)return;const enabled=!!ge('adminCourtStatusBoardEnabled')?.checked;
+  if(button){button.disabled=true;button.textContent='저장 중…';}
+  try{await updateDoc(doc(db,'meta','config'),{courtStatusBoardEnabled:enabled});G.meta.courtStatusBoardEnabled=enabled;toast(enabled?'코트 현황판 사용 설정 저장 완료':'코트 현황판 숨김 설정 저장 완료','success');renderBracket();}
+  catch(e){toast('코트 현황판 설정 저장 실패: '+e.message,'error');}
+  finally{if(button){button.disabled=false;button.textContent='코트 현황판 설정 저장';}}
+}
+window.saveCourtStatusBoardSetting=saveCourtStatusBoardSetting;
 function renderCourtStatusBoard(key, div){
+  if(!courtStatusBoardEnabled())return '';
   const selectedCourts=getSelectedCourtFilters(key);
-  const usedCourts=getUsedCourtsForKey(key);
+  const usedCourts=[...new Set([...getUsedCourtsForKey(key),...getGroupCourtBoardAssignments(key).flatMap(g=>g.courts)])];
   const st=getCourtBoardUIState(key);
   if(st.hidden){
     return buildCourtBoardHiddenHtml({key,escapeAttr:escAttr});
@@ -2135,7 +2153,7 @@ function renderCourtStatusBoard(key, div){
   const sharedWaitingVisible=(sharedWaitingExpanded ? sharedWaiting : sharedWaiting.slice(0,sharedWaitingDefaultVisibleCount));
   const sharedWaitingHiddenCount=Math.max(0, sharedWaiting.length-sharedWaitingVisible.length);
   const waitingCount=processedItems.reduce((sum,item)=>sum+((item.__visibleWaiting||[]).length),0);
-  const emptyCount=processedItems.filter(x=>x.status==='empty').length;
+  const emptyCount=processedItems.filter(x=>x.status==='empty'&&!getGroupCourtBoardAssignments(key,x.court).length).length;
   const sharedWaitingCardsHtml=sharedWaitingVisible.map((w,idx)=>{
     const wi=describeCourtBoardMatch(key,w);
     const priority=idx+1;
@@ -2182,11 +2200,12 @@ function renderCourtStatusBoard(key, div){
   });
   const cards=hasCourts ? processedItems.map(item=>{
     const info=item.current ? describeCourtBoardMatch(key,item.current) : null;
+    const groupAllocations=getGroupCourtBoardAssignments(key,item.court);
     const assignedGroups=(isIndividualByKey(key) && isIndividualAutoCourtAssignEnabled()) ? getAutoAssignedGroupsForCourt(key, item.court) : [];
     const currentTheme = info ? getRoundVisualTheme(info.label||'', item.current?.phase||'') : null;
     const badge = item.current
       ? `<span class="badge live-blink" style="font-size:.76rem;padding:4px 9px;background:${currentTheme?.chipBg||'#dcfce7'};color:${currentTheme?.chipFg||'#166534'};border:1px solid ${currentTheme?.bd||'#86efac'}">시합중</span>`
-      : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">빈코트</span>`;
+      : `<span class="badge bg-gray" style="font-size:.76rem;padding:4px 9px">${groupAllocations.length?'배정됨':'빈코트'}</span>`;
     const isCurrentManual = !!String(item.current?.manualCourtTarget||'').trim() || !!item.current?.manualSharedHold;
     const phaseChip = info
       ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px"><span class="badge" style="font-size:.72rem;padding:3px 9px;font-weight:900;background:${getCourtBoardPhaseColor(info,item.current).chipBg};color:${getCourtBoardPhaseColor(info,item.current).chipFg};border:2px solid ${getCourtBoardPhaseColor(info,item.current).bd}">${esc(info.label||'경기')}</span>${info.detail?`<span style="font-size:.72rem;color:var(--text2);font-weight:700">${esc(info.detail)}</span>`:''}</div>`
@@ -2202,7 +2221,8 @@ function renderCourtStatusBoard(key, div){
     const currentActionsHtml = info
       ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${canManageBracket()?`<button class="btn btn-outline" type="button" style="font-size:.66rem;padding:4px 8px;min-height:28px;white-space:nowrap" onclick="sendCourtCardSms('${key}','${String(item.current?.id||'')}','match_started','${String(item.court||'')}',0)">📨 문자</button>`:''}</div>`
       : '';
-    const line = buildCourtCurrentSectionHtml({
+    const allocationHtml=groupAllocations.length?`<div style="padding:9px;background:#eff6ff;border-radius:8px;margin-top:6px;font-size:.76rem"><b>예선 조별 코트 배정</b>${groupAllocations.map(g=>`<div style="margin-top:5px"><b>${esc(grpLabel(g.gi))}조</b> · ${g.teams.map(t=>esc(t.name)).join(' / ')}</div>`).join('')}<div style="font-size:.66rem;color:#64748b;margin-top:5px">배정 정보이며 실제 경기 시작 여부는 별도 입력 기준입니다.</div></div>`:'';
+    const line = (!info&&allocationHtml)?allocationHtml:buildCourtCurrentSectionHtml({
       titleHtml:currentTitleHtml,
       phaseHtml:phaseChip,
       metaHtml:currentMetaHtml,
@@ -2246,7 +2266,7 @@ function renderCourtStatusBoard(key, div){
       key,
       court:String(item.court),
       headerBadgeHtml:badge,
-      currentSectionHtml:line,
+      currentSectionHtml:line+(info?allocationHtml:''),
       waitingSectionHtml:waitingHtml,
       borderColor:item.current?(currentTheme?.bd||'var(--border)'):'var(--border)',
       background:item.current?(currentTheme?.softBg||'#fff'):'#fff',
@@ -2580,6 +2600,7 @@ async function saveMeta(){
     onlineOrderEnabled:!!G.meta.onlineOrderEnabled,
     orderPhotoOcrEnabled:G.meta.orderPhotoOcrEnabled===true,
     developerToolPassword:G.meta.developerToolPassword||null,
+    courtStatusBoardEnabled:G.meta.courtStatusBoardEnabled!==false,
     operatorPw:(G.meta.operatorPw||'2026court'),
     individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,
     usePlayerRegistry:!!G.meta.usePlayerRegistry,
@@ -13975,7 +13996,7 @@ function openDraw(tid,div){
   const oldSeedBox=ge('drawSeedConfigWrap');
   if(oldSeedBox) oldSeedBox.remove();
   const cfgScreen=ge('drawCfgScreen');
-  if(cfgScreen){
+  if(cfgScreen&&isIndividualTournament(t)){
     const seedWrap=document.createElement('div');
     seedWrap.id='drawSeedConfigWrap';
     seedWrap.className='admin-block';
@@ -14054,6 +14075,8 @@ function ensureAdminOperationalExclusionButton(){
   if(!wrap){wrap=document.createElement('div');wrap.id='adminOperationalExclusionEntry';wrap.style.cssText='margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;border-radius:10px';body.prepend(wrap);}
   wrap.innerHTML='<button type="button" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="openBracketPublicationSettings()">예선·본선 대진표 공개 관리</button>';
   installDeveloperToolEntry();
+  const court=document.createElement('div');court.style.cssText='margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px';
+  court.innerHTML=`<b>코트 현황판 사용</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminCourtStatusBoardEnabled" ${courtStatusBoardEnabled()?'checked':''}> 코트 현황판 표시</label><div style="font-size:.75rem">수동으로 진행하며 현황판을 사용하지 않을 때는 해제하세요. 조별 코트 배정과 기존 경기 기록은 유지됩니다.</div><button class="btn btn-outline" style="margin-top:8px" onclick="saveCourtStatusBoardSetting(this)">코트 현황판 설정 저장</button>`;wrap.appendChild(court);
   const ocr=document.createElement('div');ocr.style.cssText='margin-top:12px;padding-top:10px;border-top:1px solid #cbd5e1';
   ocr.innerHTML=`<b>오더지 OCR 보조 기능</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminOrderPhotoOcrEnabled" ${isOrderPhotoOcrEnabled()?'checked':''}> OCR 분석 버튼 사용 허용</label><div style="font-size:.75rem;line-height:1.5">기본은 꺼짐입니다. 켜도 사진 첨부 시 자동 분석하지 않으며, 사진 영역의 ‘OCR 분석(선택)’을 눌렀을 때만 실행됩니다. 수기 글씨는 인식이 부정확할 수 있어 명단 확인이 필요합니다.</div><button type="button" class="btn btn-outline" style="margin-top:8px" onclick="saveOrderPhotoOcrSetting(this)">OCR 설정 저장</button>`;wrap.appendChild(ocr);
 }
@@ -17005,6 +17028,7 @@ function openMainDraw(tid,div){
     const titleInput = ge('mainDrawTitleInput');
     if(titleInput) titleInput.value = getMainDrawDefaultTitle();
     updateMainManualSeeds();
+    const seedSection=ge('mainManualSeedsSummary')?.closest('.admin-block');if(seedSection)seedSection.style.display=isIndividualByKey(key)?'':'none';
   }
   const footer = ge('mMain')?.querySelector('.modal-footer');
   if(footer && !ge('mainHistoryBtn')){
