@@ -27353,6 +27353,7 @@ function outputCenterInnerHtml(){
         <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="renderOutputPreview()"></select></label>
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
           <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
+          <option value="order-sheets">수기 오더지 · 빈 양식</option>
           <option value="prelim-current">예선 대진표 · 현재상황</option>
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
@@ -27939,6 +27940,7 @@ function outputResolveDivision(tid,div){
   return keys.length?keys[0].slice(prefix.length):div;
 }
 async function refreshOutputCenterData(){
+  if(outputElement('outType')?.value==='order-sheets')return;
   const tid=outputElement('outTS')?.value;if(!tid)return;
   const t=G.tournaments.find(t=>t.id===tid);
   if(isPastArchiveTournament(t))await ensurePastTournamentArchive(tid);
@@ -28499,8 +28501,36 @@ function outputRaffleSlipsHtml(tid){
     @media print{.oc-sheet{padding:0!important}.raffle-guide{display:none}.raffle-page{margin:0!important}body{background:white}}
   </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · 한 장당 ${count}명 · 글자 ${font}pt<br>A4 ${wide?'가로':'세로'} / 배율 100% / 여백 5mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 넣으세요. 후보를 포함한 저장 명단 기준이며 빈 쪽지는 출력하지 않습니다.</div>${pages.join('')}`;
 }
+// PHASE264: compact handwritten team order forms, four/six/eight per portrait A4.
+function orderSheetSettings(){
+  let saved={};try{saved=JSON.parse(localStorage.getItem('kimhae_order_sheet_settings')||'{}');}catch(e){}
+  return {copies:[4,6,8].includes(Number(saved.copies))?Number(saved.copies):4,doubles:Number(saved.doubles)===3?3:5};
+}
+function updateOrderSheetSettings(){
+  const settings={copies:Number(outputElement('orderSheetCopies')?.value||4),doubles:Number(outputElement('orderSheetDoubles')?.value||5)};
+  localStorage.setItem('kimhae_order_sheet_settings',JSON.stringify(settings));renderOutputPreview();
+}
+window.updateOrderSheetSettings=updateOrderSheetSettings;
+function orderSheetControlsHtml(){
+  const c=orderSheetSettings();
+  return `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:#f1f5f9;border-radius:10px"><label>A4 한 장 배치<select id="orderSheetCopies" class="form-select" onchange="updateOrderSheetSettings()">${[4,6,8].map(n=>`<option value="${n}" ${c.copies===n?'selected':''}>${n}장</option>`).join('')}</select></label><label>복식 구성<select id="orderSheetDoubles" class="form-select" onchange="updateOrderSheetSettings()">${[5,3].map(n=>`<option value="${n}" ${c.doubles===n?'selected':''}>${n}복식 (${n*2}명)</option>`).join('')}</select></label><div style="align-self:end;font-size:.76rem;color:#475569">A4 세로 · 배율 100% · 여백 5mm · 머리글/바닥글 끄기<br>점선을 따라 잘라 사용하세요.</div></div>`;
+}
+function outputHandwrittenOrderSheets(tid){
+  const c=orderSheetSettings(),tour=(G.tournaments||[]).find(t=>t.id===tid),name=tour?.name||'테니스 단체전';
+  const rowCount=c.copies/2,font=c.copies===8?8.5:10;
+  const card=()=>`<article class="order-sheet-card"><header><strong>수기 오더지 · ${c.doubles}복식</strong><span>${outputEsc(name)}</span></header><div class="order-sheet-meta"><b>클럽 / 팀</b><span></span></div><div class="order-sheet-details">부서: ______________　조 / 경기: __________</div><table><colgroup><col style="width:12%"><col style="width:44%"><col style="width:44%"></colgroup><thead><tr><th>복식</th><th>선수 1</th><th>선수 2</th></tr></thead><tbody>${Array.from({length:c.doubles},(_,i)=>`<tr><th>${i+1}</th><td></td><td></td></tr>`).join('')}</tbody></table><footer>작성자: ______________　확인: ______________</footer></article>`;
+  return `<style>
+    .order-sheet-a4{width:200mm;height:285mm;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(${rowCount},minmax(0,1fr));gap:2mm;box-sizing:border-box;background:#fff;margin:0 auto;color:#111}
+    .order-sheet-card{min-width:0;min-height:0;padding:3mm;border:.2mm dashed #777;box-sizing:border-box;display:flex;flex-direction:column;break-inside:avoid;font-size:${font}pt;overflow:hidden}
+    .order-sheet-card header{text-align:center;flex-shrink:0;margin-bottom:1.8mm}.order-sheet-card header strong{display:block;font-size:${font+2}pt;letter-spacing:.3px}.order-sheet-card header span{display:block;font-size:${font-1.5}pt;line-height:1.25;margin-top:1mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .order-sheet-meta{display:flex;gap:2mm;align-items:center;margin:1mm 0 2mm;flex-shrink:0}.order-sheet-meta span{flex:1;height:4mm;border-bottom:.2mm solid #222}.order-sheet-details{font-size:${font-1}pt;margin-bottom:2mm;white-space:nowrap;flex-shrink:0}
+    .order-sheet-card table{width:100%;height:auto;flex:1;min-height:0;table-layout:fixed;border-collapse:collapse;font-size:${font}pt}.order-sheet-card th,.order-sheet-card td{border:.2mm solid #555;padding:.5mm;text-align:center;height:auto}.order-sheet-card thead{height:5mm}.order-sheet-card thead th{background:#eee}.order-sheet-card tbody th{background:#f7f7f7;font-weight:600}.order-sheet-card footer{font-size:${font-1}pt;flex-shrink:0;padding-top:2mm;white-space:nowrap}
+    @page{size:A4 portrait;margin:5mm}@media print{.oc-sheet{width:auto!important;padding:0!important}.order-sheet-a4{margin:0!important;break-inside:avoid}body{margin:0!important}}
+  </style><section class="order-sheet-a4">${Array.from({length:c.copies},card).join('')}</section>`;
+}
 function outputCenterBody(){
   const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.value||'prelim-current';
+  if(type==='order-sheets')return outputHandwrittenOrderSheets(tid);
   if(type==='raffle-slips')return tid?outputRaffleSlipsHtml(tid):'<div class="oc-empty">대회를 선택하세요.</div>';
   if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
   if(type==='prelim-current')return outputPrelimHtml(tid,div,false);
@@ -28549,8 +28579,9 @@ function initMobileOutputPyramidZoom(box){
 function renderOutputPreview(){
   normalizeDesktopOutputLayout();
   const box=outputElement('outputPreview');if(!box)return;
-  const raffle=outputElement('outType')?.value==='raffle-slips';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle;
-  try{box.innerHTML=`${raffle?rafflePrintControlsHtml():''}<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
+  const type=outputElement('outType')?.value,raffle=type==='raffle-slips',order=type==='order-sheets';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle||order;
+  const printButton=box.parentElement?.querySelector('button[onclick="printOutputCenter()"]');if(printButton)printButton.textContent=order?'🖨️ A4 세로 인쇄 · PDF':'🖨️ A4 가로 인쇄 · PDF';
+  try{box.innerHTML=`${order?orderSheetControlsHtml():raffle?rafflePrintControlsHtml():''}<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
   requestAnimationFrame(()=>{fitOutputPyramids(box);initMobileOutputPyramidZoom(box);});
 }
@@ -28587,7 +28618,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
   }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
 }
 async function saveOutputCenterHighResImage(){
-  if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
   try{await refreshOutputCenterData();}catch(e){toast('최신 경기 조회 실패: '+e.message,'error');return;}
   renderOutputPreview();
   const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
@@ -28601,7 +28632,7 @@ async function saveMainPyramidHighResImage(tid,div){
   await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
 }
 async function printOutputCenter(){
-  if(!outputElement('outTS')?.value||(outputElement('outType')?.value!=='raffle-slips'&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
   const w=window.open('','_blank','width=1200,height=850');
   if(!w){toast('팝업 차단을 해제해 주세요','info');return;}
   try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
