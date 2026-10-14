@@ -17109,7 +17109,8 @@ async function runMainExternalDrawAnimation(plan,audit={}){
     id:s?.id,
     t1:null,
     t2:null,
-    bye:!!s?.bye
+    bye:!!s?.bye,
+    byeSide:s?.bye?(s?.t1?2:1):null
   }));
 
   const total=Math.max(1,revealOrder.length);
@@ -17311,7 +17312,7 @@ function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
   const width=Math.max(720,Math.min(1500,n*65)),levels=Math.ceil(Math.log2(n)),baseY=levels*64+32,height=baseY+125,x=i=>(i+.5)*width/n;
   let paths='',labels='';
   for(let level=0;level<levels;level++){const group=2**(level+1),y0=baseY-level*64,y1=y0-64;for(let g=0;g<n;g+=group){const l=x(g+group/4-.5),r=x(g+3*group/4-.5),mid=(l+r)/2;paths+=`<path d="M ${l} ${y0} V ${y1} H ${r} V ${y0} M ${mid} ${y1} V ${y1-16}" fill="none" stroke="#a9b8cc" stroke-width="1.5"/>`;}const count=n/(2**level);labels+=`<text x="8" y="${y1-5}" font-size="10" fill="#64748b">${count===2?'결승':count+'강'}</text>`;}
-  const leaves=Array.from({length:n},(_,i)=>{const slot=matchSlots?.[Math.floor(i/2)]||{},entry=i%2?slot.t2:slot.t1,bye=!!slot.bye&&!entry,source=i%2?slot.source2Label:slot.source1Label;const text=bye?'부전승':entry?.nm||source||'추첨 대기';return `<div style="position:absolute;left:${x(i)}px;top:${baseY+4}px;transform:translateX(-50%);width:${Math.max(28,Math.min(52,width/n-8))}px;height:104px;border:1.5px solid ${bye?'#d4a017':'#91afd8'};border-radius:7px;background:${bye?'#fff8dc':'#f3f7ff'};display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:900;line-height:1.2;color:#10213d">${outputEsc(String(text))}</span></div>`;}).join('');
+  const leaves=Array.from({length:n},(_,i)=>{const slot=matchSlots?.[Math.floor(i/2)]||{},entry=i%2?slot.t2:slot.t1,source=i%2?slot.source2Label:slot.source1Label,byeSide=Number(slot.byeSide)||(slot.source1Label==='부전승'?1:slot.source2Label==='부전승'?2:slot.t2&&!slot.t1?1:2),bye=!!slot.bye&&!entry&&byeSide===(i%2?2:1);const text=bye?'부전승':entry?.nm||source||'추첨 대기';return `<div style="position:absolute;left:${x(i)}px;top:${baseY+4}px;transform:translateX(-50%);width:${Math.max(28,Math.min(52,width/n-8))}px;height:104px;border:1.5px solid ${bye?'#d4a017':'#91afd8'};border-radius:7px;background:${bye?'#fff8dc':'#f3f7ff'};display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:900;line-height:1.2;color:#10213d">${outputEsc(String(text))}</span></div>`;}).join('');
   const playins=(playInMatches||[]).length?`<div style="padding:8px">진출전: ${(playInMatches||[]).map(m=>outputEsc(String(m.t1?.nm||m.source1Label||'미정'))+' vs '+outputEsc(String(m.t2?.nm||m.source2Label||'미정'))).join(' / ')}</div>`:'';
   return `<div style="overflow-x:auto"><div class="pyramid-scroll-content" style="position:relative;width:${width}px;min-width:${width}px;height:${height}px;margin:auto"><svg style="position:absolute;inset:0" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${paths}${labels}</svg>${leaves}</div>${playins}</div>`;
 }
