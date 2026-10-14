@@ -4690,6 +4690,18 @@ function setClubLoginRole(role){
     :'<b>경기이사</b> · 클럽회원 기능 + 팀등록 · 출전명단/선수 관리';
   if(hint)hint.textContent='클럽 공용 비밀번호 · 클럽 회원/경기이사 동일 비밀번호 사용';
 }
+function canViewMatchOrderSide(key,m,side){
+  if(!m)return false;
+  if(AD||OP||isIndividualByKey(key))return true;
+  if(getMatchResultState(key,m).done&&!m.bye)return true;
+  return getDirectorMatchSide(key,m)===Number(side);
+}
+function canWriteMatchOrderSide(key,m,side){
+  return !!m&&(AD||OP||isIndividualByKey(key)||getDirectorMatchSide(key,m)===Number(side));
+}
+function visibleMatchOrderRubbers(key,m){
+  return (m.rubbers||[]).map(rb=>{const row={...rb};for(const side of [1,2])if(!canViewMatchOrderSide(key,m,side)){row['players'+side]=[];delete row['blankOrder'+side];}return row;});
+}
 function canSubmitOnlineOrderByClub(key,m){
   if(AD||OP)return true;
   if(!(REG_CLUB&&m))return false;
@@ -12424,7 +12436,7 @@ function openSimpleMatchDetail(key,mid){
   const dn1=t1?tdn(t1,key,m.t1):(m.source1Label||'TBD');
   const dn2=t2?tdn(t2,key,m.t2):(m.source2Label||'TBD');
   const st=getMatchResultState(key,m);
-  const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
+  const rubbers=visibleMatchOrderRubbers(key,m);
   const rows=rubbers.length?rubbers.map((rb,i)=>{
     const p1=Array.isArray(rb?.players1)?rb.players1.filter(Boolean).join('/'):'';
     const p2=Array.isArray(rb?.players2)?rb.players2.filter(Boolean).join('/'):'';
@@ -12516,7 +12528,7 @@ function toggleCompactMatchDetail(id){
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   if(!bracketKeyPublished(key,m.phase==='group'?'prelim':'main'))return '';
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
-  const rbs=m.rubbers||[];
+  const rbs=visibleMatchOrderRubbers(key,m);
   const indivMode=isIndividualByKey(key);
   // 복식 수 결정
   const[,div]=key.split('_');const isT=div==='terinee';
@@ -17667,13 +17679,13 @@ function openM3(key,mid,forceEdit=false){
   const isIndividualMode=isIndividualByKey(key);
   const useOrderHere=isOnlineOrderMode(G.meta) && !isIndividualMode;
   window._m3Ctx = { key, mid, dbl, mySide, dn1, dn2, isStaff: !!(AD||OP), online: useOrderHere, individual: isIndividualMode };
-  const revealBoth=AD||st.bothSubmitted||!useOrderHere;
+  const revealBoth=AD||OP||getMatchResultState(key,m).done;
   const myLocked=useOrderHere && !AD && !OP && st.bothSubmitted;
   const isOperator = !!OP;
-  const side1PhotoEditable = useOrderHere && (AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted));
-  const side2PhotoEditable = useOrderHere && (AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted));
-  const side1PhotoViewable = useOrderHere && !!_orderPhotoGetSaved(m,1) && _orderPhotoCanView(m,1);
-  const side2PhotoViewable = useOrderHere && !!_orderPhotoGetSaved(m,2) && _orderPhotoCanView(m,2);
+  const side1PhotoEditable = canWriteMatchOrderSide(key,m,1) && (AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted));
+  const side2PhotoEditable = canWriteMatchOrderSide(key,m,2) && (AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted));
+  const side1PhotoViewable = !!_orderPhotoGetSaved(m,1) && _orderPhotoCanView(m,1);
+  const side2PhotoViewable = !!_orderPhotoGetSaved(m,2) && _orderPhotoCanView(m,2);
 
   // ── 제목 동적 설정 ──
   const titleEl=ge('mM3T');
@@ -17872,13 +17884,12 @@ function openM3(key,mid,forceEdit=false){
     const sv2=rb.score2!=null?rb.score2:'';
     // 현장 수기 모드에서는 온라인 제출/잠금 절차를 쓰지 않는다.
     // 해당 경기를 수정할 권한이 있으면 양 팀 실제 출전명단을 현장에서 함께 기록할 수 있다.
-    const offlineDetailEditor=!isOnlineOrderMode(G.meta) && (AD||OP||canEditMatchByDirector(key,m)||canEditMatchByClubMember(key,m)||isPublicResultEntryEnabled());
-    const canEditSide1=offlineDetailEditor || AD || (mySide===1 && !myLocked) || (isOperator && !st.s1 && !st.bothSubmitted);
-    const canEditSide2=offlineDetailEditor || AD || (mySide===2 && !myLocked) || (isOperator && !st.s2 && !st.bothSubmitted);
-    const showSide1=offlineDetailEditor || isOperator || revealBoth || mySide===1 || AD;
-    const showSide2=offlineDetailEditor || isOperator || revealBoth || mySide===2 || AD;
-    const displaySelP1=(isOnlineOrderMode(G.meta) && isOperator && !st.bothSubmitted && st.s1)?[]:selP1;
-    const displaySelP2=(isOnlineOrderMode(G.meta) && isOperator && !st.bothSubmitted && st.s2)?[]:selP2;
+    const canEditSide1=canWriteMatchOrderSide(key,m,1)&&(!useOrderHere||AD||OP||!myLocked);
+    const canEditSide2=canWriteMatchOrderSide(key,m,2)&&(!useOrderHere||AD||OP||!myLocked);
+    const showSide1=canViewMatchOrderSide(key,m,1);
+    const showSide2=canViewMatchOrderSide(key,m,2);
+    const displaySelP1=showSide1?selP1:[];
+    const displaySelP2=showSide2?selP2:[];
     const pickerHtml=(arr,selArr,cid,editable)=>{
       const directOffline=!useOrderHere && editable;
       return `<div id="${cid}" class="m3-pick-wrap" data-players="${encodeURIComponent(JSON.stringify(arr||[]))}" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}">
@@ -17896,8 +17907,8 @@ function openM3(key,mid,forceEdit=false){
       isIndividual:isIndividualMode,
       submitted:st.s1,
       showSide:showSide1,
-      operatorHiddenSubmitted:(isOperator && !st.bothSubmitted && st.s1),
-      blankOrder:!!(submittedRow1.blankOrder||rb.blankOrder1),
+      operatorHiddenSubmitted:false,
+      blankOrder:showSide1&&!!(submittedRow1.blankOrder||rb.blankOrder1),
       pickerHtml:(isIndividualMode?fixedPairHtml(p1,`rp1_${r}`):pickerHtml(p1,displaySelP1,`rp1_${r}`,canEditSide1)),
       hiddenHtml:hiddenHtml([],`rp1_${r}`),
       fixedPairHtml:fixedPairHtml(p1,`rp1_${r}`),
@@ -17908,8 +17919,8 @@ function openM3(key,mid,forceEdit=false){
       isIndividual:isIndividualMode,
       submitted:st.s2,
       showSide:showSide2,
-      operatorHiddenSubmitted:(isOperator && !st.bothSubmitted && st.s2),
-      blankOrder:!!(submittedRow2.blankOrder||rb.blankOrder2),
+      operatorHiddenSubmitted:false,
+      blankOrder:showSide2&&!!(submittedRow2.blankOrder||rb.blankOrder2),
       pickerHtml:(isIndividualMode?fixedPairHtml(p2,`rp2_${r}`):pickerHtml(p2,displaySelP2,`rp2_${r}`,canEditSide2)),
       hiddenHtml:hiddenHtml([],`rp2_${r}`),
       fixedPairHtml:fixedPairHtml(p2,`rp2_${r}`),
@@ -18288,8 +18299,8 @@ async function saveM3Core(){
   m.memo=(ge('mM3MatchMemo')?.value||'').trim();
   for(let r=0;r<dbl;r++){
     const c1=ge('rp1_'+r),c2=ge('rp2_'+r);
-    const rawPl1=getPickerSelected('rp1_'+r);
-    const rawPl2=getPickerSelected('rp2_'+r);
+    const rawPl1=canWriteMatchOrderSide(key,m,1)?getPickerSelected('rp1_'+r):((prevRb[r]?.blankOrder1)?['__GHOST__']:(prevRb[r]?.players1||[]));
+    const rawPl2=canWriteMatchOrderSide(key,m,2)?getPickerSelected('rp2_'+r):((prevRb[r]?.blankOrder2)?['__GHOST__']:(prevRb[r]?.players2||[]));
     const currentBlank1=rawPl1[0]==='__GHOST__';
     const currentBlank2=rawPl2[0]==='__GHOST__';
     const pl1=currentBlank1?[]:rawPl1;
@@ -26290,15 +26301,7 @@ function _orderPhotoGetSaved(match, side){
   if(entry.hasPhoto || entry.downloadURL || entry.dataUrl) return entry;
   return null;
 }
-function _orderPhotoCanView(match, side){
-  if(!match) return false;
-  if(AD || OP) return true;
-  const key = CM_key || '';
-  const teams = G.teams[key] || [];
-  const team = side===1 ? teams[match.t1] : teams[match.t2];
-  const club = String(team?.club || '').trim();
-  return !!(REG && REG_CLUB && club && String(REG_CLUB).trim()===club);
-}
+function _orderPhotoCanView(match,side){return canViewMatchOrderSide(CM_key||'',match,Number(side));}
 function _sanitizeOrderPhotoStore(raw){
   const out={};
   if(!raw || typeof raw!=='object' || Array.isArray(raw)) return out;
@@ -26325,6 +26328,7 @@ function _safeStorageSeg(v){
 async function persistOrderPhoto(side, imageDataUrl, source,context=null){
   const key=context?.key||CM_key, mid=context?.mid||CM_id; if(!key||!mid||!imageDataUrl) return null;
   const list=G.matches[key]||[]; const m=list.find(x=>x.id===mid || x._id===mid); if(!m) return null;
+  if(!canWriteMatchOrderSide(key,m,Number(side)))throw new Error('본인 클럽 오더만 수정할 수 있습니다');
   const teams=G.teams[key]||[];
   const team=side===1?teams[m.t1]:teams[m.t2];
   const base=_orderPhotoStoreKey(m, side); // 'side1' or 'side2'
@@ -26850,7 +26854,7 @@ async function saveOrderPhotoOcrSetting(button){
 async function analyzeStoredOrderPhoto(side){
   if(!isOrderPhotoOcrEnabled()){toast('관리자 설정에서 OCR 보조 기능을 켜야 사용할 수 있습니다.','info');return;}
   if(__orderPhotoJobBusy||matchResultSaveBusy){toast('현재 처리가 완료된 후 다시 눌러 주세요.','info');return;}
-  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!_orderPhotoCanView(ctx.match,Number(side)))return;
+  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side)))return;
   const saved=_orderPhotoGetSaved(ctx.match,Number(side));if(!saved)return;
   const run=async()=>{
     try{
@@ -26888,7 +26892,7 @@ function renderOrderPhotoManage(key,m){
 }
 async function deleteOrderPhoto(side,button){
   if(__orderPhotoJobBusy||matchResultSaveBusy){toast('사진 분석·저장 완료 후 삭제해 주세요.','info');return;}
-  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!_orderPhotoCanView(ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match))return;
+  const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match))return;
   const base=_orderPhotoStoreKey(ctx.match,Number(side));if(!_orderPhotoGetSaved(ctx.match,Number(side)))return;
   if(!confirm('첨부된 오더지 사진을 삭제하시겠습니까? 입력된 선수 명단과 경기 결과는 유지됩니다.'))return;
   if(button){button.disabled=true;button.textContent='삭제 중…';}
@@ -26930,7 +26934,7 @@ function renderOrderPhotoBlankReview(key,m){
 }
 async function confirmOrderPhotoBlank(side,row,button){
   const ctx=_orderPhotoGetContext(Number(side));if(!ctx)return;
-  if(!_orderPhotoCanView(ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match)){toast('해당 팀의 오더 수정 권한이 필요합니다','error');return;}
+  if(!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side))||!canEditMatchByClubMember(ctx.key,ctx.match)){toast('해당 팀의 오더 수정 권한이 필요합니다','error');return;}
   if(!orderPhotoUnresolvedRows(ctx.match,side,ctx.dbl).includes(Number(row))){toast('선수가 입력된 칸은 공오더로 확정할 수 없습니다','info');return;}
   if(!confirm(`${Number(row)+1}복식 사진에 선수 이름이 없는 빈칸이 맞습니까?\n\n공오더로 저장하고 해당 복식은 0:6 처리됩니다. 글씨를 못 읽은 경우에는 취소 후 선수를 선택하세요.`))return;
   if(button?.disabled)return;if(button){button.disabled=true;button.textContent='공오더 저장 중…';}
