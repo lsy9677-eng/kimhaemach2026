@@ -15158,9 +15158,12 @@ async function applySavedMainDrawToLive(id,key){
   const norm=normalizeDrawHistoryEntry(entry),plan=norm.plan||{n:norm.mainSize,matchSlots:norm.mainPreviewSlots||[]};
   if(!plan.n||!plan.matchSlots?.length){toast('저장된 본선 배정 정보가 없습니다','error');return;}
   if(plan.matchSlots.some(s=>Number(s.t1?.rk)===1&&Number(s.t2?.rk)===1)){toast('이전 기록에 1위끼리 대결이 있습니다. 본선을 다시 추첨하세요.','error');return;}
+  if(plan.matchSlots.some(s=>s.t1?.gn!=null&&s.t2?.gn!=null&&Number(s.t1.gn)===Number(s.t2.gn))){toast('이전 기록에 같은 조끼리 첫 경기가 있습니다. 본선을 다시 추첨하세요.','error');return;}
   const info=_k2td(key),tour=G.tournaments.find(t=>t.id===info.tid);const expected=getPreviewAdvSlots(G.draws[key]||{},gDS(tour,info.div));
   const actual=[...plan.matchSlots.flatMap(x=>[x.t1,x.t2]),...(plan.playInMatches||[]).flatMap(x=>[x.t1,x.t2])].filter(x=>x&&!x.playInPlaceholder);
   if(actual.length!==expected.length){toast('이전 추첨에 미완료 조의 진출 자리가 누락되었습니다. 본선을 다시 추첨하세요.','error');return;}
+  const expectedByes=Number(plan.n)-plan.matchSlots.flatMap(x=>[x.t1,x.t2]).filter(Boolean).length;
+  if(plan.matchSlots.some(x=>!x.t1&&!x.t2)||plan.matchSlots.filter(x=>x.bye).length!==expectedByes){toast('이전 추첨의 부전승 자리가 잘못되었습니다. 본선만 다시 추첨하세요.','error');return;}
   if((G.matches[key]||[]).some(m=>(m.phase==='main'||m.phase==='playin')&&getMatchResultState(key,m).done&&!m.bye)){toast('진행된 본선 결과가 있어 적용을 중단했습니다','error');return;}
   if(!confirm('저장된 이 추첨 결과를 실제 본선 대진에 적용할까요? 기존 본선 배정은 교체되고 예선 결과는 유지됩니다.'))return;
   const matches=buildMainMatches(plan.matchSlots,plan.n,plan.playInMatches||[]),next=[...(G.matches[key]||[]).filter(m=>m.phase!=='main'&&m.phase!=='playin'),...matches];
@@ -16556,6 +16559,30 @@ function chooseBestMainLeaf(positions, entry, leaves, n, rnd){
   });
   return bestPos;
 }
+function repairMainFirstRoundGroupConflicts(leaves,rnd){
+  const same=(a,b)=>a&&b&&a.gn!=null&&b.gn!=null&&Number(a.gn)===Number(b.gn);
+  for(let pass=0;pass<leaves.length;pass++){
+    let changed=false;
+    for(let pair=0;pair<leaves.length;pair+=2){
+      if(!same(leaves[pair],leaves[pair+1]))continue;
+      let repaired=false;
+      for(const pos of [pair,pair+1]){
+        const entry=leaves[pos];if(entry.seedNo)continue;
+        const sibling=leaves[pos%2===0?pos+1:pos-1];
+        for(const other of shuffleSeeded(leaves.map((_,i)=>i),rnd)){
+          if(Math.floor(other/2)===Math.floor(pos/2))continue;
+          const candidate=leaves[other],candidateSibling=leaves[other%2===0?other+1:other-1];
+          if(!candidate||!candidateSibling||candidate.seedNo||(Number(candidate.rk)===1)!==(Number(entry.rk)===1))continue;
+          if(same(candidate,sibling)||same(entry,candidateSibling))continue;
+          [leaves[pos],leaves[other]]=[leaves[other],leaves[pos]];repaired=true;changed=true;break;
+        }
+        if(repaired)break;
+      }
+      if(!repaired)throw new Error('같은 조끼리의 첫 경기 대결을 피할 수 없습니다. 본선 방식 또는 시드를 확인하세요.');
+    }
+    if(!changed)return;
+  }
+}
 function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   const total=(entries||[]).length;
   const spec=computeMainBracketSpec(total, bracketMode);
@@ -16571,19 +16598,19 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
 
   if(spec.playInTeams>0){
     const manualProtected=new Set(Object.keys(manualSeedMap).map(v=>Number(v)));
-    const candidates=shuffleSeeded(
-      allSeeded.filter(e=>e.placeholder||!manualProtected.has(Number(e?.ti))).sort((a,b)=>{
-        const ra=Number(a?.rk||99), rb=Number(b?.rk||99);
-        if(ra!==rb) return rb-ra; // 2위 우선 진출전
-        return Number(a?.gn||0)-Number(b?.gn||0);
-      }),
-      rnd
-    );
+    const eligible=allSeeded.filter(e=>e.placeholder||!manualProtected.has(Number(e?.ti)));
+    const eligibleFirst=shuffleSeeded(eligible.filter(e=>Number(e.rk)===1),rnd),eligibleOther=shuffleSeeded(eligible.filter(e=>Number(e.rk)!==1),rnd);
+    const requiredFirst=Math.max(0,allSeeded.filter(e=>Number(e.rk)===1).length-spec.mainSize/2);
+    if(eligibleFirst.length<requiredFirst)throw new Error('시드 보호와 1위끼리 대결 금지 조건이 충돌합니다.');
+    const candidates=[...eligibleFirst.slice(0,requiredFirst),...eligibleOther,...eligibleFirst.slice(requiredFirst)];
+    const chosen=candidates.slice(0,spec.playInTeams);
+    if(chosen.length!==spec.playInTeams)throw new Error('시드 보호로 진출전 배정 인원이 부족합니다.');
+    const firsts=chosen.filter(e=>Number(e.rk)===1),seconds=chosen.filter(e=>Number(e.rk)!==1),ordered=[];
+    while(firsts.length){if(!seconds.length)throw new Error('진출전에서 1위끼리 대결이 발생합니다. 본선 방식을 확인하세요.');ordered.push(firsts.shift(),seconds.shift());}
+    ordered.push(...seconds);
+    repairMainFirstRoundGroupConflicts(ordered,rnd);
     const playMap=new Set();
-    playInEntries=candidates.slice(0, spec.playInTeams).map((e,i)=>{
-      playMap.add(getMainEntryBracketLabel(e));
-      return {...e, playInId:Math.floor(i/2)+1};
-    });
+    playInEntries=ordered.map((e,i)=>{playMap.add(getMainEntryBracketLabel(e));return {...e,playInId:Math.floor(i/2)+1};});
     mainPool=allSeeded.filter(e=>!playMap.has(getMainEntryBracketLabel(e)));
     const placeholders=Array.from({length:spec.winnersNeeded},(_,i)=>({
       nm:`진출전 승자${i+1}`,
@@ -16622,8 +16649,28 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     leaves[pos]={...entry};
   });
 
-  const getOpenPositions=()=>leaves.map((v,i)=>v?null:i).filter(v=>v!=null);
-  [...rank1, ...others].forEach(entry=>{
+  // PHASE259: reserve an actual opponent vacancy for each bye before filling normal matches.
+  const reservedByeLeaves=new Set(),byeEntries=new Set();
+  const entryKey=e=>getMainEntryBracketLabel(e);
+  const byeCandidates=[
+    ...seedEntries.filter(e=>Number(e.rk)===1),...rank1,
+    ...seedEntries.filter(e=>Number(e.rk)!==1),...others
+  ];
+  for(const entry of byeCandidates){
+    if(byeEntries.size>=byeCount)break;
+    const identity=entryKey(entry);if(byeEntries.has(identity))continue;
+    let position=leaves.findIndex(e=>e&&entryKey(e)===identity);
+    if(position>=0){const sibling=position%2===0?position+1:position-1;if(leaves[sibling]||reservedByeLeaves.has(sibling))continue;}
+    else{
+      const open=leaves.map((e,i)=>!e&&!reservedByeLeaves.has(i)&&!leaves[i%2===0?i+1:i-1]&&!reservedByeLeaves.has(i%2===0?i+1:i-1)?i:null).filter(i=>i!=null);
+      if(!open.length)continue;
+      position=chooseBestMainLeaf(open,entry,leaves,mainSize,rnd);leaves[position]={...entry};
+    }
+    reservedByeLeaves.add(position%2===0?position+1:position-1);byeEntries.add(identity);
+  }
+  if(byeEntries.size!==byeCount)throw new Error('부전승과 시드 배정 조건이 충돌합니다. 본선 설정을 확인하세요.');
+  const getOpenPositions=()=>leaves.map((v,i)=>v||reservedByeLeaves.has(i)?null:i).filter(v=>v!=null);
+  [...rank1, ...others].filter(e=>!byeEntries.has(entryKey(e))).forEach(entry=>{
     let opens=getOpenPositions();
     if(!opens.length)throw new Error('본선 배정 자리가 부족합니다.');
     if(Number(entry.rk)===1){opens=opens.filter(pos=>Number(leaves[pos%2===0?pos+1:pos-1]?.rk)!==1);}
@@ -16633,6 +16680,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     if(pos!=null) leaves[pos]={...entry};
   });
 
+  repairMainFirstRoundGroupConflicts(leaves,rnd);
   for(let i=0;i<matchCount;i++){
     const a=leaves[i*2]||null;
     const b=leaves[i*2+1]||null;
@@ -16655,6 +16703,9 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     slot.source2Label = slot.bye ? '부전승' : (getMainEntryBracketLabel(slot.t2) || slot.source2Label || '');
   });
 
+  if(byeIdxs.length!==byeCount||matchSlots.some(slot=>!slot.t1&&!slot.t2))throw new Error('본선 부전승 또는 진출 자리 누락이 있어 저장을 중단했습니다.');
+  const expectedFirstByes=Math.min(byeCount,mainPool.filter(e=>Number(e.rk)===1).length);
+  if(matchSlots.filter(slot=>slot.bye&&Number(slot.t1?.rk)===1).length!==expectedFirstByes)throw new Error('조 1위 우선 부전승 조건과 시드가 충돌합니다.');
   const revealOrder=[];
   byeIdxs.forEach(slotIdx=>{
     const slot=matchSlots[slotIdx];
@@ -28021,8 +28072,10 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
         entrants.push({name:'부전승',team:null,byeSlot:true,sourceLabel:'',matchId:mid,side:1});
         entrants.push({name:outputTeamName(key,m.t2),team:m.t2,byeWinner:true,sourceLabel:String(m.source2Label||'').trim(),matchId:mid,side:2});
       }else{
-        entrants.push({name:'',team:null,sourceLabel:'',matchId:mid,side:1});
-        entrants.push({name:'',team:null,sourceLabel:'',matchId:mid,side:2});
+        const source1=String(m.source1Label||'').trim(),source2=String(m.source2Label||'').trim();
+        const side=source1&&source1!=='부전승'?1:2;
+        entrants.push(side===1?{name:'미정',team:null,byeWinner:true,sourceLabel:source1,matchId:mid,side:1}:{name:'부전승',team:null,byeSlot:true,sourceLabel:'',matchId:mid,side:1});
+        entrants.push(side===2?{name:'미정',team:null,byeWinner:true,sourceLabel:source2,matchId:mid,side:2}:{name:'부전승',team:null,byeSlot:true,sourceLabel:'',matchId:mid,side:2});
       }
     }else{
       entrants.push({name:outputTeamName(key,m.t1),team:m.t1,sourceLabel:String(m.source1Label||'').trim(),matchId:mid,side:1});
