@@ -12225,6 +12225,9 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     }
   }
 
+  if(!mMs.length&&draw.groups?.length&&showMainSection){
+    html+=`<div class="sec-title" style="margin-top:16px">🏆 본선 빈 피라미드 대진표</div>${renderActualMainPyramidForDiv(tid,div,false)}`;
+  }
   return html;
 }
 
@@ -12801,6 +12804,7 @@ function renderCombinedBracketSection(tid, div){
     if(bronzeMode==='match' && bronzeMatch){ const bst=getMatchResultState(key,bronzeMatch); const b1=bronzeMatch.t1!==null?teams[bronzeMatch.t1]:null; const b2=bronzeMatch.t2!==null?teams[bronzeMatch.t2]:null; mainHTML += `<div class="card" style="margin-top:10px"><div class="card-title">🥉 3·4위전</div>${mCard(bronzeMatch,key,b1?tdn(b1,key,bronzeMatch.t1):(bronzeMatch.t1===null?'TBD':'?'),b2?tdn(b2,key,bronzeMatch.t2):(bronzeMatch.t2===null?'TBD':'?'),bst.done,bst.sc1,bst.sc2,'3·4위전')}</div>`; }
   }
 
+  if(!mMs.length&&draw.groups?.length&&bracketPhasePublished(tid,'main'))mainHTML=renderActualMainPyramidForDiv(tid,div,false);
   let groupsHTML = '';
   if(draw.groups?.length && bracketPhasePublished(tid,'prelim')){
     groupsHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px">`;
@@ -15140,13 +15144,13 @@ function renderSavedPrelimNeutralPyramid(mainSize, savedSlots=[]){
     else byeLeaves.add(mi*2+1);
   });
   const boxes=Array.from({length:n},(_,i)=>{
-    const bye=byeLeaves.has(i),xx=x(i),bw=Math.max(25,Math.min(40,width/n-3));
+    const bye=false,xx=x(i),bw=Math.max(25,Math.min(40,width/n-3));
     return `<div style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:72px;border:1px solid ${bye?'#e0a400':'#b8c6d8'};background:${bye?'#fff8dc':'#f8fbff'};border-radius:5px;display:flex;align-items:center;justify-content:center;text-align:center">
       <div style="font-size:${n>=32?'6.5':'8.5'}px;font-weight:900;color:${bye?'#9a6700':'#cbd5e1'}">${bye?'부<br>전<br>승':'　'}</div></div>`;
   }).join('');
   return `<div style="border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff);padding:8px">
     <div style="text-align:center;font-size:.78rem;font-weight:900;color:#10213d">본선 빈 피라미드 · ${n}강</div>
-    <div style="text-align:center;font-size:.68rem;color:#64748b;margin:3px 0 7px">본선 추첨 전 · 팀명 및 조/순위 배정 위치 비공개 · 부전승 자리만 표시</div>
+    <div style="text-align:center;font-size:.68rem;color:#64748b;margin:3px 0 7px">본선 추첨 전 · 빈 구조만 표시 · 팀과 부전승 위치는 본선 추첨 후 확정</div>
     <div style="overflow-x:auto"><div style="position:relative;width:${width}px;height:${baseY+86}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+86}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div></div>`;
@@ -17539,19 +17543,22 @@ async function savePyramidSlotQuickEdit(){
   if(newTeam!==null){
     first.forEach(x=>{
       if(x===m) return;
-      if(Number(x.t1)===newTeam) x.t1=null;
-      if(Number(x.t2)===newTeam) x.t2=null;
+      if(x.t1!=null&&Number(x.t1)===newTeam){x.t1=null;x.source1Label='';}
+      if(x.t2!=null&&Number(x.t2)===newTeam){x.t2=null;x.source2Label='';}
     });
-    if(side===1 && Number(m.t2)===newTeam) m.t2=null;
-    if(side===2 && Number(m.t1)===newTeam) m.t1=null;
+    if(side===1&&m.t2!=null&&Number(m.t2)===newTeam){m.t2=null;m.source2Label='';}
+    if(side===2&&m.t1!=null&&Number(m.t1)===newTeam){m.t1=null;m.source1Label='';}
   }
-  if(side===1) m.t1=newTeam; else m.t2=newTeam;
+  if(side===1)m.t1=newTeam;else m.t2=newTeam;
+  const resolvedLabels=getPrelimResolvedLabelMap(key);
+  m['source'+side+'Label']=raw==='__BYE__'?'부전승':newTeam==null?'':(Object.entries(resolvedLabels).find(([label,value])=>Number(value.ti)===newTeam)?.[0]||'');
 
   // 첫 라운드의 팀/부전승 상태를 다시 계산한다.
   first.forEach(x=>{
     const has1=x.t1!==null&&x.t1!==undefined, has2=x.t2!==null&&x.t2!==undefined;
-    if(has1!==has2){ x.bye=true; x.winner=has1?x.t1:x.t2; }
-    else { x.bye=false; x.winner=null; }
+    const explicitBye=x.source1Label==='부전승'||x.source2Label==='부전승';
+    x.bye=explicitBye;
+    x.winner=explicitBye&&has1!==has2?(has1?x.t1:x.t2):null;
     x.rubbers=[]; delete x.simpleResult;
   });
   // 부전승 선택은 해당 슬롯을 비우고 반대편 팀을 자동 진출시키는 의미.
@@ -27992,7 +27999,8 @@ function outputPreDrawMainSize(tid,div){
   const advance=Math.max(1,Number(groups.length?draw?.advance||cfg.advance||2:validSaved?saved.advance:cfg.advance||2));
   const groupSize=Math.max(2,Number(cfg.grpSize||t?.grpSize||4));
   const groupCount=groups.length||(validSaved?saved.groupSizes.length:Math.ceil(count/groupSize));
-  const entrants=Math.max(2,groupCount*advance);
+  const entrants=Math.max(2,groups.length?getPreviewAdvSlots(draw,{...cfg,advance}).length:groupCount*advance);
+  if(groups.length)return computeMainBracketSpec(entrants,draw?.mainBracketMode||'auto').mainSize;
   let n=2;while(n<entrants)n*=2;
   return n;
 }
@@ -28091,7 +28099,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
   let n=1;while(n<entrants.length)n*=2;while(entrants.length<n)entrants.push({name:'',team:null});
 
   // A4 가로 폭 최적화: 8/16/32팀 모두 한 장 폭에 맞도록 슬롯 폭을 제한
-  const width=Math.max(900,Math.min(1500,n*46)), baseY=352, stepY=57, levels=Math.log2(n), height=baseY+112;
+  const width=Math.max(900,Math.min(1500,n*46)), baseY=352, stepY=57, levels=Math.log2(n), height=baseY+142;
   const x=i=>(i+.5)*width/n, BLUE='#1565c0', THIN='#a9b8cc';
 
   const winnerTeam=m=>{
@@ -28165,16 +28173,16 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     // PHASE240: readable group/rank badges, distinct first/second colors.
     const rankParts=src.match(/^(.*?)\s*([12])위$/);
     const rankOne=rankParts?.[2]==='1';
-    const srcBadge=src?`<div style="position:absolute;top:-36px;left:50%;transform:translateX(-50%);min-width:${n>=32?'38':'46'}px;z-index:7;border:1px solid ${rankOne?'#c69016':'#367dc4'};border-radius:6px;background:${rankOne?'#fff2c2':'#e6f1ff'};color:${rankOne?'#785100':'#124d8f'};font-weight:950;line-height:1.15;padding:3px 3px;white-space:nowrap;text-align:center">${rankParts?`<span style="display:block;font-size:10px">${outputEsc(rankParts[1].trim())}</span><strong style="display:block;font-size:${n>=32?'13':'15'}px">${rankParts[2]}위</strong>`:`<span style="font-size:10px">${outputEsc(src)}</span>`}</div>`:'';
+    const srcBadge=src?`<div class="pyramid-slot-provenance" style="width:100%;flex-shrink:0;border-bottom:1px solid ${rankOne?'#d8b34d':'#9ebdde'};border-radius:4px 4px 0 0;background:${rankOne?'#fff2c2':'#e6f1ff'};color:${rankOne?'#785100':'#124d8f'};font-weight:950;line-height:1.1;padding:3px 0;text-align:center">${rankParts?`<span style="display:block;font-size:8px">${outputEsc(rankParts[1].trim())}</span><strong style="display:block;font-size:11px">${rankParts[2]}위</strong>`:`<span style="font-size:8px;overflow-wrap:anywhere">${outputEsc(src)}</span>`}</div>`:'';
     const nameLen=Array.from(pyramidDisplayTeamName(e.name)).length;
     const teamFont=nameLen<=3?(n>=32?14:18):nameLen<=5?(n>=32?11.5:14.5):(n>=32?9.2:11.5);
-    const maxReadableFont=Math.max(24,Math.min(40,bw-2));
+    const maxReadableFont=Math.max(18,Math.min(24,bw-2));
     const quickEditable=interactive&&!blank&&(AD||OP)&&e.matchId&&e.side;
     const qClick=quickEditable?`onclick="event.stopPropagation();openPyramidSlotQuickEdit('${key}','${String(e.matchId).replace(/'/g,"\\'")}',${Number(e.side)})"`:'';
     const qTitle=quickEditable?'title="눌러서 팀/부전승 선택"':'';
     const editBadge=quickEditable?`<div style="position:absolute;right:-5px;bottom:-5px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
-    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:86px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:visible;padding:4px 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
-      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:76px;overflow:visible;text-shadow:0 0 .01px currentColor">${blank?'':verticalName(e.name||'빈슬롯')}</div>
+    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:116px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:visible;padding:0 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
+      ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:78px;margin:auto 0;overflow:visible;text-shadow:0 0 .01px currentColor">${blank?'':verticalName(e.name||'빈슬롯')}</div>
     </div>`;
   }).join('');
 
@@ -28233,6 +28241,10 @@ function outputPreDrawPyramidSkeleton(tid,div){
   div=outputResolveDivision(tid,div);
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const n=outputPreDrawMainSize(tid,div), width=Math.max(900,Math.min(1500,n*46));
+  const key=tid+'_'+div,draw=G.draws?.[key]||{},tour=(G.tournaments||[]).find(t=>t.id===tid),cfg=gDS(tour,div)||{};
+  const entrants=draw.groups?.length?getPreviewAdvSlots(draw,cfg).length:null;
+  const spec=entrants!=null?computeMainBracketSpec(entrants,draw.mainBracketMode||'auto'):null;
+  const summary=entrants!=null?`${entrants}팀 진출 · ${n}강 · 부전승 ${Math.max(0,n-(spec.playInTeams?spec.directCount+spec.winnersNeeded:entrants))}팀${spec.playInMatches?` · 진출전 ${spec.playInMatches}경기`:''}`:'';
   const baseY=330,stepY=57,levels=Math.log2(n),x=i=>(i+.5)*width/n,THIN='#a9b8cc';
   let paths='',labels='';
   for(let level=0;level<levels;level++){
@@ -28255,7 +28267,7 @@ function outputPreDrawPyramidSkeleton(tid,div){
   const resultBar=`<div style="display:grid;grid-template-columns:1.05fr 1fr 1.35fr;gap:8px;max-width:680px;margin:0 auto 10px">${resultCell('🏆 우승','#d59b00')}${resultCell('🥈 준우승','#7890ad')}${resultCell('🥉 3위','#b87333')}</div>`;
   return `<div style="padding:8px 10px;border:1.5px dashed #9fb4cf;border-radius:12px;background:linear-gradient(180deg,#fff,#f8fbff)">
     <div style="text-align:center;font-size:.84rem;font-weight:900;color:#10213d;margin-bottom:3px">🌳 본선 빈 대진표 · ${n}강</div>
-    <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">본선 추첨 전 · 팀 칸과 배정 위치는 추첨 후 표시합니다.</div>
+    <div style="text-align:center;font-size:.72rem;color:#64748b;margin-bottom:8px">${summary?outputEsc(summary)+' · ':''}본선 추첨 전 · 팀과 부전승 위치는 추첨 후 확정됩니다.</div>
     ${resultBar}<div class="pyramid-scroll-content" style="overflow:visible;width:${width}px;min-width:${width}px;margin:0 auto"><div style="position:relative;width:${width}px;height:${baseY+102}px;margin:0 auto">
       <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 ${width} ${baseY+102}" preserveAspectRatio="none">${paths}${labels}</svg>${boxes}
     </div></div></div>`;
@@ -28276,7 +28288,7 @@ function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const key=tid+'_'+div, allMs=G.matches?.[key]||[];
   const ms=allMs.filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
-  if(!ms.length)return '';
+  if(!ms.length)return G.draws?.[key]?.groups?.length?`<div class="actual-main-pyramid"><div class="mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;touch-action:pan-y">${outputPreDrawPyramidSkeleton(tid,div)}</div></div>`:'';
   return `<div class="actual-main-pyramid" data-main-pyramid="${outputEsc(key)}">
     ${showSaveButton?`<div style="display:flex;justify-content:flex-end;gap:6px;margin:0 0 7px"><button class="btn btn-outline" style="font-size:.72rem;padding:5px 10px" onclick="saveMainPyramidHighResImage('${outputEsc(tid)}','${outputEsc(div)}')">🖼️ 본선 고화질 이미지 저장</button></div>`:''}
     <div style="font-size:.7rem;color:#64748b;text-align:center;margin:0 0 6px">가지 교차점의 <b>입력/점수</b> 버튼을 누르면 결과 입력 · 확인 · 수정이 가능합니다.</div>
