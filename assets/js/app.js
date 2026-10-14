@@ -8231,7 +8231,7 @@ function ensureRegistryBulkSaveControls(year){
   if(!controls){controls=document.createElement('div');controls.id='registryBulkSaveControls';controls.style.cssText='position:sticky;bottom:0;padding:10px;background:#eff6ff;display:flex;gap:10px;align-items:center;z-index:2';controls.innerHTML='<button id="registryBulkSaveBtn" class="btn btn-primary">💾 전체 변경사항 저장</button><span id="registryBulkSaveStatus" style="font-size:.73rem"></span>';list.parentElement.appendChild(controls);}
   ge('registryBulkSaveBtn').onclick=()=>saveRegistryManagerAll(Number(year));updateRegistryBulkSaveStatus(year);
 }
-async function saveRegistryManagerAll(year){
+async function saveRegistryManagerAllCore(year){
   if(!AD)return;
   const original=await loadRegistry(year),next=original.map(r=>({...r})),changed=[];
   next.forEach((row,idx)=>{
@@ -8240,17 +8240,17 @@ async function saveRegistryManagerAll(year){
     const key=registryGenderDraftKey(year,idx);if(REGISTRY_GENDER_DRAFTS.has(key))row.gender=REGISTRY_GENDER_DRAFTS.get(key);
     if(JSON.stringify(row)!==JSON.stringify(original[idx]))changed.push(idx);
   });
-  if(next.some(r=>!r.name||!r.club)){toast('이름과 주클럽을 확인해 주세요','error');return;}
-  if(!changed.length){toast('변경된 내용이 없습니다','info');return;}
+  if(next.some(r=>!r.name||!r.club)){rosterSaveNotice('이름과 주클럽을 확인해 주세요','error');return;}
+  if(!changed.length){rosterSaveNotice('변경된 내용이 없습니다','info');return;}
   sl(true);let saved=false;
   try{
     G_REGISTRY[year]=next;await saveRegistry(year);saved=true;
     for(const idx of changed)REGISTRY_GENDER_DRAFTS.delete(registryGenderDraftKey(year,idx));
     DIVISION_RULE_CACHE.clear();
-    toast(`전체 변경사항 ${changed.length}명 저장 완료 ✅`,'success');
-    try{await syncOfficialRegistryRowsToPlayers(changed.map(i=>next[i]));for(const idx of changed){const old=original[idx],row=next[idx];if(old.name!==row.name||old.club!==row.club)await removeOfficialRegistryPlayerIfUnused(old.name,old.club);}}catch(e){console.warn('registry player sync pending',e);toast('명단은 저장됐으나 선수정보 동기화 확인이 필요합니다.','info');}
+    rosterSaveNotice(`전체 변경사항 ${changed.length}명 저장 완료 ✅`,'success');
+    try{await syncOfficialRegistryRowsToPlayers(changed.map(i=>next[i]));for(const idx of changed){const old=original[idx],row=next[idx];if(old.name!==row.name||old.club!==row.club)await removeOfficialRegistryPlayerIfUnused(old.name,old.club);}}catch(e){console.warn('registry player sync pending',e);rosterSaveNotice('명단은 저장됐으나 선수정보 동기화 확인이 필요합니다.','info');}
     await renderRegistryMgr();await renderRegistryTab(true);
-  }catch(e){if(!saved)G_REGISTRY[year]=original;toast((saved?'저장은 완료됐으나 화면 갱신 실패: ':'저장 실패: ')+e.message,'error');}
+  }catch(e){if(!saved)G_REGISTRY[year]=original;rosterSaveNotice((saved?'저장은 완료됐으나 화면 갱신 실패: ':'저장 실패: ')+e.message,'error');}
   finally{sl(false);updateRegistryBulkSaveStatus(year);}
 }
 function decorateRegistryGenderControls(year,members){
@@ -9755,29 +9755,52 @@ async function beginUnifiedTeamEdit(key,idx){
     ge('aoReg')?.scrollIntoView({block:'start',behavior:'smooth'});
   },120);
 }
-async function saveUnifiedTeamEdit(){
+// PHASE255: roster writes expose status and reject repeated clicks during persistence.
+let rosterSaveBusy=false;
+function rosterSaveNotice(message,type){
+  const status=ge('rosterSaveStatus');
+  if(status){status.textContent=message;status.style.background=type==='error'?'#fff1f2':type==='success'?'#ecfdf5':'#eff6ff';status.style.color=type==='error'?'#b91c1c':type==='success'?'#166534':'#1e40af';}
+  toast(message,type);
+}
+async function withRosterSaveState(run,editing=false){
+  if(rosterSaveBusy)return;
+  rosterSaveBusy=true;
+  let status=ge('rosterSaveStatus');
+  if(!status){status=document.createElement('div');status.id='rosterSaveStatus';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483500;max-width:90vw;padding:12px 18px;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:.9rem;font-weight:900;box-shadow:0 4px 16px #0003';document.body.appendChild(status);}
+  status.dataset.run=String(Date.now());const token=status.dataset.run;status.style.display='block';status.textContent=editing?'⏳ 명단 수정 내용 저장 중…':'⏳ 명단 저장 중…';
+  const buttons=Array.from(document.querySelectorAll('button')).filter(b=>/registerTeam|saveUnifiedTeamEdit|saveRegistryManagerAll|saveRegistryQuickEditModal/.test(b.getAttribute('onclick')||''));
+  const old=buttons.map(b=>({b,disabled:b.disabled,text:b.textContent}));old.forEach(({b})=>{b.disabled=true;b.textContent='⏳ 저장 중…';});
+  try{await run();}
+  catch(e){sl(false);rosterSaveNotice('명단 저장 실패: '+e.message,'error');}
+  finally{rosterSaveBusy=false;old.forEach(({b,disabled,text})=>{b.disabled=disabled;b.textContent=text;});if(status.textContent.startsWith('⏳'))status.textContent='처리가 끝났습니다. 안내와 입력 내용을 확인해 주세요.';setTimeout(()=>{if(!rosterSaveBusy&&status.dataset.run===token)status.style.display='none';},8000);}
+}
+async function registerTeam(){return withRosterSaveState(()=>registerTeamCore(),!!UNIFIED_TEAM_EDIT);}
+async function saveUnifiedTeamEdit(){return withRosterSaveState(()=>saveUnifiedTeamEditCore(),true);}
+async function saveRegistryManagerAll(year){return withRosterSaveState(()=>saveRegistryManagerAllCore(year),true);}
+async function saveRegistryQuickEditModal(){return withRosterSaveState(()=>saveRegistryQuickEditModalCore(),true);}
+async function saveUnifiedTeamEditCore(){
   const edit=UNIFIED_TEAM_EDIT;if(!edit)return;
   const tid=ge('regTS')?.value,div=ge('regDS')?.value,club=getRegClubInputValue();
-  if(tid!==edit.tid){toast('다른 대회로는 수정할 수 없습니다. 수정 취소 후 새로 등록해 주세요','error');return;}
-  if(!div||!club){toast('부서와 클럽을 선택하세요','error');return;}
-  if(REG&&!AD&&transferClub(club)!==transferClub(REG_CLUB)){toast('자기 클럽 팀만 수정할 수 있습니다','error');return;}
+  if(tid!==edit.tid){rosterSaveNotice('다른 대회로는 수정할 수 없습니다. 수정 취소 후 새로 등록해 주세요','error');return;}
+  if(!div||!club){rosterSaveNotice('부서와 클럽을 선택하세요','error');return;}
+  if(REG&&!AD&&transferClub(club)!==transferClub(REG_CLUB)){rosterSaveNotice('자기 클럽 팀만 수정할 수 있습니다','error');return;}
   const current=(G.teams[edit.key]||[]).find(t=>t._id===edit.id);
-  const access=getTeamRegistrationManageAccess(tid,current);if(!current||!access.ok){toast(access.reason||'기존 팀을 찾을 수 없습니다','error');return;}
+  const access=getTeamRegistrationManageAccess(tid,current);if(!current||!access.ok){rosterSaveNotice(access.reason||'기존 팀을 찾을 수 없습니다','error');return;}
   const doublesCount=getRegDoublesCount(),mainPlayerCount=div==='여성부'?6:doublesCount*2,names=[];
   names.push(...readTeamRosterInputs('p',mainPlayerCount));
   const nextKey=tid+'_'+div;
   const others=(G.teams[nextKey]||[]).filter(t=>t._id!==edit.id);
   const check=validateTeamRegistration({names,club,maxPlayers:mainPlayerCount+2,existingTeams:others,makePlayerKey:pKey});
-  if(!check.ok){toast(check.error,'error');return;}
+  if(!check.ok){rosterSaveNotice(check.error,'error');return;}
   const capacity=validateRegistrationCapacity({currentCount:others.length,maxTeams:getDivisionMaxTeams(tid,div),isIndividual:false});
-  if(!capacity.ok){toast(capacity.error,'error');return;}
+  if(!capacity.ok){rosterSaveNotice(capacity.error,'error');return;}
   const tournament=G.tournaments.find(t=>t.id===tid);
-  let missing;try{missing=await verifiedMissingRegistryMembers(names,club,tournament);}catch(e){toast(e.message,"error");return;}
+  let missing;try{missing=await verifiedMissingRegistryMembers(names,club,tournament);}catch(e){rosterSaveNotice(e.message,"error");return;}
   if(missing.length){showMissingMembers2026(missing,club,tournament);return;}
   const rules=await validateTeamDivisionRules({tid,div,club,names,excludeKey:edit.key,excludeIdx:(G.teams[edit.key]||[]).findIndex(t=>t._id===edit.id)});
   if(!rules.ok){alert(rules.error);return;}
   const next={...edit.original,...buildTeamEditPayload({club,players:names,doublesCount,mainPlayerCount}),division:div,tournamentId:tid};
-  try{attachRegistrationIdentities(next,tid);}catch(e){toast(e.message,'error');return;}
+  try{attachRegistrationIdentities(next,tid);}catch(e){rosterSaveNotice(e.message,'error');return;}
   sl(true);
   try{
     await validatePriorYearClubTransfer(tid,div,[next]);
@@ -9816,13 +9839,13 @@ async function saveUnifiedTeamEdit(){
     for(let i=1;i<=12;i++){const el=ge('p'+i);if(el){el.value='';delete el.dataset.playerId;}}
     refreshDivisionRuleFormBadges('register');
     savePlayersToLocalCache();try{cacheTournamentBundleFromMemory(tid);}catch(e){}
-    renderRL();renderAllP();toast('수정 내용 저장 완료 ✅','success');
-  }catch(e){toast('수정 실패: '+e.message,'error');}
+    renderRL();renderAllP();rosterSaveNotice('수정 내용 저장 완료 ✅','success');
+  }catch(e){rosterSaveNotice('수정 실패: '+e.message,'error');}
   finally{sl(false);}
 }
 
-async function registerTeam(){
-  if(UNIFIED_TEAM_EDIT)return saveUnifiedTeamEdit();
+async function registerTeamCore(){
+  if(UNIFIED_TEAM_EDIT)return saveUnifiedTeamEditCore();
   // PHASE135: 지난대회 명단 보기/불러오기 과정에서 등록 화면이 재렌더링되어
   // regTS/regDS 값이 잠깐 비는 경우에도, 열 때 보존한 현재 대회/부서를 안전하게 복원한다.
   const tsEl=ge('regTS'), dsEl=ge('regDS');
@@ -9852,17 +9875,17 @@ async function registerTeam(){
   const isIndividual=isIndividualTournament(t);
   const club=getRegClubInputValue();
 
-  if(!tid||!div){toast('대회/부서 선택','error');return;}
-  if(t?.status&&t.status!=='open' && !AD){toast('접수중인 대회만 등록 가능','error');return;}
-  if(!isIndividual && !club){toast('클럽 선택','error');return;}
+  if(!tid||!div){rosterSaveNotice('대회/부서 선택','error');return;}
+  if(t?.status&&t.status!=='open' && !AD){rosterSaveNotice('접수중인 대회만 등록 가능','error');return;}
+  if(!isIndividual && !club){rosterSaveNotice('클럽 선택','error');return;}
   if(!isIndividual && REG && !AD){
     const access=getTeamRegistrationManageAccess(tid);
-    if(!access.ok){toast(access.reason,'error');return;}
+    if(!access.ok){rosterSaveNotice(access.reason,'error');return;}
     const myClub=baseClub(REG_CLUB)||REG_CLUB;
     const inputClub=baseClub(club)||club;
-    if(inputClub!==myClub){toast('경기이사는 자기 클럽 팀만 등록할 수 있습니다','error');return;}
+    if(inputClub!==myClub){rosterSaveNotice('경기이사는 자기 클럽 팀만 등록할 수 있습니다','error');return;}
   }else if(!AD && !isIndividual && isRegDeadlinePassed(tid)){
-    toast(`등록 기한이 만료되어 등록할 수 없습니다.\n${regDeadlineLabel(tid)}`,'error');return;
+    rosterSaveNotice(`등록 기한이 만료되어 등록할 수 없습니다.\n${regDeadlineLabel(tid)}`,'error');return;
   }
 
   const key=tid+'_'+div,ex=G.teams[key]||[];
@@ -9872,7 +9895,7 @@ async function registerTeam(){
     maxTeams,
     isIndividual
   });
-  if(!capacityCheck.ok){ toast(capacityCheck.error,'error'); return; }
+  if(!capacityCheck.ok){ rosterSaveNotice(capacityCheck.error,'error'); return; }
 
   let names=[];
   let dbl=1;
@@ -9905,13 +9928,13 @@ async function registerTeam(){
       smsFlags:[p1receiveOrderSms,p1receiveResultSms,p2receiveOrderSms,p2receiveResultSms],
       existingTeams:ex
     });
-    if(!individualCheck.ok){ toast(individualCheck.error,'error'); return; }
+    if(!individualCheck.ok){ rosterSaveNotice(individualCheck.error,'error'); return; }
     individualPlayers=[
       {name:p1, clubsRaw:p1clubRaw, clubs:parseClubAliases(p1clubRaw), phone:p1phone, career:p1career, receiveSms:(p1receiveOrderSms||p1receiveResultSms), receiveOrderSms:p1receiveOrderSms, receiveResultSms:p1receiveResultSms},
       {name:p2, clubsRaw:p2clubRaw, clubs:parseClubAliases(p2clubRaw), phone:p2phone, career:p2career, receiveSms:(p2receiveOrderSms||p2receiveResultSms), receiveOrderSms:p2receiveOrderSms, receiveResultSms:p2receiveResultSms}
     ];
   }else{
-    if(!club){toast('클럽 선택','error');return;}
+    if(!club){rosterSaveNotice('클럽 선택','error');return;}
     dbl=getRegDoublesCount();
     const mainCount=dbl*2;
     const isRegW=(div==='여성부'), isRegT=(div==='테린이'||div==='terinee');
@@ -9925,11 +9948,11 @@ async function registerTeam(){
       existingTeams:ex,
       makePlayerKey:pKey
     });
-    if(!teamCheck.ok){ toast(teamCheck.error,'error'); return; }
-    let missing2026;try{missing2026=await verifiedMissingRegistryMembers(names,club,t);}catch(e){toast(e.message,"error");return;}
+    if(!teamCheck.ok){ rosterSaveNotice(teamCheck.error,'error'); return; }
+    let missing2026;try{missing2026=await verifiedMissingRegistryMembers(names,club,t);}catch(e){rosterSaveNotice(e.message,"error");return;}
     if(missing2026.length){showMissingMembers2026(missing2026,club,t);return;}
     const divRuleCheck=await validateTeamDivisionRules({tid,div,club,names});
-    if(!divRuleCheck.ok){ alert(divRuleCheck.error); toast('부서 자격 규정을 확인해 주세요','error'); return; }
+    if(!divRuleCheck.ok){ alert(divRuleCheck.error); rosterSaveNotice('부서 자격 규정을 확인해 주세요','error'); return; }
   }
 
   sl(true);
@@ -9972,7 +9995,7 @@ async function registerTeam(){
     G.teams[key].splice(newIdx,1);
     if(!G.teams[key].length) delete G.teams[key];
     sl(false);
-    toast('등록 실패: '+e.message,'error');
+    rosterSaveNotice('등록 실패: '+e.message,'error');
     return;
   }
 
@@ -10018,7 +10041,7 @@ async function registerTeam(){
   sl(false);
   renderRL();
   renderRegisterDivisionOverview();
-  toast(isIndividual?'참가 접수 완료 ✅':'팀 등록 완료 ✅','success');
+  rosterSaveNotice(isIndividual?'참가 접수 완료 ✅':'팀 등록 완료 ✅','success');
 }
 async function _removePlayerHistory(names,club,tid,div){
   // Player history is derived data: read its server document before editing it.
@@ -25850,12 +25873,12 @@ function updateRegistryQuickEditQualificationHint(){
   if(a) tags.push('65+ 인증완료');
   el.innerHTML=tags.length?`현재 자격 표시: <b>${tags.map(esc).join(' · ')}</b><br><span style="color:#64748b">저장 즉시 팀등록 하향 예외 판정에 반영됩니다.</span>`:'여성 또는 65+ 인증을 지정하면 선수현황과 팀등록 자격판정에 즉시 반영됩니다.';
 }
-async function saveRegistryQuickEditModal(){
+async function saveRegistryQuickEditModalCore(){
   if(!AD)return;
   const year=parseInt(ge('rqemYear')?.value||2026);
   const idx=parseInt(ge('rqemIdx')?.value||'-1',10);
   const members=await loadRegistry(year),m=members[idx];
-  if(!m){toast('선수를 찾을 수 없습니다','error');return;}
+  if(!m){rosterSaveNotice('선수를 찾을 수 없습니다','error');return;}
   try{ await loadAge65Certifications(); }catch(_e){}
   const oldName=cleanName(m.name||''),oldClub=canonicalRegistryClub(m.club||'');
   const oldGender=_ruleGenderKey(m?.gender||m?.sex||'');
@@ -25864,13 +25887,13 @@ async function saveRegistryQuickEditModal(){
   const newClub=canonicalRegistryClub(ge('rqemClub')?.value||'');
   const newSubClub=(ge('rqemSubClub')?.value||'').trim();
   const identityTag=String(ge('rqemIdentityTag')?.value||'').trim().toUpperCase();
-  if(identityTag&&!/^[A-Z0-9]{1,8}$/.test(identityTag)){toast('구분은 영문 또는 숫자 1~8자로 입력하세요','error');return;}
-  if(identityTag&&members.some((r,i)=>i!==idx&&transferName(r.name)===transferName(newName)&&r.identityTag===identityTag)){toast('동명이인 구분값이 중복됩니다','error');return;}
+  if(identityTag&&!/^[A-Z0-9]{1,8}$/.test(identityTag)){rosterSaveNotice('구분은 영문 또는 숫자 1~8자로 입력하세요','error');return;}
+  if(identityTag&&members.some((r,i)=>i!==idx&&transferName(r.name)===transferName(newName)&&r.identityTag===identityTag)){rosterSaveNotice('동명이인 구분값이 중복됩니다','error');return;}
   const newGender=ge('rqemGender')?.checked?'F':'M';
   const newAge65=!!ge('rqemAge65')?.checked;
-  if(!newName||!newClub){toast('이름과 주 클럽을 확인해 주세요','error');return;}
+  if(!newName||!newClub){rosterSaveNotice('이름과 주 클럽을 확인해 주세요','error');return;}
   const duplicate=members.some((r,i)=>i!==idx&&normName(cleanName(r.name||''))===normName(newName)&&canonicalRegistryClub(r.club||'')===newClub);
-  if(duplicate&&!identityTag){toast('같은 클럽의 동명이인은 A/B 구분값을 입력하세요','error');return;}
+  if(duplicate&&!identityTag){rosterSaveNotice('같은 클럽의 동명이인은 A/B 구분값을 입력하세요','error');return;}
   if(oldAge65!==newAge65){
     const q=newAge65?`${newName} 선수를 만 65세 이상 인증완료로 저장할까요?`:`${newName} 선수의 65세 이상 인증을 해제할까요?`;
     if(!confirm(q)) return;
@@ -25883,7 +25906,7 @@ async function saveRegistryQuickEditModal(){
     G_REGISTRY[year]=members;await saveRegistry(year);
     if(hasRegistryNamesakeInClub(members,members[idx])){
       PLAYER_SEARCH_MODEL=null;DIVISION_RULE_CACHE.clear();
-      closeRegistryQuickEditModal();sl(false);toast('동명이인 정보 저장 완료 ✅','success');
+      closeRegistryQuickEditModal();sl(false);rosterSaveNotice('동명이인 정보 저장 완료 ✅','success');
       await renderRegistryTab(true);try{await renderRegistryMgr();}catch(e){}return;
     }
 
@@ -25917,11 +25940,11 @@ async function saveRegistryQuickEditModal(){
     const gLabel=newGender==='F'?'여성':newGender==='M'?'남성':'미지정';
     await fbLog(`등록선수 수정: ${oldName}(${oldClub}) → ${newName}(${newClub}) / 부클럽 ${newSubClub||'없음'} / 성별 ${gLabel} / 65+ ${newAge65?'인증':'미인증'}`,'✏️');
     closeRegistryQuickEditModal();sl(false);
-    toast('선수 정보 수정 완료 ✅','success');
+    rosterSaveNotice('선수 정보 수정 완료 ✅','success');
     renderAllP();await renderRegistryTab(true);
     try{await renderRegistryMgr();}catch(e){}
     try{refreshDivisionRuleFormBadges('register');}catch(e){}
-  }catch(e){sl(false);console.error(e);toast('저장 실패: '+e.message,'error');}
+  }catch(e){sl(false);console.error(e);rosterSaveNotice('저장 실패: '+e.message,'error');}
 }
 
 // 선수 등록 현황 탭 — 인라인 빠른 삭제
