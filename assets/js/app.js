@@ -16602,6 +16602,15 @@ function repairMainFirstRoundGroupConflicts(leaves,rnd){
     if(!changed)return;
   }
 }
+function balancedMainByePositions(positions,reserved,n){
+  const score=pos=>{const counts=[];for(let size=n/2;size>=2;size/=2){const start=Math.floor(pos/size)*size;counts.push([...reserved].filter(p=>p>=start&&p<start+size).length);}return counts;};
+  const compare=(a,b)=>{for(let i=0;i<a.length;i++)if(a[i]!==b[i])return a[i]-b[i];return 0;};
+  let best=null;for(const pos of positions){const value=score(pos);if(best===null||compare(value,best)<0)best=value;}
+  return positions.filter(pos=>compare(score(pos),best)===0);
+}
+function assertMainByeSpread(slots){
+  const n=slots.length;for(let block=n/2;block>=1;block/=2){const counts=[];for(let start=0;start<n;start+=block)counts.push(slots.slice(start,start+block).filter(s=>s.bye).length);if(Math.max(...counts)-Math.min(...counts)>1)throw new Error('부전승 균등 분산 조건과 시드가 충돌합니다. 본선 설정을 확인하세요.');}
+}
 function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   const total=(entries||[]).length;
   const spec=computeMainBracketSpec(total, bracketMode);
@@ -16683,7 +16692,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
     else{
       const open=leaves.map((e,i)=>!e&&!reservedByeLeaves.has(i)&&!leaves[i%2===0?i+1:i-1]&&!reservedByeLeaves.has(i%2===0?i+1:i-1)?i:null).filter(i=>i!=null);
       if(!open.length)continue;
-      position=chooseBestMainLeaf(open,entry,leaves,mainSize,rnd);leaves[position]={...entry};
+      position=chooseBestMainLeaf(balancedMainByePositions(open,reservedByeLeaves,mainSize),entry,leaves,mainSize,rnd);leaves[position]={...entry};
     }
     reservedByeLeaves.add(position%2===0?position+1:position-1);byeEntries.add(identity);
   }
@@ -16723,6 +16732,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   });
 
   if(byeIdxs.length!==byeCount||matchSlots.some(slot=>!slot.t1&&!slot.t2))throw new Error('본선 부전승 또는 진출 자리 누락이 있어 저장을 중단했습니다.');
+  assertMainByeSpread(matchSlots);
   const expectedFirstByes=Math.min(byeCount,mainPool.filter(e=>Number(e.rk)===1).length);
   if(matchSlots.filter(slot=>slot.bye&&Number(slot.t1?.rk)===1).length!==expectedFirstByes)throw new Error('조 1위 우선 부전승 조건과 시드가 충돌합니다.');
   const revealOrder=[];
