@@ -12168,7 +12168,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         ${isIndividualByKey(key)?`<button class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;font-weight:800;border-color:var(--accent);color:var(--accent)" onclick="toggleMainSection('${key}')">${mainCollapsed?'📂 가지형 대진표 펼치기':'📁 가지형 대진표 접기'}</button>`:''}
         ${canManageBracket()?`<div style="display:flex;gap:6px">
-          <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>
+          ${isIndividualByKey(key)?`<button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="buildMain('${tid}','${div}')">🎲 본선 시드보호 재추첨</button>`:''}
           <button class="btn btn-outline" style="font-size:.72rem;padding:4px 10px" onclick="openManualEdit('${tid}','${div}')">⚙️ 고급 수동수정</button>
         </div>`:''}
       </div>
@@ -17149,7 +17149,7 @@ async function runMainExternalDrawAnimation(plan,audit={}){
 
     renderMainPreview(liveSlots,n,G.teams[MD?.key||'']||[],MD?.key||'',false,(plan?.playInMatches)||[]);
     if(progress) progress.style.width=`${Math.round(((i+1)/total)*100)}%`;
-    ge('mainStageMeta').innerHTML=`시드보호 본선 재추첨 진행 중... (${i+1}/${total})`;
+    ge('mainStageMeta').innerHTML=`${isIndividualByKey(MD.key)?'시드보호 본선 재추첨':'본선 추첨'} 진행 중... (${i+1}/${total})`;
     await sleep(i===revealOrder.length-1 ? 260 : 120);
   }
 
@@ -17220,7 +17220,7 @@ async function startMainDraw(){
   MD.isRunning=true;
   let planPrepared;try{planPrepared=prepareMainExternalDraw(true);}catch(e){MD.isRunning=false;toast(e.message,'error');return;}
   MD.plan=planPrepared || MD.plan;
-  ge('mainStageMeta').innerHTML='시드보호 본선 재추첨 진행 중...';
+  ge('mainStageMeta').innerHTML=isIndividualByKey(MD.key)?'시드보호 본선 재추첨 진행 중...':'본선 추첨 진행 중...';
 
   ge('mainDrawBtn').disabled=true;
   ge('mainStep1').style.display='none';
@@ -18078,7 +18078,7 @@ async function saveSimpleMatchResultCore(score1,score2){
   catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('결과 저장 실패: '+e.message,'error');}
 }
 
-function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+function esc(s){return String(s??'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 // 스코어 버튼 클릭 핸들러
 // PHASE247: enter the losing rubber score once; fill the winner with six.
 function setRbSc(inputId,val,autoOpponent=true){
@@ -22298,9 +22298,11 @@ function _restorePointKeys(tid){
 function _restorePointClone(v){
   try{return JSON.parse(JSON.stringify(v??null));}catch(e){return null;}
 }
+let LAST_RESTORE_POINT_ERROR='';
 async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저장',force=false}={}){
   tid=String(tid||'').trim();
-  if(!tid||__autoRestoreSuppressed||__autoRestoreBusy)return null;
+  if(!tid||__autoRestoreSuppressed||__autoRestoreBusy){LAST_RESTORE_POINT_ERROR=!tid?'대회가 선택되지 않았습니다.':'다른 복구점 저장·복원이 진행 중입니다.';return null;}
+  LAST_RESTORE_POINT_ERROR='';
   const t=_restorePointTournament(tid);
   if(!t)return null;
   const lastKey=`kimhae_restore_last_${tid}`;
@@ -22322,6 +22324,7 @@ async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저�
     if(type==='auto') cleanupOldTournamentRestorePoints(tid).catch(()=>{});
     return rp.id;
   }catch(e){
+    LAST_RESTORE_POINT_ERROR=e?.message||String(e);
     console.warn('restore point create failed',e);
     return null;
   }finally{__autoRestoreBusy=false;}
@@ -22598,7 +22601,7 @@ function setRecoveryCategory(category){AUTO_RESTORE_CATEGORY=category;openAutoRe
 window.setRecoveryCategory=setRecoveryCategory;
 async function manualTournamentRestorePoint(tid){
   sl(true);const id=await createTournamentRestorePoint(tid,{type:'manual',reason:'관리자 수동 복구점',force:true});sl(false);
-  toast(id?'복구점 저장 완료 💾':'복구점 저장 실패',id?'success':'error');if(id)openAutoRestoreCenter();
+  toast(id?'복구점 저장 완료 💾':'복구점 저장 실패: '+(LAST_RESTORE_POINT_ERROR||'대회 데이터를 확인해 주세요.'),id?'success':'error');if(id){AUTO_RESTORE_CATEGORY='full';openAutoRestoreCenter();}
 }
 function ensureAutoRestoreCenterButton(){
   if(ge('autoRestoreCenterBtn'))return;
