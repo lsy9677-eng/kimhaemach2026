@@ -22825,8 +22825,9 @@ async function saveRegListExcel44(){
         rows.push([dl(div),'','','등록팀없음','','']);
         return;
       }
-      sorted.forEach(({team},idx)=>{
-        const teamName=tdn(team,key,idx);
+      // PHASE254: team labels use the original division roster index, never the export sort index.
+      sorted.forEach(({team,sortIdx},idx)=>{
+        const teamName=tdn(team,key,sortIdx);
         const players=(team.players||[]).filter(Boolean);
         const dbl=Number(team.doublesCount||5);
         const neutralFiveRoster=isUnifiedTeamRoster(div,dbl);
