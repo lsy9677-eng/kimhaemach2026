@@ -12558,9 +12558,9 @@ function matchOrderRecordBadges(key,m){
   const rows=[1,2].map(side=>matchOrderRecordStatus(key,m,side)).filter(Boolean);
   if(!rows.length)return '';
   return `<div class="match-record-badges" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;margin:5px 0">${rows.map(r=>{
-    const complete=r.filled===r.count,scoreComplete=r.scoreFilled===r.count,ok=r.photo&&complete&&scoreComplete;
-    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'O':'X'} · 👥 ${complete?'O':'X '+r.filled+'/'+r.count+'복'} · 점수 ${scoreComplete?'O':'X '+r.scoreFilled+'/'+r.count+'복'}</span>`;
-  }).join('')}</div>`;
+    const complete=r.filled===r.count,ok=r.photo&&complete;
+    return `<span title="사진은 첨부 여부, 명단은 복식별 입력량입니다. 내용 검증 완료를 뜻하지 않습니다." style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'O':'X'} · 명단 ${r.filled}/${r.count}복</span>`;
+  }).join('')}<span title="경기 공통 · 유효한 복식별 점수 입력량입니다. 팀 종합 결과와 별도로 확인합니다." style="padding:3px 7px;border:1px solid ${rows[0].scoreFilled===rows[0].count?'#86efac':'#fcd34d'};border-radius:7px;background:${rows[0].scoreFilled===rows[0].count?'#f0fdf4':'#fffbeb'};color:${rows[0].scoreFilled===rows[0].count?'#166534':'#92400e'};font-size:.68rem;line-height:1.5">점수 ${rows[0].scoreFilled}/${rows[0].count}복</span></div>`;
 }
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   if(!bracketKeyPublished(key,m.phase==='group'?'prelim':'main'))return '';
