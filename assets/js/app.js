@@ -17865,7 +17865,7 @@ function openM3(key,mid,forceEdit=false){
     escapeHtml:esc
   })}
   ${buildPhotoAssistHtml({
-    show:photoAssistVisible,
+    show:photoAssistVisible&&!isSimpleResultMode(G.meta),
     team1:dn1,
     team2:dn2,
     side1Editable:side1PhotoEditable,
@@ -17982,7 +17982,7 @@ function openM3(key,mid,forceEdit=false){
     });
     const hint=ge('offlineResultEntryHint');
     if(hint){
-      hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진은 오더지 기록으로 보관됩니다. 선수 명단을 직접 선택해 주세요. OCR 보조 기능은 관리자 허용 시 분석 버튼으로 선택 실행할 수 있습니다.</div>');
+      hint.insertAdjacentHTML('afterend', '<div style="font-size:.64rem;color:#64748b;margin:0 2px 8px;line-height:1.45">📷 사진은 증빙으로 보관됩니다. 복식별 선수 이름을 직접 선택해 기록하세요.</div>');
 
     }
   }
@@ -26910,6 +26910,7 @@ window.saveOrderPhotoOcrSetting=saveOrderPhotoOcrSetting;
 window.analyzeStoredOrderPhoto=analyzeStoredOrderPhoto;
 function renderOrderPhotoManage(key,m){
   const body=ge('mM3B');if(!body)return;
+  for(const side of [1,2]){const status=ge('orderPhotoStatus'+side);if(status)status.textContent=_orderPhotoGetSaved(m,side)?'사진 저장됨 · 명단은 직접 확인해 주세요.':'사진 미첨부';}
   const originalButtons=Array.from(body.querySelectorAll('button'));
   for(const side of [1,2]){
     if(!_orderPhotoGetSaved(m,side)||!_orderPhotoCanView(m,side))continue;
@@ -26922,10 +26923,11 @@ function renderOrderPhotoManage(key,m){
     const view=originalButtons.find(b=>matchesSide(b,'openOrderPhotoViewer'));
     const parent=anchor?.parentElement||view?.parentElement;if(!parent)continue;
     if(view){view.disabled=false;view.onclick=()=>openOrderPhotoViewer(side);}
+    if(!canWriteMatchOrderSide(key,m,side))continue;
     const controls=document.createElement('div');controls.style.cssText='display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:5px';
     const trigger=isSimpleResultMode(G.meta)?'triggerSimpleOrderPhoto':'triggerOrderPhoto';
     controls.innerHTML=`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="${trigger}(${side},'upload')">사진 수정</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button>`.replace('사진 수정','사진 수정');
-    if(isOrderPhotoOcrEnabled())controls.insertAdjacentHTML('beforeend',`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="analyzeStoredOrderPhoto(${side})">OCR 분석(선택)</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="selectLocalOrderPhotoForOcr(${side})">기기 사진으로 OCR</button>`);
+    if(isOrderPhotoOcrEnabled()&&canWriteMatchOrderSide(key,m,side))controls.insertAdjacentHTML('beforeend',`<details style="width:100%;font-size:.7rem;text-align:left;margin-top:5px"><summary style="cursor:pointer;color:#64748b">OCR 보조 도구 · 손글씨 인식 제한</summary><div style="padding:6px 0;color:#92400e">손글씨는 누락·오인식이 많습니다. 선수 이름을 직접 선택하는 방법을 권장합니다.</div><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="analyzeStoredOrderPhoto(${side})">OCR 분석(선택)</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="selectLocalOrderPhotoForOcr(${side})">기기 사진으로 OCR</button></details>`);
     parent.appendChild(controls);
   }
 }
