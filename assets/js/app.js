@@ -7472,11 +7472,7 @@ function openTD(tid){
   ge('mTDT').textContent=t.name;
   const fl={group_knockout:'예선+본선',knockout:'토너먼트',roundrobin:'풀리그'};
   const rows=(t.divisions||[]).map(d=>{const c=gDS(t,d),cnt=(G.teams[tid+'_'+d]||[]).length;
-    const bronzeOpt = (c.format!=='roundrobin' && cnt<10)
-      ? (AD
-          ? `<select class="form-select" id="dTP_${tid}_${d}" style="width:120px"><option value="shared" ${c.thirdPlaceMode==='shared'?'selected':''}>공동 3위</option><option value="match" ${c.thirdPlaceMode==='match'?'selected':''}>3·4위전</option></select><div style="font-size:.65rem;color:var(--text3);margin-top:4px">10팀 미만만 적용</div>`
-          : `<span class="badge bg-bronze">${c.thirdPlaceMode==='match'?'3·4위전':'공동 3위'}</span>`)
-      : `<span style="font-size:.72rem;color:var(--text3)">-</span>`;
+    const bronzeOpt=c.format==='roundrobin'?'<span>-</span>':`<span class="badge bg-bronze">${cnt>0&&cnt<10?'3·4위전':'공동 3위'}</span><div style="font-size:.65rem;color:var(--text3);margin-top:4px">참가팀 수 기준 자동 적용</div>`;
     return`<tr><td><span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${tid}','${d}')">${dl(d)}</span></td><td><b>${cnt}</b>팀</td>
     <td>${AD?`<select class="form-select" id="dF_${tid}_${d}"><option value="group_knockout" ${c.format==='group_knockout'?'selected':''}>예선+본선</option><option value="roundrobin" ${c.format==='roundrobin'?'selected':''}>풀리그</option><option value="knockout" ${c.format==='knockout'?'selected':''}>토너먼트</option></select>`:`<span class="badge bg-green">${fl[c.format]}</span>`}</td>
     <td>${AD?`<select class="form-select" id="dG_${tid}_${d}" style="width:75px"><option value="3" ${c.grpSize===3?'selected':''}>3팀</option><option value="4" ${c.grpSize===4?'selected':''}>4팀</option><option value="5" ${c.grpSize===5?'selected':''}>5팀</option></select>`:`${c.grpSize}팀`}</td>
@@ -12276,7 +12272,7 @@ function calcFinalRanks(key,teams,mMs){
       const bronzeLoser = bronzeMatch.winner===bronzeMatch.t1 ? bronzeMatch.t2 : bronzeMatch.t1;
       pushRank(bronzeMatch.winner,3,'3위');
       pushRank(bronzeLoser,4,'4위');
-    }else{
+    }else if(bronzeMode==='shared'){
       getSharedThirdTeamIndexes(key,teams,mainList).forEach(idx=>pushRank(idx,3,'공동 3위'));
     }
     return ranks.sort((a,b)=>a.rank-b.rank || String(a.club).localeCompare(String(b.club),'ko'));
@@ -13293,7 +13289,7 @@ function renderBracketTree(key,mMs,teams){
       const ti3=bronzeMatch.winner, ti4=bronzeMatch.winner===bronzeMatch.t1?bronzeMatch.t2:bronzeMatch.t1;
       if(ti3!=null&&teams[ti3]) thirdHtml+=`<div class="t-champ" style="padding:8px 12px"><div style="font-size:1.1rem">🥉</div><div style="font-weight:700;font-size:.78rem;margin-top:3px">${tdn(teams[ti3],key,ti3)}</div><div style="font-size:.62rem;color:var(--text2)">3위</div></div>`;
       if(ti4!=null&&teams[ti4]) thirdHtml+=`<div class="t-champ" style="padding:8px 12px"><div style="font-size:1rem">4️⃣</div><div style="font-weight:700;font-size:.78rem;margin-top:3px">${tdn(teams[ti4],key,ti4)}</div><div style="font-size:.62rem;color:var(--text2)">4위</div></div>`;
-    } else if(sharedThirdIdxs.length){
+    } else if(bronzeMode==='shared'&&sharedThirdIdxs.length){
       thirdHtml=`<div class="t-champ" style="padding:8px 12px"><div style="font-size:1.1rem">🥉</div><div style="font-weight:700;font-size:.78rem;margin-top:3px">${sharedThirdIdxs.map(idx=>teams[idx]?tdn(teams[idx],key,idx):'').filter(Boolean).join(' · ')}</div><div style="font-size:.62rem;color:var(--text2)">공동 3위</div></div>`;
     }
     awardHtml=`<div class="t-round" style="min-width:120px"><div class="t-rtitle" style="background:var(--accent);margin-right:4px">🏆 시상</div><div class="t-matches" style="gap:8px">
@@ -21861,7 +21857,7 @@ async function saveClubManagerDetails(){
 async function addClub(){const v=ge('newClubInput').value.trim();if(!v){toast('클럽명 입력','error');return;}if(G.clubs.includes(v)){toast('이미 있는 클럽','error');return;}G.clubs.push(v);await saveMeta();renderCL();popSel();popCF();ge('newClubInput').value='';toast(v+' 추가됨','success');}
 async function delClub(i){if(!confirm('삭제?'))return;G.clubs.splice(i,1);await saveMeta();renderCL();popSel();}
 function normalizeThirdPlaceMode(mode, teamCount){
-  return (Number(teamCount||0) < 10 && mode==='match') ? 'match' : 'shared';
+  return (Number(teamCount||0)>0 && Number(teamCount)<10) ? 'match' : 'shared';
 }
 function getDivisionTeamCount(tid,div){
   return (G.teams?.[tid+'_'+div]||[]).length;
@@ -22083,6 +22079,7 @@ function getMainMedalSummary(key,teams,mMs){
     const fourthIdx=bronzeMatch.winner===bronzeMatch.t1?bronzeMatch.t2:bronzeMatch.t1;
     return {champion,runner,thirdLabel:'3위',thirds:[teams[bronzeMatch.winner]?tdn(teams[bronzeMatch.winner],key,bronzeMatch.winner):''].filter(Boolean),fourth:teams[fourthIdx]?tdn(teams[fourthIdx],key,fourthIdx):''};
   }
+  if(bronzeMode==='match')return {champion,runner,thirdLabel:'3위 · 결정전 대기',thirds:[],fourth:''};
   return {champion,runner,thirdLabel:'공동 3위',thirds:[...new Set(sharedThirds)],fourth:''};
 }
 
@@ -28416,19 +28413,20 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
 
   // 상단 결과판: 현재형은 결과 반영, 수기형은 빈 칸.
   const finalMatch=all.filter(m=>Number(m.round||0)===rounds[rounds.length-1]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0))[0];
-  let champion='', runner='', third='', thirdLabel='🥉 공동 3위';
+  const thirdMode=getThirdPlaceModeByKey(key);
+  let champion='', runner='', third='', thirdLabel=thirdMode==='match'?'🥉 3위':'🥉 공동 3위';
   if(!blank&&finalMatch){
     const fw=winnerTeam(finalMatch);
     if(fw!=null){
       champion=outputTeamName(key,fw);
       runner=outputTeamName(key,String(fw)===String(finalMatch.t1)?finalMatch.t2:finalMatch.t1);
     }
-    const bronze=all.find(m=>m.isThirdPlace===true||m.thirdPlace===true||String(m.roundName||m.label||'').includes('3위'));
+    const bronze=thirdMode==='match'?getBronzeMatch(key):null;
     if(bronze){
       const bw=winnerTeam(bronze);
       if(bw!=null){third=outputTeamName(key,bw);thirdLabel='🥉 3위';}
     }
-    if(!third&&rounds.length>=2){
+    if(thirdMode==='shared'&&!third&&rounds.length>=2){
       const semi=all.filter(m=>Number(m.round||0)===rounds[rounds.length-2]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
       const losers=semi.map(m=>{
         const w=winnerTeam(m); if(w==null)return '';
