@@ -10823,6 +10823,41 @@ function getPreservedSeedDrawState(key){
 }
 
 
+const divisionDrawResetBusy=new Set();
+async function resetDivisionDrawState(key){
+  if(!canManageBracket())throw new Error('대진 관리 권한이 필요합니다.');
+  if(divisionDrawResetBusy.has(key))throw new Error('초기화 저장 중입니다. 잠시 기다려 주세요.');
+  divisionDrawResetBusy.add(key);
+  const {tid,div}=_k2td(key),before=G.matches[key],beforeDraw=G.draws[key];
+  try{
+    // 메모리에 없는 경기까지 서버에서 확인한 뒤 같은 배치로 대진과 추첨을 초기화한다.
+    const snapshot=await getDocsFromServer(query(collection(db,'matches'),where('tournamentId','==',tid)));
+    const records=snapshot.docs.map(d=>({...d.data(),_id:d.id})).filter(m=>String(m.division||'')===div);
+    const serverDraw=await getDocFromServer(doc(db,'draws',key));
+    const oldDraw=serverDraw.exists()?serverDraw.data():{};
+    const preserved={};
+    if(typeof oldDraw.mainSeedRaw==='string')preserved.mainSeedRaw=oldDraw.mainSeedRaw;
+    if(oldDraw.mainSeedMap&&typeof oldDraw.mainSeedMap==='object')preserved.mainSeedMap=oldDraw.mainSeedMap;
+    const resetAt=new Date().toISOString();
+    const nextDraw={...preserved,drawResetAt:resetAt,mainDrawResetAt:resetAt};
+    G._matchIdsByKey=G._matchIdsByKey||{};
+    G._matchIdsByKey[key]=records.map(m=>m._id);
+    G.matches[key]=[];
+    await stM(key,{drawOverride:nextDraw});
+    await resetMatchRecords(key,{records,statsOnly:true,preserveDraw:true});
+    G.matches[key]=[];G.draws[key]=nextDraw;
+    if(G.mainMatches)delete G.mainMatches[key];
+    for(const map of [window.BRACKET_PRELIM_TOGGLE,window.BRACKET_MAIN_TOGGLE])if(map)delete map[key];
+    if(window._lastOrderCache){delete window._lastOrderCache[key];persistLastOrderCache();}
+    try{cacheTournamentBundleFromMemory(tid);}catch(e){}
+  }catch(e){G.matches[key]=before||[];if(beforeDraw)G.draws[key]=beforeDraw;else delete G.draws[key];throw e;}
+  finally{divisionDrawResetBusy.delete(key);}
+}
+function isCurrentDrawHistory(key,entry,mode='prelim'){
+  const resetAt=mode==='main'?(G.draws[key]?.mainDrawResetAt||G.draws[key]?.drawResetAt):G.draws[key]?.drawResetAt;
+  return !entry.deleted&&(!resetAt||String(entry.createdAt||'')>String(resetAt));
+}
+
 async function resetPrelimDrawOnly(key){
   const {tid,div}=_k2td(key);
   if(!confirm(`예선 리셋을 진행합니다.
@@ -10835,26 +10870,7 @@ async function resetPrelimDrawOnly(key){
 추첨 전 상태로 완전히 되돌릴까요?`)) return;
   sl(true);
   try{
-    const preservedSeedDraw = getPreservedSeedDrawState(key);
-    await resetMatchRecords(key);
-    G.matches[key]=[];
-    await stM(key);
-    if(G.mainMatches && G.mainMatches[key]) delete G.mainMatches[key];
-    try{
-      if(window.BRACKET_PRELIM_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE,key)){
-        delete window.BRACKET_PRELIM_TOGGLE[key];
-      }
-      if(window.BRACKET_MAIN_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_MAIN_TOGGLE,key)){
-        delete window.BRACKET_MAIN_TOGGLE[key];
-      }
-    }catch(_e){}
-    if(Object.keys(preservedSeedDraw).length){
-      G.draws[key]=preservedSeedDraw;
-      await stD(key);
-    }else{
-      try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
-      delete G.draws[key];
-    }
+    await resetDivisionDrawState(key);
     await fbLog(`예선 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화, 시드 유지)`,'♻️');
     sl(false);
     toast('예선 리셋 완료 ✅ 예선·본선 대진은 초기화되고 관리자 시드는 유지됩니다','success');
@@ -10882,7 +10898,7 @@ async function resetMainDrawOnly(key){
   try{
 
     const preservedSeedDraw=getPreservedSeedDrawState(key);
-    const preservedDraw={...draw, ...preservedSeedDraw};
+    const preservedDraw={...draw, ...preservedSeedDraw,mainDrawResetAt:new Date().toISOString()};
     delete preservedDraw.mainPlan;
     delete preservedDraw.mainAudit;
     delete preservedDraw.mainUpdatedAt;
@@ -10914,26 +10930,7 @@ async function resetDrawOnly(key){
 예선 추첨 전 상태로 완전히 되돌릴까요?`)) return;
   sl(true);
   try{
-    const preservedSeedDraw = getPreservedSeedDrawState(key);
-    await resetMatchRecords(key);
-    G.matches[key]=[];
-    await stM(key);
-    if(G.mainMatches && G.mainMatches[key]) delete G.mainMatches[key];
-    try{
-      if(window.BRACKET_PRELIM_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_PRELIM_TOGGLE,key)){
-        delete window.BRACKET_PRELIM_TOGGLE[key];
-      }
-      if(window.BRACKET_MAIN_TOGGLE && Object.prototype.hasOwnProperty.call(window.BRACKET_MAIN_TOGGLE,key)){
-        delete window.BRACKET_MAIN_TOGGLE[key];
-      }
-    }catch(_e){}
-    if(Object.keys(preservedSeedDraw).length){
-      G.draws[key]=preservedSeedDraw;
-      await stD(key);
-    }else{
-      try{ await deleteDoc(doc(db,'draws',key)); }catch(_e){}
-      delete G.draws[key];
-    }
+    await resetDivisionDrawState(key);
     await fbLog(`전체 리셋: ${tid} ${dl(div)} (예선/본선 대진 전체 초기화, 시드 유지)`,'♻️');
     sl(false);
     toast('전체 리셋 완료 ✅ 예선·본선 대진은 초기화되고 관리자 시드는 유지됩니다','success');
@@ -11143,8 +11140,9 @@ function renderMatchProgressSummary(key){
     const remain = Math.max(0, s.total - s.done);
     const groupComplete=s.total>0&&s.done===s.total;
     const liveCls = s.playing > 0 ? ' live-card' : '';
-    const pendingInGrp = s.matches.filter(m=>!m.bye&&!isDone(m));
-    const doneInGrp = s.matches.filter(m=>isDone(m) && !m.bye);
+    const orderedGroupMatches=sortGroupMatchesForDisplay(key,gi,s.matches);
+    const pendingInGrp = orderedGroupMatches.filter(m=>!m.bye&&!isDone(m));
+    const doneInGrp = orderedGroupMatches.filter(m=>isDone(m) && !m.bye);
     const groupTheme = getRoundVisualTheme('예선', 'group');
     const grpMemo=getGroupMemo(key,gi);
     const grpCourts=getGroupDisplayCourts(key,gi);
@@ -11918,7 +11916,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     ensureIndividualAutoCourtAssignmentsForKey(key);
   }
   const teams=G.teams[key]||[];
-  const rawDraw=G.draws[key];
+  const storedDraw=G.draws[key];
+  const rawDraw=(storedDraw?.groups?.length||storedDraw?.mainPlan)?storedDraw:null;
   const draw=showPrelimSection?rawDraw:(rawDraw?{...rawDraw,groups:[]}:null);
   const t=G.tournaments.find(t=>t.id===tid);
   const cfg=gDS(t,div);
@@ -11939,8 +11938,8 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const prelimToggleId = _prelimToggleId(key);
   const mainToggleId = _mainToggleId(key);
   const teamHeader=buildBracketRegisteredTeamBadges(tid,div,key,teams);
-  const latestSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
-  const latestMainSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')==='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const latestSavedDraw=(G.drawHistories[key]||[]).filter(it=>isCurrentDrawHistory(key,it,String(it.mode||'')==='main'?'main':'prelim')).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const latestMainSavedDraw=(G.drawHistories[key]||[]).filter(it=>isCurrentDrawHistory(key,it,'main') && String(it.mode||'')==='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
   // 개인전이라도 draw.groups가 있으면 group_knockout처럼 동작 (기존 개인전 대회 호환)
   const isIndivKey = isIndividualByKey(key);
   const hasGroups = !!(draw && Array.isArray(draw.groups) && draw.groups.length > 0);
@@ -11950,7 +11949,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const prelimRedrawLabel = draw ? '예선 재추첨' : '예선 추첨';
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
   const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
-  const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>!it.deleted && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
+  const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>isCurrentDrawHistory(key,it,'prelim') && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
   const prelimMenuWrapId = `prelimMenuWrap_${bracketDivisionDomId(key)}`;
   const mainMenuWrapId = `mainMenuWrap_${bracketDivisionDomId(key)}`;
   const topActions=`<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;max-width:100%">
