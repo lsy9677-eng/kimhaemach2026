@@ -11012,7 +11012,7 @@ function renderMatchProgressSummary(key){
       const a=rb?.score1??rb?.s1,b=rb?.score2??rb?.s2;
       return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;padding:5px 7px;border-top:1px solid #e5e7eb;font-size:.72rem"><span>${p1||'-'}</span><b>${a??'-'}:${b??'-'}</b><span style="text-align:right">${p2||'-'}</span></div>`;
     }).join(''):`<div style="padding:7px;font-size:.72rem;color:var(--text3)">상세 선수기록이 아직 입력되지 않았습니다.</div>`;
-    return `<div style="border:1.5px solid ${roundTheme.bd};border-radius:10px;background:${roundTheme.softBg};overflow:hidden">
+    return `<div class="match-result-complete" style="border:3px solid #3b82f6;border-radius:11px;background:#eff6ff;box-shadow:0 2px 5px rgba(37,99,235,.12);overflow:hidden">
       <div class="main-status-row" style="padding:7px 9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
         <span class="ms-round-chip" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>
         <span style="font-size:.88rem;font-weight:${leftWin?900:600}">${leftWin?'🏆 ':''}${n1}</span>
@@ -12733,7 +12733,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
     const detailId='compactDetail_'+String(key+'_'+m.id).replace(/[^a-zA-Z0-9_-]/g,'_');
     const resultBtn=(AD||OP||canEditMatchByClubMember(key,m))
       ? `<button class="btn btn-gray" style="padding:4px 9px;font-size:.72rem;white-space:nowrap" onclick="event.stopPropagation();openMatchOperations('${key}','${m.id}')">🔎 결과확인</button>`:'';
-    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-status="done" style="margin-bottom:7px;border:1.5px solid #bbf7d0;background:#f7fff9">
+    return `<div class="m3card" id="${getMatchCardDomId(key,m.id)}" data-match-id="${m.id}" data-match-status="done" style="margin-bottom:7px;border:3px solid #3b82f6;background:#eff6ff;box-shadow:0 2px 5px rgba(37,99,235,.12)">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;min-height:44px;flex-wrap:wrap">
         <span style="font-size:.72rem;font-weight:900;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 8px">${label||'경기'}</span>
         <div style="display:flex;align-items:center;gap:7px;flex:1;min-width:190px">
@@ -16817,17 +16817,43 @@ function tennisRevealHTML(text, tone='primary', sub=''){
     ${sub?`<div style="font-size:.74rem;color:var(--text2);text-align:center">${sub}</div>`:''}
   </div>`;
 }
+const mobileMainDrawMovedNodes=[];
+function restoreMobileMainDrawNodes(){
+  for(const item of mobileMainDrawMovedNodes){if(item.marker.parentNode){item.marker.parentNode.insertBefore(item.node,item.marker);item.marker.remove();}for(const saved of item.styles){if(saved.style===null)saved.el.removeAttribute('style');else saved.el.setAttribute('style',saved.style);}}
+  mobileMainDrawMovedNodes.length=0;ge('mobileMainDrawWorkspace')?.remove();
+}
 function fitMobileMainDraw(){
-  if(!window.matchMedia('(max-width:768px)').matches)return;
-  if(!ge('mobileMainDrawStyle')){const style=document.createElement('style');style.id='mobileMainDrawStyle';style.textContent=`@media(max-width:768px){#mMain{padding:4px!important}#mMain .modal-content{width:100%!important;max-width:100%!important;max-height:calc(100dvh - 8px)!important;margin:0!important;overflow:hidden!important}#mMain .modal-body{overflow:auto!important;min-height:0!important;padding:8px!important}#mainStep2{min-width:0!important;width:100%!important}#mainBracketPreview{min-width:0!important;width:100%!important;overflow:hidden!important}#mainStageContent{min-height:0!important;height:175px!important;overflow:hidden!important;position:relative}#mainStageContent>div{transform:scale(.62);transform-origin:top center}#mainStageMeta,#mainSeedSummary{font-size:11px!important;line-height:1.35!important}#mMain .modal-footer{flex-wrap:wrap!important;padding:6px!important}}`;document.head.appendChild(style);}
+  const modal=ge('mMain'),step=ge('mainStep2');if(!modal||!step)return;
+  if(!window.matchMedia('(max-width:768px)').matches){restoreMobileMainDrawNodes();return;}
+  const active=step.style.display!=='none';
+  let workspace=ge('mobileMainDrawWorkspace');
+  if(!active){restoreMobileMainDrawNodes();return;}
+  if(!workspace){
+    workspace=document.createElement('div');workspace.id='mobileMainDrawWorkspace';
+    workspace.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:100vw!important;box-sizing:border-box;background:#fff;z-index:100000;display:flex;flex-direction:column;overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0px);color:#10213d';
+    workspace.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#10213d;color:white;flex-shrink:0"><b>본선 대진표 추첨</b><button type="button" onclick="cm(\'mMain\')" style="color:#fff;background:#ffffff22;border:0;border-radius:8px;padding:7px 12px">닫기 ✕</button></div><div id="mobileMainDrawBody" style="flex:1;min-height:0;overflow:auto;overflow-x:hidden;padding:8px;box-sizing:border-box;display:flex;flex-direction:column;gap:5px"></div>';
+    modal.appendChild(workspace);
+    const body=ge('mobileMainDrawBody');
+    const move=(node,target)=>{if(!node)return;const marker=document.createComment('mobile-main-draw-origin');node.parentNode.insertBefore(marker,node);mobileMainDrawMovedNodes.push({node,marker,styles:[node,...node.querySelectorAll('button')].map(el=>({el,style:el.getAttribute('style')}))});target.appendChild(node);};
+    move(ge('mainStageMeta'),body);move(ge('mainStageContent'),body);move(ge('mainSeedSummary'),body);
+    const tools=document.createElement('div');tools.style.cssText='display:flex;align-items:center;justify-content:space-between;flex-shrink:0';tools.innerHTML='<b style="font-size:12px">본선 배정 현황</b><button type="button" id="mainDrawMobileZoom" class="btn btn-outline" style="font-size:11px;padding:4px 8px">대진표 확대</button>';body.appendChild(tools);
+    move(ge('mainBracketPreview'),body);
+    const footer=modal.querySelector('.modal-footer');move(footer,workspace);
+    if(footer){footer.style.setProperty('display','flex','important');footer.style.setProperty('flex-wrap','wrap','important');footer.style.setProperty('position','static','important');footer.style.setProperty('flex-shrink','0','important');footer.style.setProperty('padding','6px','important');footer.style.setProperty('margin','0','important');footer.style.setProperty('width','100%','important');footer.style.setProperty('box-sizing','border-box','important');footer.querySelectorAll('button').forEach(b=>{b.style.setProperty('min-width','0','important');b.style.setProperty('flex','1 1 40%','important');b.style.setProperty('font-size','12px','important');b.style.setProperty('padding','7px 5px','important');});}
+    ge('mainDrawMobileZoom').onclick=()=>{const box=ge('mainBracketPreview');box.dataset.expanded=box.dataset.expanded==='1'?'0':'1';fitMobileMainDraw();};
+  }
+  workspace.style.display='flex';
+  const stage=ge('mainStageContent');if(stage){stage.style.cssText='height:155px!important;min-height:155px!important;flex:0 0 155px;overflow:hidden;position:relative;width:100%;box-sizing:border-box';const child=stage.firstElementChild;if(child){child.style.transform='scale(.56)';child.style.transformOrigin='top center';}}
+  for(const id of ['mainStageMeta','mainSeedSummary']){const el=ge(id);if(el)el.style.cssText='font-size:11px!important;line-height:1.35;margin:0!important;padding:3px!important;flex-shrink:0;overflow-wrap:anywhere';}
   const box=ge('mainBracketPreview'),content=box?.querySelector('.pyramid-scroll-content');
+  if(box){box.style.cssText='width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:hidden;flex-shrink:0;box-sizing:border-box';}
   if(content){
-    if(!ge('mainDrawMobileZoom')){const button=document.createElement('button');button.id='mainDrawMobileZoom';button.type='button';button.className='btn btn-outline';button.style.cssText='font-size:11px;padding:4px 8px;margin:4px';button.textContent='대진표 확대';button.onclick=()=>{box.dataset.expanded=box.dataset.expanded==='1'?'0':'1';button.textContent=box.dataset.expanded==='1'?'전체 맞춤':'대진표 확대';fitMobileMainDraw();};box.before(button);}
     const width=parseFloat(content.style.width)||content.scrollWidth,height=parseFloat(content.style.height)||content.scrollHeight;
-    const available=Math.max(1,box.clientWidth-8),limit=Math.max(120,Math.min(280,window.innerHeight*.35));
-    const scale=box.dataset.expanded==='1'?1:Math.min(1,available/width,limit/height);
+    const available=Math.max(1,box.clientWidth-4),limit=Math.max(110,Math.min(300,window.innerHeight*.36));
+    const expanded=box.dataset.expanded==='1',scale=expanded?1:Math.min(1,available/width,limit/height);
     content.style.transform=`scale(${scale})`;content.style.transformOrigin='top left';content.style.margin='0';
-    const viewport=content.parentElement;viewport.style.height=Math.ceil(height*scale)+'px';viewport.style.width='100%';viewport.style.overflow=box.dataset.expanded==='1'?'auto':'hidden';if(box.dataset.expanded==='1')viewport.style.height=limit+'px';
+    const viewport=content.parentElement;viewport.style.cssText=`width:100%;height:${expanded?limit:Math.ceil(height*scale)}px;min-width:0;overflow:${expanded?'auto':'hidden'};box-sizing:border-box`;
+    ge('mainDrawMobileZoom').textContent=expanded?'전체 맞춤':'대진표 확대';
   }
 }
 window.addEventListener('resize',()=>requestAnimationFrame(fitMobileMainDraw));
