@@ -2670,6 +2670,13 @@ async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
 function _k2td(key){const i=key.lastIndexOf('_');return {tid:key.slice(0,i), div:key.slice(i+1)};}
 
+function compareMyClubMatchOrder(a,b){
+  const phase=m=>m.phase==='group'?0:(['playin','play-in','prelim'].includes(m.phase)?1:((m.phase==='bronze'||m.isThirdPlaceMatch)?3:2));
+  const num=v=>Number.isFinite(Number(v))?Number(v):0;
+  return phase(a)-phase(b)
+    || (phase(a)===0 ? num(a.group)-num(b.group) : num(a.round)-num(b.round))
+    || num(a.slot)-num(b.slot);
+}
 function myClubMatchPhaseLabel(key,m){
   if(m.phase==='group')return '예선'+(m.group!=null?' · '+grpLabel(Number(m.group)):'');
   if(m.phase==='bronze'||m.isThirdPlaceMatch)return '3·4위전';
@@ -10605,7 +10612,7 @@ function renderBracketCore(){
           const _t1=_tms[_m.t1]??_tms.find(t=>t.id===_m.t1);
           const _t2=_tms[_m.t2]??_tms.find(t=>t.id===_m.t2);
           return bracketKeyPublished(_key,_m.phase==='group'?'prelim':'main')&&!_m.bye&&((_t1&&baseClub(_t1.club||'')===_mbc)||(_t2&&baseClub(_t2.club||'')===_mbc));
-        });
+        }).sort(compareMyClubMatchOrder);
         if(_myMs.length){
           _myMatchCards+=`<div class="my-match-section-label" style="margin:10px 0 6px">${dl(_div)}</div>`;
           _myMs.forEach(_m=>{
@@ -17999,6 +18006,10 @@ function openM3(key,mid,forceEdit=false){
   }
 
 
+  // 현장 기록 모드에서는 온라인 오더의 제출 상태와 공개 안내를 사용하지 않는다.
+  const recordOrderSideHtml=(markup)=>useOrderHere?markup:String(markup)
+    .replace(/(>\s*)(?:미제출|제출 완료|제출완료)(\s*<)/g,'$1기록용 명단$2')
+    .replace(/상대 클럽 제출 후 자동 공개/g,'기록용 명단입니다. 경기 결과 확정 후 공개됩니다.');
   const defSlotLabels=['1·2번','3·4번','5·6번','7·8번','9·10번'];
   let statusText='';
   if(useOrderHere){
@@ -18015,11 +18026,11 @@ function openM3(key,mid,forceEdit=false){
   );
 
   html=`${resultTeamsHeaderHtml}
-  ${buildTeamResultIntroHtml({
-    useOnlineOrder:useOrderHere,
+  ${useOrderHere?buildTeamResultIntroHtml({
+    useOnlineOrder:true,
     bothSubmitted:st.bothSubmitted,
     isOperator
-  })}
+  }):'<div style="padding:10px 12px;margin:8px 0;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:.8rem;line-height:1.6">기록용 명단입니다. 경기 결과 확정 후 공개됩니다.</div>'}
   ${buildOrderSubmitStatusHtml({
     show:useOrderHere,
     bothSubmitted:st.bothSubmitted,
@@ -18081,7 +18092,7 @@ function openM3(key,mid,forceEdit=false){
     };
     const hiddenHtml=(selArr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(selArr||[]))}"></div>`;
     const fixedPairHtml=(arr,cid)=>`<div id="${cid}" style="display:none" data-selected="${encodeURIComponent(JSON.stringify(arr||[]))}"></div><div style="padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.82rem;color:var(--text);font-weight:800;line-height:1.6">${(arr||[]).length?arr.join(' / '):'선수 정보 없음'}</div>`;
-    const side1BoxHtml=buildOrderSideBoxHtml({
+    const side1BoxHtml=recordOrderSideHtml(buildOrderSideBoxHtml({
       teamName:dn1,
       isIndividual:isIndividualMode,
       submitted:st.s1,
@@ -18092,8 +18103,8 @@ function openM3(key,mid,forceEdit=false){
       hiddenHtml:hiddenHtml([],`rp1_${r}`),
       fixedPairHtml:fixedPairHtml(p1,`rp1_${r}`),
       escapeHtml:esc
-    });
-    const side2BoxHtml=buildOrderSideBoxHtml({
+    }));
+    const side2BoxHtml=recordOrderSideHtml(buildOrderSideBoxHtml({
       teamName:dn2,
       isIndividual:isIndividualMode,
       submitted:st.s2,
@@ -18104,7 +18115,7 @@ function openM3(key,mid,forceEdit=false){
       hiddenHtml:hiddenHtml([],`rp2_${r}`),
       fixedPairHtml:fixedPairHtml(p2,`rp2_${r}`),
       escapeHtml:esc
-    });
+    }));
     html+=buildTeamRubberCardHtml({
       rubberNo:r+1,
       defaultSlotLabel:defSlotLabels[r],
