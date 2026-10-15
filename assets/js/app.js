@@ -11115,6 +11115,7 @@ function renderMatchProgressSummary(key){
   const groupHtml = Object.keys(groups).map(Number).sort((a,b)=>a-b).map(gi=>{
     const s = groups[gi];
     const remain = Math.max(0, s.total - s.done);
+    const groupComplete=s.total>0&&s.done===s.total;
     const liveCls = s.playing > 0 ? ' live-card' : '';
     const pendingInGrp = s.matches.filter(m=>!m.bye&&!isDone(m));
     const doneInGrp = s.matches.filter(m=>isDone(m) && !m.bye);
@@ -11127,9 +11128,9 @@ function renderMatchProgressSummary(key){
       <button class="btn btn-outline" style="padding:4px 8px;font-size:.68rem" onclick="openGroupSmsModal('${key}',${gi})">📨 문자</button>
       <button class="btn btn-outline" style="padding:4px 8px;font-size:.68rem" onclick="openGroupCourtModal('${key}',${gi})">🎾 코트배정</button>
     </div>`:'';
-    return `<div class="card${liveCls}" style="padding:10px 12px;background:${groupTheme.softBg};border:1.5px solid ${groupTheme.bd};margin:0">
+    return `<div class="card${liveCls}" style="padding:10px 12px;background:${groupComplete?'#eff6ff':groupTheme.softBg};border:${groupComplete?'3px solid #2563eb':'1.5px solid '+groupTheme.bd};margin:0">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <div style="font-weight:900;color:${groupTheme.fg}"><span class="main-status-round" style="background:${groupTheme.chipBg};color:${groupTheme.chipFg};border:1px solid ${groupTheme.bd};margin-right:6px">🎾 예선</span>${grpLabel(gi)} 현황</div>
+        <div style="font-weight:900;color:${groupTheme.fg}"><span class="main-status-round" style="background:${groupTheme.chipBg};color:${groupTheme.chipFg};border:1px solid ${groupTheme.bd};margin-right:6px">🎾 예선</span>${grpLabel(gi)} 현황 ${groupComplete?'<span style="display:inline-block;padding:3px 7px;border-radius:999px;background:#1d4ed8;color:#fff;font-size:.7rem">✓ 조 경기 완료</span>':''}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
           <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${s.total}</span>
           <span class="badge" style="background:#ecfccb;color:#3f6212">완료 ${s.done}</span>
@@ -17416,7 +17417,7 @@ function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
   const width=Math.max(720,Math.min(1500,n*65)),levels=Math.ceil(Math.log2(n)),baseY=levels*64+32,height=baseY+125,x=i=>(i+.5)*width/n;
   let paths='',labels='';
   for(let level=0;level<levels;level++){const group=2**(level+1),y0=baseY-level*64,y1=y0-64;for(let g=0;g<n;g+=group){const l=x(g+group/4-.5),r=x(g+3*group/4-.5),mid=(l+r)/2;paths+=`<path d="M ${l} ${y0} V ${y1} H ${r} V ${y0} M ${mid} ${y1} V ${y1-16}" fill="none" stroke="#a9b8cc" stroke-width="1.5"/>`;}const count=n/(2**level);labels+=`<text x="8" y="${y1-5}" font-size="10" fill="#64748b">${count===2?'결승':count+'강'}</text>`;}
-  const leaves=Array.from({length:n},(_,i)=>{const slot=matchSlots?.[Math.floor(i/2)]||{},entry=i%2?slot.t2:slot.t1,source=i%2?slot.source2Label:slot.source1Label,byeSide=Number(slot.byeSide)||(slot.source1Label==='부전승'?1:slot.source2Label==='부전승'?2:slot.t2&&!slot.t1?1:2),bye=!!slot.bye&&!entry&&byeSide===(i%2?2:1);const text=bye?'부전승':entry?.nm||source||'추첨 대기';return `<div style="position:absolute;left:${x(i)}px;top:${baseY+4}px;transform:translateX(-50%);width:${Math.max(28,Math.min(52,width/n-8))}px;height:104px;border:1.5px solid ${bye?'#d4a017':'#91afd8'};border-radius:7px;background:${bye?'#fff8dc':'#f3f7ff'};display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:900;line-height:1.2;color:#10213d">${outputEsc(String(text))}</span></div>`;}).join('');
+  const leaves=Array.from({length:n},(_,i)=>{const slot=matchSlots?.[Math.floor(i/2)]||{},entry=i%2?slot.t2:slot.t1,source=i%2?slot.source2Label:slot.source1Label,byeSide=Number(slot.byeSide)||(slot.source1Label==='부전승'?1:slot.source2Label==='부전승'?2:slot.t2&&!slot.t1?1:2),bye=!!slot.bye&&!entry&&byeSide===(i%2?2:1);const text=bye?'부전승':entry?.nm||source||'추첨 대기';const provenance=entry&&Number(entry.gn)>=1&&Number(entry.rk)>=1?getMainEntryBracketLabel(entry):'';return `<div style="position:absolute;left:${x(i)}px;top:${baseY+4}px;transform:translateX(-50%);width:${Math.max(28,Math.min(52,width/n-8))}px;height:104px;border:1.5px solid ${bye?'#d4a017':'#91afd8'};border-radius:7px;background:${bye?'#fff8dc':'#f3f7ff'};display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden">${provenance?`<b style="flex-shrink:0;box-sizing:border-box;width:100%;padding:3px 1px;text-align:center;font-size:8px;line-height:1.25;word-break:keep-all;background:${Number(entry.rk)===1?'#fef3c7':'#dbeafe'};color:#10213d;border-bottom:1px solid #b8c6d8">${outputEsc(provenance)}</b>`:''}<span style="writing-mode:vertical-rl;text-orientation:upright;font-size:12px;font-weight:900;line-height:1.2;color:#10213d;min-height:0;flex:1;max-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center">${outputEsc(String(text))}</span></div>`;}).join('');
   const playins=(playInMatches||[]).length?`<div style="padding:8px">진출전: ${(playInMatches||[]).map(m=>outputEsc(String(m.t1?.nm||m.source1Label||'미정'))+' vs '+outputEsc(String(m.t2?.nm||m.source2Label||'미정'))).join(' / ')}</div>`:'';
   return `<div style="overflow-x:auto"><div class="pyramid-scroll-content" style="position:relative;width:${width}px;min-width:${width}px;height:${height}px;margin:auto"><svg style="position:absolute;inset:0" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${paths}${labels}</svg>${leaves}</div>${playins}</div>`;
 }
