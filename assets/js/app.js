@@ -18202,7 +18202,7 @@ function openM3(key,mid,forceEdit=false){
   },0);
   om('mM3');
   refreshAllOrderChipAvailability();
-  if(!simpleModeHere) requestAnimationFrame(()=>applyLastOrderIfEmpty(key, m, dbl, st));
+  renderOrderConvenienceTools();
 }
 
 function setOfflineResultEntryMode(mode){
@@ -18458,6 +18458,7 @@ function refreshAllOrderChipAvailability(){
   refreshOrderChipAvailability('rp2_');
   const match=(G.matches[CM_key]||[]).find(x=>x.id===CM_id||x._id===CM_id);
   if(match)renderOrderPhotoBlankReview(CM_key,match);
+  renderOrderConvenienceTools();
 }
 function tC(cid,player){
   const sel=getPickerSelected(cid);
@@ -27403,6 +27404,77 @@ function saveLastOrderFromPicker(key, m) {
     window._lastOrderCache[key][m.t2] = { rubbers: r2, savedAt: new Date().toISOString() };
   persistLastOrderCache();
 }
+
+function orderConvenienceContext(side){
+  const c=window._m3Ctx||{},m=(G.matches[c.key]||[]).find(x=>x.id===c.mid||x._id===c.mid);
+  if(!m||c.individual||![1,2].includes(Number(side))||!canWriteMatchOrderSide(c.key,m,side))return null;
+  if(c.online&&!(AD||OP)&&getOnlineOrderState(c.key,m).bothSubmitted)return null;
+  if(!ge(`rp${side}_0_list`))return null;
+  return {c,m,team:side===1?m.t1:m.t2};
+}
+function previousTeamOrderCandidates(side){
+  const x=orderConvenienceContext(side);if(!x)return [];
+  const all=G.matches[x.c.key]||[],current=all.indexOf(x.m);
+  return all.filter((m,i)=>m!==x.m&&!m.bye&&(m.t1===x.team||m.t2===x.team)
+    &&(compareMyClubMatchOrder(m,x.m)<0||(compareMyClubMatchOrder(m,x.m)===0&&i<current)))
+    .map(m=>{const s=m.t1===x.team?1:2;return {m,rows:Array.from({length:x.c.dbl},(_,r)=>{
+      const submitted=getSubmittedPlayersForSide(x.c.key,m,s,r);
+      const rb=m.rubbers?.[r]||{};
+      return submitted.length?submitted:(rb['blankOrder'+s]?['__GHOST__']:(rb['players'+s]||[]));
+    })};}).filter(x=>x.rows.some(a=>a.some(p=>p&&p!=='__GHOST__')))
+    .sort((a,b)=>compareMyClubMatchOrder(b.m,a.m)||all.indexOf(b.m)-all.indexOf(a.m));
+}
+function renderOrderConvenienceTools(){
+  const previous=ge('orderConvenienceTools');
+  const openSides=[...(previous?.querySelectorAll('details[open]')||[])].map(el=>el.dataset.side);
+  const selections=[1,2].map(side=>ge('previousTeamOrder'+side)?.value||'');
+  previous?.remove();
+  const host=ge('simpleResultDetailWrap')||ge('mM3B');if(!host||window._m3Ctx?.individual)return;
+  let markup='';
+  for(const side of [1,2]){
+    const x=orderConvenienceContext(side);if(!x)continue;
+    const candidates=previousTeamOrderCandidates(side),roster=getPickerPlayers(`rp${side}_0`).filter(p=>p!=='__GHOST__');
+    markup+=`<div style="margin:8px 0;padding:10px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#0f172a"><b>${esc(side===1?x.c.dn1:x.c.dn2)} · 명단 간편 작성</b>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0"><select id="previousTeamOrder${side}" style="max-width:100%;flex:1;padding:8px"><option value="">이전 경기 선택</option>${candidates.map((v,i)=>`<option value="${i}">${esc(myClubMatchPhaseLabel(x.c.key,v.m))} · ${esc(tdn((G.teams[x.c.key]||[])[v.m.t1],x.c.key,v.m.t1))} vs ${esc(tdn((G.teams[x.c.key]||[])[v.m.t2],x.c.key,v.m.t2))}</option>`).join('')}</select><button type="button" class="btn btn-outline" onclick="loadPreviousTeamOrder(${side})" ${candidates.length?'':'disabled'}>이전 명단 불러오기</button></div>
+      <details data-side="${side}" ${openSides.includes(String(side))?'open':''}><summary style="cursor:pointer;font-weight:800;padding:5px 0">복식 순서 · 선수 교체 / 맞교환</summary><div style="font-size:.7rem;margin:6px 0">↑↓는 두 선수 묶음 이동 · 다른 복식의 선수를 고르면 자리 맞교환 · 공오더는 기존 입력란에서 지정</div>${Array.from({length:x.c.dbl},(_,r)=>{
+        const selected=getPickerSelected(`rp${side}_${r}`);
+        return `<div style="display:flex;gap:4px;align-items:center;margin:6px 0;flex-wrap:wrap"><b>${r+1}복</b><button type="button" onclick="moveTeamOrderPair(${side},${r},-1)" ${r===0?'disabled':''}>↑</button><button type="button" onclick="moveTeamOrderPair(${side},${r},1)" ${r===x.c.dbl-1?'disabled':''}>↓</button>${[0,1].map(j=>`<select style="min-width:95px;flex:1;padding:7px;max-width:100%" onchange="changeTeamOrderPlayer(${side},${r},${j},this.value)"><option value="">선수 선택</option>${roster.map((p,i)=>`<option value="${i}" ${selected[j]===p?'selected':''}>${esc(p)}</option>`).join('')}</select>`).join('')}</div>`;
+      }).join('')}</details><div style="font-size:.7rem;color:#1d4ed8;margin-top:6px">작성 중 변경입니다. 확인 후 ${x.c.online?'제출':'저장'}해 주세요.</div></div>`;
+  }
+  if(!markup)return;const panel=document.createElement('div');panel.id='orderConvenienceTools';panel.innerHTML=markup;host.prepend(panel);
+  for(const side of [1,2])if(ge('previousTeamOrder'+side))ge('previousTeamOrder'+side).value=selections[side-1];
+}
+function loadPreviousTeamOrder(side){
+  const x=orderConvenienceContext(side);if(!x)return;
+  const value=ge('previousTeamOrder'+side)?.value;if(value==null||value===''){toast('이전 경기를 선택해 주세요','info');return;}
+  const source=previousTeamOrderCandidates(side)[Number(value)];if(!source)return;
+  if(Array.from({length:x.c.dbl},(_,r)=>getPickerSelected(`rp${side}_${r}`)).some(a=>a.length)&&!confirm('작성 중인 이 팀 명단을 이전 경기 명단으로 바꾸시겠습니까?'))return;
+  const roster=getPickerPlayers(`rp${side}_0`),used=new Set(),missing=[];
+  source.rows.forEach((row,r)=>{const valid=[];for(const p of row.slice(0,2)){
+    if(p==='__GHOST__')continue;
+    if(!roster.includes(p)||used.has(p)){missing.push(p);continue;}used.add(p);valid.push(p);
+  }setPickerSelected(`rp${side}_${r}`,valid);});
+  refreshAllOrderChipAvailability();renderOrderConvenienceTools();
+  toast(missing.length?'명단을 불러왔습니다. 제외된 선수: '+[...new Set(missing)].join(', ')+' · 빈자리를 다시 선택하세요':'이전 명단을 불러왔습니다. 확인 후 제출 또는 저장하세요',missing.length?'info':'success');
+}
+function moveTeamOrderPair(side,row,delta){
+  const x=orderConvenienceContext(side);if(!x)return;const target=row+delta;if(target<0||target>=x.c.dbl)return;
+  const a=`rp${side}_${row}`,b=`rp${side}_${target}`,old=getPickerSelected(a);
+  setPickerSelected(a,getPickerSelected(b));setPickerSelected(b,old);
+  refreshAllOrderChipAvailability();renderOrderConvenienceTools();
+}
+function changeTeamOrderPlayer(side,row,position,value){
+  const x=orderConvenienceContext(side);if(!x)return;
+  const roster=getPickerPlayers(`rp${side}_0`).filter(p=>p!=='__GHOST__'),player=value===''?'':roster[Number(value)];
+  if(value!==''&&!player)return;
+  const slots=Array.from({length:x.c.dbl},(_,r)=>getPickerSelected(`rp${side}_${r}`).filter(p=>p!=='__GHOST__'));
+  const old=slots[row][position]||'';
+  if(player)for(let r=0;r<slots.length;r++)for(let j=0;j<slots[r].length;j++)if(slots[r][j]===player)slots[r][j]=old;
+  slots[row][position]=player;
+  slots.forEach((a,r)=>setPickerSelected(`rp${side}_${r}`,a.filter(Boolean)));
+  refreshAllOrderChipAvailability();renderOrderConvenienceTools();
+}
+Object.assign(window,{loadPreviousTeamOrder,moveTeamOrderPair,changeTeamOrderPlayer});
 
 function getLastOrder(key, teamIdx) {
   return window._lastOrderCache?.[key]?.[teamIdx] || null;
