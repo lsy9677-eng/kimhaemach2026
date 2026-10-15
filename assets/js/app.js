@@ -26405,6 +26405,7 @@ async function persistOrderPhoto(side, imageDataUrl, source,context=null){
     throw new Error('사진 주소 저장 실패: '+(e?.message||e));
   }
 
+  cacheOrderPhotoOcrBlob(downloadURL,blob);
   // Keep only durable Storage metadata: raw camera base64 must never enter match snapshots.
   const live=(G.matches[key]||[]).find(x=>x.id===mid||x._id===mid)||m;
   live.orderPhotoStore={...(live.orderPhotoStore||{}),[base]:meta};
@@ -26867,15 +26868,37 @@ async function saveOrderPhotoOcrSetting(button){
   }catch(e){toast('OCR 설정 저장 실패: '+e.message,'error');}
   finally{if(button){button.disabled=false;button.textContent='OCR 설정 저장';}}
 }
-async function analyzeStoredOrderPhoto(side){
+const orderPhotoOcrBlobCache=new Map();
+function cacheOrderPhotoOcrBlob(url,blob){
+  if(!url||!blob?.size)return;
+  orderPhotoOcrBlobCache.delete(url);orderPhotoOcrBlobCache.set(url,blob);
+  while(orderPhotoOcrBlobCache.size>8)orderPhotoOcrBlobCache.delete(orderPhotoOcrBlobCache.keys().next().value);
+}
+async function loadOrderPhotoOcrBlob(saved){
+  const url=saved.downloadURL||saved.dataUrl;
+  if(orderPhotoOcrBlobCache.has(url))return orderPhotoOcrBlobCache.get(url);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+  try{const response=await fetch(url,{signal:controller.signal});if(!response.ok)throw new Error('HTTP '+response.status);const blob=await response.blob();if(!blob.size)throw new Error('사진 데이터가 비어 있습니다');cacheOrderPhotoOcrBlob(url,blob);return blob;}
+  catch(e){throw new Error('저장 사진을 불러올 수 없습니다. 기기 사진으로 OCR 버튼에서 원본을 선택해 주세요.');}
+  finally{clearTimeout(timer);}
+}
+function selectLocalOrderPhotoForOcr(side){
+  const ctx=_orderPhotoGetContext(Number(side));
+  if(!isOrderPhotoOcrEnabled()||!ctx||!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side)))return;
+  if(__orderPhotoJobBusy||matchResultSaveBusy)return;
+  const input=document.createElement('input');input.type='file';input.accept='image/*';
+  input.onchange=()=>{const file=input.files?.[0];if(file&&CM_key===ctx.key&&CM_id===ctx.mid)analyzeStoredOrderPhoto(Number(side),file);};input.click();
+}
+window.selectLocalOrderPhotoForOcr=selectLocalOrderPhotoForOcr;
+async function analyzeStoredOrderPhoto(side,localFile=null){
   if(!isOrderPhotoOcrEnabled()){toast('관리자 설정에서 OCR 보조 기능을 켜야 사용할 수 있습니다.','info');return;}
   if(__orderPhotoJobBusy||matchResultSaveBusy){toast('현재 처리가 완료된 후 다시 눌러 주세요.','info');return;}
   const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side)))return;
   const saved=_orderPhotoGetSaved(ctx.match,Number(side));if(!saved)return;
   const run=async()=>{
     try{
-      const response=await fetch(saved.downloadURL||saved.dataUrl);if(!response.ok)throw new Error('사진을 불러오지 못했습니다.');
-      const file=await response.blob();file.__runOcr=true;file.__skipUpload=true;
+      _orderPhotoSetStatus(side,localFile?'선택한 사진 준비 중…':'저장 사진 불러오는 중…');
+      const file=localFile||await loadOrderPhotoOcrBlob(saved);file.__runOcr=true;file.__skipUpload=true;
       if(CM_key!==ctx.key||CM_id!==ctx.mid)throw new Error('다른 경기 화면으로 이동했습니다. 원래 경기에서 다시 분석해 주세요.');
       if(isSimpleResultMode(G.meta))await _processSimpleOrderPhotoCore(Number(side),file);
       else await _processOrderPhotoCore(Number(side),file);
@@ -26902,7 +26925,7 @@ function renderOrderPhotoManage(key,m){
     const controls=document.createElement('div');controls.style.cssText='display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:5px';
     const trigger=isSimpleResultMode(G.meta)?'triggerSimpleOrderPhoto':'triggerOrderPhoto';
     controls.innerHTML=`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="${trigger}(${side},'upload')">사진 수정</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="deleteOrderPhoto(${side},this)">사진 삭제</button>`.replace('사진 수정','사진 수정');
-    if(isOrderPhotoOcrEnabled())controls.insertAdjacentHTML('beforeend',`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="analyzeStoredOrderPhoto(${side})">OCR 분석(선택)</button>`);
+    if(isOrderPhotoOcrEnabled())controls.insertAdjacentHTML('beforeend',`<button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="analyzeStoredOrderPhoto(${side})">OCR 분석(선택)</button><button type="button" class="btn btn-outline" style="font-size:.7rem;padding:5px 9px" onclick="selectLocalOrderPhotoForOcr(${side})">기기 사진으로 OCR</button>`);
     parent.appendChild(controls);
   }
 }
