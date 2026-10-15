@@ -28213,10 +28213,23 @@ function outputMainTableHtml(tid,div,blank=false){
   }).join('');
   return outputHeader(t,div,blank?'본선 대진표 · 현장 수기용':'본선 대진표 · 현재상황')+body;
 }
+function isMainPyramidMatch(m){
+  if(!m||['group','playin','play-in','prelim'].includes(String(m.phase||'').toLowerCase())||['group','playin','play-in','prelim'].includes(String(m.stage||'').toLowerCase()))return false;
+  return m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null&&!m.phase&&!m.stage);
+}
+function openPyramidMatchAction(key,id,round,slot){
+  const matches=(G.matches[key]||[]).filter(m=>isMainPyramidMatch(m)&&String(m.id||m._id||'')===String(id)&&Number(m.round||0)===Number(round)&&Number(m.slot||0)===Number(slot));
+  if(matches.length!==1){toast('경기 연결 정보가 달라졌습니다. 대진표를 새로고침해 주세요.','error');return;}
+  const m=matches[0];
+  if(m.t1==null||m.t2==null){toast('앞 경기 결과가 확정되면 양 팀이 배정되어 입력할 수 있습니다.','info');return;}
+  if(AD||OP||canEditMatchByClubMember(key,m))openMatchOperations(key,m.id||m._id);
+  else openSimpleMatchDetail(key,m.id||m._id);
+}
+window.openPyramidMatchAction=openPyramidMatchAction;
 function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
   div=outputResolveDivision(tid,div);
   if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
-  const key=tid+'_'+div, all=(G.matches?.[key]||[]).filter(m=>m.phase==='main'||m.phase==='knockout'||m.stage==='main'||m.stage==='knockout'||(m.round!=null&&m.group==null));
+  const key=tid+'_'+div, all=(G.matches?.[key]||[]).filter(isMainPyramidMatch);
   if(!all.length)return '';
   const rounds=[...new Set(all.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
   const first=all.filter(m=>Number(m.round||0)===rounds[0]).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
@@ -28280,11 +28293,9 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
           const ready=m.t1!==null&&m.t1!==undefined&&m.t2!==null&&m.t2!==undefined;
           const canEdit=!!(AD||OP||canEditMatchByClubMember(key,m));
           const canOperate=canEdit&&ready;
-          const score=done?`${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}`:(ready?'입력':'대기');
-          const action=done?'결과확인':(canOperate?'결과입력':'경기확인');
-          const click=canOperate||done&&canEdit
-            ? `openMatchOperations('${key}','${matchId}')`
-            : `openSimpleMatchDetail('${key}','${matchId}')`;
+          const score=done?`${st.disp1??st.sc1??0}:${st.disp2??st.sc2??0}`:(ready?'입력':'승자대기');
+          const action=done?'결과확인':(ready?(canOperate?'결과입력':'경기확인'):'앞 경기 승자 확정 대기');
+          const click=`openPyramidMatchAction('${key}','${matchId}',${Number(m.round||0)},${Number(m.slot||0)})`;
           const chipW=n>=32?46:n>=16?56:66;
           const chipH=n>=32?24:n>=16?26:30;
           const chipFs=n>=32?8.2:n>=16?9.6:12;
