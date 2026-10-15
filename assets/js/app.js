@@ -3663,12 +3663,12 @@ function renderOperationViewButtons(key){
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div>
         <div style="font-size:.92rem;font-weight:900;color:var(--primary-dark)">🧭 운영 보기</div>
-        <div style="font-size:.76rem;color:var(--text2);margin-top:4px">예선과 본선 운영 화면을 나눠서 볼 수 있습니다. 자동감지와 자동 접기는 그대로 유지됩니다.</div>
+        <div style="font-size:.76rem;color:var(--text2);margin-top:4px">전체·예선·본선을 선택하면 아래 운영 현황과 대진표가 함께 바뀝니다.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn ${mode==='all'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setOperationViewMode('${key}','all')">전체</button>
         <button class="btn ${mode==='group'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setOperationViewMode('${key}','group')">예선</button>
-        <button class="btn ${mode==='main'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setOperationViewMode('${key}','main')">본선 운영</button>
+        <button class="btn ${mode==='main'?'btn-primary':'btn-outline'}" style="padding:7px 12px;font-size:.8rem;white-space:nowrap" onclick="setOperationViewMode('${key}','main')">본선</button>
       </div>
     </div>
   </div>`;
@@ -10961,12 +10961,13 @@ function sortGroupMatchesForDisplay(key, gi, list){
 }
 
 function renderMatchProgressSummary(key){
-  const list=G.matches[key]||[];
+  const showGroups=shouldShowPrelimByOperationMode(key),showMain=shouldShowMainByOperationMode(key);
+  const list=(G.matches[key]||[]).filter(m=>m.phase==='group'?showGroups:showMain);
   const [tid,div]=key.split('_');
   const teams=G.teams[key]||[];
   const isIndividualMode=isIndividualByKey(key);
   const useOrder=!!G.meta.onlineOrderEnabled && !isIndividualMode;
-  const estimatedMainTotal = estimateMainBracketMatchCount(key);
+  const estimatedMainTotal = showMain?estimateMainBracketMatchCount(key):0;
   if(isIndividualMode) return '';
   if(!list.length && !estimatedMainTotal) return '';
 
@@ -11173,7 +11174,7 @@ function renderMatchProgressSummary(key){
   return `<div class="card main-status-board" style="margin-top:12px;background:linear-gradient(135deg,#f9fbff,#eef4ff);border:1.5px solid #d7e3ff">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <div class="main-status-top-title" style="font-weight:900;color:var(--primary-dark);font-size:.98rem">📊 경기 진행 현황 <span style="font-size:.7rem;font-weight:600;color:var(--text3)">· 여기서 오더·결과·상세조회까지 처리</span></div>
-      ${!isIndividualByKey(key)&&G.draws[key]?.groups?.length?`<button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;margin-left:auto" onclick="openLatestSavedDraw('${tid}','${div}','prelim')">📋 예선 추첨표 보기</button>`:''}
+      ${showGroups&&!isIndividualByKey(key)&&G.draws[key]?.groups?.length?`<button class="btn btn-outline" style="padding:4px 9px;font-size:.68rem;margin-left:auto" onclick="openLatestSavedDraw('${tid}','${div}','prelim')">📋 예선 추첨표 보기</button>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <span class="badge" style="background:#dbeafe;color:#1d4ed8">전체 ${groupTotal+main.total}경기</span>
         <span class="badge" style="background:${getRoundVisualTheme('예선','group').chipBg};color:${getRoundVisualTheme('예선','group').chipFg};border:1px solid ${getRoundVisualTheme('예선','group').bd}">예선 ${groupTotal}경기</span>
@@ -11952,7 +11953,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const entryListId = `entryList_${key}`;
   const entryListCollapsed = isIndivKey; // 개인전이면 기본 접힘
 
-  let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
+  let html=`${renderOperationDivisionBanner(tid,div,key,teams)}${renderOperationViewButtons(key)}${renderMatchProgressSummary(key)}<div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div>
         <div style="font-weight:700;font-size:.96rem">${t.name} — ${dl(div)}</div>
@@ -11982,8 +11983,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       ${isGroupKO?`<div class="sf-step" style="cursor:pointer" onclick="jumpToMainBracketSection('${tid}','${div}')"><div class="sf-dot ${s4?'sf-done':s3?'sf-active':'sf-pend'}">${s4?'🏆':4}</div><div class="sf-lbl">본선<br>${shownMainTotal?shownMainDone+'/'+shownMainTotal:'미시작'}</div></div>`:''}
     </div></div>`;
 
-  html += renderMatchProgressSummary(key);
-  html += renderOperationViewButtons(key);
+
   if(isIndivKey && draw?.groups?.length){
     const selectedGroups=getDisplayGroupFilters(key)||[];
     const selectedCourts=getDisplayCourtFilters(key)||[];
