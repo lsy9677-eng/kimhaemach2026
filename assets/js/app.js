@@ -2670,6 +2670,13 @@ async function fbSet(col,key,data){await setDoc(doc(db,col,key),{...data,_u:new 
 /** ===== 문서형 구조(마이그레이션): registrations / matches ===== */
 function _k2td(key){const i=key.lastIndexOf('_');return {tid:key.slice(0,i), div:key.slice(i+1)};}
 
+function myClubMatchPhaseLabel(key,m){
+  if(m.phase==='group')return '예선'+(m.group!=null?' · '+grpLabel(Number(m.group)):'');
+  if(m.phase==='bronze'||m.isThirdPlaceMatch)return '3·4위전';
+  if(m.phase==='playin')return '본선 진출전';
+  if(m.phase==='main')return '본선 · '+getMainRoundLabelByRoundIndex(m.round,key);
+  return '경기';
+}
 function getMainRoundLabelByRoundIndex(round, key){
   try{
     const mains=(G.matches?.[key]||[]).filter(m=>String(m?.phase||'')==='main');
@@ -10599,8 +10606,9 @@ function renderBracket(){
             const _winNm=_done?(baseClub((_tms[_st.winner]??_tms.find(t=>t.id===_st.winner))?.club||'')===_mbc?'🏆 승':'😢 패'):(_st.started?`⏳ 진행중 ${_st.disp1??_st.sc1}:${_st.disp2??_st.sc2}`:'⏳ 대기');
             const _orderSummary=getMyClubOrderStatusSummaryHTML(_key,_m,_mbc);
             const _draftBadge=getMyClubOrderDraftBadgeHTML(_key,_m,_mbc);
-            _myMatchCards+=`<div style="background:white;border:1.5px solid #16a34a;border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
+            _myMatchCards+=`<div data-match-status="${_done?'done':'pending'}" style="background:${_done?'#eff6ff':'white'};border:${_done?'3px solid #3b82f6':'1.5px solid #16a34a'};box-shadow:${_done?'0 2px 5px rgba(37,99,235,.12)':'none'};border-radius:10px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer" onclick="goBracketMatch('${_atid}','${_div}','${_m.id}')">
               <div style="flex:1;min-width:220px">
+                <div style="margin-bottom:5px"><span style="display:inline-block;padding:3px 8px;border-radius:999px;font-size:.72rem;font-weight:900;background:${_m.phase==='group'?'#dbeafe':'#ffedd5'};color:${_m.phase==='group'?'#1e40af':'#9a3412'}">${esc(myClubMatchPhaseLabel(_key,_m))}</span></div>
                 <div class="my-match-card-title">${_n1} <span style="color:var(--text3);font-weight:700">vs</span> ${_n2}</div>
                 ${_orderSummary}
                 ${_draftBadge}
