@@ -16817,8 +16817,23 @@ function tennisRevealHTML(text, tone='primary', sub=''){
     ${sub?`<div style="font-size:.74rem;color:var(--text2);text-align:center">${sub}</div>`:''}
   </div>`;
 }
+function fitMobileMainDraw(){
+  if(!window.matchMedia('(max-width:768px)').matches)return;
+  if(!ge('mobileMainDrawStyle')){const style=document.createElement('style');style.id='mobileMainDrawStyle';style.textContent=`@media(max-width:768px){#mMain{padding:4px!important}#mMain .modal-content{width:100%!important;max-width:100%!important;max-height:calc(100dvh - 8px)!important;margin:0!important;overflow:hidden!important}#mMain .modal-body{overflow:auto!important;min-height:0!important;padding:8px!important}#mainStep2{min-width:0!important;width:100%!important}#mainBracketPreview{min-width:0!important;width:100%!important;overflow:hidden!important}#mainStageContent{min-height:0!important;height:175px!important;overflow:hidden!important;position:relative}#mainStageContent>div{transform:scale(.62);transform-origin:top center}#mainStageMeta,#mainSeedSummary{font-size:11px!important;line-height:1.35!important}#mMain .modal-footer{flex-wrap:wrap!important;padding:6px!important}}`;document.head.appendChild(style);}
+  const box=ge('mainBracketPreview'),content=box?.querySelector('.pyramid-scroll-content');
+  if(content){
+    if(!ge('mainDrawMobileZoom')){const button=document.createElement('button');button.id='mainDrawMobileZoom';button.type='button';button.className='btn btn-outline';button.style.cssText='font-size:11px;padding:4px 8px;margin:4px';button.textContent='대진표 확대';button.onclick=()=>{box.dataset.expanded=box.dataset.expanded==='1'?'0':'1';button.textContent=box.dataset.expanded==='1'?'전체 맞춤':'대진표 확대';fitMobileMainDraw();};box.before(button);}
+    const width=parseFloat(content.style.width)||content.scrollWidth,height=parseFloat(content.style.height)||content.scrollHeight;
+    const available=Math.max(1,box.clientWidth-8),limit=Math.max(120,Math.min(280,window.innerHeight*.35));
+    const scale=box.dataset.expanded==='1'?1:Math.min(1,available/width,limit/height);
+    content.style.transform=`scale(${scale})`;content.style.transformOrigin='top left';content.style.margin='0';
+    const viewport=content.parentElement;viewport.style.height=Math.ceil(height*scale)+'px';viewport.style.width='100%';viewport.style.overflow=box.dataset.expanded==='1'?'auto':'hidden';if(box.dataset.expanded==='1')viewport.style.height=limit+'px';
+  }
+}
+window.addEventListener('resize',()=>requestAnimationFrame(fitMobileMainDraw));
 function showMainStageMsg(html){
   ge('mainStageContent').innerHTML=html;
+  requestAnimationFrame(fitMobileMainDraw);
 }
 let _mainAudioCtx=null;
 function getMainAudioCtx(){
@@ -17291,6 +17306,8 @@ async function startMainDraw(){
   ge('mainDrawBtn').disabled=true;
   ge('mainStep1').style.display='none';
   ge('mainStep2').style.display='block';
+  fitMobileMainDraw();
+  if(window.matchMedia('(max-width:768px)').matches){const body=ge('mMain')?.querySelector('.modal-body');if(body)body.scrollTop=Math.max(0,ge('mainStep2').offsetTop-body.offsetTop);}
   ge('mainProgressBar').style.width='0%';
   const {key,tid,div}=MD;
   const teams=G.teams[key]||[];
@@ -17380,6 +17397,7 @@ function renderMainPreviewHTML(matchSlots,n,isPreview,playInMatches=[]){
 
 function renderMainPreview(matchSlots,n,teams,key,final,playInMatches=[]){
   ge('mainBracketPreview').innerHTML=renderMainPreviewHTML(matchSlots,n,false,playInMatches);
+  requestAnimationFrame(fitMobileMainDraw);
 }
 
 // ─── Firebase 저장용 match 구조 생성 ────────────────────
