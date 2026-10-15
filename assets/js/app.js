@@ -12535,6 +12535,14 @@ function matchOrderRecordStatus(key,m,side){
   const {tid,div}=_k2td(key),tour=(G.tournaments||[]).find(t=>t.id===tid);
   const count=Number(gDS(tour,div)?.doublesCount||team.doublesCount||(div==='terinee'?3:5));
   const st=getOnlineOrderState(key,m),base=side===1?st.c1:st.c2,submitted=st.subs?.[base]?.rubbers||[];
+  let scoreFilled=0;
+  for(let i=0;i<count;i++){
+    const rb=m.rubbers?.[i]||{},a=rb.score1??rb.s1,b=rb.score2??rb.s2;
+    if(a==null||b==null||String(a).trim()===''||String(b).trim()==='')continue;
+    if(!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)===Number(b))continue;
+    const result=analyzeRubberScore(a,b);
+    if(!getRubberScoreErrorMessage(result,i+1))scoreFilled++;
+  }
   let filled=0;const used=new Set();
   for(let i=0;i<count;i++){
     const rb=m.rubbers?.[i]||{},row=submitted[i]||{};
@@ -12543,15 +12551,15 @@ function matchOrderRecordStatus(key,m,side){
     if(players.length!==2||players.some(p=>p==='__GHOST__'||used.has(p))||players[0]===players[1])continue;
     players.forEach(p=>used.add(p));filled++;
   }
-  return {name:tdn(team,key,side===1?m.t1:m.t2),photo:!!_orderPhotoGetSaved(m,side),filled,count};
+  return {name:tdn(team,key,side===1?m.t1:m.t2),photo:!!_orderPhotoGetSaved(m,side),filled,count,scoreFilled};
 }
 function matchOrderRecordBadges(key,m){
   if(!m||m.bye||isIndividualByKey(key))return '';
   const rows=[1,2].map(side=>matchOrderRecordStatus(key,m,side)).filter(Boolean);
   if(!rows.length)return '';
   return `<div class="match-record-badges" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;margin:5px 0">${rows.map(r=>{
-    const complete=r.filled===r.count,ok=r.photo&&complete;
-    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'O':'X'} · 👥 ${complete?'O':'X '+r.filled+'/'+r.count+'복'}</span>`;
+    const complete=r.filled===r.count,scoreComplete=r.scoreFilled===r.count,ok=r.photo&&complete&&scoreComplete;
+    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'O':'X'} · 👥 ${complete?'O':'X '+r.filled+'/'+r.count+'복'} · 점수 ${scoreComplete?'O':'X '+r.scoreFilled+'/'+r.count+'복'}</span>`;
   }).join('')}</div>`;
 }
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
