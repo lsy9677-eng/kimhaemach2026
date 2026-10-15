@@ -11058,8 +11058,8 @@ function renderMatchProgressSummary(key){
       <div style="font-size:.74rem;font-weight:800;color:#334155;margin-bottom:5px">🏅 순위</div>
       <div style="display:flex;flex-direction:column;gap:4px">
         ${stats.map((s,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:${i===0?'#eff6ff':i===1?'#fff7ed':'#f8fafc'};border:1px solid ${i===0?'#bfdbfe':i===1?'#fed7aa':'#e5e7eb'};border-radius:8px">
-          <span style="min-width:22px;font-weight:900;color:${i===0?'#1d4ed8':i===1?'#c2410c':'#475569'}">${i+1}</span>
-          <span style="flex:1;font-size:.78rem;font-weight:800;color:var(--text)">${s.nm}</span>
+          <span style="min-width:22px;font-weight:900;color:${i===0?'#1d4ed8':i===1?'#c2410c':'#475569'}">${s.tiePending?'대기':(s.rank||'-')}</span>
+          <span style="flex:1;font-size:.78rem;font-weight:800;color:var(--text)">${s.nm}${s.tieBasis?`<small style="display:block;font-size:.62rem;font-weight:500;color:${s.tiePending?'#c2410c':'#64748b'}">${esc(s.tieBasis)} · 게임득실 ${s.gameScoresReady?(s.gameDiff>0?'+':'')+s.gameDiff:'미입력'}</small>`:''}</span>
           <span style="font-size:.72rem;color:var(--text2)">${s.w}승 ${s.l}패</span>
           <span style="font-size:.72rem;color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span>
         </div>`).join('')}
@@ -11141,6 +11141,7 @@ function renderMatchProgressSummary(key){
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:6px">
         <span style="font-size:.68rem;font-weight:700;color:var(--text3);background:#fff;border:1px solid var(--border);padding:3px 7px;border-radius:999px">🎾 ${courtText}</span>
         ${groupOps}
+        ${AD?`<button class="btn btn-outline" style="font-size:.68rem;padding:4px 8px" onclick="openTeamGroupTieDecision('${key}',${gi})">동률 판정</button>`:''}
       </div>
       ${grpMemo?renderNoticeTicker(grpMemo,'📢 공지(조)'):''}
       ${standingsHtml(gi, s.matches)}
@@ -12081,16 +12082,17 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         </div>
         ${grpMemo?renderNoticeTicker(grpMemo,'📢 공지(조)'):''}`;
       if(!indivMode){
+        if(AD)html+=`<button class="btn btn-outline" style="margin:6px;font-size:.75rem" onclick="openTeamGroupTieDecision('${key}',${gi})">동률 관리자 판정</button>`;
         html+=`<div style="border-bottom:2px solid var(--border)">`;
         stats.forEach((s,r)=>{
-          const isAdv=r<adv&&grpDone;
+          const isAdv=r<adv&&grpDone&&s.rank!=null&&!s.tiePending;
           const rowCls=isAdv&&r===0?'adv-1st':isAdv&&r===1?'adv-2nd':isAdv?'adv':'';
           const chipStyle=r===0?'background:#1565c0;color:white;':r===1?'background:#e67e22;color:white;':'background:#7f8c8d;color:white;';
-          const rankLabel=s.rank==null?`${s.slot||r+1}번`:`${s.rank}위`;
+          const rankLabel=s.tiePending?'판정 대기':(s.rank==null?`${s.slot||r+1}번`:`${s.rank}위`);
           html+=`<div class="gs-row ${rowCls}">
             <div class="gs-rk">${rankLabel}</div>
             <div class="gs-nm">${s.nm}${(isAdv&&s.rank!=null)?`<span class="adv-chip" style="${chipStyle}">${r===0?'1위 진출':'2위 진출'}</span>`:''}</div>
-            <div class="gs-stats">${s.rank==null?'<span style="color:var(--text3)">경기 전</span>':`<><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></>`}</div>
+            <div class="gs-stats">${s.tiePending?'<span style="color:#c2410c">동률 · 판정 대기</span>':s.rank==null?'<span style="color:var(--text3)">경기 전</span>':`<><span>${s.w}승 ${s.l}패</span><span style="color:${s.diff>0?'#1565c0':s.diff<0?'#c62828':'var(--text2)'}">득실 ${s.diff>0?'+':''}${s.diff}</span></>`}</div>
           </div>`.replace('<>','').replace('</>','');
         });
         html+=`</div><div class="grp-matches-section"><div class="grp-matches-label">📋 경기 목록</div>`;
@@ -13357,6 +13359,73 @@ ${title}
 }
 window.openIndividualTieAgePrompt = openIndividualTieAgePrompt;
 
+function teamTieFingerprint(key,gi,tidxs){
+  return JSON.stringify({teams:tidxs.map(i=>[i,G.teams[key]?.[i]?.team_id||G.teams[key]?.[i]?._id||'',G.teams[key]?.[i]?.club||'']),matches:(G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)).map(m=>({id:m.id||m._id,t1:m.t1,t2:m.t2,winner:m.winner,simple:m.simpleResult,rubbers:m.rubbers})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))});
+}
+function sortTeamGroupStandings(key,gi,rows){
+  const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)&&!m.bye);
+  const finished=matches.length>0&&matches.every(m=>getMatchResultState(key,m).done);
+  const decision=G.draws[key]?.teamTieDecisions?.[gi];
+  const manual=finished&&decision?.fingerprint===teamTieFingerprint(key,gi,rows.map(r=>r.ti))?decision:null;
+  const scores=new Map(rows.map(r=>[r.ti,{gamesFor:0,gamesAgainst:0,gameDiff:0,gameScoresReady:true}]));
+  for(const m of matches){
+    const a=scores.get(m.t1),b=scores.get(m.t2);if(!a||!b)continue;
+    const count=getMatchDoublesCount(key,m);let valid=0;
+    for(let i=0;i<count;i++){
+      const rb=m.rubbers?.[i]||{},x=rb.score1??rb.s1,y=rb.score2??rb.s2;
+      if(x==null||y==null||String(x).trim()===''||String(y).trim()===''||!Number.isFinite(Number(x))||!Number.isFinite(Number(y))||Number(x)===Number(y))continue;
+      if(getRubberScoreErrorMessage(analyzeRubberScore(x,y),i+1))continue;
+      valid++;a.gamesFor+=Number(x);a.gamesAgainst+=Number(y);b.gamesFor+=Number(y);b.gamesAgainst+=Number(x);
+    }
+    if(valid!==count||!getMatchResultState(key,m).done){a.gameScoresReady=false;b.gameScoresReady=false;}
+  }
+  rows=rows.map(r=>({...r,...scores.get(r.ti),tiePending:false}));rows.forEach(r=>r.gameDiff=r.gamesFor-r.gamesAgainst);
+  const sorted=rows.slice().sort((a,b)=>b.w-a.w),out=[];
+  for(let i=0;i<sorted.length;){
+    let end=i+1;while(end<sorted.length&&sorted[end].w===sorted[i].w)end++;
+    let block=sorted.slice(i,end),basis='승수',pending=false;
+    if(block.length>1){
+      if(manual&&block.every(r=>manual.order.includes(r.ti))){block.sort((a,b)=>manual.order.indexOf(a.ti)-manual.order.indexOf(b.ti));basis='관리자 판정: '+manual.reason;}
+      else if(block.length===2){
+        const head=matches.filter(m=>[m.t1,m.t2].includes(block[0].ti)&&[m.t1,m.t2].includes(block[1].ti)&&getMatchResultState(key,m).done);
+        if(head.length===1){const winner=getMatchResultState(key,head[0]).winner;if(block.some(r=>r.ti===winner)){block.sort((a,b)=>(b.ti===winner?1:0)-(a.ti===winner?1:0));basis='승자승';}else pending=true;}else pending=true;
+        if(pending)basis='승자승 판정 대기';
+      }else{
+        block.sort((a,b)=>b.diff-a.diff);const resolved=[];
+        for(let j=0;j<block.length;){let k=j+1;while(k<block.length&&block[k].diff===block[j].diff)k++;let tied=block.slice(j,k);
+          if(tied.length>1){
+            const ready=finished&&tied.every(r=>r.gameScoresReady);
+            if(ready)tied.sort((a,b)=>b.gameDiff-a.gameDiff);
+            tied=tied.map(r=>({...r,tiePending:!ready||tied.filter(t=>t.gameDiff===r.gameDiff).length>1,tieBasis:ready?'게임 총득실':'세부 점수 입력 필요'}));
+          }else tied=tied.map(r=>({...r,tieBasis:'복식 승패 득실'}));
+          resolved.push(...tied);j=k;
+        }block=resolved;basis='복식 득실 → 게임 총득실';
+      }
+    }
+    block.forEach((r,j)=>{const waiting=pending||r.tiePending;out.push({...r,rank:waiting?null:i+j+1,rankLabel:waiting?'동률·판정 대기':`${i+j+1}위`,tiePending:waiting,tieBasis:r.tieBasis||basis});});i=end;
+  }return out;
+}
+async function openTeamGroupTieDecision(key,gi){
+  if(!AD){toast('관리자만 동률 순위를 판정할 수 있습니다.','info');return;}
+  const group=G.draws[key]?.groups?.[gi],tidxs=group?.teams||[],teams=G.teams[key]||[];
+  const matches=(G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)&&!m.bye);
+  if(!matches.length||!matches.every(m=>getMatchResultState(key,m).done)){toast('조 경기 결과가 모두 확정된 뒤 판정할 수 있습니다.','info');return;}
+  const initialFingerprint=teamTieFingerprint(key,Number(gi),tidxs);
+  const rows=calcGS(key,Number(gi),tidxs,teams);
+  if(!rows.some((r,i)=>rows.some((x,j)=>i!==j&&x.w===r.w))){toast('승수가 같은 팀이 없습니다.','info');return;}
+  const listing=rows.map((r,i)=>`${i+1}. ${r.nm} · ${r.w}승 · 복식득실 ${r.diff} · 게임득실 ${r.gameScoresReady?r.gameDiff:'미입력'}${r.tiePending?' · 판정대기':''}`).join('\n');
+  const input=prompt(`${grpLabel(gi)} 동률 관리자 판정\n${listing}\n\n최종 순서대로 위 번호를 모두 입력하세요. 예: 2,1,3\n승수가 다른 팀의 순서는 변경되지 않습니다.\n기존 판정을 해제하려면 초기화 입력`,rows.map((r,i)=>i+1).join(','));if(input===null)return;
+  const path=`teamTieDecisions.${Number(gi)}`;
+  if(input.trim()==='초기화'){try{await updateDoc(doc(db,'draws',key),{[path]:deleteField()});if(G.draws[key].teamTieDecisions)delete G.draws[key].teamTieDecisions[gi];renderBracket();toast('자동 판정 기준으로 복원했습니다.','success');}catch(e){toast('판정 해제 실패: '+e.message,'error');}return;}
+  const indexes=input.split(/[,，\s]+/).filter(Boolean).map(Number);
+  if(indexes.length!==rows.length||new Set(indexes).size!==rows.length||indexes.some(n=>!Number.isInteger(n)||n<1||n>rows.length)){toast('각 팀 번호를 빠짐없이 한 번씩 입력하세요.','error');return;}
+  const reason=prompt('판정 근거를 입력하세요. 예: 현장 추첨 결과 / 연장자 우선 확인','');if(reason===null)return;if(!reason.trim()){toast('판정 근거를 입력하세요.','error');return;}
+  const fingerprint=teamTieFingerprint(key,Number(gi),tidxs);
+  if(fingerprint!==initialFingerprint){toast('판정 중 경기 기록이 변경됐습니다. 다시 확인해 주세요.','error');return;}
+  const decision={order:indexes.map(n=>rows[n-1].ti),reason:reason.trim(),actor:'관리자',updatedAt:new Date().toISOString(),fingerprint};
+  try{await updateDoc(doc(db,'draws',key),{[path]:decision});G.draws[key].teamTieDecisions={...(G.draws[key].teamTieDecisions||{}),[gi]:decision};try{cacheTournamentBundleFromMemory(_k2td(key).tid);scheduleTournamentAutoRestorePoint(key,'예선 동률 관리자 판정');}catch(e){}renderBracket();toast('동률 판정을 저장했습니다. 결과 변경 시 판정을 다시 확인해야 합니다.','success');}catch(e){toast('판정 저장 실패: '+e.message,'error');}
+}
+window.openTeamGroupTieDecision=openTeamGroupTieDecision;
 function calcGS(key,gi,tidxs,teams){
   const indivMode=isIndividualByKey(key);
   const rows=tidxs.map((ti,slotIdx)=>{
@@ -13382,8 +13451,7 @@ function calcGS(key,gi,tidxs,teams){
     return rows.map((row,idx)=>({...row, rank:null, rankLabel:`${row.slot||idx+1}번`}));
   }
   if(!indivMode){
-    const sorted=rows.slice().sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
-    return sorted.map((row,idx)=>({...row, rank:idx+1, rankLabel:`${idx+1}위`}));
+    return sortTeamGroupStandings(key,gi,rows);
   }
   const sorted=rows.slice().sort((a,b)=>b.w-a.w||b.diff-a.diff||a.slot-b.slot);
   let idx=0;
