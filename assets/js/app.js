@@ -10556,6 +10556,20 @@ function onBrTC(){
 }
 
 function renderBracket(){
+  try{return renderBracketCore();}finally{requestAnimationFrame(highlightOwnClubBracket);}
+}
+function highlightOwnClubBracket(){
+  const page=ge('page-bracket');if(!page)return;
+  page.querySelectorAll('.own-club-bracket-pulse').forEach(el=>el.classList.remove('own-club-bracket-pulse'));
+  if(!REG_CLUB||!(REG||CLUB_MEMBER))return;
+  if(!ge('ownClubBracketPulseStyle')){const style=document.createElement('style');style.id='ownClubBracketPulseStyle';style.textContent='@keyframes ownClubBracketGlow{0%,100%{box-shadow:0 0 0 2px rgba(22,163,74,.3)}50%{box-shadow:0 0 0 4px rgba(22,163,74,.65)}}.own-club-bracket-pulse{animation:ownClubBracketGlow 2.8s ease-in-out infinite;outline:2px solid #16a34a;outline-offset:1px}@media(prefers-reduced-motion:reduce){.own-club-bracket-pulse{animation:none}}';document.head.appendChild(style);}
+  const club=baseClub(REG_CLUB)||REG_CLUB;
+  const own=(key,index)=>{if(index==null||index==='')return false;const team=G.teams[key]?.[Number(index)];return !!team&&(baseClub(team.club||'')||team.club)===club;};
+  page.querySelectorAll('[data-nav-match-key][data-nav-match-id]').forEach(el=>{const key=el.getAttribute('data-nav-match-key'),id=el.getAttribute('data-nav-match-id'),m=(G.matches[key]||[]).find(m=>String(m.id||m._id)===id);if(m&&(own(key,m.t1)||own(key,m.t2)))el.classList.add('own-club-bracket-pulse');});
+  page.querySelectorAll('[data-pyramid-team-key][data-pyramid-team-index]').forEach(el=>{if(own(el.getAttribute('data-pyramid-team-key'),el.getAttribute('data-pyramid-team-index')))el.classList.add('own-club-bracket-pulse');});
+  page.querySelectorAll('#bracketFilterBanner [data-match-status]').forEach(el=>el.classList.add('own-club-bracket-pulse'));
+}
+function renderBracketCore(){
   const tid=ge('brTS').value;
   const selectedDivs=getBracketSelectedDivs(tid);
   const currentTournament=G.tournaments.find(t=>t.id===tid);
@@ -11017,7 +11031,7 @@ function renderMatchProgressSummary(key){
       const a=rb?.score1??rb?.s1,b=rb?.score2??rb?.s2;
       return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;padding:5px 7px;border-top:1px solid #e5e7eb;font-size:.72rem"><span>${p1||'-'}</span><b>${a??'-'}:${b??'-'}</b><span style="text-align:right">${p2||'-'}</span></div>`;
     }).join(''):`<div style="padding:7px;font-size:.72rem;color:var(--text3)">상세 선수기록이 아직 입력되지 않았습니다.</div>`;
-    return `<div class="match-result-complete" style="border:3px solid #3b82f6;border-radius:11px;background:#eff6ff;box-shadow:0 2px 5px rgba(37,99,235,.12);overflow:hidden">
+    return `<div class="match-result-complete" data-nav-match-key="${esc(key)}" data-nav-match-id="${esc(mid)}" style="border:3px solid #3b82f6;border-radius:11px;background:#eff6ff;box-shadow:0 2px 5px rgba(37,99,235,.12);overflow:hidden">
       <div class="main-status-row" style="padding:7px 9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
         <span class="ms-round-chip" style="background:${roundTheme.chipBg};color:${roundTheme.chipFg};border:1px solid ${roundTheme.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>
         <span style="font-size:.88rem;font-weight:${leftWin?900:600}">${leftWin?'🏆 ':''}${n1}</span>
@@ -11043,7 +11057,7 @@ function renderMatchProgressSummary(key){
       const canEdit=AD||OP||canEditMatchByClubMember(key,m);
       const status=st.started?`진행중 ${st.disp1??st.sc1}:${st.disp2??st.sc2}`:'대기';
       const opText=useOrder?'📝 오더·결과':'⚡ 결과입력';
-      return `<div class="main-status-row" style="padding:8px 9px;border-radius:10px;background:${th.softBg};border:1.5px solid ${th.bd};display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+      return `<div class="main-status-row" data-nav-match-key="${esc(key)}" data-nav-match-id="${esc(mid)}" style="padding:8px 9px;border-radius:10px;background:${th.softBg};border:1.5px solid ${th.bd};display:flex;align-items:center;gap:7px;flex-wrap:wrap">
         <span class="ms-round-chip" style="background:${th.chipBg};color:${th.chipFg};border:1px solid ${th.bd}">${m.phase==='main'?'🏆':'🎾'} ${roundLabel}</span>
         <span style="font-size:.72rem;font-weight:800;color:${st.started?'#b45309':'#64748b'}">${status}</span>
         <b style="font-size:.84rem">${n1}</b><span style="font-size:.72rem;color:var(--text3)">vs</span><b style="font-size:.84rem">${n2}</b>
@@ -19267,17 +19281,10 @@ function openMyClubQuickOrder(){
 }
 
 function focusMatchCardElement(el){
-  if(!el) return false;
-  const header=document.querySelector('.app-header');
-  const notice=ge('brFloatingNotice');
-  const headerH=header?header.getBoundingClientRect().height:0;
-  const noticeH=(notice && getComputedStyle(notice).display!=='none')?notice.getBoundingClientRect().height:0;
-  const top=window.scrollY + el.getBoundingClientRect().top - headerH - noticeH - 24;
-  window.scrollTo({top: Math.max(0, top), behavior:'smooth'});
-  el.classList.remove('match-focus-pulse');
-  void el.offsetWidth;
-  el.classList.add('match-focus-pulse');
-  setTimeout(()=>el.classList.remove('match-focus-pulse'), 2600);
+  if(!el)return false;
+  if(!ge('matchNavigationFocusStyle')){const style=document.createElement('style');style.id='matchNavigationFocusStyle';style.textContent='@keyframes matchNavigationPulse{0%,100%{outline:4px solid #f59e0b;box-shadow:0 0 0 7px #fbbf2440}50%{outline:4px solid #2563eb;box-shadow:0 0 0 10px #3b82f650}}.match-navigation-target{animation:matchNavigationPulse .8s ease-in-out 5!important;outline-offset:4px!important;z-index:12!important;scroll-margin:110px 30px}';document.head.appendChild(style);}
+  el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+  el.classList.add('match-navigation-target');setTimeout(()=>el.classList.remove('match-navigation-target'),4200);
   return true;
 }
 
@@ -19290,8 +19297,10 @@ function goBracketMatch(tid,div,matchId){
   }
 
   const matchList=(G.matches?.[matchKey]||[]);
-  const targetMatch=matchList.find(m=>String(m?.id||m?._id||'')===String(matchId)) || null;
+  let targetMatch=matchList.find(m=>String(m?.id||m?._id||'')===String(matchId)) || null;
   const ensureTargetSectionOpen=()=>{
+    targetMatch=(G.matches?.[matchKey]||[]).find(m=>String(m.id||m._id||'')===String(matchId))||targetMatch;
+    if(targetMatch){window.__OP_VIEW_MODE=window.__OP_VIEW_MODE||{};window.__OP_VIEW_MODE[matchKey]=targetMatch.phase==='group'?'group':'main';}
     try{
       if(targetMatch && String(targetMatch.phase||'')==='group'){
         window.BRACKET_PRELIM_TOGGLE = window.BRACKET_PRELIM_TOGGLE || {};
@@ -19330,7 +19339,9 @@ function goBracketMatch(tid,div,matchId){
       const safeId = (typeof CSS!=='undefined' && typeof CSS.escape==='function') ? CSS.escape(exactId) : exactId.replace(/([^a-zA-Z0-9_-])/g,'\$1');
       const exact = scope.querySelector(`#${safeId}`);
       const byData = scope.querySelector(`.m3card[data-match-id="${String(matchId).replace(/"/g,'\"')}"]`);
-      const el = exact || byData;
+      const linked=Array.from(scope.querySelectorAll('[data-nav-match-key][data-nav-match-id]')).filter(node=>node.getAttribute('data-nav-match-key')===matchKey&&node.getAttribute('data-nav-match-id')===String(matchId));
+      const pyramid=linked.find(node=>node.hasAttribute('data-pyramid-op'));
+      const el=targetMatch?.phase==='main'?(pyramid||exact||linked[0]):(exact||linked[0]||byData);
 
       if(el){
         focusMatchCardElement(el);
@@ -19338,7 +19349,7 @@ function goBracketMatch(tid,div,matchId){
       }
 
       tries++;
-      if(tries < 36){
+      if(tries < 16){
         try{ renderBracket(); }catch(_e){}
         setTimeout(finder, 180);
       }else{
@@ -28379,7 +28390,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
               : 'linear-gradient(180deg,#ffffff 0%,#f8fafc 55%,#edf2f7 100%)');
           const chipBd=done?'#3fa96a':(canOperate?'#3f78c8':'#b8c6d8');
           const chipFg=done?'#0f6b38':(canOperate?'#0f3f7d':'#64748b');
-          ops+=`<button type="button" data-pyramid-op="1" title="${action}" aria-label="${action}" onclick="event.stopPropagation();${click}" style="position:absolute;left:${mid}px;top:${y1-11}px;transform:translate(-50%,-50%);z-index:6;width:${chipW}px;min-width:${chipW}px;height:${chipH}px;padding:1px 4px;border:2px solid ${chipBd};border-radius:999px;background:${chipBg};color:${chipFg};font-size:${chipFs}px;font-weight:1000;letter-spacing:-0.2px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(15,35,65,.18), inset 0 1px 0 rgba(255,255,255,.95);text-shadow:0 .25px 0 rgba(255,255,255,.55);white-space:nowrap">${outputEsc(score)}</button>`;
+          ops+=`<button type="button" data-pyramid-op="1" data-nav-match-key="${outputEsc(key)}" data-nav-match-id="${outputEsc(matchId)}" title="${action}" aria-label="${action}" onclick="event.stopPropagation();${click}" style="position:absolute;left:${mid}px;top:${y1-11}px;transform:translate(-50%,-50%);z-index:6;width:${chipW}px;min-width:${chipW}px;height:${chipH}px;padding:1px 4px;border:2px solid ${chipBd};border-radius:999px;background:${chipBg};color:${chipFg};font-size:${chipFs}px;font-weight:1000;letter-spacing:-0.2px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(15,35,65,.18), inset 0 1px 0 rgba(255,255,255,.95);text-shadow:0 .25px 0 rgba(255,255,255,.55);white-space:nowrap">${outputEsc(score)}</button>`;
         }
       }
       const seg=(from,win)=>`<path d="M ${from} ${y0} V ${y1} H ${mid}" fill="none" stroke="${win?BLUE:THIN}" stroke-width="${win?4.4:1.25}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -28414,7 +28425,7 @@ function outputBottomUpTreeHtml(tid,div,blank=false,interactive=false){
     const qClick=quickEditable?`onclick="event.stopPropagation();openPyramidSlotQuickEdit('${key}','${String(e.matchId).replace(/'/g,"\\'")}',${Number(e.side)})"`:'';
     const qTitle=quickEditable?'title="눌러서 팀/부전승 선택"':'';
     const editBadge=quickEditable?`<div style="position:absolute;right:-5px;bottom:-5px;z-index:8;width:17px;height:17px;border-radius:50%;background:#1565c0;color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,35,65,.25);display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1">✎</div>`:'';
-    return `<div ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:116px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:visible;padding:0 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
+    return `<div data-pyramid-team-key="${outputEsc(key)}" data-pyramid-team-index="${e.team==null?'':Number(e.team)}" ${qClick} ${qTitle} style="position:absolute;left:${xx}px;top:${baseY+4}px;transform:translateX(-50%);width:${bw}px;height:116px;border:${quickEditable?'2px':'1px'} solid ${quickEditable?'#6b9ddd':border};background:${bg};border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:visible;padding:0 1px 3px;cursor:${quickEditable?'pointer':'default'};box-shadow:${quickEditable?'0 3px 8px rgba(21,101,192,.12)':'none'};touch-action:manipulation">
       ${editBadge}${srcBadge}<div class="pyramid-team-name" data-base-font="${teamFont}" data-max-readable-font="${maxReadableFont}" style="font-size:${teamFont}px;font-weight:950;color:${color};letter-spacing:0;max-height:78px;margin:auto 0;overflow:visible;text-shadow:0 0 .01px currentColor">${blank?'':verticalName(e.name||'빈슬롯')}</div>
     </div>`;
   }).join('');
