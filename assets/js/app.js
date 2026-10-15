@@ -12551,7 +12551,7 @@ function matchOrderRecordBadges(key,m){
   if(!rows.length)return '';
   return `<div class="match-record-badges" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;margin:5px 0">${rows.map(r=>{
     const complete=r.filled===r.count,ok=r.photo&&complete;
-    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'있음':'없음'} · 👥 ${complete?'완료':r.filled+'/'+r.count+'복 입력'}</span>`;
+    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'O':'X'} · 👥 ${complete?'O':'X '+r.filled+'/'+r.count+'복'}</span>`;
   }).join('')}</div>`;
 }
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
