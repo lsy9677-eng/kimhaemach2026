@@ -19283,7 +19283,14 @@ function openMyClubQuickOrder(){
 function focusMatchCardElement(el){
   if(!el)return false;
   if(!ge('matchNavigationFocusStyle')){const style=document.createElement('style');style.id='matchNavigationFocusStyle';style.textContent='@keyframes matchNavigationPulse{0%,100%{outline:4px solid #f59e0b;box-shadow:0 0 0 7px #fbbf2440}50%{outline:4px solid #2563eb;box-shadow:0 0 0 10px #3b82f650}}.match-navigation-target{animation:matchNavigationPulse .8s ease-in-out 5!important;outline-offset:4px!important;z-index:12!important;scroll-margin:110px 30px}';document.head.appendChild(style);}
-  el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+  // Scroll only the pyramid viewport horizontally; never scroll the page slider sideways.
+  const pyramid=el.closest('.pyramid-scroll-content');
+  if(pyramid){let viewport=pyramid.parentElement;while(viewport&&viewport!==ge('page-bracket')){const css=getComputedStyle(viewport);if(/auto|scroll/.test(css.overflowX)&&viewport.scrollWidth>viewport.clientWidth){const r=el.getBoundingClientRect(),v=viewport.getBoundingClientRect();viewport.scrollTo({left:Math.max(0,viewport.scrollLeft+r.left-v.left+r.width/2-viewport.clientWidth/2),behavior:'smooth'});break;}viewport=viewport.parentElement;}}
+  let parent=el.parentElement;
+  while(parent&&parent!==document.body&&parent!==document.documentElement){const css=getComputedStyle(parent);if(/auto|scroll/.test(css.overflowY)&&parent.scrollHeight>parent.clientHeight){const r=el.getBoundingClientRect(),v=parent.getBoundingClientRect();parent.scrollTo({top:Math.max(0,parent.scrollTop+r.top-v.top-parent.clientHeight/2),behavior:'smooth'});}parent=parent.parentElement;}
+  const header=document.querySelector('.app-header'),notice=ge('brFloatingNotice');
+  const offset=(header?.getBoundingClientRect().height||0)+(notice&&getComputedStyle(notice).display!=='none'?notice.getBoundingClientRect().height:0)+30;
+  window.scrollTo({left:0,top:Math.max(0,window.scrollY+el.getBoundingClientRect().top-Math.max(offset,window.innerHeight*.38)),behavior:'smooth'});
   el.classList.add('match-navigation-target');setTimeout(()=>el.classList.remove('match-navigation-target'),4200);
   return true;
 }
