@@ -11023,6 +11023,7 @@ function renderMatchProgressSummary(key){
           ${canEdit?`<button class="btn btn-gray" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();openMatchOperations('${key}','${mid}')">✏️ 결과수정</button>`:''}
         </div>
       </div>
+      ${matchOrderRecordBadges(key,m)}
       <div id="${detailId}" style="display:none;background:#fff;padding:3px 7px 7px">${detail}</div>
     </div>`;
   }
@@ -11042,6 +11043,7 @@ function renderMatchProgressSummary(key){
         <span style="font-size:.72rem;font-weight:800;color:${st.started?'#b45309':'#64748b'}">${status}</span>
         <b style="font-size:.84rem">${n1}</b><span style="font-size:.72rem;color:var(--text3)">vs</span><b style="font-size:.84rem">${n2}</b>
         ${useOrder&&ost?`<span style="font-size:.68rem;color:${ost.bothSubmitted?'#166534':'#92400e'}">${ost.bothSubmitted?'오더 양팀완료':(ost.s1||ost.s2?'오더 제출중':'오더 미제출')}</span>`:''}
+        ${matchOrderRecordBadges(key,m)}
         ${canEdit?`<button class="btn btn-accent" style="margin-left:auto;padding:5px 9px;font-size:.7rem" onclick="event.stopPropagation();openMatchOperations('${key}','${mid}')">${opText}</button>`:''}
       </div>`;
     }).join('');
@@ -12527,6 +12529,31 @@ function toggleCompactMatchDetail(id){
   if(btn)btn.textContent=open?'상세닫기':'상세보기';
 }
 
+function matchOrderRecordStatus(key,m,side){
+  const team=(G.teams[key]||[])[side===1?m.t1:m.t2];
+  if(!team||m.bye||!canViewMatchOrderSide(key,m,side))return null;
+  const {tid,div}=_k2td(key),tour=(G.tournaments||[]).find(t=>t.id===tid);
+  const count=Number(gDS(tour,div)?.doublesCount||team.doublesCount||(div==='terinee'?3:5));
+  const st=getOnlineOrderState(key,m),base=side===1?st.c1:st.c2,submitted=st.subs?.[base]?.rubbers||[];
+  let filled=0;const used=new Set();
+  for(let i=0;i<count;i++){
+    const rb=m.rubbers?.[i]||{},row=submitted[i]||{};
+    if(rb['blankOrder'+side]||row.blankOrder){filled++;continue;}
+    const players=(Array.isArray(row.players)&&row.players.length?row.players:(rb['players'+side]||[])).filter(Boolean);
+    if(players.length!==2||players.some(p=>p==='__GHOST__'||used.has(p))||players[0]===players[1])continue;
+    players.forEach(p=>used.add(p));filled++;
+  }
+  return {name:tdn(team,key,side===1?m.t1:m.t2),photo:!!_orderPhotoGetSaved(m,side),filled,count};
+}
+function matchOrderRecordBadges(key,m){
+  if(!m||m.bye||isIndividualByKey(key))return '';
+  const rows=[1,2].map(side=>matchOrderRecordStatus(key,m,side)).filter(Boolean);
+  if(!rows.length)return '';
+  return `<div class="match-record-badges" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;margin:5px 0">${rows.map(r=>{
+    const complete=r.filled===r.count,ok=r.photo&&complete;
+    return `<span style="display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px 7px;border:1px solid ${ok?'#86efac':'#fcd34d'};border-radius:7px;background:${ok?'#f0fdf4':'#fffbeb'};color:${ok?'#166534':'#92400e'};font-size:.68rem;line-height:1.5"><b>${esc(r.name)}</b> 📷 ${r.photo?'있음':'없음'} · 👥 ${complete?'완료':r.filled+'/'+r.count+'복 입력'}</span>`;
+  }).join('')}</div>`;
+}
 function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
   if(!bracketKeyPublished(key,m.phase==='group'?'prelim':'main'))return '';
   const wn1=done&&m.winner===m.t1,wn2=done&&m.winner===m.t2;
@@ -12710,6 +12737,7 @@ function mCard(m,key,dn1,dn2,done,sc1,sc2,label){
           ${resultBtn}
         </div>
       </div>
+      ${matchOrderRecordBadges(key,m)}
       <div id="${detailId}" style="display:none;padding:0 11px 10px">
         ${matchMemo?renderNoticeTicker(matchMemo,'📢 공지(경기)'):''}
         ${orderTeamStatus}
@@ -14096,8 +14124,7 @@ function ensureAdminOperationalExclusionButton(){
   installDeveloperToolEntry();
   const court=document.createElement('div');court.style.cssText='margin-top:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px';
   court.innerHTML=`<b>코트 현황판 사용</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminCourtStatusBoardEnabled" ${courtStatusBoardEnabled()?'checked':''}> 코트 현황판 표시</label><div style="font-size:.75rem">수동으로 진행하며 현황판을 사용하지 않을 때는 해제하세요. 조별 코트 배정과 기존 경기 기록은 유지됩니다.</div><button class="btn btn-outline" style="margin-top:8px" onclick="saveCourtStatusBoardSetting(this)">코트 현황판 설정 저장</button>`;wrap.appendChild(court);
-  const ocr=document.createElement('div');ocr.style.cssText='margin-top:12px;padding-top:10px;border-top:1px solid #cbd5e1';
-  ocr.innerHTML=`<b>오더지 OCR 보조 기능</b><label style="display:block;margin:8px 0"><input type="checkbox" id="adminOrderPhotoOcrEnabled" ${isOrderPhotoOcrEnabled()?'checked':''}> OCR 분석 버튼 사용 허용</label><div style="font-size:.75rem;line-height:1.5">기본은 꺼짐입니다. 켜도 사진 첨부 시 자동 분석하지 않으며, 사진 영역의 ‘OCR 분석(선택)’을 눌렀을 때만 실행됩니다. 수기 글씨는 인식이 부정확할 수 있어 명단 확인이 필요합니다.</div><button type="button" class="btn btn-outline" style="margin-top:8px" onclick="saveOrderPhotoOcrSetting(this)">OCR 설정 저장</button>`;wrap.appendChild(ocr);
+  const photoInfo=document.createElement('div');photoInfo.style.cssText='margin-top:12px;font-size:.78rem;color:#475569';photoInfo.textContent='오더지 사진은 증빙 보관용입니다. 선수 명단은 경기 상세에서 직접 선택해 저장하세요.';wrap.appendChild(photoInfo);
 }
 let developerToolUnlockedUntil=0,developerToolTapTimes=[];
 function developerToolAuthorized(){return AD&&Date.now()<developerToolUnlockedUntil;}
@@ -17968,7 +17995,7 @@ function openM3(key,mid,forceEdit=false){
     <div id="offlineResultEntryHint" style="font-size:.67rem;color:#64748b;margin:0 2px 8px">필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.</div>
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
-  renderOrderPhotoBlankReview(key,m);
+
   renderOrderPhotoManage(key,m);
   const body = ge('mM3B');
   // PHASE92: 현장 간편결과 화면의 중복 상세입력 진입 버튼 정리.
@@ -26405,7 +26432,7 @@ async function persistOrderPhoto(side, imageDataUrl, source,context=null){
     throw new Error('사진 주소 저장 실패: '+(e?.message||e));
   }
 
-  cacheOrderPhotoOcrBlob(downloadURL,blob);
+
   // Keep only durable Storage metadata: raw camera base64 must never enter match snapshots.
   const live=(G.matches[key]||[]).find(x=>x.id===mid||x._id===mid)||m;
   live.orderPhotoStore={...(live.orderPhotoStore||{}),[base]:meta};
@@ -26856,18 +26883,8 @@ async function _processOrderPhotoCore(side,file){
   }
 }
 // PHASE250: unresolved photo rows require visual confirmation before becoming a blank order.
-function isOrderPhotoOcrEnabled(){return G.meta?.orderPhotoOcrEnabled===true;}
-async function saveOrderPhotoOcrSetting(button){
-  if(!AD)return;
-  const enabled=!!ge('adminOrderPhotoOcrEnabled')?.checked;
-  if(button){button.disabled=true;button.textContent='저장 중…';}
-  try{
-    await updateDoc(doc(db,'meta','config'),{orderPhotoOcrEnabled:enabled});
-    G.meta.orderPhotoOcrEnabled=enabled;
-    toast(enabled?'OCR 보조 기능 사용 허용 · 분석 버튼을 눌러 실행합니다.':'OCR 보조 기능 사용 안 함 · 사진 기능은 유지됩니다.','success');
-  }catch(e){toast('OCR 설정 저장 실패: '+e.message,'error');}
-  finally{if(button){button.disabled=false;button.textContent='OCR 설정 저장';}}
-}
+function isOrderPhotoOcrEnabled(){return false;}
+async function saveOrderPhotoOcrSetting(button){toast('현재 오더지 사진은 보관용으로만 사용합니다.','info');}
 const orderPhotoOcrBlobCache=new Map();
 function cacheOrderPhotoOcrBlob(url,blob){
   if(!url||!blob?.size)return;
@@ -26891,7 +26908,7 @@ function selectLocalOrderPhotoForOcr(side){
 }
 window.selectLocalOrderPhotoForOcr=selectLocalOrderPhotoForOcr;
 async function analyzeStoredOrderPhoto(side,localFile=null){
-  if(!isOrderPhotoOcrEnabled()){toast('관리자 설정에서 OCR 보조 기능을 켜야 사용할 수 있습니다.','info');return;}
+  if(!isOrderPhotoOcrEnabled()){toast('현재 사진 보관 기능만 사용합니다. 명단은 직접 선택해 주세요.','info');return;}
   if(__orderPhotoJobBusy||matchResultSaveBusy){toast('현재 처리가 완료된 후 다시 눌러 주세요.','info');return;}
   const ctx=_orderPhotoGetContext(Number(side));if(!ctx||!canWriteMatchOrderSide(ctx.key,ctx.match,Number(side)))return;
   const saved=_orderPhotoGetSaved(ctx.match,Number(side));if(!saved)return;
