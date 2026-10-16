@@ -14290,9 +14290,15 @@ function adminOperationalContext(){
   const sizes=saved?.teamCount===teams.length&&validPrelimGroupSizes(saved.groupSizes,teams.length)?saved.groupSizes:(presets.find(p=>p.sizes[0]===cfg.grpSize)||presets[Math.floor(presets.length/2)])?.sizes||[];
   return {tid,div,key,teams,sizes};
 }
+function updateDeveloperFixedSlotOptions(row){
+  const {sizes}=adminOperationalContext(),group=ge('devFixedGroup'+row)?.value,slot=ge('devFixedSlot'+row);
+  if(!slot)return;slot.innerHTML='<option value="">자리 선택</option>'+(group===''?'':Array.from({length:sizes[Number(group)]||0},(_,i)=>`<option value="${i}">${i+1}번 자리</option>`).join(''));
+}
+window.updateDeveloperFixedSlotOptions=updateDeveloperFixedSlotOptions;
 function renderDeveloperFixedPlacements(){
   if(!developerToolAuthorized())return;const {key,teams,sizes}=adminOperationalContext(),pending=DEVELOPER_FIXED_PLACEMENTS.get(key);
-  ge('opExDetails').innerHTML=`<p>조 구성: ${sizes.join(' · ')}팀</p><div style="font-size:.8rem">${teams.map((t,i)=>`${i+1}. ${esc(tdn(t,key,i))}`).join('<br>')}</div><label>팀번호=조번호:자리번호 (최대 3팀)<input class="form-input" id="opExInput" placeholder="예: 1=2:3, 5=1:1" value="${esc((pending?.placements||[]).map(x=>`${x.teamIndex+1}=${x.groupIndex+1}:${x.slotIndex+1}`).join(', '))}"></label><p style="font-size:.75rem">같은 기기의 다음 추첨 1회에 적용합니다. 테스트 추첨도 1회를 사용합니다. 새로고침하면 해제됩니다. 고정팀을 제외한 팀은 같은클럽 분리 조건으로 무작위 배정합니다.</p><button class="btn btn-primary" onclick="saveDeveloperFixedPlacements()">다음 추첨에 적용</button> <button class="btn btn-outline" onclick="clearDeveloperFixedPlacements()">고정 해제</button>`;
+  ge('opExDetails').innerHTML=`<p>예선 조 구성: ${sizes.join(' · ')}팀 · 최대 3팀 고정</p>${Array.from({length:3},(_,r)=>`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"><select id="devFixedTeam${r}" class="form-select" style="flex:2;min-width:150px"><option value="">팀 선택 (미사용)</option>${teams.map((t,i)=>`<option value="${i}">${esc(tdn(t,key,i))}</option>`).join('')}</select><select id="devFixedGroup${r}" class="form-select" style="flex:1;min-width:100px" onchange="updateDeveloperFixedSlotOptions(${r})"><option value="">조 선택</option>${sizes.map((n,i)=>`<option value="${i}">${i+1}조 (${n}팀)</option>`).join('')}</select><select id="devFixedSlot${r}" class="form-select" style="flex:1;min-width:100px"><option value="">자리 선택</option></select></div>`).join('')}<p style="font-size:.75rem">같은 기기의 다음 실운영 예선 추첨 1회에 적용합니다. 테스트 추첨에는 적용하지 않으며 설정도 유지됩니다. 본선 추첨에는 적용하지 않습니다. 새로고침하면 해제됩니다. 나머지 팀은 같은클럽 분리 조건으로 무작위 배정합니다.</p><button class="btn btn-primary" onclick="saveDeveloperFixedPlacements()">다음 실운영 예선에 적용</button> <button class="btn btn-outline" onclick="clearDeveloperFixedPlacements()">고정 해제</button>`;
+  (pending?.placements||[]).forEach((x,r)=>{ge('devFixedTeam'+r).value=String(x.teamIndex);ge('devFixedGroup'+r).value=String(x.groupIndex);updateDeveloperFixedSlotOptions(r);ge('devFixedSlot'+r).value=String(x.slotIndex);});
 }
 function validateDeveloperPlacements(placements,teams,sizes){
   if(placements.length>3)throw new Error('최대 3팀까지 고정할 수 있습니다.');
@@ -14306,9 +14312,16 @@ function validateDeveloperPlacements(placements,teams,sizes){
 }
 function saveDeveloperFixedPlacements(){
   if(!developerToolAuthorized()){toast('개발자 도구 비밀번호를 다시 인증하세요.','error');return;}
-  const {key,teams,sizes}=adminOperationalContext(),raw=ge('opExInput').value.trim(),placements=[];
-  if(!raw){clearDeveloperFixedPlacements();return;}
-  try{for(const token of raw.split(',')){const m=token.trim().match(/^(\d+)\s*=\s*(\d+)\s*:\s*(\d+)$/);if(!m)throw new Error('형식: 1=2:3 (1번팀을 2조 3번째 자리)');const teamIndex=Number(m[1])-1;placements.push({teamIndex,groupIndex:Number(m[2])-1,slotIndex:Number(m[3])-1,teamId:teams[teamIndex]?._id||''});}validateDeveloperPlacements(placements,teams,sizes);
+  const {key,teams,sizes}=adminOperationalContext(),placements=[];
+  try{
+    for(let r=0;r<3;r++){
+      const team=ge('devFixedTeam'+r)?.value||'',group=ge('devFixedGroup'+r)?.value||'',slot=ge('devFixedSlot'+r)?.value||'';
+      if(team===''&&group===''&&slot==='')continue;
+      if(team===''||group===''||slot==='')throw new Error(`${r+1}번째 항목의 팀·조·자리를 모두 선택하세요.`);
+      const teamIndex=Number(team);placements.push({teamIndex,groupIndex:Number(group),slotIndex:Number(slot),teamId:teams[teamIndex]?._id||''});
+    }
+    if(!placements.length){clearDeveloperFixedPlacements();return;}
+    validateDeveloperPlacements(placements,teams,sizes);
     DEVELOPER_FIXED_PLACEMENTS.set(key,{placements,groupSizes:sizes.slice(),teamIds:teams.map(t=>t._id||''),teamClubs:teams.map(t=>t.club||'')});
     if(DW?.key===key&&!DW.isRunning)applyAdminOperationalExclusionsToDraw();toast('다음 추첨 자리 고정 저장 완료','success');renderDeveloperFixedPlacements();
   }catch(e){toast(e.message,'error');}
@@ -14316,11 +14329,17 @@ function saveDeveloperFixedPlacements(){
 function clearDeveloperFixedPlacements(){
   if(!developerToolAuthorized())return;const {key}=adminOperationalContext();DEVELOPER_FIXED_PLACEMENTS.delete(key);if(DW?.key===key&&!DW.isRunning)delete DW.cfg.operationalExclusions;renderDeveloperFixedPlacements();toast('고정 해제 완료','success');
 }
+function isDeveloperFixedTestDraw(){return !!ge('drawIsTestInput')?.checked;}
+function consumeDeveloperFixedPlacements(key,isTest=false){
+  if(!isTest)DEVELOPER_FIXED_PLACEMENTS.delete(key);
+  if(DW?.key===key)delete DW.cfg.operationalExclusions;
+}
 function applyAdminOperationalExclusionsToDraw(){
-  delete DW.cfg.operationalExclusions;const pending=DEVELOPER_FIXED_PLACEMENTS.get(DW.key);
+  delete DW.cfg.operationalExclusions;if(isDeveloperFixedTestDraw())return;const pending=DEVELOPER_FIXED_PLACEMENTS.get(DW.key);
   if(pending)DW.cfg.operationalExclusions=pending.placements.map(x=>({...x}));
 }
 function assertAdminOperationalContext(){
+  if(isDeveloperFixedTestDraw())return;
   const pending=DEVELOPER_FIXED_PLACEMENTS.get(DW.key);if(!pending)return;
   if(JSON.stringify(pending.groupSizes)!==JSON.stringify(DW.cfg.grpSizes)||JSON.stringify(pending.teamIds)!==JSON.stringify(DW.teams.map(t=>t._id||''))||JSON.stringify(pending.teamClubs)!==JSON.stringify(DW.teams.map(t=>t.club||'')))throw new Error('등록팀 또는 조 구성이 변경됐습니다. 개발자 특수 도구에서 다시 설정하세요.');
 }
@@ -14329,7 +14348,7 @@ function prelimExclusionsSatisfied(groups,placements,teams){
   return (placements||[]).every(x=>groups[x.groupIndex].teams[x.slotIndex]===x.teamIndex);
 }
 function getOperationalPrelimGroups(indices,teams,sizes,seeds){
-  assertAdminOperationalContext();return getPrelimSeedDistributedGroups(indices,teams,sizes,seeds,DW.cfg.operationalExclusions||[]);
+  applyAdminOperationalExclusionsToDraw();assertAdminOperationalContext();return getPrelimSeedDistributedGroups(indices,teams,sizes,seeds,DW.cfg.operationalExclusions||[]);
 }
 Object.assign(window,{openDeveloperToolPassword,submitDeveloperToolPassword,openDeveloperSpecialTools,closeDeveloperSpecialTools,populateDeveloperFixedDivisions,renderDeveloperFixedPlacements,saveDeveloperFixedPlacements,clearDeveloperFixedPlacements});
 
@@ -16037,7 +16056,7 @@ async function startIndividualDraw(){
     btn.disabled=false;
     IDW.isRunning=false;
     SFX.finale();
-    DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;
+    consumeDeveloperFixedPlacements(key,drawIsTest);
     toast('추첨 완료 🎲','success');
     refreshRunPreview(key);
   }catch(e){
@@ -16259,14 +16278,14 @@ async function saveManualPrelimDraw(){
   for(let gi=0;gi<sizes.length;gi++){const arr=[];for(let si=0;si<Number(sizes[gi]);si++){const v=ge(`mp_${gi}_${si}`)?.value;if(v===undefined||v===''||!Number.isInteger(Number(v))||Number(v)<0||Number(v)>=DW.teams.length){toast(`${grpLabel(gi)}조 ${si+1}번 자리를 선택하세요`,'error');return;}arr.push(Number(v));used.push(Number(v));}groups.push({teams:arr,courts:[],memo:''});}
   if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
   if(used.length!==DW.teams.length){toast('모든 팀을 한 번씩 배치해야 합니다','error');return;}
-  try{assertAdminOperationalContext();if(!prelimExclusionsSatisfied(groups,DW.cfg.operationalExclusions||[],DW.teams)){toast('개발자 도구에 설정한 고정 자리가 일치하지 않습니다','error');return;}}catch(e){toast(e.message,'error');return;}
+  try{applyAdminOperationalExclusionsToDraw();assertAdminOperationalContext();if(!prelimExclusionsSatisfied(groups,DW.cfg.operationalExclusions||[],DW.teams)){toast('개발자 도구에 설정한 고정 자리가 일치하지 않습니다','error');return;}}catch(e){toast(e.message,'error');return;}
   if(!confirm('현장 수동 추첨 결과를 예선 대진으로 확정할까요?'))return;
   const key=DW.key,advance=Number(DW.cfg?.advance||2),now=new Date(),allowedCourts=getDrawAllowedCourtsFromModal();
   await resetMatchRecords(key);
   const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
   G.draws[key]={...(G.draws[key]||{}),groups,shuffled:used.slice(),advance,groupDrawAudit:audit,allowedCourts,manualDraw:true,manualConfirmedAt:now.toISOString()};
   const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=ms;
-  sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
+  sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');consumeDeveloperFixedPlacements(key,isDeveloperFixedTestDraw());toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
 async function startDraw(){
@@ -16377,7 +16396,7 @@ async function startDraw(){
     ge('confirmDrawBtn').onclick=()=>{cm('mDraw');renderBracket();};
     ge('confirmDrawBtn').disabled=false;
     DW.isRunning=false;
-    DEVELOPER_FIXED_PLACEMENTS.delete(key);delete DW.cfg.operationalExclusions;
+    consumeDeveloperFixedPlacements(key,drawIsTest);
     SFX.finale();
     toast('추첨 완료 🎲','success');
     refreshRunPreview(key);
