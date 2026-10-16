@@ -11981,7 +11981,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const entryListId = `entryList_${key}`;
   const entryListCollapsed = isIndivKey; // 개인전이면 기본 접힘
 
-  let html=`${renderOperationDivisionBanner(tid,div,key,teams)}${renderOperationViewButtons(key)}${renderMatchProgressSummary(key)}<div class="card" style="margin-bottom:12px">
+  let html=`${renderOperationDivisionBanner(tid,div,key,teams)}<div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
       <div>
         <div style="font-weight:700;font-size:.96rem">${t.name} — ${dl(div)}</div>
@@ -12009,7 +12009,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
       <div class="sf-step"><div class="sf-dot ${s2?'sf-done':'sf-pend'}">${s2?'✓':2}</div><div class="sf-lbl">추첨<br>${s2?'완료':'대기'}</div></div>
       <div class="sf-step"><div class="sf-dot ${s3?'sf-done':s2?'sf-active':'sf-pend'}">${s3?'✓':3}</div><div class="sf-lbl">예선<br>${gMs.length?gDone+'/'+gMs.length:'미시작'}</div></div>
       ${isGroupKO?`<div class="sf-step" style="cursor:pointer" onclick="jumpToMainBracketSection('${tid}','${div}')"><div class="sf-dot ${s4?'sf-done':s3?'sf-active':'sf-pend'}">${s4?'🏆':4}</div><div class="sf-lbl">본선<br>${shownMainTotal?shownMainDone+'/'+shownMainTotal:'미시작'}</div></div>`:''}
-    </div></div>`;
+    </div></div>${renderOperationViewButtons(key)}${renderMatchProgressSummary(key)}`;
 
 
   if(isIndivKey && draw?.groups?.length){
