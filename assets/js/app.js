@@ -15300,6 +15300,52 @@ function renderSavedPrelimNeutralPyramid(mainSize, savedSlots=[]){
     </div></div></div>`;
 }
 
+function resolveSavedPrelimGroups(key,entry){
+  const teams=G.teams[key]||[],used=new Set();
+  if(!entry.groups?.length)throw new Error('저장된 예선 조편성 정보가 없습니다.');
+  const groups=entry.groups.map(g=>({teams:(g.teams||[]).map(saved=>{
+    const tm=typeof saved==='string'?{name:saved}:saved;
+    const matches=teams.map((t,i)=>({t,i})).filter(({t,i})=>tm.registrationId
+      ?String(t._id||t.id||'')===String(tm.registrationId)
+      :tdn(t,key,i)===tm.name&&(!tm.club||String(t.club||'')===String(tm.club)));
+    if(matches.length!==1)throw new Error(`${tm.name||'팀'}의 등록정보가 변경되었거나 구분되지 않습니다. 현재 팀명단을 확인해 주세요.`);
+    const i=matches[0].i;if(used.has(i))throw new Error('추첨 기록에 중복된 팀이 있습니다.');used.add(i);return i;
+  }),courts:[],memo:''}));
+  if(groups.some(g=>g.teams.length<2))throw new Error('2팀 미만인 조가 있어 적용할 수 없습니다.');
+  if(used.size!==teams.length)throw new Error('저장 당시와 현재 등록팀 구성이 다릅니다. 다시 추첨해 주세요.');
+  return groups;
+}
+const savedPrelimApplyBusy=new Set();
+async function applySavedPrelimDrawToLive(id,key){
+  if(!canManageBracket()){toast('예선 적용 권한이 없습니다','error');return;}
+  if(savedPrelimApplyBusy.has(key))return;
+  const entry=(G.drawHistories[key]||[]).find(x=>x.id===id||x._id===id);
+  if(!entry||entry.deleted||entry.mode==='main'){toast('적용할 예선 기록을 다시 확인해 주세요','error');return;}
+  let groups;try{groups=resolveSavedPrelimGroups(key,entry);}catch(e){toast(e.message,'error');return;}
+  if(!confirm('이 기록의 조편성과 자리 순서를 실제 예선에 적용할까요?\n기존 예선·본선 배정은 교체됩니다. 팀 등록명단은 유지되고 변경 전후 복구점이 저장됩니다.\n이미 명단·오더·결과가 입력된 경기가 있으면 적용을 중단합니다.'))return;
+  savedPrelimApplyBusy.add(key);sl(true);
+  const before=G.matches[key],beforeDraw=G.draws[key];
+  try{
+    const {tid,div}=_k2td(key);
+    const snap=await getDocsFromServer(query(collection(db,'matches'),where('tournamentId','==',tid)));
+    const records=snap.docs.map(d=>({...d.data(),_id:d.id})).filter(m=>String(m.division||'')===div);
+    if(records.some(m=>m.winner!=null&&!m.bye||m.simpleResult?.confirmed||(m.rubbers||[]).length||Object.keys(m.orderSubmissions||{}).length||Object.keys(m.orderPhotoStore||{}).length))throw new Error('입력된 명단·오더·경기 결과가 있어 적용을 중단했습니다. 초기화가 필요한 경우 복구점을 확인하고 별도로 진행하세요.');
+    // 확인 대기 중 등록팀이 바뀌었다면 적용을 다시 검증한다.
+    groups=resolveSavedPrelimGroups(key,entry);
+    const {mainSeedRaw,mainSeedMap}=getPreservedSeedDrawState(key);
+    const nextDraw={groups,advance:Number(entry.advance||2),shuffled:groups.flatMap(g=>g.teams),groupDrawAudit:{mode:'saved_record_applied',sourceHistoryId:id,confirmedAt:new Date().toISOString()},mainDrawResetAt:new Date().toISOString()};
+    if(mainSeedRaw!==undefined)nextDraw.mainSeedRaw=mainSeedRaw;
+    if(mainSeedMap!==undefined)nextDraw.mainSeedMap=mainSeedMap;
+    G.draws[key]=nextDraw;
+    G.matches[key]=buildFreshGroupMatchesFromDraw(key);
+    G._matchIdsByKey=G._matchIdsByKey||{};G._matchIdsByKey[key]=records.map(m=>m._id);
+    await stM(key,{drawOverride:nextDraw});
+    cm('mDrawHistoryView');renderBracket();toast('저장된 예선 조편성을 적용했습니다. 코트는 다시 배정해 주세요.','success');
+  }catch(e){G.matches[key]=before||[];if(beforeDraw)G.draws[key]=beforeDraw;else delete G.draws[key];toast('예선 적용 실패: '+e.message,'error');}
+  finally{savedPrelimApplyBusy.delete(key);sl(false);}
+}
+window.applySavedPrelimDrawToLive=applySavedPrelimDrawToLive;
+
 async function applySavedMainDrawToLive(id,key){
   if(!canManageBracket()){toast('본선 적용 권한이 없습니다','error');return;}
   const entry=(G.drawHistories[key]||[]).find(x=>x.id===id||x._id===id);if(!entry){toast('추첨 기록을 다시 불러오세요','info');return;}
@@ -15375,6 +15421,7 @@ function renderSavedDrawView(entry){
       <div>
         <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">${leftTitle}</div>
         ${leftHtml}
+        ${!isMainMode&&!norm.deleted&&canManageBracket()?`<button class="btn btn-primary" style="margin-top:12px" onclick="applySavedPrelimDrawToLive('${norm.id||norm._id||entry.id||entry._id}','${norm.key||entry.key}')">이 기록으로 예선 적용</button>`:''}
         ${isMainMode&&norm.isTest&&canManageBracket()?`<button class="btn btn-primary" style="margin-top:12px" onclick="applySavedMainDrawToLive('${norm.id||norm._id||entry.id||entry._id}','${norm.key||entry.key}')">이 결과를 실제 본선에 적용</button>`:''}
       </div>
       <div>
@@ -15979,7 +16026,7 @@ async function startIndividualDraw(){
       mainSize:preview.totalAdv||0, mainPreviewSlots:[],
       groups:groupData.map((g,gi)=>({
         label:grpLabel(gi),
-        teams:g.teams.map(ti=>({name:tdn(teams[ti],key,ti),club:String(teams[ti]?.club||'')}))
+        teams:g.teams.map(ti=>({name:tdn(teams[ti],key,ti),club:String(teams[ti]?.club||''),registrationId:String(teams[ti]?._id||teams[ti]?.id||'')}))
       })),
       indivMode:true, grpSize:gs, mainMode
     });
@@ -16321,7 +16368,7 @@ async function startDraw(){
       mainPreviewSlots: preview.matchSlots||[],
       groups: groupData.map((g,gi)=>({
         label: grpLabel(gi),
-        teams: g.teams.map(ti=>({name:tdn(teams[ti],key,ti), club:String(teams[ti]?.club||'')}))
+        teams: g.teams.map(ti=>({name:tdn(teams[ti],key,ti), club:String(teams[ti]?.club||''),registrationId:String(teams[ti]?._id||teams[ti]?.id||'')}))
       }))
     });
     await fbLog(`추첨완료: ${t?.name||''} ${dl(DW.div)} ${ng}조 / ${drawIsTest?'테스트':'실운영'} / 무작위 / ${drawTitle} / ${drawTime.toLocaleString('ko-KR')}`,'🎲');
