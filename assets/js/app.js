@@ -4458,7 +4458,21 @@ function handleAppPopState(ev){
 }
 window.addEventListener('popstate', handleAppPopState);
 
+function installPageSwipeBoundary(){
+  document.querySelectorAll('.page').forEach(page=>{
+    if(page.dataset.swipeBoundaryReady)return;
+    page.dataset.swipeBoundaryReady='1';
+    // 영역 내부 조작을 유지하면서 전역 화면 전환 제스처로 전달하지 않는다.
+    for(const type of ['touchstart','touchmove','touchend','touchcancel','pointerdown','pointermove','pointerup']){
+      page.addEventListener(type,event=>event.stopPropagation(),{passive:true});
+    }
+  });
+}
 function showPage(n){
+  installPageSwipeBoundary();
+  const sourceType=String(window.event?.type||'');
+  if(/^(touch|pointer)/.test(sourceType))return;
+
   restoreDesktopOutputLayout();
   if(n==='output'){
     installPublicOutputCenter();
@@ -13413,6 +13427,8 @@ function sortTeamGroupStandings(key,gi,rows){
         const head=matches.filter(m=>[m.t1,m.t2].includes(block[0].ti)&&[m.t1,m.t2].includes(block[1].ti)&&getMatchResultState(key,m).done);
         if(head.length===1){const winner=getMatchResultState(key,head[0]).winner;if(block.some(r=>r.ti===winner)){block.sort((a,b)=>(b.ti===winner?1:0)-(a.ti===winner?1:0));basis='승자승';}else pending=true;}else pending=true;
         if(pending)basis='승자승 판정 대기';
+      }else if(matches.some(m=>m.simpleResult?.confirmed&&m.simpleResult?.winnerOnly)){
+        pending=true;basis='세부 점수 입력 필요';
       }else{
         block.sort((a,b)=>b.diff-a.diff);const resolved=[];
         for(let j=0;j<block.length;){let k=j+1;while(k<block.length&&block[k].diff===block[j].diff)k++;let tied=block.slice(j,k);
@@ -13522,7 +13538,7 @@ function getMatchResultState(key,m){
   if(m.bye) return {done:true,started:true,sc1:1,sc2:0,disp1:1,disp2:0,winner:m.winner,totalRubbers:1};
   const totalRubbers=getMatchDoublesCount(key,m);
   const need=Math.floor(totalRubbers/2)+1;
-  if(m.phase==='main'&&m.simpleResult?.confirmed&&m.simpleResult?.winnerOnly&&m.winner!=null){return {done:true,started:true,sc1:0,sc2:0,disp1:'-',disp2:'-',winner:m.winner,totalRubbers,simpleResult:true,winnerOnly:true,detailsPending:true};}
+  if(m.simpleResult?.confirmed&&m.simpleResult?.winnerOnly&&m.winner!=null){return {done:true,started:true,sc1:0,sc2:0,disp1:'-',disp2:'-',winner:m.winner,totalRubbers,simpleResult:true,winnerOnly:true,detailsPending:true};}
   const simpleResult=normalizeSimpleResult(m.simpleResult,totalRubbers,m.phase);
   if(simpleResult && m.simpleResult?.confirmed){const winner=simpleResult.winnerSide===1?m.t1:m.t2;return {done:true,started:true,sc1:simpleResult.score1,sc2:simpleResult.score2,disp1:simpleResult.score1,disp2:simpleResult.score2,winner,totalRubbers,simpleResult:true,detailsPending:!(Array.isArray(m.rubbers)&&m.rubbers.some(rb=>Array.isArray(rb?.players1)&&rb.players1.length||Array.isArray(rb?.players2)&&rb.players2.length))};}
   const rubbers=Array.isArray(m.rubbers)?m.rubbers:[];
@@ -13647,7 +13663,7 @@ function getPreviewAdvSlots(draw,cfg){
   const res=[];
   (draw?.groups||[]).forEach((grp,gi)=>{
     const grpSize=(grp?.teams||[]).length||0;
-    const advCount=grpSize<=2 ? grpSize : Math.max(1, Number(draw?.advance||cfg?.advance||2));
+    const advCount=grpSize<=2 ? grpSize : Math.min(grpSize,Math.max(1, Number(draw?.advance||cfg?.advance||2)));
     for(let rk=1; rk<=advCount; rk++) res.push({nm:`${grpLabel(gi)} ${rk}위`, gn:gi+1, rk, placeholder:true, grpSize});
   });
   return res;
@@ -13918,7 +13934,7 @@ function buildHybridMainSlots(entries, n){
 
 function computeMainBracketSpec(total, mode='auto'){
   const t=Math.max(0, Number(total||0));
-  const requestedMode=String(mode||'auto');
+  const requestedMode=['auto','full','playin'].includes(String(mode))?String(mode):'auto';
   if(t<2) return {mainSize:0, playInTeams:0, playInMatches:0, winnersNeeded:0, directCount:t, exact:true, mode:requestedMode};
   let lower=1;
   while(lower*2 <= t) lower*=2;
@@ -18062,7 +18078,7 @@ function openM3(key,mid,forceEdit=false){
       team1:dn1,team2:dn2,options:getSimpleResultOptions(dbl,m.phase),saved:savedSimple,escapeHtml:esc,
       photo1:!!_orderPhotoGetSaved(m,1),photo2:!!_orderPhotoGetSaved(m,2),
       canPhoto1:!!(AD||OP||mySide===1),canPhoto2:!!(AD||OP||mySide===2),
-      allowWinnerOnly:m.phase==='main',
+      allowWinnerOnly:['group','main'].includes(m.phase),
       winnerOnlySide:(m.simpleResult?.winnerOnly&&m.winner===m.t1)?1:((m.simpleResult?.winnerOnly&&m.winner===m.t2)?2:0)
     })}
     <div style="margin:9px 0 5px">
@@ -18071,6 +18087,7 @@ function openM3(key,mid,forceEdit=false){
     <div id="offlineResultEntryHint" style="font-size:.67rem;color:#64748b;margin:0 2px 8px">필요할 때만 열어 실제 출전선수와 복식별 점수를 기록하세요.</div>
     <div id="simpleResultDetailWrap" style="display:none">${html}</div>`;}
   ge('mM3B').innerHTML=html;
+  installSimpleScoreSaveSelection();
 
   renderOrderPhotoManage(key,m);
   const body = ge('mM3B');
@@ -18174,7 +18191,37 @@ async function withMatchResultSaveLock(run){
 }
 async function saveMainWinnerOnly(side){return withMatchResultSaveLock(()=>saveMainWinnerOnlyCore(side));}
 async function saveSimpleMatchResult(score1,score2){return withMatchResultSaveLock(()=>saveSimpleMatchResultCore(score1,score2));}
-async function saveM3(){return withMatchResultSaveLock(()=>saveM3Core());}
+async function saveM3(){return withMatchResultSaveLock(()=>{
+  const draft=ge('mM3')?._simpleScoreDraft;
+  if(isSimpleResultMode(G.meta)&&draft&&draft.key===CM_key&&draft.mid===CM_id)return saveSimpleMatchResultCore(draft.score1,draft.score2);
+  return saveM3Core();
+});}
+function installSimpleScoreSaveSelection(){
+  const modal=ge('mM3');if(!modal)return;
+  delete modal._simpleScoreDraft;
+  if(modal.dataset.simpleScoreSaveReady)return;
+  modal.dataset.simpleScoreSaveReady='1';
+  modal.addEventListener('click',event=>{
+    if(!isSimpleResultMode(G.meta))return;
+    const button=event.target.closest?.('button');
+    if(!button||!ge('mM3B')?.contains(button)||button.closest('#simpleResultDetailWrap'))return;
+    const score=String(button.textContent||'').trim().match(/^(\d+)\s*:\s*(\d+)$/);if(!score)return;
+    const match=(G.matches[CM_key]||[]).find(m=>m.id===CM_id||m._id===CM_id);if(!match)return;
+    const score1=Number(score[1]),score2=Number(score[2]);
+    if(!normalizeSimpleResult({score1,score2},getMatchDoublesCount(CM_key,match),match.phase))return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const prior=modal._simpleScoreDraft;
+    const clear=prior?.key===CM_key&&prior?.mid===CM_id&&prior.score1===score1&&prior.score2===score2;
+    if(clear)delete modal._simpleScoreDraft;
+    else modal._simpleScoreDraft={key:CM_key,mid:CM_id,score1,score2};
+    for(const b of ge('mM3B').querySelectorAll('button')){
+      if(b.closest('#simpleResultDetailWrap')||!/^\d+\s*:\s*\d+$/.test(b.textContent.trim()))continue;
+      const selected=!clear&&b===button;b.style.background=selected?'#d4a017':'#fff';b.style.color=selected?'#fff':'#10213d';b.style.borderColor=selected?'#d4a017':'#10213d';
+    }
+    matchResultSaveNotice(clear?'점수 선택을 해제했습니다. 기존에 저장된 결과는 유지됩니다.':`선택한 점수 ${score1}:${score2} · 아래 결과저장을 눌러 주세요.`,'info');
+  },true);
+}
+
 async function saveMainWinnerOnlyCore(side){
   const key=CM_key,mid=CM_id;if(!key||!mid)return;
   if(!isSimpleResultMode(G.meta)){matchResultSaveNotice('현재는 온라인 오더 제출 방식입니다','info');return;}
@@ -18182,15 +18229,15 @@ async function saveMainWinnerOnlyCore(side){
   if(m.simpleResult?.confirmed && !(AD||OP)){
     matchResultSaveNotice('기존 확정 결과 변경은 관리자·경기진행자만 가능합니다','error');return;
   }
-  if(m.phase!=='main'){matchResultSaveNotice('승리팀만 확정 기능은 본선에서만 사용할 수 있습니다','info');return;}
+  if(!['group','main'].includes(m.phase)){matchResultSaveNotice('승리팀만 확정은 예선·본선에서 사용할 수 있습니다','info');return;}
   if(!canEditMatchByClubMember(key,m)){matchResultSaveNotice('해당 경기 참가 클럽의 경기이사·경기진행자·관리자만 결과를 저장할 수 있습니다','error');return;}
   const winner=Number(side)===1?m.t1:Number(side)===2?m.t2:null;if(winner==null)return;
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2',winnerName=Number(side)===1?dn1:dn2;
-  if(!confirm(`${winnerName} 승리로 확정하시겠습니까?\n\n스코어 없이 바로 다음 라운드로 진출합니다.\n스코어와 선수 상세기록은 나중에 보완할 수 있습니다.`))return;
+  if(!confirm(`${winnerName} 승리로 확정하시겠습니까?\n\n스코어 없이 승패를 먼저 확정합니다.\n스코어와 선수 상세기록은 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
-  m.winner=winner;m.detailStatsApplied=false;m.simpleResult={confirmed:true,winnerOnly:true,winnerSide:Number(side),scorePending:true,detailsPending:true,confirmedAt:new Date().toISOString(),confirmedBy:String(AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사')),phase:'main'};
+  m.winner=winner;m.detailStatsApplied=false;m.simpleResult={confirmed:true,winnerOnly:true,winnerSide:Number(side),scorePending:true,detailsPending:true,confirmedAt:new Date().toISOString(),confirmedBy:String(AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사')),phase:m.phase};
   sl(true);
-  try{await persistSingleMatchDoc(key,m);await autoAdv(key,m.id);await fbLog(`본선 초간편 결과: ${winnerName} 승리 · 스코어 미입력`,'⚡');sl(false);cm('mM3');matchResultSaveNotice(`${winnerName} 승리 확정 ✅`,'success');renderBracket();}
+  try{await persistSingleMatchDoc(key,m);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`${m.phase==='group'?'예선':'본선'} 초간편 결과: ${winnerName} 승리 · 스코어 미입력`,'⚡');sl(false);cm('mM3');matchResultSaveNotice(`${winnerName} 승리 확정 ✅`,'success');renderBracket();}
   catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('승리팀 저장 실패: '+e.message,'error');}
 }
 async function saveSimpleMatchResultCore(score1,score2){
@@ -18206,11 +18253,11 @@ async function saveSimpleMatchResultCore(score1,score2){
   const {t1,t2}=getMatchTeamObjects(key,m),dn1=t1?tdn(t1,key,m.t1):'팀1',dn2=t2?tdn(t2,key,m.t2):'팀2';
   if(!confirm(`${dn1} ${normalized.score1} : ${normalized.score2} ${dn2}\n\n이 결과로 경기 완료 처리하시겠습니까?\n선수 상세 오더는 나중에 보완할 수 있습니다.`))return;
   const previousWinner=m.winner,previousSimple=m.simpleResult?JSON.parse(JSON.stringify(m.simpleResult)):null;
-  m.detailStatsApplied=false;m.simpleResult=buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase);m.winner=winner;
+  m.detailStatsApplied=false;m.simpleResult={...buildSimpleResultRecord(normalized,totalRubbers,AD?'관리자':OP?'경기진행자':(REG_CLUB||'경기이사'),m.phase),winnerOnly:false,scorePending:false};m.winner=winner;
   // 실제 출전선수가 아직 확정되지 않았으므로 간편 결과 저장 시 개인 승패 통계는 건드리지 않는다.
   sl(true);
   try{await persistSingleMatchDoc(key,m);if(m.phase==='group'&&syncIndividualMainBracketFromPrelim(key))await stM(key);if(m.phase==='main')await autoAdv(key,m.id);await fbLog(`현장 간편결과: ${dn1} ${normalized.score1}:${normalized.score2} ${dn2}`,'⚡');sl(false);cm('mM3');matchResultSaveNotice(`결과 저장 완료 ✅ ${normalized.score1}:${normalized.score2}`,'success');renderBracket();}
-  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('결과 저장 실패: '+e.message,'error');}
+  catch(e){m.winner=previousWinner;if(previousSimple)m.simpleResult=previousSimple;else delete m.simpleResult;sl(false);matchResultSaveNotice('결과 저장 실패 ['+(e.code||'unknown')+']: '+e.message+(e.code==='permission-denied'?' · Firebase의 경기·복구점 저장 권한 확인이 필요합니다.':''),'error');}
 }
 
 function esc(s){return String(s??'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
@@ -18218,7 +18265,8 @@ function esc(s){return String(s??'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 // PHASE247: enter the losing rubber score once; fill the winner with six.
 function setRbSc(inputId,val,autoOpponent=true){
   const inp=ge(inputId);if(!inp)return;
-  const score=val===''||val==null?null:Number(val);
+  let score=val===''||val==null?null:Number(val);
+  if(autoOpponent&&String(inp.value).trim()!==''&&score!==null&&Number(inp.value)===score)score=null;
   inp.value=score==null?'':score;
   for(let n=0;n<=6;n++){
     const btn=ge(inputId+'_btn'+n);if(!btn)continue;
@@ -28534,6 +28582,9 @@ function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
     <div class="actual-main-pyramid-body mobile-bracket-hscroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-y;background:#fff;border:1px solid #d7e0ed;border-radius:12px;padding:10px">${outputBottomUpTreeHtml(tid,div,false,true)}</div>
   </div>`;
 }
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installPageSwipeBoundary,{once:true});
+else installPageSwipeBoundary();
 
 // Phase87: 모바일 피라미드 대진표는 버튼 줌 + 영역 전용 핀치 줌 + 한손가락 가로 이동을 지원한다.
 function initMobileBracketHorizontalScroll(root=document){
