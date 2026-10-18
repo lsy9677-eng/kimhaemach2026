@@ -28543,6 +28543,7 @@ function initMobileBracketHorizontalScroll(root=document){
     el.dataset.mobileHscrollReady='1';
     el.style.overflowX='auto'; el.style.overflowY='hidden';
     el.style.webkitOverflowScrolling='touch'; el.style.overscrollBehaviorX='contain'; el.style.touchAction='pan-y';
+    el.style.overflowAnchor='none';
 
     // 실제 본선 HTML의 첫 자식은 우승/준우승 결과판일 수 있다.
     // 확대/축소 대상은 반드시 피라미드 본체를 우선 선택한다.
@@ -28598,12 +28599,17 @@ function initMobileBracketHorizontalScroll(root=document){
       tools.style.cssText='display:flex;justify-content:center;align-items:center;gap:6px;margin:5px 0 7px;position:sticky;left:0;z-index:3';
       tools.innerHTML='<button type="button" class="btn btn-outline" data-zout style="padding:5px 11px;font-size:.78rem">− 축소</button><button type="button" class="btn btn-outline" data-zfit style="padding:5px 10px;font-size:.78rem">▣ 전체맞춤</button><span data-bracket-zoom-label style="min-width:42px;text-align:center;font-size:.72rem;font-weight:800;color:#475569">100%</span><button type="button" class="btn btn-outline" data-zin style="padding:5px 11px;font-size:.78rem">＋ 확대</button>';
       el.parentNode?.insertBefore(tools,el);
-      tools.querySelector('[data-zout]')?.addEventListener('click',()=>applyZoom(getZoom()-.08));
-      tools.querySelector('[data-zin]')?.addEventListener('click',()=>applyZoom(getZoom()+.08));
-      tools.querySelector('[data-zfit]')?.addEventListener('click',fitZoom);
+      tools.querySelector('[data-zout]')?.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();applyZoom(getZoom()-.08);});
+      tools.querySelector('[data-zin]')?.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();applyZoom(getZoom()+.08);});
+      tools.querySelector('[data-zfit]')?.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();fitZoom();});
     }
 
     let sx=0,sy=0,lastX=0,horizontal=false,pinching=false,pinchStartDist=0,pinchStartZoom=1;
+    let gestureMoved=false,suppressClickUntil=0;
+    // 확대·이동 뒤 생성되는 클릭은 경기 버튼 실행 전에 차단한다.
+    el.addEventListener('click',ev=>{
+      if(gestureMoved||Date.now()<suppressClickUntil){ev.preventDefault();ev.stopImmediatePropagation();}
+    },true);
     const touchDist=touches=>{
       if(!touches||touches.length<2)return 0;
       const dx=touches[0].clientX-touches[1].clientX,dy=touches[0].clientY-touches[1].clientY;
@@ -28612,10 +28618,12 @@ function initMobileBracketHorizontalScroll(root=document){
     const touchMidX=touches=>touches&&touches.length>=2?(touches[0].clientX+touches[1].clientX)/2:null;
     el.addEventListener('touchstart',ev=>{
       if(ev.touches?.length>=2){
+        gestureMoved=true;suppressClickUntil=Date.now()+800;
         pinching=true; horizontal=false; pinchStartDist=Math.max(1,touchDist(ev.touches)); pinchStartZoom=getZoom();
         ev.preventDefault(); ev.stopPropagation(); return;
       }
       const t=ev.touches&&ev.touches[0]; if(!t)return;
+      if(ev.touches.length===1&&!pinching)gestureMoved=false;
       sx=lastX=t.clientX; sy=t.clientY; horizontal=false;
       ev.stopPropagation();
     },{passive:false});
@@ -28627,6 +28635,7 @@ function initMobileBracketHorizontalScroll(root=document){
       }
       const t=ev.touches&&ev.touches[0]; if(!t)return;
       const dx=t.clientX-sx,dy=t.clientY-sy;
+      if(Math.abs(dx)>8||Math.abs(dy)>8){gestureMoved=true;suppressClickUntil=Date.now()+800;}
       if(horizontal || (Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy))){
         horizontal=true;
         el.scrollLeft-=t.clientX-lastX;
@@ -28635,9 +28644,13 @@ function initMobileBracketHorizontalScroll(root=document){
       }
     },{passive:false});
     const endTouch=ev=>{
-      if(ev.touches?.length<2)pinching=false;
-      if(horizontal||pinching)ev.stopPropagation();
-      if(!ev.touches?.length){ horizontal=false; pinching=false; }
+      const moved=gestureMoved||horizontal||pinching;
+      if(moved){suppressClickUntil=Date.now()+800;ev.stopPropagation();if(ev.cancelable)ev.preventDefault();}
+      if(ev.touches?.length===1&&pinching){
+        const t=ev.touches[0];sx=lastX=t.clientX;sy=t.clientY;
+      }
+      if((ev.touches?.length||0)<2)pinching=false;
+      if(!ev.touches?.length){horizontal=false;pinching=false;gestureMoved=false;}
     };
     el.addEventListener('touchend',endTouch,{passive:false});
     el.addEventListener('touchcancel',endTouch,{passive:false});
