@@ -8,17 +8,18 @@
 <meta http-equiv="Expires" content="0">
 
 <title>김해시테니스협회 대회관리 시스템</title>
+<script src="assets/js/organization-context.js?v=307"></script>
 <script>
   // ✅ 배포할 때마다 아래 버전 문자열만 바꾸면, 사용자가 앱을 열 때 자동으로 새 버전을 적용합니다.
   // 예) "2026-02-27-02" 처럼 숫자만 올려도 됩니다.
-  const APP_VERSION = "1.0.6-home-hide-ended-tournaments";
+  const APP_VERSION = "1.0.7-independent-organizations";
 
   (function forceUpdateOnNewVersion() {
     const key = "APP_VERSION";
-    const prev = localStorage.getItem(key);
+    const prev = window.organizationLocalStorage.getItem(key);
 
     if (prev !== APP_VERSION) {
-      localStorage.setItem(key, APP_VERSION);
+      window.organizationLocalStorage.setItem(key, APP_VERSION);
 
       // Cache Storage(PWA/서비스워커 캐시 포함) 삭제 시도
       const bust = () => {
@@ -1863,7 +1864,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 <div class="sticky-alert-wrap" id="stickyAlertWrap" aria-live="polite" aria-atomic="true"></div>
 <button class="scroll-top" id="stBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
-<script type="module" src="assets/js/app.js?v=mod1"></script>
+<script type="module" src="assets/js/app.js?v=org307"></script>
 
 <script>
   // 배포 안정화 모드: 기존 service worker 자동 해제 + 캐시 정리
@@ -2565,15 +2566,15 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 
   function maybeShowSwipeHint(page){
     if(!['home','tournament','register'].includes(page)) return;
-    if(localStorage.getItem(HINT_KEYS.swipe) === '1') return;
-    localStorage.setItem(HINT_KEYS.swipe, '1');
+    if(window.organizationLocalStorage.getItem(HINT_KEYS.swipe) === '1') return;
+    window.organizationLocalStorage.setItem(HINT_KEYS.swipe, '1');
     showGestureHint('swipe','↔ 좌우로 넘겨서 이동할 수 있어요','홈 · 대회관리 · 팀등록에서만 지원됩니다.',2600);
   }
 
   function maybeShowBracketHint(page){
     if(page !== 'bracket') return;
-    if(localStorage.getItem(HINT_KEYS.bracket) === '1') return;
-    localStorage.setItem(HINT_KEYS.bracket, '1');
+    if(window.organizationLocalStorage.getItem(HINT_KEYS.bracket) === '1') return;
+    window.organizationLocalStorage.setItem(HINT_KEYS.bracket, '1');
     showGestureHint('bracket','👉 대진표는 좌우로 드래그해서 보세요','대진표 · 선수현황 · 시합결과는 페이지 스와이프가 꺼져 있습니다.',2800);
   }
 

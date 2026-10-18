@@ -1,3 +1,7 @@
+const MATCH_ORGANIZATION=window.MATCH_ORGANIZATION;
+if(!MATCH_ORGANIZATION)throw new Error("단체 설정을 불러오지 못했습니다. 새로고침해 주세요.");
+const organizationLocalStorage=window.organizationLocalStorage;
+const organizationSessionStorage=window.organizationSessionStorage;
 'use strict';
 // PHASE161: responsive navigation bootstrap. Hide legacy mobile navigation before
 // delayed role/data initialization so the old bar never flashes before the
@@ -355,12 +359,12 @@ function formatPhoneLoose(raw=''){
 
 const PERSONAL_MATCH_PHONE_KEY='kimhae_personal_match_phone_v1';
 function getPersonalMatchPhone(){
-  try{return normalizePhoneDigits(localStorage.getItem(PERSONAL_MATCH_PHONE_KEY)||'');}catch(e){return '';}
+  try{return normalizePhoneDigits(organizationLocalStorage.getItem(PERSONAL_MATCH_PHONE_KEY)||'');}catch(e){return '';}
 }
 function setPersonalMatchPhone(raw=''){
   const digits=normalizePhoneDigits(raw);
   if(digits.length<9){ toast('전화번호를 다시 확인해 주세요','error'); return false; }
-  try{ localStorage.setItem(PERSONAL_MATCH_PHONE_KEY, digits); }catch(e){}
+  try{ organizationLocalStorage.setItem(PERSONAL_MATCH_PHONE_KEY, digits); }catch(e){}
   toast('내 경기 전화번호를 저장했습니다 ✅','success');
   try{ renderBracket(); }catch(e){}
   return true;
@@ -372,7 +376,7 @@ function promptPersonalMatchPhone(){
   setPersonalMatchPhone(raw);
 }
 function clearPersonalMatchPhone(){
-  try{ localStorage.removeItem(PERSONAL_MATCH_PHONE_KEY); }catch(e){}
+  try{ organizationLocalStorage.removeItem(PERSONAL_MATCH_PHONE_KEY); }catch(e){}
   toast('저장된 전화번호를 지웠습니다','success');
   try{ renderBracket(); }catch(e){}
 }
@@ -688,6 +692,7 @@ function updateTournamentTypeUI(){
 window.updateTournamentTypeUI = updateTournamentTypeUI;
 
 function getAppTitle(){
+  if(MATCH_ORGANIZATION.id!=='kimhae')return MATCH_ORGANIZATION.name+' 대회관리';
   return String(G?.meta?.appTitle||'시합관리 시스템').trim() || '시합관리 시스템';
 }
 function usesFixedClubList(){ return !!G?.meta?.useFixedClubs; }
@@ -778,8 +783,8 @@ import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShel
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment,deleteField}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-const FB={apiKey:"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE",authDomain:"kimheatennis2026.firebaseapp.com",projectId:"kimheatennis2026",storageBucket:"kimheatennis2026.firebasestorage.app",messagingSenderId:"243465970482",appId:"1:243465970482:web:ceafbd39de51837d49ed2b"};
-const _app=initializeApp(FB);
+const FB=MATCH_ORGANIZATION.firebase;
+const _app=initializeApp(FB,"association-"+MATCH_ORGANIZATION.id);
 const db=getFirestore(_app);
 const storage=getStorage(_app);
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
@@ -808,7 +813,7 @@ Object.defineProperty(window,'REG_CLUB',{get:()=>REG_CLUB,set:(v)=>{REG_CLUB=v;}
 // ── 과거 대회 내장 데이터 ─────────────────────────────────
 let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 
-let G={meta:{pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},popupNotice:{enabled:false,title:'',text:'',imageUrl:'',startAt:'',endAt:'',updatedAt:''},clubDefaultRegions:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
+let G={meta:{pw:(MATCH_ORGANIZATION.id==='jangyu'?'jangyu1234':'kimhae1234'),regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},popupNotice:{enabled:false,title:'',text:'',imageUrl:'',startAt:'',endAt:'',updatedAt:''},clubDefaultRegions:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
 const PLAYER_CACHE_TTL=1000*60*60*12;
 const TOURNAMENT_BUNDLE_CACHE_KEY='OAI_TOURNAMENT_BUNDLE_CACHE_V3';
@@ -968,7 +973,7 @@ async function ensureFirstAppearanceDataReady(force=false){
 function _playerDocId(k){ return String(k||'').replace(/[\/\.#\$\[\]]/g,'_'); }
 function loadPlayersFromLocalCache(){
   try{
-    const raw=localStorage.getItem(PLAYER_CACHE_KEY);
+    const raw=organizationLocalStorage.getItem(PLAYER_CACHE_KEY);
     if(!raw) return false;
     const parsed=JSON.parse(raw);
     const ts=Number(parsed?.ts||0);
@@ -981,7 +986,7 @@ function loadPlayersFromLocalCache(){
 }
 function savePlayersToLocalCache(){
   try{
-    localStorage.setItem(PLAYER_CACHE_KEY, JSON.stringify({ts:Date.now(), data:G.players||{}}));
+    organizationLocalStorage.setItem(PLAYER_CACHE_KEY, JSON.stringify({ts:Date.now(), data:G.players||{}}));
   }catch(e){}
 }
 async function ensurePlayersLoaded(force=false){
@@ -1069,13 +1074,13 @@ function ensureViewerBracketPolling(page, tid){
 window.runViewerBracketPoll = runViewerBracketPoll;
 function readTournamentBundleCache(){
   try{
-    const raw=localStorage.getItem(TOURNAMENT_BUNDLE_CACHE_KEY);
+    const raw=organizationLocalStorage.getItem(TOURNAMENT_BUNDLE_CACHE_KEY);
     const parsed=raw?JSON.parse(raw):{};
     return parsed && typeof parsed==='object' ? parsed : {};
   }catch(e){ return {}; }
 }
 function writeTournamentBundleCache(all){
-  try{ localStorage.setItem(TOURNAMENT_BUNDLE_CACHE_KEY, JSON.stringify(all||{})); }catch(e){}
+  try{ organizationLocalStorage.setItem(TOURNAMENT_BUNDLE_CACHE_KEY, JSON.stringify(all||{})); }catch(e){}
 }
 function saveTournamentBundleCache(tid, payload){
   if(!tid) return;
@@ -2521,7 +2526,8 @@ async function loadMeta(){
       const d=s.data();
       // memberRegistry2026은 meta/config에서 제외 → memberRegistries/2026 에서만 관리
       const {memberRegistry2026:_mr, ...dClean}=d;
-      G.meta={pw:'kimhae1234',regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
+      if(MATCH_ORGANIZATION.id==='jangyu')window.__organizationLegacyRegistry=Array.isArray(_mr)?_mr:[];
+      G.meta={pw:(MATCH_ORGANIZATION.id==='jangyu'?'jangyu1234':'kimhae1234'),regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템',...dClean};
       if(Array.isArray(d.clubs)){
         G.clubs=d.clubs.map(x=>String(x||'').trim()).filter(Boolean);
       }
@@ -2556,7 +2562,7 @@ async function loadMeta(){
       if(!G.meta.indivLockEnd) G.meta.indivLockEnd='';
       markFbWriteCache('meta','config',{pw:G.meta.pw,regPw:(G.meta.regPw||'202601'),clubs:G.clubs,adminPhone:(G.meta.adminPhone||''),clubContacts:(G.meta.clubContacts||{}),clubEmails:(G.meta.clubEmails||{}),clubPasswords:(G.meta.clubPasswords||{}),clubPasswordCustom:(G.meta.clubPasswordCustom||{}),directorPasswords:(G.meta.directorPasswords||{}),directorPasswordCustom:(G.meta.directorPasswordCustom||{}),clubPasswordAudit:(G.meta.clubPasswordAudit||{}),directorPasswordAudit:(G.meta.directorPasswordAudit||{}),clubDefaultRegions:(G.meta.clubDefaultRegions||{}),regDeadlineDt:(G.meta.regDeadlineDt||''),adminFloatingNotice:(G.meta.adminFloatingNotice||''),adminFloatingNoticeEnabled:!!G.meta.adminFloatingNoticeEnabled,onlineOrderEnabled:!!G.meta.onlineOrderEnabled,operatorPw:(G.meta.operatorPw||'2026court'),individualAutoCourtAssignEnabled:!!G.meta.individualAutoCourtAssignEnabled,usePlayerRegistry:!!G.meta.usePlayerRegistry,showAssociationDashboard:!!G.meta.showAssociationDashboard,useFixedClubs:!!G.meta.useFixedClubs,allowPublicTeamRegistration:!!G.meta.allowPublicTeamRegistration,allowPublicResultEntry:!!G.meta.allowPublicResultEntry,appTitle:(G.meta.appTitle||'시합관리 시스템'),regSessionVersion:Number(G.meta.regSessionVersion||1),drawHistoryPolicyVersion:Number(G.meta.drawHistoryPolicyVersion||0),indivLockEnabled:!!G.meta.indivLockEnabled,indivLockStart:(G.meta.indivLockStart||''),indivLockEnd:(G.meta.indivLockEnd||'')});
     }else{
-      await setDoc(doc(db,'meta','config'),{pw:'kimhae1234',regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'});
+      await setDoc(doc(db,'meta','config'),{pw:(MATCH_ORGANIZATION.id==='jangyu'?'jangyu1234':'kimhae1234'),regPw:'202601',clubs:G.clubs,adminPhone:'',clubContacts:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},clubDefaultRegions:{},adminFloatingNotice:'',adminFloatingNoticeEnabled:false,onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'});
     }
   }catch(e){}
 
@@ -2571,10 +2577,10 @@ async function loadMeta(){
       REGISTRY_SAVE_BASELINES.set(Number(REG_YEAR),JSON.parse(JSON.stringify(members)));
       if(!REGISTRY_YEARS_LOADED.includes(REG_YEAR)) REGISTRY_YEARS_LOADED.push(REG_YEAR);
     }else{
-      G.meta.memberRegistry2026=[];
+      G.meta.memberRegistry2026=MATCH_ORGANIZATION.id==='jangyu'?(window.__organizationLegacyRegistry||[]):[];
     }
   }catch(e){
-    G.meta.memberRegistry2026=[];
+    G.meta.memberRegistry2026=MATCH_ORGANIZATION.id==='jangyu'?(window.__organizationLegacyRegistry||[]):[];
   }
 }
 async function saveMeta(){
@@ -2616,7 +2622,8 @@ async function saveMeta(){
   };
   try{
     if(isSameFbWrite('meta','config',payload)) return;
-    await setDoc(doc(db,'meta','config'), payload);
+    if(MATCH_ORGANIZATION.id==='jangyu')await setDoc(doc(db,'meta','config'),payload,{merge:true});
+    else await setDoc(doc(db,'meta','config'), payload);
     markFbWriteCache('meta','config',payload);
   }catch(e){
     console.error('saveMeta 오류:', e);
@@ -2819,6 +2826,7 @@ function transferConflicts(team,rows,year){
   return out;
 }
 async function validatePriorYearClubTransfer(tid,div,teams){
+  if(!MATCH_ORGANIZATION.requiresAssociationRegistration)return;
   const t=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
   if(!t||isIndividualTournament(t)||__autoRestoreSuppressed||!teams.length)return;
   const year=transferYear(t);
@@ -3188,18 +3196,18 @@ async function fbLog(t,i='📌'){ return; }
 function onDU(){
   schedulePastArchiveMigration();
   // 새로고침 후 관리자 세션 복원
-  if(!AD && localStorage.getItem('adm')==='1'){
+  if(!AD && organizationLocalStorage.getItem('adm')==='1'){
     applyAdminUI();
   }
   // 팀등록 세션 복원
-  if(!OP && localStorage.getItem('op')==='1' && !AD){
+  if(!OP && organizationLocalStorage.getItem('op')==='1' && !AD){
     OP=true;
     refreshRoleUI();
   }
-  if(!REG && localStorage.getItem('reg')==='1'){
+  if(!REG && organizationLocalStorage.getItem('reg')==='1'){
     if(isDirectorSessionValid()){
       REG=true;
-      REG_CLUB = localStorage.getItem('reg_club')||'';
+      REG_CLUB = organizationLocalStorage.getItem('reg_club')||'';
       ge('regToggleBtn') && (ge('regToggleBtn').textContent='로그아웃');
       ge('regToggleBtn') && (ge('regToggleBtn').style.background='#388e3c');
       const _badge = ge('regLoginBadge');
@@ -3212,7 +3220,7 @@ function onDU(){
     }
   }
   applyRegLoginUI();
-  if(!REG && localStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=localStorage.getItem('reg_club')||'';}
+  if(!REG && organizationLocalStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=organizationLocalStorage.getItem('reg_club')||'';}
   if((REG||CLUB_MEMBER) && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
   applyClubRoleVisibility();
   ensureDirectorPasswordSettingsButton();
@@ -3441,7 +3449,7 @@ function loadIndivOperatorFilters(){
   try{
     // 운영 필터는 기본값을 항상 "전체 보기"로 시작한다.
     // 이전 선택을 로컬에 남겨도 다음 진입 시 자동 복원하지 않는다.
-    localStorage.removeItem(INDIV_FILTER_STORAGE_KEY);
+    organizationLocalStorage.removeItem(INDIV_FILTER_STORAGE_KEY);
   }catch(e){}
 }
 function persistIndivOperatorFilters(){
@@ -3456,7 +3464,7 @@ function persistIndivOperatorFilters(){
         mainBlocks:Array.isArray(src.mainBlocks)?src.mainBlocks.map(v=>String(v)):[]
       };
     });
-    localStorage.setItem(INDIV_FILTER_STORAGE_KEY, JSON.stringify(clean));
+    organizationLocalStorage.setItem(INDIV_FILTER_STORAGE_KEY, JSON.stringify(clean));
   }catch(e){}
 }
 loadIndivOperatorFilters();
@@ -4064,14 +4072,14 @@ function refreshRoleUI(){
 }
 function applyOperatorUI(){
   OP=true;
-  try{ localStorage.setItem('op','1'); }catch(e){}
+  try{ organizationLocalStorage.setItem('op','1'); }catch(e){}
   if(REG){
     REG=false; REG_CLUB='';
     try{
-      localStorage.removeItem('reg');
-      localStorage.removeItem('reg_club');
-      localStorage.removeItem('reg_session_version');
-    localStorage.removeItem('club_member');
+      organizationLocalStorage.removeItem('reg');
+      organizationLocalStorage.removeItem('reg_club');
+      organizationLocalStorage.removeItem('reg_session_version');
+    organizationLocalStorage.removeItem('club_member');
     }catch(e){}
     const regBtn=ge('regToggleBtn');
     if(regBtn){ regBtn.textContent='🏆 클럽 로그인'; regBtn.style.background='var(--success)'; }
@@ -4083,7 +4091,7 @@ function applyOperatorUI(){
 function toggleOperator(){ closeLoginMenu();
   if(OP){
     OP=false;
-    try{ localStorage.removeItem('op'); }catch(e){}
+    try{ organizationLocalStorage.removeItem('op'); }catch(e){}
     refreshRoleUI();
     toast('경기진행자 로그아웃','info');
     if(document.querySelector('.nav-tab.active')?.dataset?.page==='tournament') showPage('home');
@@ -4102,8 +4110,8 @@ function doOperatorLogin(){
   toast('경기진행자 로그인 ✅','success');
   showPage('bracket');
   // ▼▼▼ [이용안내] 진행자 로그인 시 안내 팝업 자동 표시 (세션당 1회) ▼▼▼
-  if(!sessionStorage.getItem('opManualShown')){
-    sessionStorage.setItem('opManualShown','1');
+  if(!organizationSessionStorage.getItem('opManualShown')){
+    organizationSessionStorage.setItem('opManualShown','1');
     setTimeout(()=>{ om('mOperatorManual'); }, 400);
   }
   // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
@@ -4207,6 +4215,7 @@ function ensureRegistryManagerButton(){
   ensureRegistryActionToolbarLayout();
 }
 function updatePlayersAdminControls(){
+  if(!MATCH_ORGANIZATION.requiresAssociationRegistration){const recordTab=ge('ptab-records');if(recordTab){recordTab.style.display='';recordTab.textContent='📊 장유 선수현황·기록';}}
   const recBtns=ge('playerPageBtns');
   const regBtns=ge('registryActionBtns');
   const recActive=!!ge('ptab-records')?.classList.contains('active');
@@ -4505,7 +4514,8 @@ function showPage(n){
   if(window.goPageSheet&&!(n==='output'&&!isMobileOutputCenter())) window.goPageSheet(n, ['players','ranking','bracket'].includes(n) || ['players','ranking','bracket'].includes(prev));
   if(n==='home')upDash();if(n==='tournament'){renderTL();renderCourtGroupManager('create');}if(n==='register'){popSel();renderRL();}
   if(n==='bracket')popSel();
-  if(n==='players'){
+  if(n==='players'&&!MATCH_ORGANIZATION.requiresAssociationRegistration){switchPlayersTab('records');}
+  else if(n==='players'){
     const act=ge('ptab-registry')?.classList.contains('active');
     if(!act) switchPlayersTab('registry');
     else {
@@ -4560,7 +4570,7 @@ function showPage(n){
 function toggleAdmin(){ closeLoginMenu();
   if(AD){
     AD=false;
-    localStorage.removeItem('adm');
+    organizationLocalStorage.removeItem('adm');
     document.body.classList.remove('admin-mode');
     ge('adminBadge').classList.remove('show');
     ge('adminToggleBtn').classList.remove('active');
@@ -4589,9 +4599,9 @@ function toggleAdmin(){ closeLoginMenu();
 function applyAdminUI(){
   AD=true;
   OP=false;
-  try{ localStorage.removeItem('op'); }catch(e){};
+  try{ organizationLocalStorage.removeItem('op'); }catch(e){};
   document.body.classList.add('admin-mode');
-  try{ if(sessionStorage.getItem('hideOpStickyRibbon')!=='1') window.__hideOpStickyRibbon=false; }catch(e){}
+  try{ if(organizationSessionStorage.getItem('hideOpStickyRibbon')!=='1') window.__hideOpStickyRibbon=false; }catch(e){}
   setTimeout(updateOperationSticky,0);
   ge('adminBadge').classList.add('show');
   ge('adminToggleBtn').classList.add('active');
@@ -4616,7 +4626,7 @@ function doLogin(){
   const pw=ge('adminPw').value;
   if(pw===G.meta.pw){
     applyAdminUI();
-    localStorage.setItem('adm','1');
+    organizationLocalStorage.setItem('adm','1');
     cm('mAdmin');
     ge('adminPw').value='';
     toast('관리자 로그인 ✅','success');
@@ -4891,9 +4901,9 @@ function toggleReg(){ closeLoginMenu();
     REG=false;
     CLUB_MEMBER=false;
     REG_CLUB='';
-    localStorage.removeItem('reg');
-    localStorage.removeItem('reg_club');
-    localStorage.removeItem('reg_session_version');
+    organizationLocalStorage.removeItem('reg');
+    organizationLocalStorage.removeItem('reg_club');
+    organizationLocalStorage.removeItem('reg_session_version');
     ge('regToggleBtn').textContent='🏆 클럽 로그인';
     ge('regToggleBtn').style.background='var(--success)';
     ge('regLoginBadge') && (ge('regLoginBadge').style.display='none');
@@ -5001,7 +5011,7 @@ function doRegLogin(){
 }
 function _completeClubMemberLogin(club){
   REG=false;CLUB_MEMBER=true;REG_CLUB=club;
-  localStorage.removeItem('reg');localStorage.setItem('club_member','1');localStorage.setItem('reg_club',club);
+  organizationLocalStorage.removeItem('reg');organizationLocalStorage.setItem('club_member','1');organizationLocalStorage.setItem('reg_club',club);
   const toggleBtn=ge('regToggleBtn');if(toggleBtn){toggleBtn.textContent='🏆 클럽 로그아웃';toggleBtn.style.background='#388e3c';}
   const badge=ge('regLoginBadge');if(badge){badge.textContent=`${club} 회원`;badge.style.cssText='display:inline-flex;align-items:center;background:#2563eb;color:#fff;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;margin-right:4px';}
   cm('mRegLogin');applyRegLoginUI();refreshRoleUI();updateMyClubUI();showPage('home');upDash();
@@ -5012,11 +5022,11 @@ function _completeClubMemberLogin(club){
 function _completeRegLogin(club){
   REG=true;
   CLUB_MEMBER=false;
-  localStorage.removeItem('club_member');
+  organizationLocalStorage.removeItem('club_member');
   REG_CLUB=club;
-  localStorage.setItem('reg','1');
-  localStorage.setItem('reg_club', club);
-  localStorage.setItem('reg_session_version', String(getRegSessionVersion()));
+  organizationLocalStorage.setItem('reg','1');
+  organizationLocalStorage.setItem('reg_club', club);
+  organizationLocalStorage.setItem('reg_session_version', String(getRegSessionVersion()));
 
   // ── 헤더 버튼·뱃지 업데이트 ──
   const toggleBtn = ge('regToggleBtn');
@@ -5048,8 +5058,8 @@ function _completeRegLogin(club){
     // ▼▼▼ [이용안내] 비번 변경 팝업이 안 뜰 때만 이용안내 자동 표시 ▼▼▼
     if(!pwNeeded){
       const shownKey = 'manualShown_' + club;
-      if(!sessionStorage.getItem(shownKey)){
-        sessionStorage.setItem(shownKey, '1');
+      if(!organizationSessionStorage.getItem(shownKey)){
+        organizationSessionStorage.setItem(shownKey, '1');
         setTimeout(()=>{ window.mShowTab(1); om('mDirectorManual'); }, 400);
       }
     }
@@ -5129,7 +5139,7 @@ async function saveChangePw(){
     _passwordAudit('club',club,'경기이사(공용비밀번호 동기화)');
     await saveMeta();
     sl(false);
-    localStorage.removeItem('pw_skip_'+club);
+    organizationLocalStorage.removeItem('pw_skip_'+club);
     CHANGE_PW_CLUB='';
     cm('mChangePw');
     toast(`클럽 공용 비밀번호 변경 완료 ✅ · 회원/경기이사 동일 적용`,'success');
@@ -5199,7 +5209,7 @@ function applyRegLoginUI(){
 
 function isDirectorSessionValid(){
   try{
-    const localVer = Number(localStorage.getItem('reg_session_version')||'1');
+    const localVer = Number(organizationLocalStorage.getItem('reg_session_version')||'1');
     return isDirectorSessionVersionValid(G.meta,localVer);
   }catch(e){
     return true;
@@ -5210,10 +5220,10 @@ function forceDirectorLogoutLocal(message='경기이사 세션이 만료되었�
     REG=false;
     CLUB_MEMBER=false;
     REG_CLUB='';
-    localStorage.removeItem('reg');
-    localStorage.removeItem('club_member');
-    localStorage.removeItem('reg_club');
-    localStorage.removeItem('reg_session_version');
+    organizationLocalStorage.removeItem('reg');
+    organizationLocalStorage.removeItem('club_member');
+    organizationLocalStorage.removeItem('reg_club');
+    organizationLocalStorage.removeItem('reg_session_version');
   }catch(e){}
   const btn=ge('regToggleBtn');
   if(btn){
@@ -5234,7 +5244,7 @@ async function pollDirectorSessionVersion(){
   try{
     if(!REG || AD) return;
     const remoteVer = Number(G?.meta?.regSessionVersion||1);
-    const localVer = Number(localStorage.getItem('reg_session_version')||'1');
+    const localVer = Number(organizationLocalStorage.getItem('reg_session_version')||'1');
     if(remoteVer !== localVer){
       forceDirectorLogoutLocal('관리자 설정으로 경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.');
     }
@@ -6601,7 +6611,7 @@ function applyFloatingNoticePosition(el, pos){
 }
 function restoreFloatingNoticePosition(el){
   try{
-    const raw=localStorage.getItem(getFloatingNoticePositionKey());
+    const raw=organizationLocalStorage.getItem(getFloatingNoticePositionKey());
     if(!raw) return;
     const pos=JSON.parse(raw);
     if(pos && Number.isFinite(Number(pos.x)) && Number.isFinite(Number(pos.y))){
@@ -6612,13 +6622,13 @@ function restoreFloatingNoticePosition(el){
 function saveFloatingNoticePosition(el){
   try{
     const rect=el.getBoundingClientRect();
-    localStorage.setItem(getFloatingNoticePositionKey(), JSON.stringify({x:Math.round(rect.left), y:Math.round(rect.top)}));
+    organizationLocalStorage.setItem(getFloatingNoticePositionKey(), JSON.stringify({x:Math.round(rect.left), y:Math.round(rect.top)}));
   }catch(e){}
 }
 function resetFloatingNoticePosition(ev){
   try{ ev?.stopPropagation?.(); ev?.preventDefault?.(); }catch(e){}
   const el=ensureFloatingNoticeEl();
-  try{ localStorage.removeItem(getFloatingNoticePositionKey()); }catch(e){}
+  try{ organizationLocalStorage.removeItem(getFloatingNoticePositionKey()); }catch(e){}
   el.style.removeProperty('left');
   el.style.removeProperty('top');
   el.style.removeProperty('right');
@@ -6744,15 +6754,15 @@ function canShowOpStickyRibbon(){
 }
 function hideOpStickyRibbon(){
   window.__hideOpStickyRibbon=true;
-  try{ sessionStorage.setItem('hideOpStickyRibbon','1'); }catch(e){}
+  try{ organizationSessionStorage.setItem('hideOpStickyRibbon','1'); }catch(e){}
   renderOpStickyRibbonFromMarker(null);
 }
 function resetOpStickyRibbon(){
   window.__hideOpStickyRibbon=false;
-  try{ sessionStorage.removeItem('hideOpStickyRibbon'); }catch(e){}
+  try{ organizationSessionStorage.removeItem('hideOpStickyRibbon'); }catch(e){}
   updateOperationSticky();
 }
-try{ window.__hideOpStickyRibbon = sessionStorage.getItem('hideOpStickyRibbon')==='1'; }catch(e){ window.__hideOpStickyRibbon=false; }
+try{ window.__hideOpStickyRibbon = organizationSessionStorage.getItem('hideOpStickyRibbon')==='1'; }catch(e){ window.__hideOpStickyRibbon=false; }
 function renderOpStickyRibbonFromMarker(marker){
   const el=ensureOpStickyRibbonEl();
   if(!marker || !canShowOpStickyRibbon()){ el.classList.remove('show'); el.style.display='none'; el.innerHTML=''; return; }
@@ -6995,7 +7005,7 @@ function buildCourtNotificationMessage(kind,key,m,meta={}){
   const court=String(meta.court||'').trim();
   const queuePos=Number(meta.queuePos||0)||0;
   const queueText=queuePos>0 ? `${queuePos}번째 대기` : '';
-  const prefix=`[김해시테니스협회]`;
+  const prefix=`[${MATCH_ORGANIZATION.name}]`;
   if(kind==='match_started') return `${prefix} 경기 시작합니다. 5분 내에 출전하세요. ${court?`${court} 코트`:''} ${info.title||''}`.replace(/\s+/g,' ').trim();
   if(kind==='match_completed') return `${prefix} 경기 완료되었습니다. 결과를 확인해 주세요. ${court?`${court} 코트`:''} ${info.title||''}`.replace(/\s+/g,' ').trim();
   if(kind==='court_changed') return `${prefix} 대기 코트가 변경되었습니다. ${court?`${court} 코트`:''} ${queueText||'대기 등록'} 되었습니다. ${info.title||''}`.replace(/\s+/g,' ').trim();
@@ -7589,7 +7599,7 @@ function _m26YearFromTournament(t){
   const m=(t?.name||'').toString().match(/20\d{2}/);
   return m?parseInt(m[0],10):0;
 }
-function needsMemberRegistry2026(t){ return _m26YearFromTournament(t) >= 2026; }
+function needsMemberRegistry2026(t){ return MATCH_ORGANIZATION.requiresAssociationRegistration && _m26YearFromTournament(t) >= 2026; }
 // PHASE207: registry display and registration share the same year and club identity.
 function findMemberRegistry2026(name, club, year=2026){
   const nn=transferIdentityParts(_m26Name(name)), cc=registrationClubIdentityKey(_m26Club(club));
@@ -8067,7 +8077,7 @@ async function submitAge65CertificationRequest(){
     sl(false); cm('mAge65CertRequest'); toast(requestType==='female'?'여성 예외 승인 요청이 접수되었습니다 ✅':'65세 이상 인증 요청이 접수되었습니다 ✅','success');
     const adminPhone=String(G.meta?.adminPhone||'').replace(/[^0-9+]/g,'');
     if(adminPhone && confirm('인증 요청이 접수되었습니다. 관리자에게 문자 알림을 보낼까요?')){
-      const body=encodeURIComponent(`[김해시테니스협회] 부서 하향 예외 승인요청\n${name} / ${club}\n사유: ${requestType==='female'?'여성':'남성 만65세 이상'}\n${_ruleDivLabel(div)||div}\n앱 관리자 설정에서 확인해 주세요.`);
+      const body=encodeURIComponent(`[${MATCH_ORGANIZATION.name}] 부서 하향 예외 승인요청\n${name} / ${club}\n사유: ${requestType==='female'?'여성':'남성 만65세 이상'}\n${_ruleDivLabel(div)||div}\n앱 관리자 설정에서 확인해 주세요.`);
       location.href=`sms:${adminPhone}?body=${body}`;
     }
   }catch(e){
@@ -10540,8 +10550,8 @@ function renderBracketDivisionChips(tid){
 function initBracketNotice(){
   const el = ge('brNotice');
   if(!el) return;
-  if(!localStorage.getItem('br_notice_seen')){
-    localStorage.setItem('br_notice_seen','1');
+  if(!organizationLocalStorage.getItem('br_notice_seen')){
+    organizationLocalStorage.setItem('br_notice_seen','1');
     setTimeout(()=>{
       el.style.background='transparent';
       el.style.border='none';
@@ -19042,15 +19052,15 @@ let MY_CLUB_FILTER = false; // 내 클럽 필터 on/off 상태
 Object.defineProperty(window,'MY_CLUB_FILTER',{get:()=>MY_CLUB_FILTER,set:(v)=>{MY_CLUB_FILTER=!!v;}});
 const MY_CLUB_FILTER_STORAGE_KEY = 'kimhae_my_club_filter';
 function loadMyClubFilterState(){
-  try{ MY_CLUB_FILTER = localStorage.getItem(MY_CLUB_FILTER_STORAGE_KEY)==='1'; }
+  try{ MY_CLUB_FILTER = organizationLocalStorage.getItem(MY_CLUB_FILTER_STORAGE_KEY)==='1'; }
   catch(e){ MY_CLUB_FILTER=false; }
   return MY_CLUB_FILTER;
 }
 function persistMyClubFilterState(v){
   MY_CLUB_FILTER = !!v;
   try{
-    if(MY_CLUB_FILTER) localStorage.setItem(MY_CLUB_FILTER_STORAGE_KEY,'1');
-    else localStorage.removeItem(MY_CLUB_FILTER_STORAGE_KEY);
+    if(MY_CLUB_FILTER) organizationLocalStorage.setItem(MY_CLUB_FILTER_STORAGE_KEY,'1');
+    else organizationLocalStorage.removeItem(MY_CLUB_FILTER_STORAGE_KEY);
   }catch(e){}
   return MY_CLUB_FILTER;
 }
@@ -22500,7 +22510,7 @@ async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저�
   if(!t)return null;
   const lastKey=`kimhae_restore_last_${tid}`;
   const now=Date.now();
-  const last=Number(localStorage.getItem(lastKey)||0);
+  const last=Number(organizationLocalStorage.getItem(lastKey)||0);
   if(type==='auto'&&!force&&now-last<AUTO_RESTORE_MIN_MS)return null;
   __autoRestoreBusy=true;
   try{
@@ -22513,7 +22523,7 @@ async function createTournamentRestorePoint(tid,{type='auto',reason='자동 저�
       batch.set(doc(db,'restorePoints',rp.id,'parts',encodeURIComponent(div)),part);
     }
     await batch.commit();
-    localStorage.setItem(lastKey,String(now));
+    organizationLocalStorage.setItem(lastKey,String(now));
     if(type==='auto') cleanupOldTournamentRestorePoints(tid).catch(()=>{});
     return rp.id;
   }catch(e){
@@ -25270,14 +25280,14 @@ const REGISTRY_LOAD_REQUESTS=new Map();
 const REGISTRY_SAVE_BASELINES=new Map();
 const REGISTRY_SAVE_LOCKS=new Set();
 function persistRegistryViewCache(year){
-  try{localStorage.setItem('OAI_REGISTRY_VIEW_V198_'+year,JSON.stringify({members:G_REGISTRY[year]||[],ts:Date.now()}));}catch(e){}
+  try{organizationLocalStorage.setItem('OAI_REGISTRY_VIEW_V198_'+year,JSON.stringify({members:G_REGISTRY[year]||[],ts:Date.now()}));}catch(e){}
 }
 async function loadRegistry(year,force=false){
   year=Number(year);
   if(!force&&REGISTRY_YEARS_LOADED.includes(year)){if(!REGISTRY_SAVE_BASELINES.has(year))REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(G_REGISTRY[year]||[])));if(year===2026)G.meta.memberRegistry2026=G_REGISTRY[year]||[];return G_REGISTRY[year]||[];}
   if(!force){
     try{
-      const cache=JSON.parse(localStorage.getItem('OAI_REGISTRY_VIEW_V198_'+year)||'null');
+      const cache=JSON.parse(organizationLocalStorage.getItem('OAI_REGISTRY_VIEW_V198_'+year)||'null');
       if(Array.isArray(cache?.members)){
         G_REGISTRY[year]=cache.members;REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(cache.members)));if(year===2026)G.meta.memberRegistry2026=cache.members;REGISTRY_YEARS_LOADED.push(year);return cache.members;
       }
@@ -25291,7 +25301,7 @@ async function loadRegistry(year,force=false){
   }
   const request=(async()=>{
     const raw=await (force?getDocFromServer:getDoc)(doc(db,'memberRegistries',String(year)));
-    const members=raw.exists()?(raw.data().members||[]):[];
+    const members=raw.exists()?(raw.data().members||[]):(MATCH_ORGANIZATION.id==='jangyu'&&year===2026?(window.__organizationLegacyRegistry||[]):[]);
     if(!Array.isArray(members))throw new Error('선수 명단 형식이 올바르지 않습니다.');
     G_REGISTRY[year]=members;
     REGISTRY_SAVE_BASELINES.set(year,JSON.parse(JSON.stringify(members)));
@@ -25328,7 +25338,9 @@ async function saveRegistry(year){
   REGISTRY_SAVE_LOCKS.add(year);
   try{
     await runTransaction(db,async tx=>{
-      const latest=await tx.get(ref),server=latest.exists()?(latest.data().members||[]):[];
+      const latest=await tx.get(ref);
+      const legacy=!latest.exists()&&MATCH_ORGANIZATION.id==='jangyu'&&year===2026?await tx.get(doc(db,'meta','config')):null;
+      const server=latest.exists()?(latest.data().members||[]):(legacy?.exists()?(legacy.data().memberRegistry2026||[]):[]);
       if(!Array.isArray(server)||stableStringify(server)!==stableStringify(baseline))throw new Error('다른 기기에서 공식 명단이 변경됐습니다. 최신 명단을 새로고침한 뒤 다시 추가·수정하세요. 기존 서버 명단은 보존했습니다.');
       tx.set(backup,{year,type:'official_registry_snapshot',permanent:true,createdAt:when,actor,beforeCount:baseline.length,afterCount:members.length,beforeParts:beforeChunks.length,afterParts:afterChunks.length,complete:true});
       parts.forEach((part,i)=>tx.set(partRefs[i],part));
@@ -25339,7 +25351,7 @@ async function saveRegistry(year){
     PLAYER_SEARCH_MODEL=null;
     if(year===2026)G.meta.memberRegistry2026=members;
   }catch(e){
-    try{localStorage.setItem('OAI_REGISTRY_UNSAVED_V217_'+year,JSON.stringify({members,attemptedAt:when,error:e.message}));}catch(ignore){}
+    try{organizationLocalStorage.setItem('OAI_REGISTRY_UNSAVED_V217_'+year,JSON.stringify({members,attemptedAt:when,error:e.message}));}catch(ignore){}
     throw e;
   }finally{REGISTRY_SAVE_LOCKS.delete(year);}
 }
@@ -27346,13 +27358,13 @@ function ensurePendingDetailCenterButton(){
 
 if(!window._lastOrderCache) {
   try{
-    window._lastOrderCache = JSON.parse(localStorage.getItem('LAST_ORDER_CACHE_V1')||'{}') || {};
+    window._lastOrderCache = JSON.parse(organizationLocalStorage.getItem('LAST_ORDER_CACHE_V1')||'{}') || {};
   }catch(_){
     window._lastOrderCache = {};
   }
 }
 function persistLastOrderCache(){
-  try{ localStorage.setItem('LAST_ORDER_CACHE_V1', JSON.stringify(window._lastOrderCache||{})); }catch(_){}
+  try{ organizationLocalStorage.setItem('LAST_ORDER_CACHE_V1', JSON.stringify(window._lastOrderCache||{})); }catch(_){}
 }
 
 // ── 캐시 저장: 저장/제출 버튼 시점에 picker DOM에서 직접 읽음 ──
@@ -28737,17 +28749,17 @@ function outputRaffleParticipants(tid){
 }
 // PHASE228: adjustable raffle printing; larger portrait default.
 function rafflePrintSettings(){
-  let saved={};if(AD)try{saved=JSON.parse(localStorage.getItem('OAI_RAFFLE_PRINT_V228')||'{}');}catch(e){}
+  let saved={};if(AD)try{saved=JSON.parse(organizationLocalStorage.getItem('OAI_RAFFLE_PRINT_V228')||'{}');}catch(e){}
   const clamp=(n,lo,hi,def)=>Number.isFinite(Number(n))?Math.max(lo,Math.min(hi,Math.round(Number(n)))):def;
   return {direction:saved.direction==='landscape'?'landscape':'portrait',cols:clamp(saved.cols,4,10,6),rows:clamp(saved.rows,8,24,12),font:clamp(saved.font,10,18,12)};
 }
 function saveRafflePrintSettings(){
   if(!AD)return;
   const settings={direction:outputElement('raffleDirection')?.value,cols:Number(outputElement('raffleCols')?.value),rows:Number(outputElement('raffleRows')?.value),font:Number(outputElement('raffleFont')?.value)};
-  try{localStorage.setItem('OAI_RAFFLE_PRINT_V228',JSON.stringify(settings));}catch(e){toast('인쇄 설정 저장 실패','error');return;}
+  try{organizationLocalStorage.setItem('OAI_RAFFLE_PRINT_V228',JSON.stringify(settings));}catch(e){toast('인쇄 설정 저장 실패','error');return;}
   renderOutputPreview();
 }
-function resetRafflePrintSettings(){if(!AD)return;try{localStorage.removeItem('OAI_RAFFLE_PRINT_V228');}catch(e){}renderOutputPreview();}
+function resetRafflePrintSettings(){if(!AD)return;try{organizationLocalStorage.removeItem('OAI_RAFFLE_PRINT_V228');}catch(e){}renderOutputPreview();}
 function rafflePrintControlsHtml(){
   if(!AD)return '';const c=rafflePrintSettings();
   const options=(lo,hi,value)=>Array.from({length:hi-lo+1},(_,i)=>`<option value="${lo+i}" ${value===lo+i?'selected':''}>${lo+i}</option>`).join('');
@@ -28773,12 +28785,12 @@ function outputRaffleSlipsHtml(tid){
 }
 // PHASE264: compact handwritten team order forms, four/six/eight per portrait A4.
 function orderSheetSettings(){
-  let saved={};try{saved=JSON.parse(localStorage.getItem('kimhae_order_sheet_settings')||'{}');}catch(e){}
+  let saved={};try{saved=JSON.parse(organizationLocalStorage.getItem('kimhae_order_sheet_settings')||'{}');}catch(e){}
   return {copies:[4,6,8].includes(Number(saved.copies))?Number(saved.copies):4,doubles:Number(saved.doubles)===3?3:5};
 }
 function updateOrderSheetSettings(){
   const settings={copies:Number(outputElement('orderSheetCopies')?.value||4),doubles:Number(outputElement('orderSheetDoubles')?.value||5)};
-  localStorage.setItem('kimhae_order_sheet_settings',JSON.stringify(settings));renderOutputPreview();
+  organizationLocalStorage.setItem('kimhae_order_sheet_settings',JSON.stringify(settings));renderOutputPreview();
 }
 window.updateOrderSheetSettings=updateOrderSheetSettings;
 function orderSheetControlsHtml(){
@@ -28909,7 +28921,7 @@ async function printOutputCenter(){
   try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
-  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>김해시테니스협회 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>const fitOutputPyramids=${fitOutputPyramids.toString()};setTimeout(()=>{fitOutputPyramids(document,true);window.print();},250)<\/script></body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>const fitOutputPyramids=${fitOutputPyramids.toString()};setTimeout(()=>{fitOutputPyramids(document,true);window.print();},250)<\/script></body></html>`);w.document.close();
 }
 
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "gimhae-tennis-v1";
+const CACHE_NAME = "gimhae-tennis-org307";
 
 // 정적 자산만 캐시 (index.html 제외 - 항상 최신본 사용)
 const STATIC_ASSETS = [
@@ -65,6 +65,12 @@ self.addEventListener("fetch", (event) => {
 
   // ③ sw.js, manifest.json → 네트워크 우선 (구버전 SW 방지)
   if (url.pathname === "/sw.js" || url.pathname === "/manifest.json") {
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
+  // Shared organization bootstrap and logic must be refreshed together.
+  if (url.origin === self.location.origin && /\.(?:js|css)$/.test(url.pathname)) {
     event.respondWith(fetch(req).catch(() => caches.match(req)));
     return;
   }
