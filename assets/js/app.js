@@ -1265,7 +1265,7 @@ async function ensurePastTournamentArchive(tid,{rebuild=false}={}){
     // Public viewers use the same result locally; publication belongs to the existing administrator role.
     if(!AD){applyTournamentBundle(tid,out);return out;}
     const json=JSON.stringify(out);
-    if(new TextEncoder().encode(json+json+fullJson+fullJson).length>700000)throw new Error('대회 자료가 커서 확정본 저장 한도를 초과했습니다.');
+    if(new TextEncoder().encode(json).length>700000)throw new Error('대회 자료가 커서 확정본 저장 한도를 초과했습니다.');
     const archive={version:PAST_ARCHIVE_VERSION,revision,savedAt:new Date().toISOString(),json};
     await runTransaction(db,async tx=>{
       const current=await tx.get(doc(db,'tournaments',tid));
