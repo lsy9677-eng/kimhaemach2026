@@ -816,7 +816,7 @@ let HIST_DATA = []; // 과거 대회 데이터는 엑셀/Firestore로 관리
 let G={meta:{pw:(MATCH_ORGANIZATION.id==='jangyu'?'jangyu1234':'kimhae1234'),regPw:'202601',memberRegistry2026:[],clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},popupNotice:{enabled:false,title:'',text:'',imageUrl:'',startAt:'',endAt:'',updatedAt:''},clubDefaultRegions:{},regDeadlineDt:'',onlineOrderEnabled:false,operatorPw:'2026court',individualAutoCourtAssignEnabled:false,regSessionVersion:1,drawHistoryPolicyVersion:0,usePlayerRegistry:false,showAssociationDashboard:false,useFixedClubs:false,allowPublicTeamRegistration:false,allowPublicResultEntry:false,appTitle:'시합관리 시스템'},clubs:[],tournaments:[],teams:{},draws:{},matches:{},players:{},log:[],drawHistories:{}};
 const PLAYER_CACHE_KEY='OAI_PLAYER_CACHE_V1';
 const PLAYER_CACHE_TTL=1000*60*60*12;
-const TOURNAMENT_BUNDLE_CACHE_KEY='OAI_TOURNAMENT_BUNDLE_CACHE_V3';
+const TOURNAMENT_BUNDLE_CACHE_KEY=MATCH_ORGANIZATION.id==='jangyu'?'OAI_TOURNAMENT_BUNDLE_CACHE_JANGYU_V308':'OAI_TOURNAMENT_BUNDLE_CACHE_V3';
 const TOURNAMENT_BUNDLE_CACHE_TTL=1000*60*10;
 const TOURNAMENT_BUNDLE_MEM={};
 let DRAW_HISTORY_LOADED=false;
@@ -1102,6 +1102,15 @@ function getTournamentBundleCache(tid){
   TOURNAMENT_BUNDLE_MEM[tid]=cached;
   return cached.payload||null;
 }
+function compareOrganizationRegistrationOrder(a,b){
+  if(MATCH_ORGANIZATION.id==='jangyu'){
+    const club=(baseClub(a.club||'')||a.club||'').localeCompare(baseClub(b.club||'')||b.club||'','ko');
+    if(club)return club;
+    const team=(a.club||'').localeCompare(b.club||'','ko');
+    if(team)return team;
+  }
+  return (a.registeredAt||'').localeCompare(b.registeredAt||'');
+}
 function applyTournamentBundle(tid, bundle){
   if(!tid) return;
   bundle=bundle||{};
@@ -1123,7 +1132,7 @@ function applyTournamentBundle(tid, bundle){
     if(x._id||x.id) G._regIdsByKey[key].push(x._id||x.id);
   });
   Object.keys(G.teams).filter(k=>_k2td(k).tid===tid).forEach(k=>{
-    G.teams[k].sort((a,b)=>(a.registeredAt||'').localeCompare(b.registeredAt||''));
+    G.teams[k].sort(compareOrganizationRegistrationOrder);
     const docs=(G.teams[k]||[]).map(t=>normalizeRegistrationPayloadForHash({tournamentId:tid,division:_k2td(k).div,club:t.club,players:t.players||[],registeredAt:t.registeredAt||'',...(t.tournamentType?{tournamentType:t.tournamentType}:{}),...(t.editPin?{editPin:t.editPin}:{}),...(Array.isArray(t.individualPlayers)?{individualPlayers:t.individualPlayers}:{}),...(t.clubTokens?{clubTokens:t.clubTokens}:{}),...(t.pairLabel!==undefined?{pairLabel:t.pairLabel}:{}),...(t.entryLabel!==undefined?{entryLabel:t.entryLabel}:{}),...(t.note!==undefined?{note:t.note}:{}),...(t.doublesCount!==undefined?{doublesCount:t.doublesCount}:{}),...(t.mainPlayerCount!==undefined?{mainPlayerCount:t.mainPlayerCount}:{}),...(t.tiebreakAge!==undefined?{tiebreakAge:Number(t.tiebreakAge||0)||0}:{})}));
     markFbWriteCache('teams',k,{docs,ids:(G._regIdsByKey[k]||[]).slice().sort(),deleted:[]});
   });
@@ -1152,7 +1161,7 @@ function applyTournamentBundle(tid, bundle){
   });
 }
 // PHASE182: shared past-tournament snapshot. This is the source for rosters and player outcomes.
-const PAST_ARCHIVE_VERSION=182;
+const PAST_ARCHIVE_VERSION=MATCH_ORGANIZATION.id==='jangyu'?308:182;
 const PAST_ARCHIVE_JOBS=new Map();
 const PAST_ARCHIVE_ATTEMPTS=new Set();
 let PAST_ARCHIVE_MIGRATION_TIMER=null;
@@ -7241,6 +7250,7 @@ async function createTournament(){
     });
     const _tRegDl=ge('tRegDl')?.value;
     const tRef=await addDoc(collection(db,'tournaments'),{
+      organizationRulesVersion:308,
       name:nm,date:dt,venue:ge('tVenue').value.trim(),deadline:ge('tDeadline').value,
       courtGroups:getDraftCourtGroups('create'),
       regDeadlineDt:_tRegDl?new Date(_tRegDl).toISOString():'',
@@ -21883,12 +21893,19 @@ function normalizeThirdPlaceMode(mode, teamCount){
 function getDivisionTeamCount(tid,div){
   return (G.teams?.[tid+'_'+div]||[]).length;
 }
+function getOrganizationThirdPlaceMode(t,div){
+  const key=(t?.id||'')+'_'+div;
+  // 기존 장유 대회는 원본의 공동 3위 방식을 보존한다.
+  if(MATCH_ORGANIZATION.id==='jangyu'&&!t?.organizationRulesVersion&&isPastArchiveTournament(t)){
+    const actualBronze=(G.matches[key]||[]).some(m=>(m.phase==='bronze'||m.isThirdPlaceMatch)&&m.winner!=null&&!m.bye);
+    return actualBronze?'match':'shared';
+  }
+  return normalizeThirdPlaceMode(t?.divSettings?.[div]?.thirdPlaceMode||'shared',getDivisionTeamCount(t?.id||'',div));
+}
 function getThirdPlaceModeByKey(key){
-  const [tid,div]=String(key||'').split('_');
+  const {tid,div}=_k2td(key);
   const t=G.tournaments.find(x=>x.id===tid);
-  const cnt=getDivisionTeamCount(tid,div);
-  const raw=t?.divSettings?.[div]?.thirdPlaceMode||'shared';
-  return normalizeThirdPlaceMode(raw,cnt);
+  return getOrganizationThirdPlaceMode(t,div);
 }
 function getMainOnlyMatches(list){
   return (Array.isArray(list)?list:[]).filter(m=>m && m.phase==='main');
@@ -22017,7 +22034,7 @@ function gDS(t,div){
   const defDbl=(div==='테린이'||div==='terinee')?3:5;
   const dbl=parseInt(ds?.doublesCount||defDbl);
   const tid=t?.id||'';
-  const thirdPlaceMode=normalizeThirdPlaceMode(ds?.thirdPlaceMode||'shared', getDivisionTeamCount(tid,div));
+  const thirdPlaceMode=getOrganizationThirdPlaceMode(t,div);
   return{format:ds?.format||t?.format||'group_knockout',grpSize:parseInt(ds?.grpSize||t?.grpSize||4),advance:parseInt(ds?.advance||t?.advance||2),doublesCount:dbl,thirdPlaceMode};
 }
 function recTemplate(cnt){
