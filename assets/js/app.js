@@ -847,7 +847,7 @@ function stopTournamentListSync(){
 function startTournamentListSync(){
   stopTournamentListSync();
   _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async snap=>{
-    G.tournaments=snap.docs.map(d=>({id:d.id,...d.data()}));
+    G.tournaments=sortTournamentsLatest(snap.docs.map(d=>({id:d.id,...d.data()})));
     hydratePastArchives();
     try{
       const activeTid=getRealtimeTargetTournamentId()||null;
@@ -5871,7 +5871,7 @@ async function importIndividualExcelTeams(){
 }
 function _getActiveTournamentLabel(){
   try{
-    const at=G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments[0];
+    const at=sortTournamentsLatest(G.tournaments)[0];
     return at?`${at.name} (${at.date||''})`:'';
   }catch(e){return '';}
 }
@@ -6124,7 +6124,7 @@ async function saveContactFromAdmin(club){
 
 // 공지 문자 내용 자동 완성
 function prefillNoticeMsg(type){
-  const tid = (G.tournaments.find(t=>t.status==='ongoing')||G.tournaments.find(t=>t.status==='open')||G.tournaments.find(t=>t.status==='closed')||G.tournaments[0])?.id||'';
+  const tid = (sortTournamentsLatest(G.tournaments)[0])?.id||'';
   const t = G.tournaments.find(x=>x.id===tid);
   const tname = t?.name||'(대회명 없음)';
   const tdate = t?.date||'';
@@ -6532,7 +6532,7 @@ async function captureAndShareBracket(mode){
   }
 
   // 현재 대진표 탭의 내용을 캡처
-  const tid = ge('brTS')?.value || (G.tournaments.find(t=>t.status==='ongoing')||G.tournaments[0])?.id||'';
+  const tid = ge('brTS')?.value || (sortTournamentsLatest(G.tournaments)[0])?.id||'';
   const t = G.tournaments.find(x=>x.id===tid);
 
   if(!tid || !t){
@@ -6880,7 +6880,7 @@ function updateOperationSticky(){
 window.addEventListener('scroll',()=>{ try{ updateOperationSticky(); }catch(e){} }, {passive:true});
 window.addEventListener('resize',()=>{ try{ updateOperationSticky(); }catch(e){} });
 
-// ✅ 기본 대회 선택: 가장 최근 대회 우선
+// 기본 대회 선택: 접수 중 우선, 나머지는 실제 대회 날짜 내림차순
 function _toMs(v){
   try{
     if(v==null) return 0;
@@ -6895,7 +6895,7 @@ function tournamentSortValue(t){
   if(!t) return 0;
   const dateMs=_toMs(t.date || t.datetime || t.startAt || t.startDate || t.matchDate);
   const createdMs=_toMs(t.createdAt || t.updatedAt || t.ts);
-  return Math.max(dateMs, createdMs);
+  return dateMs || createdMs;
 }
 
 function sortTournamentsEarliest(arr){
@@ -6907,6 +6907,8 @@ function sortTournamentsEarliest(arr){
 }
 function sortTournamentsLatest(arr){
   return [...(Array.isArray(arr)?arr:[])].sort((a,b)=>{
+    const priority=Number(b?.status==='open')-Number(a?.status==='open');
+    if(priority)return priority;
     const diff=tournamentSortValue(b)-tournamentSortValue(a);
     if(diff!==0) return diff;
     return String(b?.name||'').localeCompare(String(a?.name||''));
@@ -7325,14 +7327,7 @@ function renderTL(){
   const el=ge('tournList');if(!G.tournaments.length){el.innerHTML='<div class="empty-state card"><div class="empty-icon">🏆</div><p>등록된 대회 없음</p></div>';return;}
   const sm={open:'s-open',closed:'s-closed',ongoing:'s-ongoing',finished:'s-finished'};
   const sl2={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
-  const sorted=[...G.tournaments].sort((a,b)=>{
-    const ad=(a?.date||'').toString();
-    const bd=(b?.date||'').toString();
-    if(bd!==ad) return bd.localeCompare(ad);
-    const ac=(a?.createdAt?.seconds||0);
-    const bc=(b?.createdAt?.seconds||0);
-    return bc-ac;
-  });
+  const sorted=sortTournamentsLatest(G.tournaments);
   el.innerHTML=sorted.map(t=>{
     const tc=Object.keys(G.teams).filter(k=>k.startsWith(t.id+'_')).reduce((s,k)=>s+(G.teams[k]||[]).length,0);
     return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${sl2[t.status]||'접수중'}</span></div>
@@ -7585,7 +7580,7 @@ function openTD(tid){
 
 
 function popSel(){
-  // regTS / brTS / rankTS : 가장 최근 대회순으로 정렬, 가장 최근 대회 기본 선택
+  // 공통 순서: 접수 중 대회 우선. 사용자가 직접 선택한 유효한 대회는 유지.
   ['regTS','brTS'].forEach(id=>{
     const el=ge(id); if(!el) return;
     let v = el.value;
@@ -14292,7 +14287,7 @@ function bracketPublicationNotice(phase){return `<div class="card" style="text-a
 function openBracketPublicationSettings(){
   if(!AD)return;
   let m=ge('mBracketPublication');if(!m){m=document.createElement('div');m.id='mBracketPublication';m.className='modal-overlay';m.innerHTML='<div class="modal-box"><div class="modal-header"><h3>대진표 공개 관리</h3><button class="modal-close" onclick="cm(\'mBracketPublication\')">×</button></div><div class="modal-body"><label>대회<select id="pubTournament" class="form-select" onchange="renderBracketPublicationSettings()"></select></label><div id="pubSettings"></div></div></div>';document.body.appendChild(m);}
-  ge('pubTournament').innerHTML=(G.tournaments||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+  ge('pubTournament').innerHTML=sortTournamentsLatest(G.tournaments).map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
   const active=ge('brTS')?.value||ge('regTS')?.value;if((G.tournaments||[]).some(t=>t.id===active))ge('pubTournament').value=active;
   renderBracketPublicationSettings();om('mBracketPublication');
 }
@@ -19186,9 +19181,7 @@ function updateMyClubHomeCard(){
   const body = ge('myClubHomeBody');
   if(!body || !club) return;
 
-  const at = G.tournaments.find(t=>t.status==='ongoing') ||
-             G.tournaments.find(t=>t.status==='open') ||
-             G.tournaments[0];
+  const at = sortTournamentsLatest(G.tournaments)[0];
   if(!at){ body.innerHTML='<div style="color:var(--text3)">진행 중인 대회가 없습니다</div>'; return; }
 
   const bc = baseClub(club);
@@ -19285,8 +19278,7 @@ function updateMyClubHomeCard(){
 
 // 내 클럽 대진표로 이동
 function goMyClubBracket(){
-  const at = G.tournaments.find(t=>t.status==='ongoing') ||
-             G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
+  const at = sortTournamentsLatest(G.tournaments)[0];
   if(!at) return;
   showPage('bracket');
   const brTS = ge('brTS');
@@ -19301,8 +19293,7 @@ function openMyClubQuickOrder(){
     return;
   }
   const selectedTid=getCurrentPageName()==='bracket'?ge('brTS')?.value:'';
-  const at = (selectedTid?G.tournaments.find(t=>t.id===selectedTid):null) || G.tournaments.find(t=>t.status==='ongoing') ||
-             G.tournaments.find(t=>t.status==='open') || G.tournaments[0];
+  const at = (selectedTid?G.tournaments.find(t=>t.id===selectedTid):null) || sortTournamentsLatest(G.tournaments)[0];
   if(!at){
     toast('진행 중인 대회가 없습니다','info');
     return;
@@ -21124,12 +21115,12 @@ function isHomeActiveTournament(t){
 }
 function getHomePrimaryTournament(){
   const tours = Array.isArray(G.tournaments) ? G.tournaments : [];
-  return sortTournamentsEarliest(tours.filter(isHomeActiveTournament))[0] || null;
+  return sortTournamentsLatest(tours.filter(isHomeActiveTournament))[0] || null;
 }
 
 function getHomeVisibleTournaments(){
   const tours = Array.isArray(G.tournaments) ? G.tournaments : [];
-  return sortTournamentsEarliest(tours.filter(isHomeActiveTournament));
+  return sortTournamentsLatest(tours.filter(isHomeActiveTournament));
 }
 
 function getPlayerRecordPhoneCandidates(name, playerObj, histClub=''){
@@ -25079,7 +25070,7 @@ function openSelectiveClearModal(){
   if(!container) return;
 
   // Firebase 대회 + 과거 업로드 대회(isHistorical) 모두 표시
-  const allT=[...G.tournaments].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const allT=sortTournamentsLatest(G.tournaments);
   if(!allT.length){
     container.innerHTML='<p style="color:var(--text3);text-align:center;padding:20px">등록된 대회가 없습니다</p>';
     om('mSelectiveClear'); return;
@@ -28194,19 +28185,10 @@ function outputTournamentTime(t){
   const c=t?.createdAt?.toMillis?.();return Number(c||0);
 }
 function outputSortedTournaments(){
-  const currentId=outputDefaultTournamentId();
-  return (G.tournaments||[]).filter(t=>outputTournamentYear(t)>=2026).sort((a,b)=>{
-    if(a.id===currentId&&b.id!==currentId)return -1;
-    if(b.id===currentId&&a.id!==currentId)return 1;
-    const ao=a.status==='ongoing'?1:0,bo=b.status==='ongoing'?1:0;
-    if(ao!==bo)return bo-ao;
-    const at=outputTournamentTime(a),bt=outputTournamentTime(b);
-    if(at!==bt)return bt-at;
-    return String(b.name||'').localeCompare(String(a.name||''),'ko');
-  });
+  return sortTournamentsLatest((G.tournaments||[]).filter(t=>outputTournamentYear(t)>=2026));
 }
 function outputDefaultTournamentId(){
-  return ge('brTS')?.value || (G.tournaments||[]).find(t=>t.status==='ongoing')?.id || (G.tournaments||[])[0]?.id || '';
+  return outputSortedTournaments()[0]?.id || '';
 }
 function initOutputCenter(){
   installPublicOutputCenter();
