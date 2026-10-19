@@ -11,14 +11,18 @@
   const selected=profiles[id];
   Object.freeze(selected.firebase);Object.freeze(selected);
   Object.defineProperty(window,'MATCH_ORGANIZATION',{value:selected,writable:false,configurable:false});
+  Object.freeze(profiles.kimhae.firebase);
+  Object.defineProperty(window,'MATCH_IDENTITY_FIREBASE',{value:profiles.kimhae.firebase,writable:false,configurable:false});
+  const sharedKeys=new Set(['adm','reg','reg_club','reg_session_version','club_member']);
   const prefix=id==='kimhae'?'':'OAI_ORG_'+id+':';
   function scope(storage){
+    const physical=key=>sharedKeys.has(String(key))?String(key):prefix+String(key);
     const matches=k=>prefix?k.startsWith(prefix):!k.startsWith('OAI_ORG_');
     const keys=()=>Array.from({length:storage.length},(_,i)=>storage.key(i)).filter(k=>k!==null&&matches(k));
     return Object.freeze({
-      getItem:key=>storage.getItem(prefix+String(key)),
-      setItem:(key,value)=>storage.setItem(prefix+String(key),String(value)),
-      removeItem:key=>storage.removeItem(prefix+String(key)),
+      getItem:key=>storage.getItem(physical(key)),
+      setItem:(key,value)=>storage.setItem(physical(key),String(value)),
+      removeItem:key=>storage.removeItem(physical(key)),
       key:index=>{const k=keys()[index];return k===undefined?null:k.slice(prefix.length);},
       clear:()=>keys().forEach(k=>storage.removeItem(k)),
       get length(){return keys().length;}
@@ -42,10 +46,14 @@
     bar.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:#eaf2ff;color:#10213d;border-bottom:1px solid #cbdaf2';
     const label=document.createElement('label');label.htmlFor='organizationSelect';label.textContent='운영 단체';label.style.fontWeight='800';
     const select=document.createElement('select');select.id='organizationSelect';select.setAttribute('aria-label','운영 단체 선택');select.style.cssText='flex:1;min-width:170px;max-width:340px;padding:8px;border:1px solid #9ab5dc;border-radius:8px;background:#fff;color:#10213d;font-weight:800';
-    Object.values(profiles).forEach(p=>{const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.name;select.appendChild(opt);});select.value=id;
+    const parent=document.createElement('option');parent.value='kimhae';parent.textContent='김해시테니스협회 · 상위단체';select.appendChild(parent);
+    const children=document.createElement('optgroup');children.label='김해시협회 산하 연합회';
+    [['jangyu','장유연합회',false],['dongbu','동부연합회 · 준비 중',true],['jungbu','중부연합회 · 준비 중',true]].forEach(([value,name,disabled])=>{const opt=document.createElement('option');opt.value=value;opt.textContent=name;opt.disabled=disabled;children.appendChild(opt);});
+    select.appendChild(children);select.value=id;
     select.addEventListener('change',()=>switchOrganization(select.value));
-    const note=document.createElement('span');note.textContent=id==='kimhae'?'김해시협회 전용 자료':'장유연합회 전용 자료 · 협회 미등록 선수 접수 가능';note.style.cssText='font-size:12px;font-weight:700';
-    bar.append(label,select,note);host.prepend(bar);
+    const note=document.createElement('span');note.textContent='김해시협회 공통 로그인 · 자료는 단체별 독립 관리'+(id==='jangyu'?' · 협회 미등록 선수 접수 가능':'');note.style.cssText='font-size:12px;font-weight:700';
+    const hierarchy=document.createElement('div');hierarchy.textContent='김해시테니스협회'+(id==='jangyu'?' › 장유연합회':' · 상위단체');hierarchy.style.cssText='flex-basis:100%;font-size:12px;font-weight:800';
+    bar.append(hierarchy,label,select,note);host.prepend(bar);
     const title=host.querySelector('.logo-text h1');if(title)title.textContent=selected.name;
     document.title=selected.name+' 대회관리';
   }

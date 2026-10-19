@@ -1,4 +1,4 @@
-const CACHE_NAME = "gimhae-tennis-org307";
+const CACHE_NAME = "gimhae-tennis-org309";
 
 // 정적 자산만 캐시 (index.html 제외 - 항상 최신본 사용)
 const STATIC_ASSETS = [

@@ -786,6 +786,7 @@ import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https
 const FB=MATCH_ORGANIZATION.firebase;
 const _app=initializeApp(FB,"association-"+MATCH_ORGANIZATION.id);
 const db=getFirestore(_app);
+const identityDb=MATCH_ORGANIZATION.id==='kimhae'?db:getFirestore(initializeApp(window.MATCH_IDENTITY_FIREBASE,'association-kimhae-identity'));
 const storage=getStorage(_app);
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
 if(FIRESTORE_WRITE_TRACE){
@@ -2526,6 +2527,38 @@ if(!window.__kimhaeFirestoreCleanupBound){
   },{capture:false});
 }
 
+// Authentication belongs to the parent association; competition data always uses db.
+const SHARED_IDENTITY_DEFAULTS={pw:'',regPw:'202601',adminPhone:'',clubContacts:{},clubEmails:{},clubPasswords:{},clubPasswordCustom:{},directorPasswords:{},directorPasswordCustom:{},clubPasswordAudit:{},directorPasswordAudit:{},regSessionVersion:1};
+let sharedIdentityReady=false,sharedIdentityBaseline={},sharedIdentityClubs=[];
+function identityField(data,key){return data[key]??SHARED_IDENTITY_DEFAULTS[key];}
+function identityEqual(a,b){return stableStringify(a)===stableStringify(b);}
+async function loadSharedIdentity(){
+  sharedIdentityReady=false;
+  const snap=await getDocFromServer(doc(identityDb,'meta','config'));
+  if(!snap.exists()||!snap.data().pw)throw new Error('김해시협회 공통 로그인 정보를 불러오지 못했습니다. 다시 연결해 주세요.');
+  const data=snap.data();
+  for(const key of Object.keys(SHARED_IDENTITY_DEFAULTS)){
+    const value=JSON.parse(JSON.stringify(identityField(data,key)));
+    G.meta[key]=value;sharedIdentityBaseline[key]=JSON.parse(JSON.stringify(value));
+  }
+  sharedIdentityClubs=Array.isArray(data.clubs)?data.clubs.map(x=>String(x).trim()).filter(Boolean):[];
+  sharedIdentityReady=true;
+}
+async function saveSharedIdentity(payload){
+  if(!sharedIdentityReady)throw new Error('공통 로그인 정보 연결 후 다시 저장해 주세요.');
+  const dirty=Object.keys(SHARED_IDENTITY_DEFAULTS).filter(key=>!identityEqual(identityField(payload,key),sharedIdentityBaseline[key]));
+  if(!dirty.length)return;
+  const changes=Object.fromEntries(dirty.map(key=>[key,JSON.parse(JSON.stringify(identityField(payload,key)))]));
+  const baseline=JSON.parse(JSON.stringify(sharedIdentityBaseline));
+  await runTransaction(identityDb,async tx=>{
+    const ref=doc(identityDb,'meta','config'),snap=await tx.get(ref);
+    if(!snap.exists())throw new Error('김해시협회 로그인 설정이 없습니다.');
+    for(const key of dirty)if(!identityEqual(identityField(snap.data(),key),baseline[key]))throw new Error('다른 곳에서 로그인 정보가 변경되었습니다. 새로고침 후 다시 저장해 주세요.');
+    tx.update(ref,changes);
+  });
+  Object.assign(sharedIdentityBaseline,JSON.parse(JSON.stringify(changes)));
+}
+
 async function loadMeta(){
   // 2026 명단 기준 클럽명 정규화 맵 (구 이름 → 새 이름)
   const CLUB_RENAME={'단디클럽':'단디','수로클럽':'수로','한울':'하모니','위드':'불사조','한별':'테사모','더블폴트':'로패','포티폴':'포티올','김해시시니어 클럽':'김해시니어','김해시시니어클럽':'김해시니어','김해시 시니어 클럽':'김해시니어','김해시 시니어클럽':'김해시니어','시니어클럽':'김해시니어'};
@@ -2591,6 +2624,7 @@ async function loadMeta(){
   }catch(e){
     G.meta.memberRegistry2026=MATCH_ORGANIZATION.id==='jangyu'?(window.__organizationLegacyRegistry||[]):[];
   }
+  await loadSharedIdentity();
 }
 async function saveMeta(){
   // memberRegistry2026 제외 - saveRegistry(2026)으로만 관리 (1MB 초과 방지)
@@ -2630,10 +2664,13 @@ async function saveMeta(){
     indivLockEnd:(G.meta.indivLockEnd||'')
   };
   try{
-    if(isSameFbWrite('meta','config',payload)) return;
-    if(MATCH_ORGANIZATION.id==='jangyu')await setDoc(doc(db,'meta','config'),payload,{merge:true});
-    else await setDoc(doc(db,'meta','config'), payload);
-    markFbWriteCache('meta','config',payload);
+    await saveSharedIdentity(payload);
+    const localPayload={...payload};
+    for(const key of Object.keys(SHARED_IDENTITY_DEFAULTS))delete localPayload[key];
+    if(isSameFbWrite('meta','config',localPayload))return;
+    await setDoc(doc(db,'meta','config'),localPayload,{merge:true});
+    if(MATCH_ORGANIZATION.id==='kimhae')sharedIdentityClubs=[...G.clubs];
+    markFbWriteCache('meta','config',localPayload);
   }catch(e){
     console.error('saveMeta 오류:', e);
     throw e;
@@ -3205,7 +3242,7 @@ async function fbLog(t,i='📌'){ return; }
 function onDU(){
   schedulePastArchiveMigration();
   // 새로고침 후 관리자 세션 복원
-  if(!AD && organizationLocalStorage.getItem('adm')==='1'){
+  if(sharedIdentityReady && !AD && organizationLocalStorage.getItem('adm')==='1'){
     applyAdminUI();
   }
   // 팀등록 세션 복원
@@ -3213,7 +3250,7 @@ function onDU(){
     OP=true;
     refreshRoleUI();
   }
-  if(!REG && organizationLocalStorage.getItem('reg')==='1'){
+  if(sharedIdentityReady && !REG && organizationLocalStorage.getItem('reg')==='1'){
     if(isDirectorSessionValid()){
       REG=true;
       REG_CLUB = organizationLocalStorage.getItem('reg_club')||'';
@@ -3229,7 +3266,11 @@ function onDU(){
     }
   }
   applyRegLoginUI();
-  if(!REG && organizationLocalStorage.getItem('club_member')==='1'){CLUB_MEMBER=true;REG_CLUB=organizationLocalStorage.getItem('reg_club')||'';}
+  if(sharedIdentityReady && !REG && organizationLocalStorage.getItem('club_member')==='1'){
+    const club=organizationLocalStorage.getItem('reg_club')||'';
+    if(sharedIdentityClubs.includes(club)){CLUB_MEMBER=true;REG_CLUB=club;}
+    else forceDirectorLogoutLocal('김해시협회 공통 클럽 계정을 확인해 주세요.');
+  }
   if((REG||CLUB_MEMBER) && REG_CLUB) updateMyClubUI(); // 새로고침 후 내 클럽 UI 복원
   applyClubRoleVisibility();
   ensureDirectorPasswordSettingsButton();
@@ -4632,6 +4673,7 @@ function applyAdminUI(){
   try{ applyIndivLock(); }catch(e){}
 }
 function doLogin(){
+  if(!sharedIdentityReady){toast('김해시협회 공통 로그인 정보를 먼저 연결해 주세요.','error');return;}
   const pw=ge('adminPw').value;
   if(pw===G.meta.pw){
     applyAdminUI();
@@ -5008,8 +5050,10 @@ async function saveForcedClubPassword(){
 }
 
 function doRegLogin(){
+  if(!sharedIdentityReady){toast('김해시협회 공통 로그인 정보를 먼저 연결해 주세요.','error');return;}
   const pw=(ge('regPwInput')?.value||'').trim(),club=(ge('regClubLogin')?.value||'').trim();
   if(!club){toast('클럽을 선택해주세요','error');return;}
+  if(!sharedIdentityClubs.includes(club)){toast('김해시협회 공통 계정에 등록된 클럽인지 확인해 주세요.','error');return;}
   if(!pw){toast('비밀번호를 입력해주세요','error');return;}
   const role=CLUB_LOGIN_ROLE==='member'?'member':'director';
   // PHASE90: 클럽 회원/경기이사는 동일한 클럽 공용 비밀번호를 사용한다.
@@ -5219,9 +5263,9 @@ function applyRegLoginUI(){
 function isDirectorSessionValid(){
   try{
     const localVer = Number(organizationLocalStorage.getItem('reg_session_version')||'1');
-    return isDirectorSessionVersionValid(G.meta,localVer);
+    return sharedIdentityReady && sharedIdentityClubs.includes(organizationLocalStorage.getItem('reg_club')||'') && isDirectorSessionVersionValid(G.meta,localVer);
   }catch(e){
-    return true;
+    return false;
   }
 }
 function forceDirectorLogoutLocal(message='경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.'){
@@ -5252,7 +5296,10 @@ function forceDirectorLogoutLocal(message='경기이사 세션이 만료되었�
 async function pollDirectorSessionVersion(){
   try{
     if(!REG || AD) return;
-    const remoteVer = Number(G?.meta?.regSessionVersion||1);
+    const snap=await getDocFromServer(doc(identityDb,'meta','config'));
+    if(!snap.exists())return;
+    const remoteVer=Number(snap.data().regSessionVersion||1);
+    G.meta.regSessionVersion=remoteVer;
     const localVer = Number(organizationLocalStorage.getItem('reg_session_version')||'1');
     if(remoteVer !== localVer){
       forceDirectorLogoutLocal('관리자 설정으로 경기이사 세션이 만료되었습니다. 다시 로그인해 주세요.');
