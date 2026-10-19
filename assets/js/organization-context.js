@@ -43,17 +43,16 @@
     document.documentElement.dataset.organization=id;
     const host=document.querySelector('.app-header');if(!host)return;
     const bar=document.createElement('div');bar.id='organizationNavigation';
-    bar.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:#eaf2ff;color:#10213d;border-bottom:1px solid #cbdaf2';
-    const label=document.createElement('label');label.htmlFor='organizationSelect';label.textContent='운영 단체';label.style.fontWeight='800';
-    const select=document.createElement('select');select.id='organizationSelect';select.setAttribute('aria-label','운영 단체 선택');select.style.cssText='flex:1;min-width:170px;max-width:340px;padding:8px;border:1px solid #9ab5dc;border-radius:8px;background:#fff;color:#10213d;font-weight:800';
+    bar.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:nowrap;box-sizing:border-box;height:44px;padding:5px 12px;background:#eaf2ff;color:#10213d;border-bottom:1px solid #cbdaf2';
+    bar.title='김해시테니스협회 산하: 장유·동부·중부연합회. 김해시협회 공통 로그인, 자료는 단체별 독립 관리.';
+    const label=document.createElement('label');label.htmlFor='organizationSelect';label.textContent='단체';label.style.cssText='flex:none;font-size:12px;font-weight:800;white-space:nowrap;margin:0';
+    const select=document.createElement('select');select.id='organizationSelect';select.setAttribute('aria-label','운영 단체 선택');select.style.cssText='flex:1;min-width:0;max-width:340px;width:100%;height:32px;min-height:32px;box-sizing:border-box;margin:0;padding:3px 28px 3px 9px;border:1px solid #9ab5dc;border-radius:7px;background:#fff;color:#10213d;font-size:13px;font-weight:800;line-height:normal';
     const parent=document.createElement('option');parent.value='kimhae';parent.textContent='김해시테니스협회 · 상위단체';select.appendChild(parent);
     const children=document.createElement('optgroup');children.label='김해시협회 산하 연합회';
     [['jangyu','장유연합회',false],['dongbu','동부연합회 · 준비 중',true],['jungbu','중부연합회 · 준비 중',true]].forEach(([value,name,disabled])=>{const opt=document.createElement('option');opt.value=value;opt.textContent=name;opt.disabled=disabled;children.appendChild(opt);});
     select.appendChild(children);select.value=id;
     select.addEventListener('change',()=>switchOrganization(select.value));
-    const note=document.createElement('span');note.textContent='김해시협회 공통 로그인 · 자료는 단체별 독립 관리'+(id==='jangyu'?' · 협회 미등록 선수 접수 가능':'');note.style.cssText='font-size:12px;font-weight:700';
-    const hierarchy=document.createElement('div');hierarchy.textContent='김해시테니스협회'+(id==='jangyu'?' › 장유연합회':' · 상위단체');hierarchy.style.cssText='flex-basis:100%;font-size:12px;font-weight:800';
-    bar.append(hierarchy,label,select,note);host.prepend(bar);
+    bar.append(label,select);host.prepend(bar);
     const title=host.querySelector('.logo-text h1');if(title)title.textContent=selected.name;
     document.title=selected.name+' 대회관리';
   }
