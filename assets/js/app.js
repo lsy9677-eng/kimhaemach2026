@@ -14201,6 +14201,19 @@ function prepareDrawExternalPlan(forceNew=false){
 // ─── 추첨 전역 상태 ───────────────────────────────────────
 let DW={key:null,tid:null,div:null,teams:[],cfg:{},isRunning:false,seed:1,seedMethod:'time',seedSourceLabel:'',seedSnapshotLabel:'',seedPreparedAt:'',nthPick:1,candidates:[],drawAudit:null,plan:null};
 
+// Used by the preliminary dialog warning; does not assign or change any teams.
+function checkSameClub(teams){
+  const seen=new Set();
+  for(const team of teams||[]){
+    const clubs=new Set(getTeamClubTokens(team).map(club=>baseClub(club)||club).filter(Boolean));
+    for(const club of clubs){
+      if(seen.has(club))return true;
+      seen.add(club);
+    }
+  }
+  return false;
+}
+
 function openDraw(tid,div){
   if(DW.isRunning){toast('진행 중인 추첨을 먼저 완료하세요','info');return;}
   if(!canManageBracket()){ toast('예선 추첨은 관리자 또는 경기진행자만 실행할 수 있습니다','error'); return; }
