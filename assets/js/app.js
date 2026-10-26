@@ -780,14 +780,10 @@ import{buildSimpleResultPanelHtml}from'./simple-result-ui.js';
 import{GHOST_ORDER,normalizePair,findNextTapCursor,getTapUsedPlayers,toggleTapPlayer,setTapGhost,backspaceTapSlot,resetTapSlots,buildReorderSlots,toggleReorderPick,applyReorderPlan,getGhostScorePlan}from'./order-picker-ops.js';
 import{buildTapOrderSummaryHtml,buildTapOrderCurrentText,buildTapOrderPlayerListHtml,buildReorderOverlayHtml,buildReorderCardsHtml,buildReorderPreviewHtml}from'./order-picker-ui.js';
 import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShellHtml,buildCourtBoardHiddenHtml,buildCourtBoardFrameHtml,buildCourtCurrentSectionHtml,buildCourtWaitingSectionHtml,buildCourtDropZoneHtml,buildNoCourtAssignedHtml,buildSharedWaitingCardHtml,buildSharedWaitingSectionHtml,buildCourtWaitingItemHtml,buildCourtMovePickerHtml}from'./court-status-ui.js';
-import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import{getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment,deleteField}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import{getStorage,ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-const FB=MATCH_ORGANIZATION.firebase;
-const _app=initializeApp(FB,"association-"+MATCH_ORGANIZATION.id);
-const db=getFirestore(_app);
-const identityDb=MATCH_ORGANIZATION.id==='kimhae'?db:getFirestore(initializeApp(window.MATCH_IDENTITY_FIREBASE,'association-kimhae-identity'));
-const storage=getStorage(_app);
+import{db,identityDb,storage}from'./firebase-runtime.js';
+import{imageDataUrlToBlob}from'./image-data.js';
+import{collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment,deleteField}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
 if(FIRESTORE_WRITE_TRACE){
   const wrapTrace=(name, fn)=>async (...args)=>{
@@ -26576,7 +26572,10 @@ function _sanitizeOrderPhotoStore(raw){
   return out;
 }
 function _safeStorageSeg(v){
-  return encodeURIComponent(String(v||'').replace(/[\/]+/g,'_').trim() || 'unknown');
+  const segment=String(v||'').replace(/[\/]+/g,'_').trim() || 'unknown';
+  // The pinned Storage emulator decodes object paths twice. Let the SDK
+  // encode development Unicode segments; preserve existing production paths.
+  return window.MATCH_RUNTIME.emulator?segment.replace(/%/g,'_'):encodeURIComponent(segment);
 }
 async function persistOrderPhoto(side, imageDataUrl, source,context=null){
   const key=context?.key||CM_key, mid=context?.mid||CM_id; if(!key||!mid||!imageDataUrl) return null;
@@ -26592,12 +26591,10 @@ async function persistOrderPhoto(side, imageDataUrl, source,context=null){
   let blob;
   try {
     const compressed = await compressImageDataUrl(imageDataUrl, 1200, 0.78);
-    const res = await fetch(compressed);
-    blob = await res.blob();
+    blob = imageDataUrlToBlob(compressed);
   } catch(e) {
     try {
-      const res = await fetch(imageDataUrl);
-      blob = await res.blob();
+      blob = imageDataUrlToBlob(imageDataUrl);
     } catch(e2) {
       throw new Error('이미지 변환 실패: ' + (e2?.message||e2));
     }
@@ -29219,7 +29216,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.reg-year-label').forEach(el=>{
     el.textContent = yr+'년 등록선수';
   });
-  initFB();
+  if(window.MATCH_RUNTIME.emulator){
+    initFB().catch(error=>console.warn('개발 Emulator에 연결할 수 없습니다. 로컬 Emulator 실행 상태를 확인해 주세요.',error.message));
+  }else{
+    initFB();
+  }
   refreshRoleUI();
   setTimeout(()=>{ try{ loadAge65Certifications(); }catch(e){} },800);
 });

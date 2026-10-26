@@ -1,0 +1,18 @@
+{
+  "name": "kimhaemach2026-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "seed": "node scripts/seed.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:emulator": "node tests/emulator.mjs",
+    "test:offline": "node tests/emulator.mjs --offline",
+    "test:storage-isolation": "node tests/storage-isolation.mjs",
+    "test:upload-failure": "node tests/upload-failure.mjs"
+  },
+  "devDependencies": {
+    "firebase-tools": "15.34.1",
+    "playwright": "1.56.1"
+  }
+}

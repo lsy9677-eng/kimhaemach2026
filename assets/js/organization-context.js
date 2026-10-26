@@ -3,6 +3,21 @@
   'use strict';
   const profiles={"kimhae":{"id":"kimhae","name":"김해시테니스협회","requiresAssociationRegistration":true,"firebase":{"apiKey":"AIzaSyB7gqyDoFhujrBB_h4StvHkn_Y0VoUCPgE","authDomain":"kimheatennis2026.firebaseapp.com","projectId":"kimheatennis2026","storageBucket":"kimheatennis2026.firebasestorage.app","messagingSenderId":"243465970482","appId":"1:243465970482:web:ceafbd39de51837d49ed2b"}},"jangyu":{"id":"jangyu","name":"장유테니스연합회","requiresAssociationRegistration":false,"firebase":{"apiKey":"AIzaSyBCohLbcWMSBkkk_6rhcqxi2WSejtIaaCw","authDomain":"jangyumach2026.firebaseapp.com","projectId":"jangyumach2026","storageBucket":"jangyumach2026.firebasestorage.app","messagingSenderId":"594638304093","appId":"1:594638304093:web:c0c40d684d17a021d92eb4"}}};
   const url=new URL(location.href);
+  // Loopback, LAN addresses and file previews can never select production.
+  const host=location.hostname.toLowerCase();
+  const development=location.protocol==='file:' || host==='localhost' || host.endsWith('.localhost') || host==='[::1]' || host==='::1' || !host.includes('.') || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.endsWith('.local') || host.endsWith('.test');
+  const productionHosts=window.MATCH_PRODUCTION_HOSTS;
+  if(!development && !(Array.isArray(productionHosts)&&productionHosts.includes(host)&&location.protocol==='https:')){
+    const message='확인되지 않은 실행 주소입니다. 운영 호스트 등록을 확인하거나 http://127.0.0.1:5500/에서 개발 환경을 실행해 주세요.';
+    if(document.documentElement)document.documentElement.textContent=message;
+    throw new Error(message);
+  }
+  const runtime=Object.freeze({environment:development?'development':'production',emulator:development,cachePrefix:development?'OAI_DEV:':'',
+    kimhae:Object.freeze({host:'127.0.0.1',firestore:8080,storage:9199}),jangyu:Object.freeze({host:'127.0.0.1',firestore:8081,storage:9299})});
+  Object.defineProperty(window,'MATCH_RUNTIME',{value:runtime,writable:false,configurable:false});
+  if(development){
+    for(const [key,profile] of Object.entries(profiles))profile.firebase={apiKey:'demo-local-key',projectId:'demo-'+key+'-dev',authDomain:'demo-'+key+'-dev.localhost',storageBucket:'demo-'+key+'-dev.appspot.com',appId:'demo-'+key+'-dev'};
+  }
   const id=url.searchParams.get('org')||'kimhae';
   if(!Object.prototype.hasOwnProperty.call(profiles,id)){
     document.documentElement.textContent='지원하지 않는 단체입니다. 주소의 org 값을 확인해 주세요.';
@@ -14,10 +29,15 @@
   Object.freeze(profiles.kimhae.firebase);
   Object.defineProperty(window,'MATCH_IDENTITY_FIREBASE',{value:profiles.kimhae.firebase,writable:false,configurable:false});
   const sharedKeys=new Set(['adm','reg','reg_club','reg_session_version','club_member']);
-  const prefix=id==='kimhae'?'':'OAI_ORG_'+id+':';
+  const environmentPrefix=runtime.cachePrefix;
+  const prefix=environmentPrefix+(id==='kimhae'?'':'OAI_ORG_'+id+':');
   function scope(storage){
-    const physical=key=>sharedKeys.has(String(key))?String(key):prefix+String(key);
-    const matches=k=>prefix?k.startsWith(prefix):!k.startsWith('OAI_ORG_');
+    const physical=key=>sharedKeys.has(String(key))?environmentPrefix+String(key):prefix+String(key);
+    const matches=k=>{
+      if(!k.startsWith(environmentPrefix)||(!development&&k.startsWith('OAI_DEV:')))return false;
+      const logical=k.slice(environmentPrefix.length);
+      return id==='kimhae'?!logical.startsWith('OAI_ORG_'):k.startsWith(prefix);
+    };
     const keys=()=>Array.from({length:storage.length},(_,i)=>storage.key(i)).filter(k=>k!==null&&matches(k));
     return Object.freeze({
       getItem:key=>storage.getItem(physical(key)),
@@ -41,6 +61,7 @@
   window.switchMatchOrganization=switchOrganization;
   function mount(){
     document.documentElement.dataset.organization=id;
+    document.documentElement.dataset.environment=runtime.environment;
     const host=document.querySelector('.app-header');if(!host)return;
     const bar=document.createElement('div');bar.id='organizationNavigation';
     bar.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:nowrap;box-sizing:border-box;height:44px;padding:5px 12px;background:#eaf2ff;color:#10213d;border-bottom:1px solid #cbdaf2';
@@ -53,6 +74,7 @@
     select.appendChild(children);select.value=id;
     select.addEventListener('change',()=>switchOrganization(select.value));
     bar.append(label,select);host.prepend(bar);
+    if(development){const badge=document.createElement('span');badge.textContent='개발 · Emulator';badge.style.cssText='font-size:12px;color:#9a3412;font-weight:bold';bar.append(badge);}
     const title=host.querySelector('.logo-text h1');if(title)title.textContent=selected.name;
     document.title=selected.name+' 대회관리';
   }

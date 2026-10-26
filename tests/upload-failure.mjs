@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {mkdir,writeFile} from 'node:fs/promises';
+const child=spawn(process.execPath,['tests/emulator.mjs','--fail-upload'],{windowsHide:true});
+let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{output+=data;});
+const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+assert.notEqual(code,0,'A failed upload must fail the integration test');
+assert.match(output,/Current upload failed:/,'The test must fail specifically at the current upload check');
+const result={blockedCurrentUpload:true,integrationExitCode:code,failedAtExactUploadCheck:true};
+await mkdir('test-results',{recursive:true});await writeFile('test-results/upload-failure.json',JSON.stringify(result,null,2));
+console.log(JSON.stringify(result,null,2));
