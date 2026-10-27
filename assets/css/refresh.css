@@ -1,0 +1,73 @@
+/* Shared screen theme. Keep tournament print layouts independent. */
+@media screen {
+  :root {
+    --primary:#124c3c; --primary-dark:#103b30; --primary-light:#246653;
+    --accent:#d5ed81; --accent-dark:#b9d660;
+    --bg:#f5f7f4; --bg2:#eaf0e9; --panel:#fff; --panel2:#f7faf6;
+    --border:#dce5dd; --text:#182e26; --text2:#4c6258; --text3:#66796f;
+    --shadow:0 3px 16px rgba(24,46,38,.04);
+    --shadow-lg:0 16px 48px rgba(24,46,38,.14);
+    --radius:12px; --radius-lg:20px;
+  }
+  body {background:var(--bg);font-family:'Noto Sans KR',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .app-header {background:#fff;color:var(--text);box-shadow:0 1px 0 var(--border);}
+  .header-top {max-width:1160px;margin:auto;padding:18px 28px;border:0;gap:16px;}
+  .logo-text h1 {font-family:inherit;font-size:1.15rem;font-weight:900;letter-spacing:-.045em;}
+  .logo-text p {color:var(--text2);font-size:.62rem;letter-spacing:.16em;opacity:1;margin-top:4px;}
+  .header-actions .btn-sm {min-height:40px;border-color:var(--border);color:var(--primary);font-size:.8rem;border-radius:10px;}
+  .header-actions .btn-sm:hover {background:var(--panel2);}
+  .login-menu-panel {background:var(--primary-dark);}
+  .login-menu-panel .btn-sm {color:white;}
+  .nav-tabs {max-width:1104px;margin:auto;gap:6px;padding:0 0 10px;}
+  .nav-tab {min-height:46px;padding:10px 20px;border:0;border-radius:12px;color:var(--text2);font-size:.9rem;font-weight:700;}
+  .nav-tab:hover {color:var(--primary);background:var(--panel2);}
+  .nav-tab.active {color:var(--primary-dark);background:var(--accent);border:0;border-radius:12px;}
+  .nav-tab .nbadge {background:var(--primary);color:#fff;}
+  .main-content {max-width:1160px;padding:30px 28px 80px;}
+  .hero {isolation:isolate;background:linear-gradient(115deg,#103e30,#1d6049);padding:38px 34px;border-radius:24px;min-height:218px;box-shadow:none;margin-bottom:24px;}
+  .hero::before {content:'GIMHAE TENNIS ASSOCIATION';display:block;font-size:.65rem;letter-spacing:.19em;color:var(--accent);font-weight:700;margin-bottom:16px;position:relative;z-index:1;}
+  .hero::after {content:'';width:240px;height:320px;right:65px;bottom:-125px;border:2px solid rgba(213,237,129,.25);border-radius:120px;transform:rotate(35deg);opacity:1;pointer-events:none;z-index:-1;box-shadow:0 0 0 32px rgba(213,237,129,.05),0 0 0 64px rgba(213,237,129,.035);}
+  .hero h2 {font-family:inherit;font-size:clamp(1.5rem,3vw,2.1rem);font-weight:900;letter-spacing:-.05em;line-height:1.35;}
+  .hero p {font-size:.95rem;opacity:1;color:#e0ece4;}
+  .hero-chips {margin-top:20px !important;}
+  .hero-chip {background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.24);padding:7px 14px;font-size:.82rem;color:#fff;}
+  .card {padding:24px;border-color:var(--border);box-shadow:var(--shadow);margin-bottom:20px;}
+  .card-title {font-size:1rem;letter-spacing:-.025em;padding-bottom:14px;margin-bottom:18px;}
+  .sec-title {font-family:inherit;font-weight:800;letter-spacing:-.035em;}
+  .home-status-card {padding:24px;}
+  .home-stats {gap:12px;}
+  .home-stats .stat-card {background:var(--panel2);box-shadow:none;border:1px solid #e7ede6;padding:20px;min-height:108px;border-radius:14px;gap:10px;}
+  .home-stats .stat-val {font-family:inherit;font-size:2rem;font-weight:900;letter-spacing:-.04em;}
+  .stat-label {font-size:.85rem;color:var(--text2);}
+  .home-click-card {transition:background .18s,border-color .18s;}
+  .home-click-card:hover {background:#edf4e6;border-color:#9dbb91;}
+  .btn {min-height:44px;letter-spacing:-.015em;box-shadow:none;}
+  .btn-primary {background:var(--primary);color:#fff;box-shadow:none;}
+  .btn-primary:hover {background:var(--primary-dark);box-shadow:none;}
+  .btn-accent {background:var(--accent);color:var(--primary-dark);}
+  .form-input,.form-select,.form-textarea {min-height:46px;border-width:1px;background:#fff;}
+  .form-label {color:var(--text2);font-weight:700;}
+  .modal-box {box-shadow:var(--shadow-lg);}
+  .modal-header {background:var(--primary-dark);padding:20px 24px;}
+  .modal-close {min-width:36px;min-height:36px;}
+  :is(button,a,input,select,textarea,[tabindex]):focus-visible {outline:3px solid #5e8741;outline-offset:3px;}
+  @media(max-width:680px) {
+    .header-top {padding:14px 16px;gap:8px;}
+    .logo-text h1 {font-size:.98rem;}
+    .logo-text p {font-size:.52rem;letter-spacing:.08em;}
+    .header-actions .btn-sm {min-height:36px;font-size:.68rem;padding:5px 8px;}
+    .nav-tabs {padding:0 16px 10px;gap:5px;scroll-padding-inline:16px;}
+    .nav-tab {min-height:44px;padding:10px 14px;font-size:.84rem;}
+    .main-content {padding:20px 16px 64px;}
+    .hero {padding:26px 22px;min-height:214px;border-radius:20px;margin-bottom:20px;}
+    .hero::before {font-size:.58rem;letter-spacing:.12em;}
+    .hero::after {right:-95px;}
+    .hero h2 {font-size:1.55rem;}
+    .card,.home-status-card {padding:18px;border-radius:18px;}
+    .home-stats .stat-card {min-height:100px;padding:16px;}
+    .home-stats .stat-val {font-size:1.75rem;}
+  }
+  @media(prefers-reduced-motion:reduce) {
+    *,*::before,*::after {animation:none !important;transition:none !important;scroll-behavior:auto !important;}
+  }
+}
