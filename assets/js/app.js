@@ -4829,6 +4829,20 @@ function getCurrentClubRoleInfo(){
   if(CLUB_MEMBER&&REG_CLUB)return {role:'member',label:'클럽회원',club:REG_CLUB};
   return {role:'guest',label:'일반 조회',club:''};
 }
+function syncMobileClubLoginStatus(){
+  const host=document.querySelector('.app-header');if(!host)return;
+  let status=ge('mobileClubLoginStatus');
+  if(!status){
+    status=document.createElement('div');status.id='mobileClubLoginStatus';
+    status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    status.style.cssText='padding:8px 14px;background:#eaf5ef;color:#124b39;font-size:.82rem;font-weight:900;border-top:1px solid #cce4d5;overflow-wrap:anywhere';
+    host.appendChild(status);
+    const style=document.createElement('style');style.textContent='@media(min-width:769px){#mobileClubLoginStatus{display:none!important}}';document.head.appendChild(style);
+  }
+  const info=getCurrentClubRoleInfo(),logged=['director','member'].includes(info.role);
+  status.textContent=logged?`${info.role==='director'?'🏆':'👤'} ${info.club} · ${info.label} 로그인`:'';
+  status.hidden=!logged;status.style.display=logged?'block':'none';
+}
 function getCurrentRoleCapabilities(){
   const r=getCurrentClubRoleInfo().role;
   return {
@@ -4915,6 +4929,7 @@ function runPhase57SafetyCheck(){
 }
 
 function applyClubRoleVisibility(){
+  syncMobileClubLoginStatus();
   const isMember=!!(CLUB_MEMBER&&REG_CLUB&&!AD&&!OP);
   const isDirector=!!(REG&&REG_CLUB&&!AD&&!OP);
   const roleLabel=isMember?'클럽회원':isDirector?'경기이사':'';
@@ -4927,6 +4942,7 @@ function applyClubRoleVisibility(){
   document.querySelectorAll('[onclick]').forEach(el=>{
     const oc=String(el.getAttribute('onclick')||'');
     const txt=String(el.textContent||'').trim();
+    if(/(?:showPage|mobileBottomGo)\(['"]register['"]\)/.test(oc))return; // 명단 조회는 모든 역할에 공개
     const directorOnly =
       /openTeamReg|showTeamReg|openReg|teamReg|openPlayer|playerManage|openRoster|rosterManage/i.test(oc) ||
       /팀\s*등록|팀등록|명단\s*관리|선수\s*관리|출전\s*명단/.test(txt);
@@ -8999,7 +9015,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
   const teamName=isIndividual ? getIndividualDisplayLine(team) : tdn(team,key,origIdx);
   const players=isIndividual ? getIndividualPlayers(team).map(p=>String(p?.name||'').trim()).filter(Boolean) : (Array.isArray(team?.players)?team.players:[]);
   const teamCount=players.length;
-  const canManage=!!(AD||REG);
+  const canManage=!!(AD||(REG&&(isIndividual||(REG_CLUB&&isSameRegistrationClub(baseClub(team?.club||'')||team?.club,baseClub(REG_CLUB)||REG_CLUB)))));
   const titleBadge=isIndividual ? `${idx+1}` : `${origIdx+1}`;
   const memberLabel=isIndividual ? '참가자 명단' : '선수 명단 (페어는 경기 때 결정)';
   const hasFirst=!!(AD && FIRST_APPEARANCE_READY && !isIndividual && players.some(n=>isFirstAppearancePlayer(n,team?.club||'',tid)));
@@ -9044,7 +9060,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
           ${statusBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${statusBadges}</div>`:''}
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;color:#475569;font-size:.7rem;font-weight:850;white-space:nowrap"><span>명단 보기</span><span style="font-size:.9rem">⌄</span></div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;color:#475569;font-size:.7rem;font-weight:850;max-width:150px">${!isIndividual?pastRosterReferenceButtonHtml(baseClub(team?.club||'')||team?.club||'',div,'지난대회 명단'):''}<span>명단 보기 ⌄</span></div>
     </summary>
     <div style="border-top:1px solid #e2e8f0;background:#f8fafc;padding:10px 11px 11px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -9129,6 +9145,12 @@ function _pastRosterTeamLabel(club='', sameIndex=0, sameCount=1){
   if(sameCount<=1) return c||'팀';
   return `${c}${String.fromCharCode(65+Math.max(0,sameIndex))}`;
 }
+function _pastRosterTeamDisplayLabel(team,teams,fallbackDiv=''){
+  if(team.teamName||team.entryLabel)return team.teamName||team.entryLabel;
+  const div=_pastRosterDivisionKey(team.div||team.division||fallbackDiv);
+  const same=teams.filter(other=>(other.club||'')===(team.club||'')&&_pastRosterDivisionKey(other.div||other.division||fallbackDiv)===div);
+  return _pastRosterTeamLabel(team.club,same.indexOf(team),same.length);
+}
 function _collectPastRosterLocal(club,currentTid=''){
   const targetBase=baseClub(club)||String(club||'').trim();
   const out=[];
@@ -9136,11 +9158,11 @@ function _collectPastRosterLocal(club,currentTid=''){
     const tid=String(t?.id||'');
     if(!tid || tid===String(currentTid||'')) return;
     const teams=Array.isArray(t?.teams)?t.teams:[];
-    const matched=teams.filter(tm=>(baseClub(tm?.club||'')||tm?.club||'')===targetBase);
+    const matched=teams.filter(tm=>!targetBase || isSameRegistrationClub(baseClub(tm?.club||'')||tm?.club||'',targetBase));
     matched.forEach((tm,mi)=>out.push({
       source:'hist',tid, tournamentName:t?.name||'과거 대회', date:t?.date||'',
       div:tm?.div||tm?.division||'', club:tm?.club||club,
-      teamLabel:_pastRosterTeamLabel(tm?.club||club,mi,matched.length),
+      teamLabel:_pastRosterTeamDisplayLabel(tm,matched),
       players:Array.isArray(tm?.players)?tm.players.filter(Boolean):[],
       mainPlayerCount:Number(tm?.mainPlayerCount||0)||0
     }));
@@ -9150,12 +9172,13 @@ function _collectPastRosterLocal(club,currentTid=''){
     const tid=String(td?.tid||'');
     if(!tid || tid===String(currentTid||'')) return;
     const meta=_pastRosterTournamentMeta(tid);
+    if(!meta || !isPastArchiveTournament(meta) || isIndividualTournament(meta))return;
     const teams=Array.isArray(arr)?arr:[];
-    const matched=teams.filter(tm=>(baseClub(tm?.club||'')||tm?.club||'')===targetBase);
+    const matched=teams.filter(tm=>!targetBase || isSameRegistrationClub(baseClub(tm?.club||'')||tm?.club||'',targetBase));
     matched.forEach((tm,mi)=>out.push({
       source:'memory',tid,tournamentName:meta?.name||'과거 대회',date:meta?.date||'',
       div:td?.div||tm?.division||'',club:tm?.club||club,
-      teamLabel:_pastRosterTeamLabel(tm?.club||club,mi,matched.length),
+      teamLabel:_pastRosterTeamDisplayLabel(tm,matched,td.div),
       players:Array.isArray(tm?.players)?tm.players.filter(Boolean):[],
       mainPlayerCount:Number(tm?.mainPlayerCount||0)||0
     }));
@@ -9266,6 +9289,7 @@ function _pastRosterMemberState(name,club){
   return {ok:!!findMemberRegistry2026(name,club,_m26YearFromTournament(t)||2026),required:true};
 }
 function _pastRosterAddNames(names=[],club='',mode='append',preferredDiv=''){
+  if(!canImportPastRoster(club)){toast('명단 불러오기는 자기 클럽 경기이사 또는 관리자만 가능합니다','info');return false;}
   const clean=[...new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))];
   if(!clean.length){ toast('선택한 선수가 없습니다','info'); return false; }
   _pastRosterRestoreCurrentContext(preferredDiv);
@@ -9302,6 +9326,14 @@ function _pastRosterAddNames(names=[],club='',mode='append',preferredDiv=''){
   return true;
 }
 const PAST_ROSTER_SELECTION_ORDER = Object.create(null);
+let PAST_ROSTER_VIEW={club:'',division:'all',entries:[]};
+let PAST_ROSTER_REQUEST=0;
+function canImportPastRoster(club){
+  return !!(AD || (REG&&REG_CLUB&&isSameRegistrationClub(baseClub(club||'')||club,baseClub(REG_CLUB)||REG_CLUB)));
+}
+function updatePastRosterReferenceFilters(){
+  _renderPastClubRosterModal(ge('pastRosterClubFilter')?.value||'',PAST_ROSTER_VIEW.entries,{division:ge('pastRosterDivisionFilter')?.value||'all'});
+}
 
 function _pastRosterRememberSelection(rowIdx, playerIdx, checked){
   const key=String(rowIdx);
@@ -9376,7 +9408,7 @@ function _pastRosterApplyAll(rowIdx,club='',sourceDiv=''){
     _pastRosterRevealRegistration(div);
   }
 }
-function _renderPastClubRosterModal(club,entries=[]){
+function _renderPastClubRosterModal(club,entries=[],options={}){
   Object.keys(PAST_ROSTER_SELECTION_ORDER).forEach(k=>delete PAST_ROSTER_SELECTION_ORDER[k]);
   let modal=ge('mPastClubRoster');
   if(!modal){
@@ -9386,16 +9418,23 @@ function _renderPastClubRosterModal(club,entries=[]){
     document.body.appendChild(modal);
   }
   const {div:currentDiv}= _pastRosterCurrentContext();
-  const rows=_dedupePastRosterEntries(entries);
+  const division=options.division||'all';
+  PAST_ROSTER_VIEW={club,division,entries};
+  const allRows=_dedupePastRosterEntries(entries);
+  const rows=allRows.filter(row=>(!club || isSameRegistrationClub(baseClub(row.club||'')||row.club,baseClub(club)||club)) && (division==='all'||_pastRosterDivisionKey(row.div)===division));
+  const clubs=[...new Set([...(G.clubs||[]),...allRows.map(row=>baseClub(row.club||'')||row.club),club].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const divisions=[...new Set([...allRows.map(row=>_pastRosterDivisionKey(row.div)),...(division==='all'?[]:[division])])].sort((a,b)=>_pastRosterDivisionOrder(a)-_pastRosterDivisionOrder(b));
   const cards=rows.map((x,i)=>{
+    const canImport=canImportPastRoster(x.club);
     const players=Array.isArray(x.players)?x.players:[];
     const mainCount=Number(x.mainPlayerCount||0)>0?Math.min(players.length,Number(x.mainPlayerCount)):players.length;
     const neutralFiveRoster=isUnifiedTeamRoster(x.div,Number(x.mainPlayerCount||0)/2);
     const main=neutralFiveRoster?players.slice():players.slice(0,mainCount),subs=neutralFiveRoster?[]:players.slice(mainCount);
     const renderPlayer=(n,pi,isSub=false)=>{
-      const st=_pastRosterMemberState(n,club);
+      const st=_pastRosterMemberState(n,x.club);
       const idx=isSub?main.length+pi:pi;
       const badge=st.required ? (st.ok?'<span style="font-size:.6rem;color:#15803d;font-weight:900">등록</span>':'<span style="font-size:.6rem;color:#dc2626;font-weight:900">미등록</span>') : '';
+      if(!canImport)return `<div data-past-player style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;display:flex;flex-direction:column;align-items:flex-start;gap:4px"><span style="font-weight:800">${esc(n)}</span>${currentDiv?divisionRuleBadgeHtml(PAST_ROSTER_CONTEXT.tid,currentDiv,n,x.club):''}${badge}</div>`;
       return `<label data-past-player role="button" aria-pressed="false" style="min-width:0;padding:7px 8px;border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;font-size:.78rem;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent" onclick="return _pastRosterTogglePlayer(event,${i},${idx})"><input id="pastRosterCb_${i}_${idx}" data-past-row="${i}" data-name="${esc(n)}" type="checkbox" tabindex="-1" aria-hidden="true" style="width:17px;height:17px;accent-color:#2563eb;flex:0 0 auto;pointer-events:none"><span style="display:inline-flex;width:19px;height:19px;border-radius:999px;align-items:center;justify-content:center;background:${isSub?'#64748b':'#10213d'};color:#fff;font-size:.62rem;flex:0 0 auto">${idx+1}</span><span style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n)}</span>${badge}</label>`;
     };
     const playerGrid=main.length?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${main.map((n,pi)=>renderPlayer(n,pi,false)).join('')}</div>`:'<div style="font-size:.76rem;color:#94a3b8">선수 명단 없음</div>';
@@ -9406,12 +9445,12 @@ function _renderPastClubRosterModal(club,entries=[]){
         <span class="badge bg-blue" style="font-size:.75rem">${esc(x.teamLabel||x.club||'')}</span>
         ${divDiff?'<span style="font-size:.7rem;color:#b45309;font-weight:800">현재 부서와 다름</span>':''}
       </div>${playerGrid}${subsHtml}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center">
+      ${canImport?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center">
         <button type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem" onclick="_pastRosterSelectAll(${i},true)">☑ 전체선택</button>
         <button type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem" onclick="_pastRosterSelectAll(${i},false)">선택해제</button>
-        <button type="button" class="btn btn-primary" style="padding:6px 10px;font-size:.7rem" onclick="_pastRosterApplySelected(${i},'${esc(club)}','${esc(x.div||'')}')">➕ 선택 선수 추가</button>
-        <button type="button" class="btn" style="padding:6px 10px;font-size:.7rem;background:#166534;color:#fff" onclick="_pastRosterApplyAll(${i},'${esc(club)}','${esc(x.div||'')}')">📋 전체 명단 넣기</button>
-      </div>
+        <button type="button" class="btn btn-primary" style="padding:6px 10px;font-size:.7rem" onclick="_pastRosterApplySelected(${i},'${esc(x.club)}','${esc(x.div||'')}')">➕ 선택 선수 추가</button>
+        <button type="button" class="btn" style="padding:6px 10px;font-size:.7rem;background:#166534;color:#fff" onclick="_pastRosterApplyAll(${i},'${esc(x.club)}','${esc(x.div||'')}')">📋 전체 명단 넣기</button>
+      </div>`:'<div style="margin-top:8px;font-size:.7rem;color:#64748b">비교용 명단</div>'}
     </div>`;
   });
   const groups=new Map();
@@ -9435,8 +9474,15 @@ function _renderPastClubRosterModal(club,entries=[]){
         </section>`).join('')}</div>
     </section>`).join('') : `<div style="padding:28px 12px;text-align:center;color:#64748b;font-size:.82rem">확인 가능한 지난대회 명단이 없습니다.</div>`;
   modal.innerHTML=`<div class="modal-box" style="max-width:620px;width:min(94vw,620px);max-height:88vh;display:flex;flex-direction:column">
-    <div class="modal-header" style="background:#10213d"><h3>📋 ${esc(club)} 지난대회 명단</h3><button class="modal-close" onclick="cm('mPastClubRoster')">✕</button></div>
-    <div style="padding:10px 14px;background:#eef6ff;border-bottom:1px solid #cfe0f5;font-size:.76rem;color:#244a73;line-height:1.5"><b>선택해서 현재 명단에 추가</b>하거나 <b>전체 명단을 한 번에 넣기</b>가 가능합니다. 입력칸에 넣은 뒤 최종 <b>팀 등록</b>을 눌러 저장하세요.</div>
+    <div class="modal-header" style="background:#10213d"><h3>📋 ${esc(club||'전체 클럽')} 지난대회 명단</h3><button class="modal-close" onclick="cm('mPastClubRoster')">✕</button></div>
+    <div style="padding:10px 14px;background:#eef6ff;border-bottom:1px solid #cfe0f5;font-size:.76rem;color:#244a73;line-height:1.5;display:grid;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label>클럽<select id="pastRosterClubFilter" class="form-select" style="width:100%;min-width:0" onchange="updatePastRosterReferenceFilters()"><option value="" ${!club?'selected':''}>전체 클럽</option>${clubs.map(c=>`<option value="${esc(c)}" ${c===club?'selected':''}>${esc(c)}${(REG||CLUB_MEMBER)&&isSameRegistrationClub(c,REG_CLUB)?' · 내 클럽':''}</option>`).join('')}</select></label>
+        <label>지난대회 부서<select id="pastRosterDivisionFilter" class="form-select" style="width:100%;min-width:0" onchange="updatePastRosterReferenceFilters()"><option value="all" ${division==='all'?'selected':''}>전체 부서</option>${divisions.map(d=>`<option value="${esc(d)}" ${d===division?'selected':''}>${esc(dl(d))}</option>`).join('')}</select></label>
+      </div>
+      ${currentDiv?`<div>현재 ${esc(dl(currentDiv))} 기준으로 명단·하향 출전을 비교할 수 있습니다.</div>`:''}
+      ${canImportPastRoster(club)&&club?'<div>자기 클럽 선수는 선택하거나 전체 명단을 불러와 등록할 수 있습니다.</div>':'<div>지난대회 명단은 누구나 조회·비교할 수 있습니다.</div>'}
+    </div>
     <div class="modal-body" style="padding:12px;overflow:auto;display:grid;grid-auto-rows:max-content;align-content:start;gap:16px;min-height:0">${body}</div>
     <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPastClubRoster')">닫기</button></div>
   </div>`;
@@ -9447,36 +9493,33 @@ function getPastRosterReferenceClub(){
   if(AD) return normalizeClub(getRegClubInputValue()||'');
   return '';
 }
+function pastRosterReferenceButtonHtml(club='',div='',label='📋 지난대회 명단',id=''){
+  const action=`event.preventDefault();event.stopPropagation();openPastClubRosterReference(${JSON.stringify(club)},${JSON.stringify(div)})`;
+  return `<button ${id?`id="${esc(id)}"`:''} data-past-roster-link data-club="${esc(club)}" data-division="${esc(div)}" type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem;font-weight:900;min-height:32px;white-space:nowrap" onclick="${esc(action)}">${esc(label)}</button>`;
+}
 function updatePastRosterReferenceButton(){
   const btn=ge('pastRosterRefBtn');
   if(!btn) return;
   const club=getPastRosterReferenceClub();
-  btn.style.display=club?'inline-flex':'none';
-  btn.disabled=!club;
-  btn.title=club?`${club} 지난대회 명단 보기`:'클럽을 먼저 선택하세요';
+  btn.style.display='inline-flex';
+  btn.disabled=false;
+  btn.title=club?`${club} 지난대회 명단 보기`:'전체 클럽 지난대회 명단 보기';
 }
-async function openPastClubRosterReference(){
-  if(!(REG&&REG_CLUB) && !AD){ toast('경기이사 로그인 후 사용할 수 있습니다','info'); return; }
-  const club=getPastRosterReferenceClub();
-  if(!club){ toast('클럽을 먼저 선택하세요','info'); return; }
-  const currentTid=ge('regTS')?.value||'';
-  const currentDiv=_pastRosterResolveDivision(currentTid,'');
+async function openPastClubRosterReference(requestedClub='',preferredDiv=''){
+  const request=++PAST_ROSTER_REQUEST;
+  const club=requestedClub==='__all__'?'':normalizeClub(baseClub(requestedClub||getPastRosterReferenceClub())||requestedClub||getPastRosterReferenceClub());
+  const currentTid=ge('regTS')?.value||getRealtimeTargetTournamentId()||'';
+  const currentDiv=preferredDiv||ge('regDS')?.value||'';
   PAST_ROSTER_CONTEXT={tid:currentTid,div:currentDiv};
-  const entries=_collectPastRosterLocal(club,currentTid);
-  try{
-    const exact=String(club||'').trim();
-    if(exact){
-      const snap=await getDocs(query(collection(db,'registrations'),where('club','==',exact)));
-      snap.forEach(d=>{
-        const x=d.data()||{};
-        const tid=String(x.tournamentId||x.tid||'');
-        if(!tid || tid===String(currentTid||'')) return;
-        const meta=_pastRosterTournamentMeta(tid);
-        entries.push({source:'firebase',tid,tournamentName:meta?.name||x.tournamentName||'과거 대회',date:meta?.date||x.tournamentDate||'',div:x.division||x.div||'',club:x.club||club,teamLabel:x.teamName||x.entryLabel||x.club||club,players:Array.isArray(x.players)?x.players.filter(Boolean):[],mainPlayerCount:Number(x.mainPlayerCount||0)||0});
-      });
-    }
-  }catch(e){ console.warn('지난대회 명단 조회 일부 실패',e); }
-  _renderPastClubRosterModal(club,entries);
+  _renderPastClubRosterModal(club,[],{division:preferredDiv?_pastRosterDivisionKey(preferredDiv):'all'});
+  ge('mPastClubRoster')?.querySelector('.modal-body')?.replaceChildren(Object.assign(document.createElement('div'),{textContent:'지난대회 명단을 불러오는 중…'}));
+  const past=(G.tournaments||[]).filter(t=>String(t.id)!==String(currentTid)&&isPastArchiveTournament(t)&&!isIndividualTournament(t));
+  const loaded=await Promise.allSettled(past.map(t=>fetchTournamentBundle(t.id,{acceptStale:true})));
+  try{if(currentTid)await ensureDivisionRuleCache(currentTid);}catch(e){console.warn('명단 비교 자격정보 조회 실패',e);}
+  const modal=ge('mPastClubRoster');
+  if(request!==PAST_ROSTER_REQUEST || (modal&&!modal.classList.contains('open')))return;
+  _renderPastClubRosterModal(club,_collectPastRosterLocal('',currentTid),{division:preferredDiv?_pastRosterDivisionKey(preferredDiv):'all'});
+  if(loaded.some(r=>r.status==='rejected'))toast('일부 대회 명단을 불러오지 못했습니다. 다시 열어 확인해 주세요.','info');
 }
 
 let REGISTER_DIVISION_FILTER='all';
@@ -9547,7 +9590,7 @@ function renderRegisterDivisionOverview(){
   ];
   const _divisionFilterBar = divisions.length
     ? `<div style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${(!isIndiv&&((REG&&REG_CLUB&&!AD)||AD))?`<button id="pastRosterRefBtn" type="button" class="btn btn-outline" style="padding:5px 9px;font-size:.7rem;font-weight:900;white-space:nowrap;${AD&&!getPastRosterReferenceClub()?'display:none;':''}" onclick="openPastClubRosterReference()">📋 지난대회 명단 보기</button>`:''}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${!isIndiv?`<div style="display:flex;flex-wrap:wrap;gap:6px">${pastRosterReferenceButtonHtml('','','📋 지난대회 명단 보기','pastRosterRefBtn')}${getPastRosterReferenceClub()?pastRosterReferenceButtonHtml('__all__','','전체 클럽 보기'):''}</div>`:''}</div>
         <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
           ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
         </div>
@@ -9577,6 +9620,7 @@ function renderRegisterDivisionOverview(){
           ${isSel?'<span class="badge" style="background:var(--accent);color:#fff">등록 입력중</span>':''}
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${!isIndiv?pastRosterReferenceButtonHtml('',div):''}
           <button class="btn ${canRegister?'btn-primary':'btn-gray'}" style="padding:7px 14px;font-size:.78rem" ${canRegister?`onclick="selectRegDivision('${div}')"`:'disabled'}>${canRegister?(isIndividualTournament(t)?'+ 참가 접수':'+ 팀 등록'):'등록 불가'}</button>
         </div>
       </div>
@@ -27690,7 +27734,7 @@ function loadPreviousTeamOrder(side){
   refreshAllOrderChipAvailability();renderOrderConvenienceTools();
   toast(missing.length?'명단을 불러왔습니다. 제외된 선수: '+[...new Set(missing)].join(', ')+' · 빈자리를 다시 선택하세요':'이전 명단을 불러왔습니다. 확인 후 제출 또는 저장하세요',missing.length?'info':'success');
 }
-Object.assign(window,{loadPreviousTeamOrder});
+Object.assign(window,{loadPreviousTeamOrder,updatePastRosterReferenceFilters});
 
 function getLastOrder(key, teamIdx) {
   return window._lastOrderCache?.[key]?.[teamIdx] || null;
@@ -28277,6 +28321,7 @@ function scheduleKimhaeMobileNavigationSync(){
 function ensureKimhaeMobileNavigation(){
   if(!isMobileOutputCenter()) return;
   ensurePhase117MobileHeaderLayout();
+  syncMobileClubLoginStatus();
   forceMobileRoleCheckContrast();
   setTimeout(forceMobileRoleCheckContrast,120);
   setTimeout(forceMobileRoleCheckContrast,700);

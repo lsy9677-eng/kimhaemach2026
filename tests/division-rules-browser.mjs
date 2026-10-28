@@ -5,6 +5,7 @@ import {chromium} from 'playwright';
 const source=readFileSync(new URL('../assets/js/app.js',import.meta.url),'utf8');
 const rules=source.slice(source.indexOf('// PHASE148:'),source.indexOf('function rosterPlayerHTML('));
 const cards=source.slice(source.indexOf('function buildRegisterRosterCardHtml('),source.indexOf('function upsertIndividualPlayerMetaRecords('));
+const rosterButton=source.slice(source.indexOf('function pastRosterReferenceButtonHtml('),source.indexOf('function updatePastRosterReferenceButton('));
 const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage({viewport:{width:390,height:844}});
@@ -21,10 +22,10 @@ try{
       _m26YearFromTournament:t=>Number(t.date.slice(0,4)),getTournamentDateKey:t=>t?.date||'',isIndividualTournament:()=>false,isPastArchiveTournament:t=>t.status==='finished',getPastArchive:id=>id==='spring'?{regs:rows}:null,
       loadRegistry:async()=>[],getMemberRegistry2026:()=>[],collection:(_db,name)=>name,where:(_field,_op,value)=>value,query:(...args)=>args,db:{},getDocs:async q=>({docs:(q[0]==='age65Certifications'?[]:q[1]==='old'?[{_id:'o',club:'테사모',division:'금',players:['오태섭']}]:rows).map(r=>({id:r._id,data:()=>r}))}),
       esc:n=>String(n).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),_k2td:key=>{const i=key.lastIndexOf('_');return {tid:key.slice(0,i),div:key.slice(i+1)};},isSameRegistrationClub:(a,b)=>a===b,
-      ge:id=>document.getElementById(id),om:id=>{document.getElementById(id).style.display='block';},getRegClubInputValue:()=>'테사모',REG:true,CLUB_MEMBER:false,AD:false,FIRST_APPEARANCE_READY:false,tdn:team=>team.club,rosterPlayerHTML:n=>n,isUnifiedTeamRoster:()=>true
+      ge:id=>document.getElementById(id),om:id=>{document.getElementById(id).style.display='block';},getRegClubInputValue:()=>'테사모',REG:true,REG_CLUB:'테사모',CLUB_MEMBER:false,AD:false,FIRST_APPEARANCE_READY:false,tdn:team=>team.club,rosterPlayerHTML:n=>n,isUnifiedTeamRoster:()=>true
     });
   });
-  await page.addScriptTag({content:rules+cards});
+  await page.addScriptTag({content:rules+rosterButton+cards});
   await page.evaluate(async names=>{
     await ensureDivisionRuleCache('autumn');
     document.getElementById('roster').innerHTML=buildRegisterRosterCardHtml({tid:'autumn',div:'은',key:'autumn_은',team:{club:'테사모',players:names},idx:0,isIndividual:false});
