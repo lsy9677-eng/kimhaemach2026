@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 </style>
 
 <link rel="stylesheet" href="assets/css/refresh.css?v=20261028">
+<link rel="stylesheet" href="assets/css/experience.css?v=20261028">
 </head>
 <body>
 <header class="app-header">
@@ -169,13 +170,6 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
     </div>
   </div>
 
-  <section class="home-shortcuts" aria-label="주요 기능 바로가기">
-    <button type="button" onclick="showPage('tournament')"><span class="shortcut-symbol" aria-hidden="true">01</span><span><strong>대회 안내</strong><small>일정과 대회 정보</small></span><span aria-hidden="true">↗</span></button>
-    <button type="button" onclick="showPage('register')"><span class="shortcut-symbol" aria-hidden="true">02</span><span><strong>팀 등록</strong><small>참가 신청과 팀 관리</small></span><span aria-hidden="true">↗</span></button>
-    <button type="button" onclick="showPage('bracket')"><span class="shortcut-symbol" aria-hidden="true">03</span><span><strong>대진표</strong><small>경기 편성과 진행 확인</small></span><span aria-hidden="true">↗</span></button>
-    <button type="button" onclick="showPage('ranking')"><span class="shortcut-symbol" aria-hidden="true">04</span><span><strong>시합 결과</strong><small>부서별 경기 결과</small></span><span aria-hidden="true">↗</span></button>
-  </section>
-
   <div class="card fade-in home-status-card" id="homeAssocCard">
     <div class="card-title">📊 김해시테니스협회 현황</div>
     <div class="g4 home-stats">
@@ -185,11 +179,11 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
       <div class="stat-card home-click-card" onclick="goHomeMetric('reg2026')"><div class="stat-label">2026 인원</div><div class="stat-val" id="sPlayers">0</div></div>
     </div>
   </div>
-  <div class="g2">
+  <div class="g2" id="homeTournamentSection">
     <div class="card fade-in"><div class="card-title">📌 현재 대회</div><div id="homeTournInfo"><p class="muted">등록된 대회가 없습니다</p></div></div>
   </div>
   
-  <div class="card fade-in">
+  <div class="card fade-in" id="homeSupportCard">
     <div class="card-title">📩 관리자에게 문의</div>
     <div style="display:flex;flex-direction:column;gap:7px">
       <div style="font-size:.82rem;color:var(--text2);line-height:1.55">
@@ -202,7 +196,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
     </div>
   </div>
 
-  <div class="card fade-in"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
+  <div class="card fade-in" id="homeDivisionSection"><div class="card-title">🏆 부서별 현황</div><div class="g2" id="homeDivStatus"></div></div>
 
   <!-- 등록선수 현황 버튼 (항상 표시) -->
   <div class="card fade-in" id="homeRegViewerCard" style="padding:12px 16px">

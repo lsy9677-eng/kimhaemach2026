@@ -1,0 +1,63 @@
+@media screen {
+  #page-home.active {display:flex !important;flex-direction:column;}
+  #page-home > .hero {order:0;}#myClubHomeCard {order:1;}#homeTournamentSection {order:2;}#homeAssocCard {order:3;}#homeDivisionSection {order:4;}#homeRegViewerCard {order:5;}#homeSupportCard {order:6;}
+  #kimhaeMobileHomeQuick {display:none !important;}
+  #homeAssocCard .home-stats {display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:12px;}
+  #homeDivStatus {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .hero-experience {position:relative;z-index:1;margin-top:20px;}
+  .hero-experience-details {display:flex;gap:8px 24px;flex-wrap:wrap;color:#e3eee6;font-size:.82rem;line-height:1.7;}
+  .experience-actions {display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;}
+  .hero .experience-actions .btn {min-height:44px;border-radius:10px;background:transparent;border:1px solid #adc6b6;color:#fff;font-size:.83rem;}
+  .hero .experience-actions .btn-primary {background:#d5ed81;color:#103b30;border-color:#d5ed81;}
+  .hero-chips {display:flex;gap:8px;flex-wrap:wrap;}
+  .experience-status,.sbadge {display:inline-flex;align-items:center;gap:6px;border:1px solid;border-radius:999px;padding:5px 10px;font-size:.75rem;font-weight:700;line-height:1.3;white-space:nowrap;}
+  .status-open,.s-open {background:#e9f3df;color:#234c2e;border-color:#b3cea0;}
+  .status-ongoing,.s-ongoing {background:#e8efff;color:#24478c;border-color:#abc1eb;}
+  .status-closed,.s-closed {background:#fff1dd;color:#815116;border-color:#e7c896;}
+  .status-finished,.s-finished,.status-draft {background:#eff2f0;color:#46594e;border-color:#c5d0c9;}
+  .experience-picker {display:grid;gap:8px;font-size:.8rem;color:var(--text2);margin-bottom:20px;}
+  .experience-steps {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+  .experience-step {font:inherit;text-align:left;display:flex;align-items:center;gap:12px;padding:18px 14px;min-width:0;background:var(--panel2);border:1px solid var(--border);border-radius:14px;color:var(--text);cursor:pointer;}
+  .experience-step[data-current=true] {background:#edf4e5;border-color:#94b47e;}
+  .experience-step-number {font-size:.75rem;font-weight:700;color:var(--primary);}
+  .experience-step strong,.experience-step small {display:block;word-break:keep-all;}
+  .experience-step strong {font-size:.92rem;}.experience-step small {font-size:.74rem;color:var(--text2);margin-top:5px;}
+  .experience-arrow {margin-left:auto;color:var(--text2);}
+  .experience-step:hover {border-color:#729265;}
+  .experience-notice {margin-top:18px;padding:16px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;font-size:.83rem;}
+  .experience-notice p {white-space:pre-wrap;margin-top:8px;overflow-wrap:anywhere;}
+  .experience-empty,.experience-hint {font-size:.78rem;line-height:1.7;color:var(--text2);}
+  p.experience-hint {margin-top:12px;}
+  #myClubHomeCard > .card {border:1px solid #cadbc3 !important;background:#fff !important;box-shadow:var(--shadow);padding:24px;}
+  #myClubHomeBody > div {border-radius:12px !important;padding:12px !important;}
+  #myClubHomeCard .btn {min-height:42px;border-radius:10px !important;font-weight:700;}
+  #myClubCardTitle {color:var(--primary) !important;}
+  .experience-bracket-tools {display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px;background:#fff;border:1px solid var(--border);border-radius:14px;margin-bottom:16px;}
+  .experience-bracket-tools .btn {font-size:.8rem;}
+  .experience-bracket-tools .experience-hint {flex:1 1 240px;}
+  .mobile-bracket-zoom-tools {padding:8px;background:#f5f8f2;border:1px solid var(--border);border-radius:12px;flex-wrap:wrap;}
+  .mobile-bracket-zoom-tools .btn {min-height:40px;}
+  #page-bracket .own-club-bracket-pulse {animation:none !important;outline:3px solid #256b49 !important;outline-offset:2px;}
+  .experience-receipt {position:fixed;inset:0;margin:auto;padding:28px;width:560px;max-width:calc(100vw - 28px);max-height:calc(100dvh - 32px);overflow-y:auto;border:1px solid var(--border);border-radius:24px;background:#fff;color:var(--text);box-shadow:0 24px 90px #112d3040;font:inherit;}
+  .experience-receipt::backdrop {background:#0b1c2c99;}
+  .receipt-heading {position:relative;padding-right:50px;}.receipt-heading h2 {font-size:1.25rem;letter-spacing:-.04em;margin-top:12px;line-height:1.5;}.receipt-heading p {font-size:.82rem;color:var(--text2);margin-top:6px;}
+  .receipt-check {display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#edf4e5;color:#23582f;font-size:24px;}
+  .receipt-close {position:absolute;right:0;top:0;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font:inherit;font-size:.8rem;cursor:pointer;min-height:40px;}
+  .receipt-info {display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;margin:24px 0;padding:16px;background:var(--panel2);border-radius:12px;font-size:.83rem;}.receipt-info dt {color:var(--text2);}.receipt-info dd {margin:0;font-weight:700;overflow-wrap:anywhere;}
+  .experience-receipt h3 {font-size:.88rem;}.receipt-players {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;list-style:none;counter-reset:player;margin-top:12px;}
+  .receipt-players li {counter-increment:player;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:.85rem;overflow-wrap:anywhere;}.receipt-players li::before {content:counter(player,decimal-leading-zero);font-size:.7rem;color:var(--text2);}
+  .receipt-feedback {font-size:.8rem;color:var(--primary);margin-top:12px;}.experience-receipt textarea {width:100%;min-height:130px;margin-top:12px;}
+  .experience-receipt .btn {font-size:.8rem;flex:1 1 130px;}
+  @media(max-width:768px){
+    #homeAssocCard .home-stats {grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+    #homeDivStatus {grid-template-columns:minmax(0,1fr) !important;}
+    .hero-experience-details {display:grid;gap:4px;font-size:.78rem;}
+    .hero .experience-actions .btn {flex:1 1 120px;font-size:.78rem;}
+    .experience-steps {grid-template-columns:minmax(0,1fr);gap:8px;}.experience-step {padding:14px;}
+    .experience-step small {margin-top:2px;}.experience-step-number {min-width:28px;}
+    #myClubHomeCard > .card {padding:18px;}
+    .experience-receipt {padding:20px;border-radius:20px;}.receipt-heading h2 {font-size:1.08rem;}
+    #page-home > .g2 {margin-bottom:0;}
+  }
+}
+@media print {.experience-bracket-tools,.hero-experience,.experience-receipt{display:none !important;}}

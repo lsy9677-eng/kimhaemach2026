@@ -765,6 +765,7 @@ import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,b
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml,isUnifiedTeamRoster}from'./registration-ui.js';
+import{tournamentStatus,selectHomeTournament,renderHomeExperience,showRegistrationReceipt,installBracketNavigator}from'./experience-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
@@ -1019,6 +1020,7 @@ function getSelectedTournamentIdForPage(page){
   if(pg==='bracket') return ge('brTS')?.value||'';
   if(pg==='register') return ge('regTS')?.value||'';
   if(pg==='ranking') return ge('rankTS')?.value||'';
+  if(pg==='home') return getHomeDashboardTournament()?.id||'';
   if(pg==='tournament') return '';
   return '';
 }
@@ -6917,7 +6919,7 @@ function pickDefaultTournamentId(){
 
 
 function goHomeMetric(kind){
-  const currentTid = pickDefaultTournamentId();
+  const currentTid = getHomeDashboardTournament()?.id || pickDefaultTournamentId();
   switch(kind){
     case 'current_clubs':
     case 'current_teams': {
@@ -7326,7 +7328,7 @@ function renderTL(){
   const sorted=sortTournamentsLatest(G.tournaments);
   el.innerHTML=sorted.map(t=>{
     const tc=Object.keys(G.teams).filter(k=>k.startsWith(t.id+'_')).reduce((s,k)=>s+(G.teams[k]||[]).length,0);
-    return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${sl2[t.status]||'접수중'}</span></div>
+    return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${tournamentStatus(t.status).symbol} ${tournamentStatus(t.status).label}</span></div>
     <div class="tc-body"><div class="tc-meta"><span class="tc-mi">📅 ${t.date}</span>${t.venue?`<span class="tc-mi">📍 ${t.venue}</span>`:''}<span class="tc-mi">${(t.type||'team')==='individual_pair'?'🎾 개인전':'👥 단체전'}</span><span class="tc-mi">👥 ${tc}${(t.type||'team')==='individual_pair'?'조':'팀'}</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${(t.divisions||[]).map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${t.id}','${d}')">${dl(d)} <small>${(G.teams[t.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
     ${AD?`<div class="tc-acts"><select class="form-select" style="width:auto;padding:5px 8px;font-size:.75rem" onchange="chgTS('${t.id}',this.value)"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select><button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openTD('${t.id}')">⚙️ 설정</button><button class="btn btn-primary" style="font-size:.75rem;padding:5px 10px" onclick="openET('${t.id}')">✏️ 편집</button>${isPastArchiveTournament(t)?`<button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="finalizePastTournamentArchive('${t.id}')">${getPastArchive(t.id)?'확정본 다시 저장':'지난대회 명단·결과 저장'}</button>`:''}<button class="btn btn-danger" style="font-size:.75rem;padding:5px 10px" onclick="delT('${t.id}')">삭제</button></div>`:
@@ -9852,6 +9854,7 @@ async function beginUnifiedTeamEdit(key,idx){
     if(!UNIFIED_TEAM_EDIT||UNIFIED_TEAM_EDIT.id!==original._id)return;
     ge('regTS').value=tid;onRegTC();ge('regDS').value=div;renderRL();
     const clubEl=ge('regClub');if(clubEl)clubEl.value=original.club;
+    const clubText=ge('regClubText');if(clubText)clubText.value=original.club;
     onRegClubChange();updateRegisterSlots();
     for(let j=1;j<=12;j++){const input=ge('p'+j);if(input){input.value='';delete input.dataset.playerId;delete input.dataset.registryName;delete input.dataset.registryClub;}}
     const editSlots=teamRosterInputNumbers(div==='여성부'?6:Number(getRegDoublesCount())*2);
@@ -9953,6 +9956,7 @@ async function saveUnifiedTeamEditCore(){
     refreshDivisionRuleFormBadges('register');
     savePlayersToLocalCache();try{cacheTournamentBundleFromMemory(tid);}catch(e){}
     renderRL();renderAllP();rosterSaveNotice('수정 내용 저장 완료 ✅','success');
+    openSavedRegistrationReceipt({tournament:tournament?.name||'',division:dl(div),team:tdn(next,nextKey,(G.teams[nextKey]||[]).indexOf(next)),players:names.slice(),updated:true},tid,div);
   }catch(e){rosterSaveNotice('수정 실패: '+e.message,'error');}
   finally{sl(false);}
 }
@@ -10155,6 +10159,7 @@ async function registerTeamCore(){
   renderRL();
   renderRegisterDivisionOverview();
   rosterSaveNotice(isIndividual?'참가 접수 완료 ✅':'팀 등록 완료 ✅','success');
+  openSavedRegistrationReceipt({tournament:t.name,division:dl(div),team:newTeam.entryLabel||tdn(newTeam,key,newIdx),players:names.slice(),warning:postErrors.length?'접수는 저장되었습니다. 부가 정보 동기화 상태는 새로고침 후 확인해 주세요.':''},tid,div);
 }
 async function _removePlayerHistory(names,club,tid,div){
   // Player history is derived data: read its server document before editing it.
@@ -10631,7 +10636,7 @@ function onBrTC(){
 }
 
 function renderBracket(){
-  try{return renderBracketCore();}finally{requestAnimationFrame(highlightOwnClubBracket);}
+  try{return renderBracketCore();}finally{requestAnimationFrame(()=>{highlightOwnClubBracket();installBracketNavigator({hasClub:()=>!!REG_CLUB&&!!(REG||CLUB_MEMBER),onLogin:()=>toggleReg(),onMyMatches:()=>toggleMyClubFilter('bracket',true)});});}
 }
 function highlightOwnClubBracket(){
   const page=ge('page-bracket');if(!page)return;
@@ -19174,7 +19179,7 @@ function updateMyClubHomeCard(){
   const body = ge('myClubHomeBody');
   if(!body || !club) return;
 
-  const at = sortTournamentsLatest(G.tournaments)[0];
+  const at = getHomeDashboardTournament();
   if(!at){ body.innerHTML='<div style="color:var(--text3)">진행 중인 대회가 없습니다</div>'; return; }
 
   const bc = baseClub(club);
@@ -19213,7 +19218,7 @@ function updateMyClubHomeCard(){
       return st.done && st.winner===idx;
     }).length;
 
-    const nextM = myMs.find(m=>!getMatchResultState(key,m).done);
+    const nextM = myMs.filter(m=>!getMatchResultState(key,m).done).sort(compareMyClubMatchOrder)[0];
     let nextInfo = '';
     if(nextM){
       const tms = G.teams[key]||[];
@@ -19271,7 +19276,7 @@ function updateMyClubHomeCard(){
 
 // 내 클럽 대진표로 이동
 function goMyClubBracket(){
-  const at = sortTournamentsLatest(G.tournaments)[0];
+  const at = getHomeDashboardTournament();
   if(!at) return;
   showPage('bracket');
   const brTS = ge('brTS');
@@ -19286,7 +19291,7 @@ function openMyClubQuickOrder(){
     return;
   }
   const selectedTid=getCurrentPageName()==='bracket'?ge('brTS')?.value:'';
-  const at = (selectedTid?G.tournaments.find(t=>t.id===selectedTid):null) || sortTournamentsLatest(G.tournaments)[0];
+  const at = (selectedTid?G.tournaments.find(t=>t.id===selectedTid):null) || getHomeDashboardTournament();
   if(!at){
     toast('진행 중인 대회가 없습니다','info');
     return;
@@ -20043,6 +20048,46 @@ function updateFilterBtnUI(tab, isOn){
 function upLog(){ return; }
 
 
+var HOME_EXPERIENCE_TOURNAMENT_ID='';
+function getExperienceHomeTournaments(){
+  const active=getHomeVisibleTournaments();
+  const closed=(G.tournaments||[]).filter(t=>t.status==='closed'&&(!getTournamentDateKey(t)||getTournamentDateKey(t)>=getTodayDateKey()));
+  if(active.length||closed.length)return sortTournamentsLatest([...active,...closed]);
+  return sortTournamentsLatest((G.tournaments||[]).filter(t=>t.status==='finished')).slice(0,1);
+}
+function getHomeDashboardTournament(){return selectHomeTournament(getExperienceHomeTournaments(),HOME_EXPERIENCE_TOURNAMENT_ID);}
+function updateExperienceTournamentMetrics(t,clubs=0,teams=0,players=0,matches=0){
+  if(MATCH_ORGANIZATION.requiresAssociationRegistration)return;
+  const title=ge('homeAssocCard')?.querySelector('.card-title');if(title)title.textContent='선택 대회 현황';
+  [['sClubs','참가 클럽',clubs,'register'],['sTeams','참가 팀',teams,'register'],['sMatches','참가 인원',players,'register'],['sPlayers','완료 경기',matches,'bracket']].forEach(([id,label,value,page])=>{
+    const element=ge(id);if(!element)return;element.textContent=String(value);
+    const card=element.closest('.stat-card');const labelElement=card?.querySelector('.stat-label');if(labelElement)labelElement.textContent=label;
+    if(card)card.onclick=()=>navigateExperience(page,t?.id);
+  });
+}
+async function selectExperienceHomeTournament(id){
+  HOME_EXPERIENCE_TOURNAMENT_ID=id;upDash();
+  ge('homeTournInfo')?.querySelector('select')?.focus({preventScroll:true});
+  try{
+    await syncTournamentDataForPage('home',id,false);
+    if(HOME_EXPERIENCE_TOURNAMENT_ID===id&&getCurrentPageName()==='home'){
+      const restoreFocus=document.activeElement===ge('homeTournInfo')?.querySelector('select');
+      upDash();if(restoreFocus)ge('homeTournInfo')?.querySelector('select')?.focus({preventScroll:true});
+    }
+  }catch(e){toast('대회 현황을 불러오지 못했습니다. 다시 선택하거나 새로고침해 주세요.','error');}
+}
+function navigateExperience(page,tid){
+  showPage(page);
+  if(!tid)return;
+  const id={register:'regTS',bracket:'brTS',ranking:'rankTS'}[page],select=id&&ge(id);
+  if(select){select.value=tid;if(page==='register')onRegTC();else if(page==='bracket')onBrTC();else onRankTC();}
+  window.scrollTo({top:0,behavior:'auto'});
+}
+function openSavedRegistrationReceipt(data,tid,div){
+  try{
+    showRegistrationReceipt(data,{onRoster:()=>{navigateExperience('register',tid);ge('regDS').value=div;renderRL();},onBracket:()=>goBracket(tid,div)});
+  }catch(e){console.warn('registration receipt display failed',e);toast('저장은 완료되었습니다. 등록 명단에서 내용을 확인해 주세요.','info');}
+}
 function upDash(){
   // ── 홈 현황판 4개: 2026년 협회 전체 기준 ──────────────────
   const reg2026 = (G_REGISTRY&&G_REGISTRY[2026]) || [];
@@ -20066,8 +20111,8 @@ function upDash(){
   const assocCard=ge('homeAssocCard'); if(assocCard) assocCard.style.display = G.meta.showAssociationDashboard ? '' : 'none';
 
   // ── 현재 대회 섹션 ──────────────────────────────────────────
-  const activeHomeTours = getHomeVisibleTournaments();
-  const at = activeHomeTours[0] || null;
+  const activeHomeTours = getExperienceHomeTournaments();
+  const at = selectHomeTournament(activeHomeTours,HOME_EXPERIENCE_TOURNAMENT_ID);
   if(at){
     const currentTeams=(at.divisions||[]).flatMap(d=>G.teams[at.id+'_'+d]||[]);
     const currentClubSet=new Set();
@@ -20089,25 +20134,13 @@ function upDash(){
       });
     });
 
+    updateExperienceTournamentMetrics(at,currentClubSet.size,currentTeams.length,currentPlayerSet.size,currentMatchCount);
+
     const slbl={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
     ge('heroTitle').textContent=at.name;
     ge('heroStatus').textContent='📌 '+slbl[at.status];
     ge('heroClubs').innerHTML=`🏟 참가 <b>${currentClubSet.size}</b>개 클럽`;
     ge('heroTeams').innerHTML=`👥 참가 <b>${currentTeams.length}</b>팀 · 인원 <b>${currentPlayerSet.size}</b>명`;
-    const homeTours = getHomeVisibleTournaments();
-    ge('homeTournInfo').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
-      <div style="font-weight:700;font-size:1rem">${at.name}</div>
-      <div style="font-size:.82rem;color:var(--text2)">📅 ${at.date||'-'}${at.venue?' | 📍 '+at.venue:''}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_clubs')">🏟 ${currentClubSet.size}개 클럽</span>
-        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_teams')">👥 ${currentTeams.length}팀</span>
-        <span class="hero-chip home-click-chip" style="background:var(--panel2);color:var(--primary-dark);border:1px solid var(--border)" onclick="goHomeMetric('current_teams')">🧍 ${currentPlayerSet.size}명</span>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${at.divisions.map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${at.id}','${d}')">${dl(d)} <small>${(G.teams[at.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
-      ${homeTours.length ? `<div style="margin-top:2px;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px"><div style="font-size:.76rem;font-weight:800;color:var(--primary-dark);margin-bottom:6px">📋 현재 접수중/진행중 대회 (날짜 빠른순)</div><div style="display:flex;flex-direction:column;gap:6px">${homeTours.map(t=>`<div onclick="showPage('register');const el=ge('regTS');if(el){el.value='${t.id}';onRegTC();}window.scrollTo({top:0,behavior:'smooth'});" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;background:#fff;border:1px solid var(--border);border-radius:8px"><div style="font-size:.8rem;font-weight:700;color:var(--text)">• ${esc(t.name||'')}</div><div style="font-size:.72rem;color:var(--text2);white-space:nowrap">${esc(t.date||'-')} · ${String(t.status||'')==='ongoing'?'진행중':'접수중'}</div></div>`).join('')}</div></div>` : ''}
-      <div style="display:flex;justify-content:flex-end"><button class="btn btn-outline" style="font-size:.78rem;padding:5px 11px" onclick="openGuide('${at.id}')">📌 요강 보기</button></div>
-      ${at.notice?`<div style="font-size:.78rem;background:var(--panel2);padding:8px;border-radius:var(--radius);border:1px solid var(--border);white-space:pre-line">${at.notice}</div>`:''}
-    </div>`;
     ge('homeDivStatus').innerHTML=at.divisions.map(d=>{
       const k=`${at.id}_${d}`;
       const tc=(G.teams[k]||[]).length;
@@ -20175,6 +20208,7 @@ function upDash(){
       return`<div class="stat-card" style="cursor:pointer;padding:20px 18px;min-height:158px;border-width:2px" onclick="${onClickFn}"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span class="dpill ${dc(d)}" style="font-size:.9rem;padding:6px 14px">${dl(d)}</span>${isOngoing&&mt>0?'<span class="badge bg-green" style="animation:pulse 2s infinite;font-size:.78rem;padding:5px 10px">진행중</span>':hd?'<span class="badge bg-green" style="font-size:.78rem;padding:5px 10px">추첨완료</span>':'<span class="badge bg-gray" style="font-size:.78rem;padding:5px 10px">대기</span>'}</div><div class="stat-val" style="margin-top:12px;font-size:2.25rem">${tc}<span style="font-size:1.08rem;font-weight:500"> 팀</span></div><div class="stat-label" style="font-size:.9rem;margin-top:2px">${mt>0?`경기 ${md}/${mt} 완료`:'미시작'}</div>${summary}${orderHtml}${isOngoing?'<div style="margin-top:10px;font-size:.82rem;color:var(--primary);font-weight:700">👆 탭하면 대진표 실시간 보기</div>':''}</div>`;
     }).join('');
   } else {
+    updateExperienceTournamentMetrics(null);
     ge('heroTitle').textContent=getAppTitle();
     ge('heroStatus').textContent='대회 준비중';
     ge('heroClubs').textContent='🏟 현재 참가 -';
@@ -20185,7 +20219,8 @@ function upDash(){
   upLog();
   if(window.renderHomeReg) window.renderHomeReg();
   // 내 클럽 카드 갱신 (경기이사 로그인 상태면)
-  if(REG && REG_CLUB && !AD) updateMyClubHomeCard();
+  renderHomeExperience({tournament:at,tournaments:activeHomeTours,club:REG_CLUB&&(REG||CLUB_MEMBER)?REG_CLUB:'',onSelect:selectExperienceHomeTournament,onNavigate:navigateExperience,onGuide:openGuide,onMyClub:openMobileClubStatus});
+  if((REG||CLUB_MEMBER) && REG_CLUB && !AD) updateMyClubHomeCard();
 }
 
 async function regP(name,club,tid,div,rank,_tname,_date){
