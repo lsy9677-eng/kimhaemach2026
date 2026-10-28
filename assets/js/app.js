@@ -9615,8 +9615,9 @@ function renderRL(){
 
   updateRegisterSlots();
 
-  const clubSel=ge('regClub'); if(clubSel) clubSel.disabled = lock || isIndividual;
-  const clubTxt=ge('regClubText'); if(clubTxt) clubTxt.disabled = lock || !isIndividual;
+  const freeClubInput=isIndividual || !usesFixedClubList();
+  const clubSel=ge('regClub'); if(clubSel) clubSel.disabled = lock || freeClubInput;
+  const clubTxt=ge('regClubText'); if(clubTxt) clubTxt.disabled = lock || !freeClubInput;
   for(let i=1;i<=12;i++){ const el=ge('p'+i); if(el) el.disabled = lock; }
   const regBtn = ge('aoReg')?.querySelector('button[onclick*="registerTeam"]') || document.querySelector('#aoReg button.btn.btn-primary');
   if(regBtn){
@@ -20416,6 +20417,24 @@ function isSameRegistrationClub(a,b){
   return !!aa&&!!bb&&aa===bb;
 }
 
+function renderUnrestrictedPlayerSuggestions(inp,num,h,query,selectedClub){
+  const names=new Map();
+  const add=(name,clubs)=>{
+    const clean=String(name||'').trim();
+    if(!clean||!normName(clean).includes(query))return;
+    if(!currentRegIsIndividual()&&selectedClub&&!clubs.some(c=>isSameRegistrationClub(c,selectedClub)))return;
+    if(!names.has(normName(clean)))names.set(normName(clean),clean);
+  };
+  Object.values(G.players||{}).forEach(p=>add(p?.name,[p?.club,...(p?.clubs||[])].filter(Boolean)));
+  Object.values(G.teams||{}).flat().forEach(team=>(team.players||[]).forEach(name=>add(name,[team.club||''])));
+  h.replaceChildren();
+  [...names.values()].sort((a,b)=>a.localeCompare(b,'ko')).slice(0,4).forEach(name=>{
+    const button=document.createElement('button');button.type='button';button.className='btn btn-outline';
+    button.textContent=name+' · 기존 참가 선수';button.style.cssText='font-size:.72rem;padding:5px 8px;margin:3px 4px 0 0;';
+    button.onclick=()=>{inp.value=name;delete inp.dataset.registryName;delete inp.dataset.registryClub;delete inp.dataset.playerId;h.replaceChildren();refreshDivisionRuleFormBadges('register');};
+    h.appendChild(button);
+  });
+}
 function phint(inp,num){
   const v=(inp?.value||'').trim(), h=ge('h'+num);
   if(!h) return;
@@ -20429,8 +20448,6 @@ function phint(inp,num){
   const nv = normName(v);
   const loginClub = normalizeClub((REG && !AD && REG_CLUB) ? REG_CLUB : '');
   const selectedClub = normalizeClub(loginClub || getRegClubInputValue() || '');
-  const year = getRegAutocompleteYear();
-  const registryRows = getRegistryRowsForAutocomplete(year);
 
   // PHASE164: 단체전은 클럽을 먼저 확정해야 선수검색 가능.
   // 경기이사는 로그인한 본인 클럽, 관리자는 현재 선택한 클럽만 검색한다.
@@ -20438,6 +20455,15 @@ function phint(inp,num){
     h.innerHTML=`<span style="color:#b45309;font-size:.72rem;font-weight:800">클럽을 먼저 선택하면 해당 클럽 선수만 표시됩니다.</span>`;
     return;
   }
+
+  // 장유는 협회 연간 등록명단을 요구하지 않는다. 기존 참가 선수 제안만 제공한다.
+  if(!MATCH_ORGANIZATION.requiresAssociationRegistration){
+    renderUnrestrictedPlayerSuggestions(inp,num,h,nv,selectedClub);
+    return;
+  }
+
+  const year = getRegAutocompleteYear();
+  const registryRows = getRegistryRowsForAutocomplete(year);
 
   // 2026년 이후 대회는 해당 연도 등록선수 명단 안에서만 자동완성
   const seen = new Set();
