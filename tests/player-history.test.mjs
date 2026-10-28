@@ -74,3 +74,28 @@ test('선수마다 확정본 JSON을 다시 읽지 않으며 확정본이 바뀌
   assert.equal(c.isCurrentSavedParticipation('이순보',history('spring','은')),true);
   assert.equal(reads,2);
 });
+
+test('같은 부서의 우승 확정본은 선수 문서의 예선 통과 기록보다 우선한다',()=>{
+  const c=setup({archives:{spring:{regs:[{club:'테사모',division:'은',players:['이순보']}]}}});
+  const p={name:'이순보',club:'테사모',wins:0,losses:0,history:[history('spring','은',{result:'예선 통과'})]};
+  c.G.players={'이순보__테사모':p};
+  c.collectLivePlayerHistory=()=>[history('spring','은',{source:'archive',rank:1,result:'우승'})];
+  const html=c.buildPH('이순보',p);assert.match(html,/🥇 1위/);assert.doesNotMatch(html,/예선 통과/);assert.equal((html.match(/class="hist-row"/g)||[]).length,1);
+});
+
+test('같은 선수 문서의 과거 소속·팀명 연결을 조회해 현재 주클럽과 달라도 확정 준우승을 표시한다',()=>{
+  const c=setup({archives:{spring:{regs:[{club:'하모니',division:'동',players:['이순보']}]}}});
+  const p={name:'이순보',club:'하모니E',clubs:['하모니E','하모니'],wins:0,losses:0,history:[]};
+  c.G.players={'이순보__하모니E':p};
+  c.collectLivePlayerHistory=(_name,club)=>club==='하모니'?[history('spring','동',{club:'하모니',baseClub:'하모니',source:'archive',rank:2,result:'준우승'})]:[];
+  assert.match(c.buildPH('이순보',p),/🥈 2위/);
+});
+
+test('공식명단에 동명이인이 있으면 오래된 선수 문서에 다른 클럽이 연결되어도 합치지 않는다',()=>{
+  const c=setup({archives:{spring:{regs:[{club:'타클럽',division:'은',players:['이순보']}]}}});
+  c.G_REGISTRY[2026]=[{name:'이순보',club:'테사모'},{name:'이순보',club:'타클럽'}];
+  const p={name:'이순보',club:'테사모',clubs:['테사모','타클럽'],wins:0,losses:0,history:[]};
+  c.G.players={'이순보__테사모':p};
+  c.collectLivePlayerHistory=(_name,club)=>club==='타클럽'?[history('spring','은',{club:'타클럽',baseClub:'타클럽',source:'archive',rank:1,result:'우승'})]:[];
+  assert.doesNotMatch(c.buildPH('이순보',p),/🥇 1위/);
+});

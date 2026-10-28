@@ -1232,7 +1232,8 @@ function buildPastArchiveBundle(tid,bundle){
     const final=getMainFinalMatch(matches);
     const finalDone=final && final.winner!=null && [final.t1,final.t2].some(v=>String(v)===String(final.winner));
     const hasStoredChampion=teams.some(tm=>pastArchiveOutcomeRank(tm)===1);
-    const completed=!!(finalDone||hasStoredChampion);
+    const leagueRanks=getCompletedRoundRobinRanks(key,teams);
+    const completed=leagueRanks!==null?leagueRanks.length>0:!!(finalDone||hasStoredChampion);
     states[div]=completed?'finalized':'pending';
     const rankingMatches=matches.map(m=>{
       const x={...m};
@@ -1241,7 +1242,7 @@ function buildPastArchiveBundle(tid,bundle){
       });
       return x;
     });
-    const computed=calcFinalRanks(key,teams,rankingMatches)||[];
+    const computed=leagueRanks!==null?leagueRanks:(calcFinalRanks(key,teams,rankingMatches)||[]);
     teams.forEach((team,i)=>{
       const raw=out.regs.find(r=>String(r._id||r.id||'')===String(team._id||team.id||'') && (r.division||r.div)===div);
       if(!raw)return;
@@ -1249,12 +1250,13 @@ function buildPastArchiveBundle(tid,bundle){
       const stored=pastArchiveOutcomeRank(team);
       const outcomeTeam=finalDone?{...team,rank:null,_rank:null,teamRank:null,_pastOutcome:null}:team;
       const ach=getLiveTeamAchievementForHistory(key,i,outcomeTeam,tid,div);
-      const rank=finalDone?(rankHit?.rank||null):(stored||ach?.rank||null);
-      const result=rank===1?'우승':rank===2?'준우승':rank===3?(rankHit?.label||'3위'):rank===4?'4위':String(team.result||team.teamResult||ach?.result||'참가');
+      const rank=leagueRanks!==null?(rankHit?.rank||null):finalDone?(rankHit?.rank||null):(stored||ach?.rank||null);
+      const result=rank===1?'우승':rank===2?'준우승':rank===3?(rankHit?.label||'3위'):rank===4?'4위':rank?`${rank}위`:leagueRanks!==null?'결과 미확정':String(team.result||team.teamResult||ach?.result||'참가');
       raw._pastOutcome={rank,result,confirmed:completed};
     });
   });
   out.divisionStates=states;
+  out.outcomeVersion=317;
   return out;
 }
 async function ensurePastTournamentArchive(tid,{rebuild=false}={}){
@@ -12398,8 +12400,33 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   return html;
 }
 
+function getCompletedRoundRobinRanks(key,teams){
+  const {tid,div}=_k2td(key),t=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  if(!t || gDS(t,div).format!=='roundrobin')return null;
+  const draw=G.draws[key],groups=draw?.groups;
+  if(!groups?.length)return null; // 엑셀로 확정 순위만 가져온 과거대회는 저장된 순위를 사용한다.
+  if(groups.length!==1 || teams.length<2)return [];
+  const ids=groups[0].teams||[],members=new Set(ids.map(String));
+  if(ids.length!==teams.length || members.size!==teams.length || ids.some(id=>!teams[id]))return [];
+  const matches=(G.matches[key]||[]).filter(m=>m.phase==='group' && Number(m.group)===0 && !m.bye);
+  const pairs=new Set();
+  for(const m of matches){
+    if(!members.has(String(m.t1))||!members.has(String(m.t2))||String(m.t1)===String(m.t2))return [];
+    const pair=[String(m.t1),String(m.t2)].sort().join('|');
+    if(pairs.has(pair))return [];
+    pairs.add(pair);
+    const state=getMatchResultState(key,m);
+    if(!state.done || ![String(m.t1),String(m.t2)].includes(String(state.winner)))return [];
+  }
+  if(pairs.size!==teams.length*(teams.length-1)/2)return [];
+  const stats=calcGS(key,0,ids,teams)||[];
+  if(stats.length!==teams.length || stats.some(s=>s.tiePending || !Number.isInteger(s.rank) || s.rank<1) || new Set(stats.map(s=>s.rank)).size!==teams.length)return [];
+  return stats.map(s=>({teamIdx:s.teamIdx??s.ti,rank:s.rank,label:s.rank===1?'우승':s.rank===2?'준우승':`${s.rank}위`,club:teams[s.teamIdx??s.ti]?.club||''})).sort((a,b)=>a.rank-b.rank);
+}
 function calcFinalRanks(key,teams,mMs){
   try{
+    const leagueRanks=getCompletedRoundRobinRanks(key,teams);
+    if(leagueRanks!==null)return leagueRanks;
     const mainList=getMainOnlyMatches(mMs);
     if(!mainList.length) return [];
     const finalMatch=getMainFinalMatch(mainList);
@@ -20881,7 +20908,12 @@ function buildPH(name,p){
   // - 대회명을 수정/삭제해도 중복으로 쌓이지 않도록 tid가 있으면 tid로 묶음
   // - club은 하모니A/하모니B 같은 팀표기를 baseClub로 정규화해서 중복 방지
   const seen=new Set();
-  const liveHist = collectLivePlayerHistory(safeName, clubInfo.mainClub||p?.club||'');
+  // 주클럽만 조회하면 같은 선수 문서에 연결된 과거 소속/부클럽의 확정 성적이 누락된다.
+  // 동명이인이 있는 경우에는 현재 공식명단으로 확인된 소속 범위만 사용한다.
+  const liveHistoryClubs=duplicateRegistryIdentity?strictIdentityClubs:linkedClubSet;
+  const liveHist=(liveHistoryClubs.size
+    ? [...liveHistoryClubs].flatMap(club=>collectLivePlayerHistory(safeName,club))
+    : collectLivePlayerHistory(safeName,clubInfo.mainClub||p?.club||'')).filter(h=>historyClubMatchesIdentity(h.club||h.baseClub||''));
 
   // ③-1 과거 registrations 팀명단에서 직접 복원한 참가 이력
   // 현재 등록명단에서 동명이인이 1명뿐이면 과거 클럽이 달라도 포함한다.
