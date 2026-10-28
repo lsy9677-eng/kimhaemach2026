@@ -8685,7 +8685,7 @@ function jangyuTeamDivisionAssessment(tid,div,club,names){
   return {ok:true,details,warnings,ordinaryCount:ordinary.length,exceptionCount:details.filter(c=>c.exceptionApproved).length};
 }
 function jangyuDivisionWarningsHtml(warnings){
-  return warnings.map(w=>`<div role="status" style="padding:7px 9px;border:1px solid #fca5a5;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:.73rem;font-weight:800">⚠ ${esc(w)} · 접수 가능 / 관리자 확인 필요</div>`).join('');
+  return warnings.map(w=>`<div class="division-rule-warning" role="status" style="padding:9px 11px;border:1px solid #fca5a5;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:.73rem;font-weight:800;line-height:1.65"><div>⚠ ${esc(w)}</div><div style="margin-top:5px;font-size:.7rem;font-weight:600">접수 가능 · 관리자 확인 필요</div></div>`).join('');
 }
 async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
   const cache=await ensureDivisionRuleCache(tid);
@@ -9035,7 +9035,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
     });
   }
   let statusBadges=downgradeCount
-    ? `<span style="display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.64rem;font-weight:900;white-space:nowrap">↓ 하향 ${downgradeCount}명${exceptionCount?` <span style="margin-left:4px;color:#166534">(예외 ${exceptionCount})</span>`:''}</span>`
+    ? `<span style="display:inline-flex;align-items:center;justify-self:start;padding:3px 7px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.64rem;font-weight:900;white-space:nowrap">↓ 하향 ${downgradeCount}명${exceptionCount?` <span style="margin-left:4px;color:#166534">(예외 ${exceptionCount})</span>`:''}</span>`
     : '';
   if(!isIndividual && _divisionRulePolicy().jangyu){
     statusBadges+=jangyuDivisionWarningsHtml(jangyuTeamDivisionAssessment(tid,div,team?.club||'',players).warnings);
@@ -9049,18 +9049,18 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
     : '';
 
   return `<details class="register-team-card171" style="border:1px solid #d9e2ef;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.05)">
-    <summary style="list-style:none;cursor:pointer;padding:11px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;background:#fff;user-select:none;-webkit-tap-highlight-color:transparent">
-      <div style="display:flex;align-items:center;gap:9px;min-width:0">
+    <summary class="register-team-summary" style="list-style:none;cursor:pointer;padding:11px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;background:#fff;user-select:none;-webkit-tap-highlight-color:transparent">
+      <div class="register-team-identity" style="display:flex;align-items:center;gap:9px;min-width:0">
         <span style="width:24px;height:24px;border-radius:999px;background:#0f1f4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:900;flex:0 0 auto">${titleBadge}</span>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0">
             <span style="font-size:.92rem;font-weight:950;color:#0f172a;line-height:1.15;word-break:keep-all;overflow-wrap:anywhere">${esc(teamName||'')}</span>
             ${!isIndividual?`<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;font-size:.64rem;font-weight:900;white-space:nowrap">${teamCount}명</span>`:''}
           </div>
-          ${statusBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${statusBadges}</div>`:''}
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;color:#475569;font-size:.7rem;font-weight:850;max-width:150px">${!isIndividual?pastRosterReferenceButtonHtml(baseClub(team?.club||'')||team?.club||'',div,'지난대회 명단'):''}<span>명단 보기 ⌄</span></div>
+      <div class="register-team-actions" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;color:#475569;font-size:.7rem;font-weight:850;max-width:150px">${!isIndividual?pastRosterReferenceButtonHtml(baseClub(team?.club||'')||team?.club||'',div,'지난대회 명단'):''}<span class="register-team-roster-toggle">명단 보기 ⌄</span></div>
+      ${statusBadges?`<div class="register-team-status" style="grid-column:1/-1;display:grid;gap:6px;min-width:0">${statusBadges}</div>`:''}
     </summary>
     <div style="border-top:1px solid #e2e8f0;background:#f8fafc;padding:10px 11px 11px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -9589,7 +9589,7 @@ function renderRegisterDivisionOverview(){
     ...divisions.map(d=>({value:d,label:dl(d),count:(G.teams[tid+'_'+d]||[]).length}))
   ];
   const _divisionFilterBar = divisions.length
-    ? `<div style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
+    ? `<div class="register-division-filter-bar" style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${!isIndiv?`<div style="display:flex;flex-wrap:wrap;gap:6px">${pastRosterReferenceButtonHtml('','','📋 지난대회 명단 보기','pastRosterRefBtn')}${getPastRosterReferenceClub()?pastRosterReferenceButtonHtml('__all__','','전체 클럽 보기'):''}</div>`:''}</div>
         <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
           ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
@@ -9612,14 +9612,14 @@ function renderRegisterDivisionOverview(){
     const hasMyTeam = bc && allTeams.some(tm=>baseClub(tm.club||'')===bc||tm.club===REG_CLUB);
     const borderColor = MY_CLUB_FILTER && hasMyTeam ? '#16a34a' : isSel ? '#d4a017' : '#dbe4f0';
     return `<div class="card" data-reg-division="${esc(div)}" style="margin-bottom:14px;border-top:3px solid ${borderColor}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div class="register-division-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="dpill ${dc(div)}">${dl(div)}</span>
           <span class="badge bg-green">${teams.length}${isIndividualTournament(t)?'조':'팀'}</span>
           <span class="badge bg-blue">${totalPlayers}명</span>${getDivisionMaxTeams(tid,div)?`<span class="badge bg-gold">정원 ${getDivisionMaxTeams(tid,div)}</span>`:''}
           ${isSel?'<span class="badge" style="background:var(--accent);color:#fff">등록 입력중</span>':''}
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="register-division-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${!isIndiv?pastRosterReferenceButtonHtml('',div):''}
           <button class="btn ${canRegister?'btn-primary':'btn-gray'}" style="padding:7px 14px;font-size:.78rem" ${canRegister?`onclick="selectRegDivision('${div}')"`:'disabled'}>${canRegister?(isIndividualTournament(t)?'+ 참가 접수':'+ 팀 등록'):'등록 불가'}</button>
         </div>

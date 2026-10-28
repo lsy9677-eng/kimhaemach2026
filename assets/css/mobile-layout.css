@@ -1,0 +1,50 @@
+@media screen and (max-width:768px) {
+  .main-content {padding-inline:12px !important;padding-top:14px !important;}
+  body.slider-ready #page-home,body.slider-ready #page-register {padding-inline:0 !important;min-width:0 !important;box-sizing:border-box;}
+
+  #page-register .register-team-summary {
+    grid-template-columns:minmax(0,1fr) !important;
+    grid-template-areas:"identity" "actions";
+    padding:14px !important;gap:12px !important;
+  }
+  #page-register .register-team-summary:has(.register-team-status) {grid-template-areas:"identity" "status" "actions";}
+  #page-register .register-team-identity {grid-area:identity;align-items:flex-start !important;width:100%;}
+  #page-register .register-team-identity > span {margin-top:1px;}
+  #page-register .register-team-status {grid-area:status;width:100%;}
+  #page-register .register-team-status > span {width:fit-content;max-width:100%;white-space:normal !important;}
+  #page-register .division-rule-warning {width:100%;box-sizing:border-box;word-break:keep-all;overflow-wrap:break-word;}
+  #page-register .register-team-actions {
+    grid-area:actions;display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));
+    max-width:none !important;width:100%;gap:8px !important;
+  }
+  #page-register .register-team-actions > * {
+    display:flex;align-items:center;justify-content:center;min-width:0;min-height:40px !important;
+    padding:8px !important;border-radius:10px;white-space:normal !important;
+    font-size:.73rem !important;line-height:1.4;text-align:center;
+  }
+  #page-register .register-team-roster-toggle {border:1px solid #d7e2dc;background:#f3f7f4;color:#355b4a;}
+  #page-register .register-team-actions:has(> :only-child) {grid-template-columns:minmax(0,1fr);}
+  #page-register .register-division-header {gap:12px !important;}
+  #page-register .register-division-actions {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px !important;}
+  #page-register .register-division-actions > button {width:100%;min-width:0;min-height:42px !important;white-space:normal !important;word-break:keep-all;line-height:1.4;}
+  #page-register .register-division-filter-bar > div:first-child {display:grid !important;grid-template-columns:minmax(0,1fr);gap:8px !important;}
+  #page-register .register-division-filter-bar > div:first-child > div:last-child {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px !important;}
+  #page-register .register-division-filter-bar [data-past-roster-link] {width:100%;white-space:normal !important;min-height:40px !important;line-height:1.4;}
+  #page-register [data-reg-division] {padding:16px !important;}
+
+  #page-home .hero {padding:22px 18px !important;min-height:0 !important;margin-bottom:16px !important;}
+  #page-home .hero::before {margin-bottom:12px;font-size:.55rem;letter-spacing:.1em;}
+  #page-home .hero h2 {font-size:1.3rem !important;line-height:1.45 !important;letter-spacing:-.035em;word-break:keep-all;overflow-wrap:break-word;}
+  #page-home .hero-chips {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px !important;margin-top:14px !important;}
+  #page-home .hero .hero-chip {padding:8px 9px !important;min-width:0;font-size:.7rem !important;line-height:1.5;white-space:normal;}
+  #page-home .hero-experience {margin-top:16px;}
+  #page-home .hero-experience-details {font-size:.76rem;line-height:1.65;gap:4px;}
+  #page-home .hero .experience-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px;}
+  #page-home .hero .experience-actions > .btn {min-width:0;width:100%;padding:9px 8px;min-height:44px;line-height:1.4;}
+  #page-home .hero .experience-actions > .btn:last-child:nth-child(odd) {grid-column:1/-1;}
+  #myClubHomeCard > .card {padding:16px !important;}
+  #myClubHomeCard > .card > div:first-child {flex-wrap:wrap;gap:10px;}
+  #myClubHomeCard > .card > div:first-child > div:last-child {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px !important;}
+  #myClubHomeCard > .card > div:first-child > div:last-child > button {min-width:0;min-height:40px;font-size:.73rem !important;white-space:normal;}
+  #myClubHomeCard > .card > div:first-child > div:last-child > button:last-child:nth-child(odd) {grid-column:1/-1;}
+}
