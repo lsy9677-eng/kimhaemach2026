@@ -131,6 +131,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 <link rel="stylesheet" href="assets/css/refresh.css?v=20261028">
 <link rel="stylesheet" href="assets/css/experience.css?v=20261028">
 <link rel="stylesheet" href="assets/css/mobile-layout.css?v=org320">
+<link rel="stylesheet" href="assets/css/app-shell.css?v=org321">
 </head>
 <body>
 <header class="app-header">
@@ -1868,7 +1869,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 <div class="sticky-alert-wrap" id="stickyAlertWrap" aria-live="polite" aria-atomic="true"></div>
 <button class="scroll-top" id="stBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
-<script type="module" src="assets/js/app.js?v=org320"></script>
+<script type="module" src="assets/js/app.js?v=org321"></script>
 
 <script>
   // 배포 안정화 모드: 기존 service worker 자동 해제 + 캐시 정리
@@ -2337,6 +2338,10 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
     viewport.appendChild(slider);
     main.appendChild(viewport);
     document.body.classList.add('slider-ready');
+    const pageObserver=new ResizeObserver(entries=>{
+      if(entries.some(entry=>entry.target.classList.contains('active')))queueStablePageHeight();
+    });
+    pages.forEach(page=>pageObserver.observe(page));
   }
 
   function pageIndex(name){
@@ -2349,18 +2354,13 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
     const viewport=document.getElementById('pageViewport');
     const active=document.querySelector('.page.active');
     if(!viewport || !active) return;
-    const pageName=(active.id||'').replace('page-','');
-    const freeScrollPages=['players','ranking','bracket'];
     clearTimeout(__pageHeightTimer);
     __pageHeightTimer=setTimeout(()=>{
-      if(freeScrollPages.includes(pageName)){
-        viewport.style.height='auto';
-        viewport.style.minHeight=Math.max(active.scrollHeight||0, active.offsetHeight||0, 300)+'px';
-        return;
-      }
-      const h=Math.max(active.scrollHeight||0, active.offsetHeight||0, 300);
+      const style=getComputedStyle(active);
+      const margins=(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
+      const h=Math.ceil(Math.max(active.scrollHeight||0, active.offsetHeight||0, 300)+margins);
       viewport.style.height=h+'px';
-      viewport.style.minHeight=h+'px';
+      viewport.style.minHeight='0px';
     }, 0);
   }
 

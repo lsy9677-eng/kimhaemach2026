@@ -4843,6 +4843,13 @@ function syncMobileClubLoginStatus(){
   status.textContent=logged?`${info.role==='director'?'🏆':'👤'} ${info.club} · ${info.label} 로그인`:'';
   status.hidden=!logged;status.style.display=logged?'block':'none';
 }
+function installFixedAppHeader(){
+  const header=document.querySelector('.app-header');if(!header||header.dataset.heightObserved)return;
+  header.dataset.heightObserved='1';
+  const measure=()=>document.documentElement.style.setProperty('--app-header-height',Math.ceil(header.getBoundingClientRect().height)+'px');
+  measure();
+  new ResizeObserver(measure).observe(header);
+}
 function getCurrentRoleCapabilities(){
   const r=getCurrentClubRoleInfo().role;
   return {
@@ -29338,6 +29345,7 @@ function normalizeRegisterMobileVerticalViewport(){
   if(main && !chain.includes(main)) chain.push(main);
 
   chain.forEach(node=>{
+    if(node.id==='pageViewport')return; // Shared page sizing owns this viewport on every screen.
     try{
       node.style.removeProperty('height');
       node.style.removeProperty('min-height');
@@ -29436,6 +29444,7 @@ window.addEventListener('pageshow',()=>{ try{ scheduleKimhaeMobileNavigationSync
 window.addEventListener('load',()=>{ try{ scheduleKimhaeMobileNavigationSync(); }catch(e){} });
 
 document.addEventListener('DOMContentLoaded',()=>{
+  installFixedAppHeader();
   installRegisterMobileLayoutStabilityStyle();
   scheduleRegisterSliderHeightGuard170();
   scheduleRegisterMobileVerticalViewportNormalize();
