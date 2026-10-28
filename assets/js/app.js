@@ -2697,7 +2697,7 @@ function applyIndivLock(){
 
   // 홈: 등록선수 현황 버튼
   const regCard = document.getElementById('homeRegViewerCard');
-  if(regCard) regCard.style.display = shouldHide ? 'none' : '';
+  if(regCard) regCard.style.display = (!MATCH_ORGANIZATION.requiresAssociationRegistration || shouldHide) ? 'none' : '';
 
   // 잠금 중 대상 탭에 있으면 홈으로 이동
   if(shouldHide){
@@ -5251,9 +5251,9 @@ function applyRegLoginUI(){
   if(bar){
     bar.style.display = ((REG || CLUB_MEMBER) && !AD) ? 'flex' : 'none';
   }
-  // 홈 2026 명단 버튼: 항상 표시
+  // 협회 등록선수 현황은 김해시협회 홈에만 표시한다.
   const regCard = ge('homeRegViewerCard');
-  if(regCard) regCard.style.display = 'block';
+  if(regCard) regCard.style.display = MATCH_ORGANIZATION.requiresAssociationRegistration ? 'block' : 'none';
 }
 
 function isDirectorSessionValid(){

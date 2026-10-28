@@ -27,6 +27,7 @@
   .hero {isolation:isolate;background:linear-gradient(115deg,#103e30,#1d6049);padding:38px 34px;border-radius:24px;min-height:218px;box-shadow:none;margin-bottom:24px;}
   .hero::before {content:'GIMHAE TENNIS ASSOCIATION';display:block;font-size:.65rem;letter-spacing:.19em;color:var(--accent);font-weight:700;margin-bottom:16px;position:relative;z-index:1;}
   html[data-organization="jangyu"] .hero::before {content:'JANGYU TENNIS ASSOCIATION';}
+  html[data-organization="jangyu"] #homeRegViewerCard {display:none !important;}
   .hero::after {content:'';width:240px;height:320px;right:65px;bottom:-125px;border:2px solid rgba(213,237,129,.25);border-radius:120px;transform:rotate(35deg);opacity:1;pointer-events:none;z-index:-1;box-shadow:0 0 0 32px rgba(213,237,129,.05),0 0 0 64px rgba(213,237,129,.035);}
   .hero h2 {font-family:inherit;font-size:clamp(1.5rem,3vw,2.1rem);font-weight:900;letter-spacing:-.05em;line-height:1.35;}
   .hero p {font-size:.95rem;opacity:1;color:#e0ece4;}
