@@ -8901,7 +8901,7 @@ function updateRegisterSlots(){
   const requiredRosterCount=Number(getRegDoublesCount())*2;
   if(neutralFiveRoster){
     if(modeLabel) modeLabel.textContent=`— 단체전 | ${getRegDoublesCount()}복식 · 최대 ${requiredRosterCount+2}명 등록`;
-    if(pl) pl.innerHTML=`선수 명단 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">${requiredRosterCount}명 필수 · 최대 ${requiredRosterCount+2}명 등록 가능</span>`;
+    if(pl) pl.innerHTML=`선수 명단 <span style="font-size:.72rem;font-weight:600;color:var(--text3)">최대 ${requiredRosterCount+2}명 등록 · 임시 접수 가능</span>`;
     [11,12].forEach(i=>{
       const input=ge('p'+i);
       if(!input) return;
@@ -10344,7 +10344,7 @@ function openETeam(key,idx){
     ${terineeSelHtml}
     <div class="form-group"><label class="form-label">클럽</label><select class="form-select" id="etTC">${G.clubs.map(c=>`<option ${c===team.club?'selected':''}>${c}</option>`).join('')}</select></div>
     <div class="form-group">
-      <label class="form-label" id="editRosterLabel">${isUnifiedTeamRoster(div,dbl)?`선수 ${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능`:isW?'주전 6명 + 후보 최대 2명':isT?`선수 ${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능`:'선수 명단'}</label>
+      <label class="form-label" id="editRosterLabel">${isUnifiedTeamRoster(div,dbl)?`최대 ${mainCount+2}명 등록 · 임시 접수 가능`:isW?'주전 6명 + 후보 최대 2명':isT?`최대 ${mainCount+2}명 등록 · 임시 접수 가능`:'선수 명단'}</label>
       <div id="etSlots">${buildRosterInputsHTML('ep',mainCount+2,p,div,dbl,mainCount)}</div>
       <div style="font-size:.72rem;color:var(--text3);margin-top:6px">페어는 경기 결과 입력 때 선택합니다.</div>
     </div>`;
@@ -10367,7 +10367,7 @@ function etUpdateSlots(newDbl,origIdx){
   const isEW=(eDiv==='여성부'), isET=(eDiv==='테린이'||eDiv==='terinee');
   ge('etSlots').innerHTML=buildRosterInputsHTML('ep',dbl*2+2,curVals.length?curVals:p,eDiv,dbl,dbl*2);
   const lbl=ge('editRosterLabel');
-  if(lbl) lbl.textContent=isUnifiedTeamRoster(eDiv,dbl)?`선수 ${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능`:isEW?'주전 6명 + 후보 최대 2명':isET?`선수 ${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능`:'선수 명단';
+  if(lbl) lbl.textContent=isUnifiedTeamRoster(eDiv,dbl)?`최대 ${mainCount+2}명 등록 · 임시 접수 가능`:isEW?'주전 6명 + 후보 최대 2명':isET?`최대 ${mainCount+2}명 등록 · 임시 접수 가능`:'선수 명단';
   enhanceTeamRosterEditor({mode:'edit',editable:true});
 }
 async function saveETeam(){

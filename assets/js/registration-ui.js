@@ -177,7 +177,7 @@ export function getRegistrationFormState({
 
   if(!isIndividual && isUnifiedTeamRoster(div,dbl)){
     modeLabel=`— 단체전 | ${dbl}복식 · 최대 ${mainCount+2}명 등록`;
-    playerLabelHtml=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능</span>`;
+    playerLabelHtml=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">최대 ${mainCount+2}명 등록 · 임시 접수 가능</span>`;
   }
 
   const visibleSlots=Array.from({length:12},(_,idx)=>{
