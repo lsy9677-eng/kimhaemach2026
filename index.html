@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
 }
 </style>
 
-<link rel="stylesheet" href="assets/css/refresh.css?v=20261027">
+<link rel="stylesheet" href="assets/css/refresh.css?v=20261028">
 </head>
 <body>
 <header class="app-header">
@@ -168,6 +168,13 @@ document.addEventListener('DOMContentLoaded', ()=>{setTimeout(applySimpleOrderMo
       <div id="myClubHomeBody" style="font-size:.82rem;color:#166534;line-height:1.8"></div>
     </div>
   </div>
+
+  <section class="home-shortcuts" aria-label="주요 기능 바로가기">
+    <button type="button" onclick="showPage('tournament')"><span class="shortcut-symbol" aria-hidden="true">01</span><span><strong>대회 안내</strong><small>일정과 대회 정보</small></span><span aria-hidden="true">↗</span></button>
+    <button type="button" onclick="showPage('register')"><span class="shortcut-symbol" aria-hidden="true">02</span><span><strong>팀 등록</strong><small>참가 신청과 팀 관리</small></span><span aria-hidden="true">↗</span></button>
+    <button type="button" onclick="showPage('bracket')"><span class="shortcut-symbol" aria-hidden="true">03</span><span><strong>대진표</strong><small>경기 편성과 진행 확인</small></span><span aria-hidden="true">↗</span></button>
+    <button type="button" onclick="showPage('ranking')"><span class="shortcut-symbol" aria-hidden="true">04</span><span><strong>시합 결과</strong><small>부서별 경기 결과</small></span><span aria-hidden="true">↗</span></button>
+  </section>
 
   <div class="card fade-in home-status-card" id="homeAssocCard">
     <div class="card-title">📊 김해시테니스협회 현황</div>

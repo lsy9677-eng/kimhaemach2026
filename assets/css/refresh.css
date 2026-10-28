@@ -26,6 +26,7 @@
   .main-content {max-width:1160px;padding:30px 28px 80px;}
   .hero {isolation:isolate;background:linear-gradient(115deg,#103e30,#1d6049);padding:38px 34px;border-radius:24px;min-height:218px;box-shadow:none;margin-bottom:24px;}
   .hero::before {content:'GIMHAE TENNIS ASSOCIATION';display:block;font-size:.65rem;letter-spacing:.19em;color:var(--accent);font-weight:700;margin-bottom:16px;position:relative;z-index:1;}
+  html[data-organization="jangyu"] .hero::before {content:'JANGYU TENNIS ASSOCIATION';}
   .hero::after {content:'';width:240px;height:320px;right:65px;bottom:-125px;border:2px solid rgba(213,237,129,.25);border-radius:120px;transform:rotate(35deg);opacity:1;pointer-events:none;z-index:-1;box-shadow:0 0 0 32px rgba(213,237,129,.05),0 0 0 64px rgba(213,237,129,.035);}
   .hero h2 {font-family:inherit;font-size:clamp(1.5rem,3vw,2.1rem);font-weight:900;letter-spacing:-.05em;line-height:1.35;}
   .hero p {font-size:.95rem;opacity:1;color:#e0ece4;}
@@ -35,6 +36,23 @@
   .card-title {font-size:1rem;letter-spacing:-.025em;padding-bottom:14px;margin-bottom:18px;}
   .sec-title {font-family:inherit;font-weight:800;letter-spacing:-.035em;}
   .home-status-card {padding:24px;}
+  .home-shortcuts {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px;}
+  .home-shortcuts button {display:flex;align-items:center;gap:12px;text-align:left;padding:20px 16px;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);font:inherit;cursor:pointer;min-width:0;transition:border-color .18s,background .18s;}
+  .home-shortcuts button:hover {background:var(--panel2);border-color:#93af9e;}
+  .home-shortcuts strong {display:block;font-size:.94rem;letter-spacing:-.035em;word-break:keep-all;}
+  .home-shortcuts small {display:block;font-size:.72rem;color:var(--text2);margin-top:4px;}
+  .home-shortcuts button > span:last-child {margin-left:auto;color:var(--text2);}
+  .shortcut-symbol {display:grid;place-items:center;flex-shrink:0;width:34px;height:40px;border-radius:10px;background:#edf3e8;color:var(--primary);font-size:.72rem;font-weight:700;}
+  #page-home > .g2 {grid-template-columns:minmax(0,1fr);}
+  .table-wrap {border-radius:12px;border:1px solid var(--border);}
+  th {background:var(--panel2);color:var(--text2);}
+  #kimhaeMobileBottomNav {background:#fff !important;border:1px solid var(--border) !important;box-shadow:0 8px 28px #183b2d18 !important;}
+  #kimhaeMobileBottomNav button {color:var(--text2) !important;}
+  #kimhaeMobileBottomNav button.active {background:#eaf2df !important;color:var(--primary-dark) !important;}
+  #kimhaeMobileBottomNav button[data-kmb-more="1"] {background:var(--panel2) !important;}
+  @media(min-width:681px) and (max-width:1000px) {
+    .home-shortcuts {grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
   .home-stats {gap:12px;}
   .home-stats .stat-card {background:var(--panel2);box-shadow:none;border:1px solid #e7ede6;padding:20px;min-height:108px;border-radius:14px;gap:10px;}
   .home-stats .stat-val {font-family:inherit;font-size:2rem;font-weight:900;letter-spacing:-.04em;}
@@ -66,6 +84,13 @@
     .card,.home-status-card {padding:18px;border-radius:18px;}
     .home-stats .stat-card {min-height:100px;padding:16px;}
     .home-stats .stat-val {font-size:1.75rem;}
+    .home-shortcuts {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:20px;}
+    .home-shortcuts button {padding:14px 12px;gap:8px;border-radius:14px;min-height:90px;}
+    .home-shortcuts button > span:nth-child(2) {flex:1;min-width:0;}
+    .home-shortcuts button > span:last-child {display:none;}
+    .home-shortcuts strong {font-size:.88rem;}
+    .home-shortcuts small {font-size:.67rem;}
+    .shortcut-symbol {width:26px;height:34px;font-size:.65rem;}
   }
   @media(prefers-reduced-motion:reduce) {
     *,*::before,*::after {animation:none !important;transition:none !important;scroll-behavior:auto !important;}

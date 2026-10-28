@@ -764,7 +764,7 @@ import{loadRegistryDocument,saveRegistryDocument,normalizeRegistryRows,parseOffi
 import{buildPlayerRecordCard,buildRegistryManagerTable,buildRegistryEmptyState,buildRegistryRegionSections}from'./player-registry-ui.js';
 import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassword,getClubLoginPassword,getClubLoginHint,shouldPromptClubPasswordChange,isDirectorSessionVersionValid,getClubContact,hasClubContact,derivePasswordFromPhone,setClubPassword,resetClubPasswordToTemporary,saveClubContact,saveClubDirectorContact,registerFirstLoginContact,getClubDefaultRegion,setClubDefaultRegion,applyClubDefaultRegion,applyClubDefaultRegions,normalizeRegionLabel,inferClubRegionFromMembers,buildClubRegionOptions}from'./clubs.js';
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
-import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml}from'./registration-ui.js';
+import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml,isUnifiedTeamRoster}from'./registration-ui.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
@@ -8808,9 +8808,6 @@ function getRegDoublesCount(){
 }
 
 // 등록 폼 슬롯 업데이트 (부서/복식 수 변경 시)
-function isUnifiedTeamRoster(div,dbl){
-  return Number(dbl)===5 || ['테린이','테린이부','terinee'].includes(String(div||''));
-}
 // PHASE210: short rosters use fixed reserve input IDs 11/12.
 function teamRosterInputNumbers(mainCount){
   return [...Array.from({length:Math.min(10,Number(mainCount))},(_,i)=>i+1),11,12];

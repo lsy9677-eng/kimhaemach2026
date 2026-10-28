@@ -1,5 +1,10 @@
 'use strict';
 
+// Registration, editing and exports share the same roster policy in both organizations.
+export function isUnifiedTeamRoster(div,dbl){
+  return [3,5].includes(Number(dbl)) || ['테린이','테린이부','terinee'].includes(String(div||''));
+}
+
 /**
  * 김해시테니스협회 등록 현황 UI 렌더러 - Phase 18
  * 데이터 저장/삭제/수정은 하지 않고 등록 팀 카드 HTML 생성만 담당한다.
@@ -170,6 +175,11 @@ export function getRegistrationFormState({
     playerLabelHtml='선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">주전 10명 + 후보 최대 2명</span>';
   }
 
+  if(!isIndividual && isUnifiedTeamRoster(div,dbl)){
+    modeLabel=`— 단체전 | ${dbl}복식 · 최대 ${mainCount+2}명 등록`;
+    playerLabelHtml=`선수 명단 <span style="color:var(--text3);font-size:.72rem;font-weight:400">${mainCount}명 필수 · 최대 ${mainCount+2}명 등록 가능</span>`;
+  }
+
   const visibleSlots=Array.from({length:12},(_,idx)=>{
     const i=idx+1;
     return isIndividual ? i<=2 : (i<=mainCount || i===11 || i===12);
@@ -185,10 +195,10 @@ export function getRegistrationFormState({
     showSlot4:(!isIndividual && dbl>=4),
     showSlot5:(!isIndividual && dbl>=5),
     pairLabels,
-    subNum1:isIndividual?'':'후1',
-    subNum2:isIndividual?'':'후2',
-    subPlaceholder1:'후보 1',
-    subPlaceholder2:'후보 2',
+    subNum1:isIndividual?'':isUnifiedTeamRoster(div,dbl)?String(mainCount+1):'후1',
+    subNum2:isIndividual?'':isUnifiedTeamRoster(div,dbl)?String(mainCount+2):'후2',
+    subPlaceholder1:isUnifiedTeamRoster(div,dbl)?`선수 ${mainCount+1} (선택)`:'후보 1',
+    subPlaceholder2:isUnifiedTeamRoster(div,dbl)?`선수 ${mainCount+2} (선택)`:'후보 2',
     modeLabel,
     playerLabelHtml,
     clubLabelHtml:isIndividual?'클럽명/소속<span class="req">*</span>':'클럽<span class="req">*</span>',
