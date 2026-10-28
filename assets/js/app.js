@@ -20715,13 +20715,33 @@ function resolvePlayerDisplayClubInfo(name,p,preferClub=''){
 // 일부 예전 선수는 players.history에 이력이 없지만 registrations에는 팀 명단이 남아 있다.
 const PLAYER_REG_HISTORY_CACHE = new Map();
 const PLAYER_REG_HISTORY_VERIFIED=new Set();
+const PLAYER_HISTORY_ARCHIVE_CACHE=new Map();
+function playerHistoryOfficialArchive(t){
+  const key=String(t.id),cached=PLAYER_HISTORY_ARCHIVE_CACHE.get(key);
+  if(cached && cached.snapshot===t.pastArchive && cached.revision===t.pastArchiveRevision && cached.status===t.status && cached.date===t.date)return cached.bundle;
+  const bundle=getPastArchive(t.id);
+  PLAYER_HISTORY_ARCHIVE_CACHE.set(key,{snapshot:t.pastArchive,revision:t.pastArchiveRevision,status:t.status,date:t.date,bundle});
+  return bundle;
+}
 function isCurrentSavedParticipation(name,h){
   const nk=normName(cleanName(name));
-  if(!PLAYER_REG_HISTORY_VERIFIED.has(nk)||!h.tid)return true;
-  const t=(G.tournaments||[]).find(t=>String(t.id)===String(h.tid));
-  // Completed competition results remain historical records.
-  if(!t||isPastArchiveTournament(t)||Number(h.rank||0)>0)return true;
-  return (PLAYER_REG_HISTORY_CACHE.get(nk)||[]).some(r=>String(r.tid)===String(h.tid)&&outputNormalizeDiv(r.div)===outputNormalizeDiv(h.div||h.division||'')&&isSameRegistrationClub(baseClub(r.club),baseClub(h.club||h.baseClub||'')));
+  if(!h.tid)return h.source!=='registration';
+  const t=_pastRosterTournamentMeta(h.tid);
+  // 삭제된 대회의 접수 잔재는 실제 대회 참가로 집계하지 않는다. 원본은 삭제하지 않는다.
+  if(!t)return false;
+  const sameParticipation=r=>{
+    const club=normalizeClub(baseClub(h.club||h.baseClub||'')||h.club||h.baseClub||'');
+    const sourceClub=normalizeClub(baseClub(r.club||r.baseClub||'')||r.club||r.baseClub||'');
+    return outputNormalizeDiv(r.division||r.div||'')===outputNormalizeDiv(h.div||h.division||'') && (!club||!sourceClub||isSameRegistrationClub(sourceClub,club));
+  };
+  // 확정본 명단이 최우선이다. 오래된 players.history의 다른 부서는 과거 성적이 있어도 제외한다.
+  const archive=playerHistoryOfficialArchive(t);
+  if(archive){
+    return (archive.regs||[]).some(r=>sameParticipation(r) && [...(r.players||[]),...(r.individualPlayers||[]).map(p=>p.name)].some(n=>normName(cleanName(n))===nk));
+  }
+  // 서버에서 명단 확인이 완료된 경우 지난대회도 실제 접수와 대조한다.
+  if(!PLAYER_REG_HISTORY_VERIFIED.has(nk))return true;
+  return (PLAYER_REG_HISTORY_CACHE.get(nk)||[]).some(r=>String(r.tid)===String(h.tid)&&sameParticipation(r));
 }
 async function ensurePlayerRegistrationHistory(name){
   const clean=cleanName(String(name||'').trim());
@@ -20735,6 +20755,7 @@ async function ensurePlayerRegistrationHistory(name){
       const x=d.data()||{};
       const tid=String(x.tournamentId||x.tid||'');
       const meta=_pastRosterTournamentMeta(tid);
+      if(!meta)return; // 삭제된 대회를 참조하는 접수는 과거 대회 fallback으로 되살리지 않는다.
       const club=String(x.club||x.teamClub||'').trim();
       const div=String(x.division||x.div||'').trim();
       const rawRank=Number(x.rank||x.teamRank||0)||null;
