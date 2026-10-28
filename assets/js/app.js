@@ -9172,7 +9172,11 @@ function _dedupePastRosterEntries(entries=[]){
   return out.sort((a,b)=>{
     const d=_pastRosterDateValue(b.date)-_pastRosterDateValue(a.date);
     if(d) return d;
-    return String(b.tid||'').localeCompare(String(a.tid||''));
+    const tournament=String(b.tid||'').localeCompare(String(a.tid||''));
+    if(tournament)return tournament;
+    const division=_pastRosterDivisionOrder(a.div)-_pastRosterDivisionOrder(b.div);
+    if(division)return division;
+    return String(a.teamLabel||a.club||'').localeCompare(String(b.teamLabel||b.club||''),'ko');
   });
 }
 let PAST_ROSTER_CONTEXT={tid:'',div:''};
@@ -9189,6 +9193,9 @@ function _pastRosterDivisionKey(v=''){
     '시니어':'senior','시니어부':'senior','senior':'senior'
   };
   return map[compact]||compact.toLowerCase();
+}
+function _pastRosterDivisionOrder(div){
+  return ({gold:0,silver:1,bronze:2,terinee:3,women:4,office:5,senior:6})[_pastRosterDivisionKey(div)]??99;
 }
 function _pastRosterResolveDivision(tid='', preferredDiv=''){
   const t=(G.tournaments||[]).find(x=>String(x?.id||'')===String(tid||''))||null;
@@ -9379,8 +9386,8 @@ function _renderPastClubRosterModal(club,entries=[]){
     document.body.appendChild(modal);
   }
   const {div:currentDiv}= _pastRosterCurrentContext();
-  const rows=_dedupePastRosterEntries(entries).slice(0,30);
-  const body=rows.length ? rows.map((x,i)=>{
+  const rows=_dedupePastRosterEntries(entries);
+  const cards=rows.map((x,i)=>{
     const players=Array.isArray(x.players)?x.players:[];
     const mainCount=Number(x.mainPlayerCount||0)>0?Math.min(players.length,Number(x.mainPlayerCount)):players.length;
     const neutralFiveRoster=isUnifiedTeamRoster(x.div,Number(x.mainPlayerCount||0)/2);
@@ -9396,8 +9403,8 @@ function _renderPastClubRosterModal(club,entries=[]){
     const divDiff=currentDiv && x.div && String(currentDiv)!==String(x.div);
     return `<div style="padding:12px;border:1px solid #dbe4f0;border-radius:14px;background:#fff;box-shadow:0 3px 10px rgba(15,23,42,.05)">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
-        <div style="min-width:0"><div style="font-size:.84rem;font-weight:900;color:#0f172a;line-height:1.35">${esc(x.tournamentName||'과거 대회')}</div><div style="font-size:.7rem;color:#64748b;margin-top:2px">${x.date?`📅 ${esc(x.date)}`:''}${divDiff?' · <span style="color:#b45309;font-weight:800">현재 부서와 다름</span>':''}</div></div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><span class="dpill ${dc(x.div||'')}" style="font-size:.7rem">${esc(dl(x.div||''))}</span><span class="badge bg-blue" style="font-size:.68rem">${esc(x.teamLabel||x.club||'')}</span></div>
+        <span class="badge bg-blue" style="font-size:.75rem">${esc(x.teamLabel||x.club||'')}</span>
+        ${divDiff?'<span style="font-size:.7rem;color:#b45309;font-weight:800">현재 부서와 다름</span>':''}
       </div>${playerGrid}${subsHtml}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center">
         <button type="button" class="btn btn-outline" style="padding:6px 9px;font-size:.7rem" onclick="_pastRosterSelectAll(${i},true)">☑ 전체선택</button>
@@ -9406,11 +9413,31 @@ function _renderPastClubRosterModal(club,entries=[]){
         <button type="button" class="btn" style="padding:6px 10px;font-size:.7rem;background:#166534;color:#fff" onclick="_pastRosterApplyAll(${i},'${esc(club)}','${esc(x.div||'')}')">📋 전체 명단 넣기</button>
       </div>
     </div>`;
-  }).join('') : `<div style="padding:28px 12px;text-align:center;color:#64748b;font-size:.82rem">확인 가능한 지난대회 명단이 없습니다.</div>`;
+  });
+  const groups=new Map();
+  rows.forEach((row,i)=>{
+    const tid=String(row.tid||row.tournamentName||'');
+    if(!groups.has(tid))groups.set(tid,{row,divisions:new Map()});
+    const divisions=groups.get(tid).divisions,key=_pastRosterDivisionKey(row.div);
+    if(!divisions.has(key))divisions.set(key,{div:row.div,cards:[]});
+    divisions.get(key).cards.push(cards[i]);
+  });
+  const body=rows.length ? [...groups.values()].map(group=>`
+    <section data-past-tournament="${esc(group.row.tid||'')}" style="border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;background:#fff">
+      <header style="padding:13px 14px;background:#10213d;color:#fff">
+        <h4 style="margin:0;font-size:.9rem;font-weight:900;line-height:1.5">${esc(group.row.tournamentName||'과거 대회')}</h4>
+        ${group.row.date?`<div style="font-size:.72rem;margin-top:4px;color:#dbeafe">📅 ${esc(group.row.date)}</div>`:''}
+      </header>
+      <div style="padding:12px;display:grid;gap:18px">${[...group.divisions.entries()].sort(([a],[b])=>_pastRosterDivisionOrder(a)-_pastRosterDivisionOrder(b)).map(([key,division])=>`
+        <section data-past-division="${esc(key)}">
+          <h5 style="margin:0 0 9px;padding:0 0 8px;border-bottom:2px solid #e2e8f0"><span class="dpill ${dc(division.div||'')}" style="font-size:.8rem">${esc(dl(division.div||''))}</span></h5>
+          <div style="display:grid;gap:9px">${division.cards.join('')}</div>
+        </section>`).join('')}</div>
+    </section>`).join('') : `<div style="padding:28px 12px;text-align:center;color:#64748b;font-size:.82rem">확인 가능한 지난대회 명단이 없습니다.</div>`;
   modal.innerHTML=`<div class="modal-box" style="max-width:620px;width:min(94vw,620px);max-height:88vh;display:flex;flex-direction:column">
     <div class="modal-header" style="background:#10213d"><h3>📋 ${esc(club)} 지난대회 명단</h3><button class="modal-close" onclick="cm('mPastClubRoster')">✕</button></div>
     <div style="padding:10px 14px;background:#eef6ff;border-bottom:1px solid #cfe0f5;font-size:.76rem;color:#244a73;line-height:1.5"><b>선택해서 현재 명단에 추가</b>하거나 <b>전체 명단을 한 번에 넣기</b>가 가능합니다. 입력칸에 넣은 뒤 최종 <b>팀 등록</b>을 눌러 저장하세요.</div>
-    <div class="modal-body" style="padding:12px;overflow:auto;display:grid;gap:10px">${body}</div>
+    <div class="modal-body" style="padding:12px;overflow:auto;display:grid;grid-auto-rows:max-content;align-content:start;gap:16px;min-height:0">${body}</div>
     <div class="modal-footer"><button class="btn btn-gray" onclick="cm('mPastClubRoster')">닫기</button></div>
   </div>`;
   om('mPastClubRoster');
