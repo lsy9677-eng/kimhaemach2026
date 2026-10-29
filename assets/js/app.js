@@ -767,6 +767,7 @@ import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamR
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml,isUnifiedTeamRoster}from'./registration-ui.js';
 import{tournamentStatus,selectHomeTournament,renderHomeExperience,showRegistrationReceipt,installBracketNavigator}from'./experience-ui.js';
 import{projectSharedRegistry,projectSharedCertificates,resolveSharedAge65}from'./shared-age65.js';
+import{withGuideDeadline,uploadGuideWithProgress,guideAssetsForSave}from'./guide-upload.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
@@ -785,7 +786,7 @@ import{buildCourtStatusSummaryHtml,buildCourtWaitingBadgeHtml,buildCourtCardShel
 import{db,identityDb,storage}from'./firebase-runtime.js';
 import{imageDataUrlToBlob}from'./image-data.js';
 import{collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,onSnapshot,query,orderBy,limit,serverTimestamp,writeBatch,where,documentId,getDocFromServer,getDocsFromServer,runTransaction,increment,deleteField}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import{ref,uploadBytes,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import{ref,uploadBytes,uploadBytesResumable,getDownloadURL,deleteObject,listAll}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 const FIRESTORE_WRITE_TRACE = /[?&]debugWrites=1(?:&|$)/.test(location.search);
 if(FIRESTORE_WRITE_TRACE){
   const wrapTrace=(name, fn)=>async (...args)=>{
@@ -2478,6 +2479,10 @@ const HIST_GUIDES = {}; // 요강 이미지는 Firebase Storage에서 로드
 // ── 요강 업로드(생성/편집) 임시 저장 ─────────────────────────────────────
 let GUIDE_FILES_CREATE = []; // [{name,type,dataUrl}]
 let GUIDE_FILES_EDIT = [];   // [{name,type,dataUrl}]
+let GUIDE_EDIT_CONTEXT=null;
+let GUIDE_SAVE_BUSY=false;
+let GUIDE_CREATE_DRAFT_REF=null;
+const GUIDE_SELECTION_TASKS={create:Promise.resolve(),edit:Promise.resolve()};
 
 
 async function initFB(){
@@ -7304,6 +7309,11 @@ function getCourtBoardTeamName(team,key,idx){
 }
 
 async function createTournament(){
+  if(GUIDE_SAVE_BUSY){toast('요강을 저장 중입니다. 잠시 기다려 주세요.','info');return;}
+  GUIDE_SAVE_BUSY=true;const restore=setGuideFormBusy('create');
+  try{return await createTournamentCore();}finally{GUIDE_SAVE_BUSY=false;restore();sl(false);}
+}
+async function createTournamentCore(){
   const nm=ge('tName').value.trim(),dt=ge('tDate').value;
   if(!nm||!dt){toast('대회명과 일자 필수','error');return;}
   const type=getSelectedTournamentType();
@@ -7322,7 +7332,8 @@ async function createTournament(){
       ds[name]={format:fmt,grpSize:gs,advance:adv,doublesCount:type==='individual_pair'?1:rub,maxTeams:parseInt(maxTeams||0)||0,thirdPlaceMode:'shared',allowedCourts:Array.isArray(d.courts)?d.courts.map(String).filter(Boolean):[]};
     });
     const _tRegDl=ge('tRegDl')?.value;
-    const tRef=await addDoc(collection(db,'tournaments'),{
+    const tRef=GUIDE_CREATE_DRAFT_REF||(GUIDE_CREATE_DRAFT_REF=doc(collection(db,'tournaments')));
+    const tournamentFields={
       organizationRulesVersion:308,
       name:nm,date:dt,venue:ge('tVenue').value.trim(),deadline:ge('tDeadline').value,
       courtGroups:getDraftCourtGroups('create'),
@@ -7332,10 +7343,15 @@ async function createTournament(){
       notice:ge('tNotice').value.trim(),guideText:ge('tGuideText')?.value.trim()||'',guideUrl:ge('tGuideUrl')?.value.trim()||'',
       hasGuideAssets:(GUIDE_FILES_CREATE||[]).length>0||(GUIDE_FILES_CREATE_PENDING||[]).length>0,
       status:'open',createdAt:serverTimestamp()
-    });
+    };
     await flushGuideUploads(tRef.id, 'create');
-    const assets=GUIDE_FILES_CREATE||[];
-    if(assets.length>0){await setDoc(doc(db,'tourGuides',tRef.id),{assets,updatedAt:serverTimestamp()});}
+    const assets=guideAssetsForSave(GUIDE_FILES_CREATE||[]);
+    await runTransaction(db,async tx=>{
+      if((await tx.get(tRef)).exists())throw new Error('이 대회는 이미 저장되었습니다. 새로고침 후 확인해 주세요.');
+      tx.set(tRef,{...tournamentFields,hasGuideAssets:assets.length>0});
+      if(assets.length)tx.set(doc(db,'tourGuides',tRef.id),{assets,updatedAt:serverTimestamp()});
+    });
+    GUIDE_CREATE_DRAFT_REF=null;
     await fbLog('대회 생성: '+nm+' ['+(type==='individual_pair'?'개인전':'단체전')+']','🏆');
     ['tName','tDate','tVenue','tDeadline','tRegDl','tNotice','tGuideText','tGuideUrl','newDivMaxTeams','newCourtGroupName','newCourtGroupCount'].forEach(id=>{const el=ge(id);if(el)el.value='';});
     if(ge('tType')) ge('tType').value='team';
@@ -7424,6 +7440,7 @@ async function delT(tid){
 }
 
 function openET(tid){
+  if(GUIDE_SAVE_BUSY){toast('요강을 저장 중입니다. 완료 후 다시 열어 주세요.','info');return;}
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;CE_tid=tid;
   ge('mETT').textContent='✏️ 편집: '+t.name;
   // 기존 부서 목록으로 _etDivList 초기화
@@ -7493,93 +7510,50 @@ function openET(tid){
   renderCourtGroupManager('edit');
   window._etDivList = existDivs.map(d=>({name:d, rub:(t.divSettings?.[d]?.doublesCount)||5, maxTeams:parseInt(t.divSettings?.[d]?.maxTeams||0)||0, courts:getDivisionConfiguredCourts(tid,d), locked:(G.teams[tid+'_'+d]||[]).length>0}));
   _renderEtDivList();
-  // guideAssets를 별도 컬렉션(tourGuides)에서 불러오기
-  GUIDE_FILES_EDIT = [];
-  getDoc(doc(db,'tourGuides',tid)).then(snap=>{
-    if(snap.exists()) GUIDE_FILES_EDIT=(snap.data().assets||[]).slice();
-    else GUIDE_FILES_EDIT=(t.guideAssets||[]).slice();
-    renderGuidePreview('edit');
-  }).catch(()=>{ GUIDE_FILES_EDIT=(t.guideAssets||[]).slice(); renderGuidePreview('edit'); });
+  GUIDE_FILES_EDIT=[];GUIDE_FILES_EDIT_PENDING=[];GUIDE_SELECTION_TASKS.edit=Promise.resolve();
+  GUIDE_EDIT_CONTEXT={id:crypto.randomUUID(),tid,baseline:'missing',status:'loading',error:null};
+  beginGuideEditLoad(GUIDE_EDIT_CONTEXT,t);
   om('mET');
 }
 
 async function saveET(){
-  const t = G.tournaments.find(t => t.id === CE_tid);
-  if(!t) return;
-
-  const nm = ge('etN').value.trim();
-  if(!nm){ toast('대회명 필수','error'); return; }
-
-  const etDivs = (window._etDivList||[]);
-  const newD = etDivs.map(d=>d.name);
-  if(!newD.length){ toast('부서 1개 이상','error'); return; }
-
-  sl(true);
+  if(GUIDE_SAVE_BUSY){toast('이미 저장 중입니다. 잠시 기다려 주세요.','info');return;}
+  const ctx=GUIDE_EDIT_CONTEXT,tid=CE_tid,t=G.tournaments.find(x=>x.id===tid);
+  if(!AD||!t||!ctx||ctx.tid!==tid){toast('관리자 로그인과 선택한 대회를 확인해 주세요.','error');return;}
+  const nm=ge('etN').value.trim();if(!nm){toast('대회명 필수','error');return;}
+  const divs=(window._etDivList||[]).map(d=>({...d,courts:[...(d.courts||[])]}));
+  if(!divs.length){toast('부서 1개 이상','error');return;}
+  GUIDE_SAVE_BUSY=true;const restore=setGuideFormBusy('edit');sl(true);
   try{
-    const ds = { ...(t.divSettings || {}) };
-    etDivs.forEach(({name, rub, courts}) => {
-      if(!ds[name]) ds[name] = { format:'group_knockout', grpSize:4, advance:2, thirdPlaceMode:'shared' };
-      ds[name].doublesCount = rub;
-      ds[name].maxTeams = parseInt((window._etDivList||[]).find(x=>x.name===name)?.maxTeams||ds[name].maxTeams||0)||0;
-      ds[name].thirdPlaceMode = ds[name].thirdPlaceMode || 'shared';
-      ds[name].allowedCourts = Array.isArray(courts)?courts.map(String).filter(Boolean):[];
+    const ds=JSON.parse(JSON.stringify(t.divSettings||{}));
+    divs.forEach(({name,rub,maxTeams,courts})=>{
+      if(!ds[name])ds[name]={format:'group_knockout',grpSize:4,advance:2,thirdPlaceMode:'shared'};
+      Object.assign(ds[name],{doublesCount:rub,maxTeams:parseInt(maxTeams||ds[name].maxTeams||0)||0,thirdPlaceMode:ds[name].thirdPlaceMode||'shared',allowedCourts:courts.map(String).filter(Boolean)});
     });
-
-    await flushGuideUploads(CE_tid, 'edit');
-
-    const assets = GUIDE_FILES_EDIT || [];
-    const guideText = ge('etGuideText')?.value.trim() || '';
-    const guideUrl  = ge('etGuideUrl')?.value.trim() || '';
-    const notice    = ge('etNt').value.trim();
-    const venue     = ge('etVn').value.trim();
-    const hasGuideAssets = assets.length > 0;
-
-    const _etRegDlVal = ge('etRegDl')?.value||'';
-    const updFields = {
-      name: nm,
-      date: ge('etDt').value,
-      venue,
-      deadline: ge('etDl').value,
-      regDeadlineDt: _etRegDlVal ? new Date(_etRegDlVal).toISOString() : '',
-      status: ge('etSt').value,
-      divisions: newD,
-      divSettings: ds,
-      notice,
-      guideText,
-      guideUrl,
-      hasGuideAssets,
-      type: t.type || 'team',
-      courtGroups: getDraftCourtGroups('edit')
-    };
-
-    await updateDoc(doc(db, 'tournaments', CE_tid), {...updFields,pastArchive:null,pastArchiveRevision:increment(1)});
-    pastArchiveLocalInvalidation(CE_tid);
-
-    if(hasGuideAssets){
-      await setDoc(doc(db, 'tourGuides', CE_tid), {
-        assets,
-        updatedAt: serverTimestamp()
-      });
-    }
-
-    const _ti = G.tournaments.findIndex(x => x.id === CE_tid);
-    if(_ti >= 0){
-      Object.assign(G.tournaments[_ti], updFields);
-    }
-
-    await fbLog('대회 편집: ' + nm, '✏️');
-
-    sl(false);
-    cm('mET');
-    renderTL();
-    toast('저장 완료 ✅', 'success');
-
-  }catch(e){
-    sl(false);
-    toast('저장 실패: ' + e.message, 'error');
-    console.error(e);
-  }
+    const deadline=ge('etRegDl')?.value||'';
+    const fields={name:nm,date:ge('etDt').value,venue:ge('etVn').value.trim(),deadline:ge('etDl').value,regDeadlineDt:deadline?new Date(deadline).toISOString():'',status:ge('etSt').value,divisions:divs.map(d=>d.name),divSettings:ds,notice:ge('etNt').value.trim(),guideText:ge('etGuideText')?.value.trim()||'',guideUrl:ge('etGuideUrl')?.value.trim()||'',type:t.type||'team',courtGroups:getDraftCourtGroups('edit')};
+    setGuideSaveStatus('edit','기존 첨부 확인 중…');await ctx.loading;
+    if(ctx.error)throw new Error('기존 첨부를 불러오지 못했습니다. 첨부 다시 불러오기를 누른 뒤 저장해 주세요.');
+    await flushGuideUploads(tid,'edit');
+    const assets=guideAssetsForSave(GUIDE_FILES_EDIT);fields.hasGuideAssets=assets.length>0;
+    setGuideSaveStatus('edit','대회 정보와 요강 저장 중…');
+    const tRef=doc(db,'tournaments',tid),gRef=doc(db,'tourGuides',tid);
+    await runTransaction(db,async tx=>{
+      const current=await tx.get(tRef),guide=await tx.get(gRef);
+      if(!current.exists())throw new Error('삭제된 대회입니다. 새로고침해 주세요.');
+      if(guideDocumentSignature(guide)!==ctx.baseline)throw new Error('다른 화면에서 요강이 변경됐습니다. 편집 창을 다시 열어 확인해 주세요.');
+      tx.update(tRef,{...fields,pastArchive:null,pastArchiveRevision:increment(1)});
+      tx.set(gRef,{assets,updatedAt:serverTimestamp()},{merge:true});
+    });
+    ctx.baseline=JSON.stringify(assets);Object.assign(t,fields);
+    fbLog('대회 편집: '+nm,'✏️').catch(()=>console.warn('Saved guide audit log unavailable'));
+    setGuideSaveStatus('edit','저장 완료');
+    try{pastArchiveLocalInvalidation(tid);if(GUIDE_EDIT_CONTEXT===ctx)cm('mET');renderTL();}catch(e){console.warn('Saved guide display refresh failed');}
+    toast('대회와 요강 저장 완료 ✅','success');
+  }catch(e){setGuideSaveStatus('edit','저장하지 못했습니다. '+e.message,true);toast('저장 실패: '+e.message,'error');console.warn('Tournament guide save failed',e.code||e.message);}
+  finally{GUIDE_SAVE_BUSY=false;restore();sl(false);}
 }
+
 function openTD(tid){
   const t=G.tournaments.find(t=>t.id===tid);if(!t)return;
   ge('mTDT').textContent=t.name;
@@ -23660,6 +23634,40 @@ async function saveRegistryFilteredImageHQ(){
 // ═══════════════════════════════════════════════════════
 //  📌 대회요강(텍스트/링크/파일) 업로드 & 표시
 // ═══════════════════════════════════════════════════════
+function guideDocumentSignature(snapshot){
+  return snapshot.exists()?JSON.stringify(Array.isArray(snapshot.data().assets)?snapshot.data().assets:null):'missing';
+}
+function beginGuideEditLoad(ctx,t){
+  ctx.status='loading';ctx.error=null;
+  ctx.loading=(async()=>{
+    try{
+      const snapshot=await withGuideDeadline(getDocFromServer(doc(db,'tourGuides',ctx.tid)),20000,'첨부 정보를 확인하지 못했습니다. 연결 후 다시 불러와 주세요.');
+      const canonical=snapshot.exists()&&Array.isArray(snapshot.data().assets);
+      let assets=canonical?snapshot.data().assets:(t.guideAssets||[]);
+      if(!canonical&&!assets.length&&t.hasGuideAssets){
+        const listing=await withGuideDeadline(listAll(ref(storage,'guides/'+ctx.tid)),15000,'기존 첨부 목록을 불러오지 못했습니다.');
+        assets=await Promise.all(listing.items.map(async item=>({name:item.name,type:item.name.toLowerCase().endsWith('.pdf')?'application/pdf':item.name.toLowerCase().endsWith('.png')?'image/png':'image/jpeg',dataUrl:await withGuideDeadline(getDownloadURL(item),15000,'기존 첨부 주소를 확인하지 못했습니다.'),isStorage:true,storagePath:item.fullPath})));
+      }
+      ctx.baseline=guideDocumentSignature(snapshot);ctx.status='ready';
+      if(GUIDE_EDIT_CONTEXT===ctx)GUIDE_FILES_EDIT=assets.map(a=>({...a}));
+    }catch(error){ctx.error=error;ctx.status='error';}
+    finally{if(GUIDE_EDIT_CONTEXT===ctx)renderGuidePreview('edit');}
+  })();
+  renderGuidePreview('edit');return ctx.loading;
+}
+function setGuideFormBusy(mode){
+  const root=mode==='edit'?ge('mET'):ge('aoTCreate');
+  const controls=[...(root?.querySelectorAll('button,input,select,textarea')||[])].map(el=>({el,disabled:el.disabled,text:el.tagName==='BUTTON'?el.textContent:null}));
+  controls.forEach(({el})=>el.disabled=true);
+  return ()=>controls.forEach(({el,disabled,text})=>{el.disabled=disabled;if(text!==null)el.textContent=text;});
+}
+function setGuideSaveStatus(mode,message,error=false){
+  const preview=ge(mode==='edit'?'etGuidePreview':'tGuidePreview');if(!preview)return;
+  let status=ge('guideSaveStatus_'+mode);
+  if(!status){status=document.createElement('div');status.id='guideSaveStatus_'+mode;status.setAttribute('role','status');status.style.cssText='font-size:.8rem;line-height:1.6;padding:10px;margin-top:10px;border-radius:10px;white-space:pre-wrap';preview.after(status);}
+  status.textContent=message;status.style.color=error?'#9f2533':'#214d3d';status.style.background=error?'#fff0f2':'#eef5e9';
+  if(GUIDE_SAVE_BUSY){const root=mode==='edit'?ge('mET'):ge('aoTCreate');root?.querySelectorAll(mode==='edit'?'button[onclick*="saveET"]':'button[onclick*="createTournament"]').forEach(button=>{button.textContent=error?'저장하지 못함':message;});}
+}
 function _pickGuideStore(mode){ return mode==='edit' ? GUIDE_FILES_EDIT : GUIDE_FILES_CREATE; }
 function _setGuideStore(mode, arr){ if(mode==='edit') GUIDE_FILES_EDIT = arr; else GUIDE_FILES_CREATE = arr; }
 
@@ -23667,14 +23675,19 @@ function renderGuidePreview(mode){
   const arr = _pickGuideStore(mode);
   const box = ge(mode==='edit' ? 'etGuidePreview' : 'tGuidePreview');
   if(!box) return;
+  if(mode==='edit'&&GUIDE_EDIT_CONTEXT?.status==='loading'){box.textContent='기존 첨부를 확인하고 있습니다…';return;}
+  if(mode==='edit'&&GUIDE_EDIT_CONTEXT?.error){
+    box.textContent='기존 첨부를 불러오지 못했습니다. 입력 내용은 유지됩니다. ';
+    const retry=document.createElement('button');retry.type='button';retry.className='btn btn-outline';retry.textContent='첨부 다시 불러오기';retry.onclick=()=>beginGuideEditLoad(GUIDE_EDIT_CONTEXT,G.tournaments.find(t=>t.id===GUIDE_EDIT_CONTEXT.tid)||{});box.append(retry);return;
+  }
   if(!arr.length){ box.innerHTML=''; return; }
   box.innerHTML = `<div style="font-size:.78rem;font-weight:700;color:var(--primary-dark);margin:8px 0 6px">첨부 요강 (${arr.length})</div>` +
     `<div style="display:flex;flex-wrap:wrap;gap:8px">`+
     arr.map((a,i)=>`
       <div style="border:1px solid var(--border);border-radius:10px;padding:8px;background:white;min-width:120px">
-        <div style="font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${a.name}</div>
-        <div style="font-size:.65rem;color:var(--text3)">${a.type}</div>
-        ${a.type.startsWith('image/')?`<img src="${a.dataUrl}" style="width:160px;max-width:100%;border-radius:8px;margin-top:6px;border:1px solid var(--border)">`:''}
+        <div style="font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${esc(a.name||'첨부')}</div>
+        <div style="font-size:.65rem;color:var(--text3)">${esc(a.type||'')}</div>
+        ${(a.type||'').startsWith('image/')?`<img src="${esc(a.dataUrl||'')}" style="width:160px;max-width:100%;border-radius:8px;margin-top:6px;border:1px solid var(--border)">`:''}
         <div style="margin-top:6px;display:flex;gap:6px;justify-content:flex-end">
           <button class="btn btn-danger" style="padding:3px 8px;font-size:.7rem" onclick="removeGuideFile('${mode}',${i})">삭제</button>
         </div>
@@ -23684,7 +23697,10 @@ function renderGuidePreview(mode){
 }
 
 function removeGuideFile(mode, idx){
+  if(GUIDE_SAVE_BUSY)return;
   const arr = _pickGuideStore(mode);
+  const id=arr[idx]?._uploadId,pending=mode==='edit'?GUIDE_FILES_EDIT_PENDING:GUIDE_FILES_CREATE_PENDING;
+  if(id){const index=pending.findIndex(entry=>entry.id===id);if(index>=0)pending.splice(index,1);}
   arr.splice(idx,1);
   _setGuideStore(mode, arr);
   renderGuidePreview(mode);
@@ -23728,46 +23744,39 @@ async function compressImageDataUrl(dataUrl, maxW=1400, quality=0.82){
 let GUIDE_FILES_CREATE_PENDING = [];
 let GUIDE_FILES_EDIT_PENDING   = [];
 
-async function onGuideFilesSelected(input, mode){
-  const files=[...(input.files||[])];
-  if(!files.length) return;
-  const pending = mode==='edit' ? GUIDE_FILES_EDIT_PENDING : GUIDE_FILES_CREATE_PENDING;
-
-  for(const f of files){
-    if(f.size > 10*1024*1024){ toast(`파일이 너무 큽니다 (최대 10MB): ${f.name}`, 'error'); continue; }
-    pending.push(f);
-    const arr = _pickGuideStore(mode);
-    // 미리보기용 dataUrl 생성
-    let dataUrl = await readFileAsDataUrl(f);
-    if(f.type.startsWith('image/') && dataUrl.length>350_000){
-      dataUrl = await compressImageDataUrl(dataUrl, 1400, 0.82);
+function onGuideFilesSelected(input,mode){
+  const files=[...(input.files||[])],ctx=mode==='edit'?GUIDE_EDIT_CONTEXT:null;
+  if(!files.length)return Promise.resolve();
+  const task=GUIDE_SELECTION_TASKS[mode].catch(()=>{}).then(async()=>{
+    if(ctx){await ctx.loading;if(ctx.error)throw new Error('기존 첨부를 먼저 다시 불러와 주세요.');if(GUIDE_EDIT_CONTEXT!==ctx)return;}
+    const pending=mode==='edit'?GUIDE_FILES_EDIT_PENDING:GUIDE_FILES_CREATE_PENDING,arr=_pickGuideStore(mode);
+    for(const file of files){
+      if(file.size>10*1024*1024)throw new Error('파일은 10MB 이하로 선택해 주세요: '+file.name);
+      let dataUrl=await withGuideDeadline(readFileAsDataUrl(file),15000,'파일을 읽지 못했습니다. 다시 선택해 주세요.');
+      if(file.type.startsWith('image/')&&dataUrl.length>350000)dataUrl=await withGuideDeadline(compressImageDataUrl(dataUrl,1400,.82),15000,'이미지 미리보기를 만들지 못했습니다. 다른 파일로 선택해 주세요.');
+      if(ctx&&GUIDE_EDIT_CONTEXT!==ctx)return;
+      const id=crypto.randomUUID();pending.push({id,file});arr.push({name:file.name,type:file.type||'application/octet-stream',dataUrl,_pending:true,_uploadId:id});
     }
-    arr.push({name:f.name, type:f.type||'application/octet-stream', dataUrl, _pending:true});
-    _setGuideStore(mode, arr);
-  }
-  renderGuidePreview(mode);
-  input.value='';
+    _setGuideStore(mode,arr);renderGuidePreview(mode);
+  });
+  GUIDE_SELECTION_TASKS[mode]=task;
+  return task.catch(e=>{setGuideSaveStatus(mode,e.message,true);toast(e.message,'error');}).finally(()=>{input.value='';});
 }
-
-// 대회 저장 시 pending 파일들을 Storage에 업로드하고 URL 반환
-async function flushGuideUploads(tid, mode){
-  const pending = mode==='edit' ? GUIDE_FILES_EDIT_PENDING : GUIDE_FILES_CREATE_PENDING;
-  if(!pending.length) return;
-  const arr = _pickGuideStore(mode);
-  for(const file of pending){
-    try{
-      const fileRef = ref(storage, `guides/${tid}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      // arr 안의 pending 항목을 Storage URL로 교체
-      const idx = arr.findIndex(a=>a._pending && a.name===file.name);
-      if(idx>=0){ arr[idx] = {name:file.name, type:file.type, dataUrl:url, isStorage:true}; }
-    }catch(e){ toast(`업로드 실패: ${file.name}`,'error'); }
+async function flushGuideUploads(tid,mode){
+  await GUIDE_SELECTION_TASKS[mode];
+  const pending=mode==='edit'?GUIDE_FILES_EDIT_PENDING:GUIDE_FILES_CREATE_PENDING,arr=_pickGuideStore(mode),count=pending.length;
+  let done=0;
+  for(const entry of [...pending]){
+    const index=arr.findIndex(a=>a._uploadId===entry.id);
+    if(index<0){pending.splice(pending.indexOf(entry),1);continue;}
+    const file=entry.file;
+    entry.path ||= 'guides/'+tid+'/'+entry.id+'_'+file.name.replace(/[\\/]/g,'_');
+    const fileRef=ref(storage,entry.path);
+    const url=await uploadGuideWithProgress({start:()=>uploadBytesResumable(fileRef,file,{contentType:file.type||'application/octet-stream'}),getURL:()=>getDownloadURL(fileRef),onProgress:percent=>setGuideSaveStatus(mode,'첨부 업로드 '+(done+1)+'/'+count+' · '+percent+'%')});
+    arr[index]={name:file.name,type:file.type||'application/octet-stream',dataUrl:url,isStorage:true,storagePath:entry.path};
+    pending.splice(pending.indexOf(entry),1);done++;renderGuidePreview(mode);
   }
-  // pending 비우기
-  if(mode==='edit') GUIDE_FILES_EDIT_PENDING.length=0;
-  else GUIDE_FILES_CREATE_PENDING.length=0;
-  _setGuideStore(mode, arr);
+  _setGuideStore(mode,arr);
 }
 
 // ── 요강 보기 모달 ─────────────────────────────────────
@@ -23832,6 +23841,7 @@ function openGuide(tid){
   // tourGuides 컬렉션 먼저 조회
   getDoc(doc(db,'tourGuides',tid)).then(snap=>{
     const assets = snap.exists() ? (snap.data().assets||[]) : (liveT?.guideAssets||[]);
+    if(snap.exists()&&Array.isArray(snap.data().assets)&&!assets.length&&!text&&!url){ge('mGuideB').textContent='등록된 요강이 없습니다';return;}
     if(!text && !url && (!assets||!assets.length)){
       // Storage 폴더 확인 (guides/{tid}/)
       return loadGuideFromStorage(tid).then(storageAssets=>{
