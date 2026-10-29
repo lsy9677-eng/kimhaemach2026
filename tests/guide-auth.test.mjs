@@ -25,3 +25,7 @@ test('wrong Google account is signed out rather than silently granted upload acc
 test('Kimhae and isolated demo uploads retain their existing flows',async()=>{
  for(const config of [{org:'kimhae'},{emulator:true}]){const {ctx,state}=fixture(config);await ctx.requireGuideUploadAdministrator();await ctx.authenticateGuideUpload();assert.equal(state.popup,0);}
 });
+test('Kimhae popup images require upload authentication without changing legacy guide behavior',async()=>{
+ const {ctx}=fixture({org:'kimhae'});await ctx.requireGuideUploadAdministrator();
+ await assert.rejects(ctx.requireGuideUploadAdministrator('notice'),/관리자 인증/);
+});

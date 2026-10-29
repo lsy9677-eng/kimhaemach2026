@@ -2,10 +2,10 @@ import {app} from './firebase-runtime.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signOut} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 const uploadEmails=new Set(['lsy9677@gmail.com','canyone2@korea.com']);
-export function usesGuideAuthentication(){return !window.MATCH_RUNTIME?.emulator&&window.MATCH_ORGANIZATION?.id==='jangyu';}
+export function usesGuideAuthentication(scope='guide'){return !window.MATCH_RUNTIME?.emulator&&(window.MATCH_ORGANIZATION?.id==='jangyu'||scope==='notice');}
 function isUploadAdministrator(user){return !!user?.emailVerified&&uploadEmails.has(String(user.email||'').toLowerCase());}
-export async function authenticateGuideUpload(){
- if(!usesGuideAuthentication())return;
+export async function authenticateGuideUpload(scope='guide'){
+ if(!usesGuideAuthentication(scope))return;
  const auth=getAuth(app),provider=new GoogleAuthProvider();
  provider.setCustomParameters({prompt:'select_account'});
  try{
@@ -17,9 +17,9 @@ export async function authenticateGuideUpload(){
   throw new Error(messages[error.code]||error.message||'업로드 관리자 인증에 실패했습니다.');
  }
 }
-export async function requireGuideUploadAdministrator(){
- if(!usesGuideAuthentication())return;
+export async function requireGuideUploadAdministrator(scope='guide'){
+ if(!usesGuideAuthentication(scope))return;
  const auth=getAuth(app);await auth.authStateReady();
- if(!isUploadAdministrator(auth.currentUser))throw new Error('첨부 파일 위의 ‘업로드 관리자 인증’을 먼저 눌러주세요. 선택한 파일은 유지됩니다.');
+ if(!isUploadAdministrator(auth.currentUser))throw new Error('사진 또는 첨부 파일 위의 ‘업로드 관리자 인증’을 먼저 눌러주세요. 선택한 파일은 유지됩니다.');
  await auth.currentUser.getIdToken();
 }

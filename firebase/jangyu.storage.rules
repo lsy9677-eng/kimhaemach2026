@@ -14,5 +14,12 @@ service firebase.storage {
         && request.resource.contentType.matches('(image/.*|application/pdf)');
       allow delete: if uploadAdministrator();
     }
+    match /notices/popup/{fileName} {
+      allow get, list: if true;
+      allow create, update: if uploadAdministrator()
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if uploadAdministrator();
+    }
   }
 }

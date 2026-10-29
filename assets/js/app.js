@@ -4340,13 +4340,36 @@ function ensurePopupNoticeManager(){
       </section>
     </div></div>`;
   document.body.appendChild(o);
+  const style=document.createElement('style');style.textContent=`
+    #popupNoticeManagerOverlay,#popupNoticeManagerOverlay *{box-sizing:border-box;min-width:0}
+    #popupNoticeManagerOverlay>div{overflow-x:hidden;width:100%;max-width:680px}
+    #popupNoticeManagerOverlay input,#popupNoticeManagerOverlay textarea{max-width:100%;min-inline-size:0}
+    #popupNoticeManagerOverlay>div>div:first-child>div{flex:1}
+    #popupNoticeManagerOverlay>div>div:first-child>button{flex-shrink:0;white-space:nowrap}
+    #popupNoticeManagerOverlay button{white-space:normal;overflow-wrap:anywhere}
+    @media(max-width:520px){#popupNoticeManagerOverlay [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}}
+  `;o.appendChild(style);
+  if(usesGuideAuthentication('notice')){
+    const button=document.createElement('button');button.type='button';button.className='btn btn-outline';button.id='popupNoticeAuth';button.textContent='업로드 관리자 인증';button.style.cssText='margin-bottom:10px;width:100%';
+    button.onclick=async()=>{button.disabled=true;try{await authenticateGuideUpload('notice');button.textContent='업로드 관리자 인증 완료';setPopupNoticeStatus('사진 업로드 권한이 확인됐습니다.');}catch(e){setPopupNoticeStatus(e.message,true);}finally{button.disabled=false;}};
+    ge('popupNoticeImageFile').before(button);
+  }
 }
 let _popupNoticePendingImageData='';
 let _popupNoticePendingImageFile=null;
+let _popupNoticeUploadedImage=null;
+let _popupNoticeSaving=false;
+let _popupNoticeImageRead=Promise.resolve();
+function setPopupNoticeStatus(message,error=false){
+ let el=ge('popupNoticeSaveStatus');if(!el){el=document.createElement('div');el.id='popupNoticeSaveStatus';el.setAttribute('role','status');el.style.cssText='margin-top:10px;padding:10px;border-radius:9px;font-size:.78rem;overflow-wrap:anywhere';ge('popupNoticeImagePreview')?.after(el);}
+ el.textContent=message;el.style.background=error?'#fff0f2':'#eef5e9';el.style.color=error?'#9f2533':'#214d3d';
+}
 function openPopupNoticeManager(){
+  if(_popupNoticeSaving)return;
   if(!AD){toast('관리자 로그인 필요','info');return;}
   ensurePopupNoticeManager();
-  const n=getPopupNotice();_popupNoticePendingImageData=String(n.imageUrl||'');_popupNoticePendingImageFile=null;
+  const n=getPopupNotice();_popupNoticePendingImageData=String(n.imageUrl||'');_popupNoticePendingImageFile=null;_popupNoticeUploadedImage=null;_popupNoticeImageRead=Promise.resolve();
+  ge('popupNoticeSaveStatus')?.remove();ge('popupNoticeImageFile').value='';
   ge('popupNoticeEnabled').checked=!!n.enabled;
   ge('popupNoticeTitle').value=n.title||'';
   ge('popupNoticeText').value=n.text||'';
@@ -4357,17 +4380,20 @@ function openPopupNoticeManager(){
   ge('unifiedFloatingNoticeEnabled').checked=!!G.meta.adminFloatingNoticeEnabled;
   ge('popupNoticeManagerOverlay').style.display='flex';
 }
-function closePopupNoticeManager(){const o=ge('popupNoticeManagerOverlay');if(o)o.style.display='none';}
+function closePopupNoticeManager(){if(_popupNoticeSaving)return;const o=ge('popupNoticeManagerOverlay');if(o)o.style.display='none';}
 function previewPopupNoticeImage(input){
+  if(_popupNoticeSaving)return;
   const f=input?.files?.[0];if(!f)return;
   if(!/^image\//i.test(f.type||'')){toast('이미지 파일만 선택할 수 있습니다','error');input.value='';return;}
   if(f.size>8*1024*1024){toast('사진은 8MB 이하로 선택해 주세요','error');input.value='';return;}
-  _popupNoticePendingImageFile=f;
-  const r=new FileReader();r.onload=()=>{_popupNoticePendingImageData=String(r.result||'');renderPopupNoticeImagePreview(_popupNoticePendingImageData);};r.readAsDataURL(f);
+  _popupNoticePendingImageFile=f;_popupNoticeUploadedImage=null;
+  _popupNoticeImageRead=withGuideDeadline(readFileAsDataUrl(f),15000,'공지 사진을 읽지 못했습니다. 다시 선택해주세요.').then(data=>{if(_popupNoticePendingImageFile===f){_popupNoticePendingImageData=String(data||'');renderPopupNoticeImagePreview(_popupNoticePendingImageData);}});
+  _popupNoticeImageRead.catch(e=>setPopupNoticeStatus(e.message,true));
 }
+function removePopupNoticeImage(){if(_popupNoticeSaving)return;_popupNoticePendingImageData='';_popupNoticePendingImageFile=null;_popupNoticeUploadedImage=null;_popupNoticeImageRead=Promise.resolve();ge('popupNoticeImageFile').value='';renderPopupNoticeImagePreview('');}
 function renderPopupNoticeImagePreview(src){
   const el=ge('popupNoticeImagePreview');if(!el)return;
-  el.innerHTML=src?`<img src="${src}" alt="공지 미리보기" style="display:block;max-width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0"><button type="button" class="btn btn-outline" style="margin-top:6px;font-size:.7rem" onclick="_popupNoticePendingImageData='';_popupNoticePendingImageFile=null;renderPopupNoticeImagePreview('')">사진 제거</button>`:'<div style="font-size:.7rem;color:#94a3b8">선택된 사진 없음</div>';
+  el.innerHTML=src?`<img src="${src}" alt="공지 미리보기" style="display:block;max-width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid #e2e8f0"><button type="button" class="btn btn-outline" style="margin-top:6px;font-size:.7rem" onclick="removePopupNoticeImage()">사진 제거</button>`:'<div style="font-size:.7rem;color:#94a3b8">선택된 사진 없음</div>';
 }
 function buildPopupNoticeView(n){
   return `<div style="width:min(520px,94vw);max-height:88vh;overflow:auto;background:#fff;border-radius:18px;padding:18px;box-shadow:0 22px 60px rgba(0,0,0,.32)">
@@ -4389,12 +4415,15 @@ function previewPopupNotice(){
   showPopupNoticeView(n,true);
 }
 async function uploadPopupNoticeImageIfNeeded(){
+  await _popupNoticeImageRead;
   if(!_popupNoticePendingImageFile) return _popupNoticePendingImageData||'';
+  await requireGuideUploadAdministrator('notice');
   const f=_popupNoticePendingImageFile;
+  if(_popupNoticeUploadedImage?.file===f)return _popupNoticeUploadedImage.url;
   const safe=String(f.name||'notice.jpg').replace(/[^a-zA-Z0-9._-]+/g,'_');
-  const fileRef=ref(storage,`notices/popup/${Date.now()}_${safe}`);
-  await uploadBytes(fileRef,f,{contentType:f.type||'image/jpeg'});
-  return await getDownloadURL(fileRef);
+  const fileRef=ref(storage,`notices/popup/${crypto.randomUUID()}_${safe}`);
+  const url=await uploadGuideWithProgress({start:()=>uploadBytesResumable(fileRef,f,{contentType:f.type||'image/jpeg'}),getURL:()=>getDownloadURL(fileRef),onProgress:p=>setPopupNoticeStatus('공지 사진 업로드 · '+p+'%')});
+  _popupNoticeUploadedImage={file:f,url};return url;
 }
 async function saveUnifiedFloatingNotice(){
   if(!AD){toast('관리자 로그인 필요','error');return;}
@@ -4420,18 +4449,38 @@ function hideLegacyFloatingNoticeAdminControls(){
   }
   input.style.display='none';const chk=ge('adminFloatingNoticeEnabled');if(chk)chk.style.display='none';
 }
+async function persistPopupNotice(notice){
+  const target=doc(db,'meta','config');
+  await runTransaction(db,async tx=>{await tx.get(target);tx.set(target,{popupNotice:notice},{merge:true});});
+  G.meta.popupNotice=notice;
+}
 async function savePopupNotice(){
   if(!AD){toast('관리자 로그인 필요','error');return;}
+  if(_popupNoticeSaving)return;
   const start=ge('popupNoticeStart')?.value||'',end=ge('popupNoticeEnd')?.value||'';
   if(start&&end&&new Date(end)<=new Date(start)){toast('게시 종료는 시작 이후로 설정해 주세요','error');return;}
   const title=(ge('popupNoticeTitle')?.value||'').trim(),text=(ge('popupNoticeText')?.value||'').trim();
-  if(!title&&!text&&!_popupNoticePendingImageData){toast('텍스트 또는 사진을 입력해 주세요','error');return;}
-  try{const imageUrl=await uploadPopupNoticeImageIfNeeded();G.meta.popupNotice={enabled:!!ge('popupNoticeEnabled')?.checked,title,text,imageUrl,startAt:start?new Date(start).toISOString():'',endAt:end?new Date(end).toISOString():'',updatedAt:new Date().toISOString()};_popupNoticePendingImageData=imageUrl;_popupNoticePendingImageFile=null;await saveMeta();closePopupNoticeManager();toast('팝업 공지 저장 완료 ✅','success');if(popupNoticeIsActive())showPopupNoticeView(getPopupNotice(),true);}catch(e){console.error(e);toast('팝업 공지 저장 실패: '+(e?.message||e),'error');}
+  if(!title&&!text&&!_popupNoticePendingImageData&&!_popupNoticePendingImageFile){toast('텍스트 또는 사진을 입력해 주세요','error');return;}
+  const enabled=!!ge('popupNoticeEnabled')?.checked;
+  _popupNoticeSaving=true;
+  const controls=[...ge('popupNoticeManagerOverlay').querySelectorAll('button,input,textarea')].map(el=>({el,disabled:el.disabled}));controls.forEach(({el})=>el.disabled=true);
+  let saved=false;
+  try{
+    const imageUrl=await uploadPopupNoticeImageIfNeeded();
+    const notice={enabled,title,text,imageUrl,startAt:start?new Date(start).toISOString():'',endAt:end?new Date(end).toISOString():'',updatedAt:new Date().toISOString()};
+    setPopupNoticeStatus('공지 저장 중…');await persistPopupNotice(notice);
+    _popupNoticePendingImageData=imageUrl;_popupNoticePendingImageFile=null;_popupNoticeUploadedImage=null;saved=true;
+    setPopupNoticeStatus(enabled?'공지 저장 및 게시 설정 완료':'공지 저장 완료 · 게시가 꺼져 있습니다.');
+    toast(enabled?'팝업 공지 저장 완료 ✅':'공지 저장 완료 · 게시를 켜면 공개됩니다.','success');
+  }catch(e){setPopupNoticeStatus('저장하지 못했습니다. '+(e.message||e),true);toast('팝업 공지 저장 실패: '+(e.message||e),'error');}
+  finally{_popupNoticeSaving=false;controls.forEach(({el,disabled})=>el.disabled=disabled);}
+  if(saved){closePopupNoticeManager();if(popupNoticeIsActive())showPopupNoticeView(getPopupNotice(),true);}
 }
 async function disablePopupNotice(){
-  if(!AD)return;
-  G.meta.popupNotice={...getPopupNotice(),enabled:false,updatedAt:new Date().toISOString()};
-  try{await saveMeta();ge('popupNoticeEnabled')&&(ge('popupNoticeEnabled').checked=false);toast('팝업 게시를 중지했습니다','success');}catch(e){toast('저장 실패: '+(e?.message||e),'error');}
+  if(!AD||_popupNoticeSaving)return;_popupNoticeSaving=true;
+  try{await persistPopupNotice({...getPopupNotice(),enabled:false,updatedAt:new Date().toISOString()});ge('popupNoticeEnabled')&&(ge('popupNoticeEnabled').checked=false);toast('팝업 게시를 중지했습니다','success');}
+  catch(e){setPopupNoticeStatus('저장 실패: '+(e.message||e),true);toast('저장 실패: '+(e.message||e),'error');}
+  finally{_popupNoticeSaving=false;}
 }
 let _popupNoticeShownVersion='';
 function maybeShowPopupNotice(){
@@ -29492,7 +29541,7 @@ function scheduleRegisterSliderHeightGuard170(){
 }
 
 Object.assign(window,{deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
-  showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
+  removePopupNoticeImage,showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
   onBrTC,renderBracket,toggleBracketDivision,setBracketSelectedDivs,saveBracketDivisionSettings,applyBracketRecommend,resetPrelimDrawOnly,resetMainDrawOnly,resetDrawOnly,openDraw,openDrawHistory,openLatestSavedDraw,openLatestMainSavedDraw,openSavedDrawHistory,saveDrawModalImage,saveSavedDrawImage,confirmDraw,startDraw,buildMain,openMainDraw,startMainDraw,prepareMainExternalDraw,updateMainSeedPreview,spawnConfetti,celebrateGroupComplete,

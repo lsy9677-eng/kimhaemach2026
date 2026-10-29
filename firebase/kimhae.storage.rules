@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function popupUploadAdministrator() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email in ['lsy9677@gmail.com', 'canyone2@korea.com'];
+    }
+    match /notices/popup/{fileName} {
+      allow get, list: if true;
+      allow create, update: if popupUploadAdministrator()
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if popupUploadAdministrator();
+    }
+
+
+    // 대회 요강 파일
+    match /guides/{allPaths=**} {
+      allow read: if true;
+      allow write: if
+        request.resource != null &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+    }
+
+    // 오더 사진
+    match /orderPhotos/{allPaths=**} {
+      allow read: if true;
+      allow write: if
+        request.resource != null &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    // 그 외 경로는 전부 차단
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
