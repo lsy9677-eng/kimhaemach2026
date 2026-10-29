@@ -4400,16 +4400,23 @@ function buildPopupNoticeView(n){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px"><div style="font-size:1.12rem;font-weight:900;color:#0f172a">${esc(n.title||'공지사항')}</div><button type="button" onclick="closePopupNoticeView()" style="border:0;background:#f1f5f9;border-radius:999px;width:32px;height:32px;font-size:18px;cursor:pointer">×</button></div>
     ${n.imageUrl?`<img src="${n.imageUrl}" alt="공지 이미지" style="display:block;width:100%;max-height:56vh;object-fit:contain;border-radius:12px;margin:5px 0 12px">`:''}
     ${n.text?`<div style="white-space:pre-wrap;line-height:1.65;font-size:.9rem;color:#334155">${esc(n.text)}</div>`:''}
-    <button type="button" class="btn btn-primary" style="width:100%;margin-top:15px" onclick="closePopupNoticeView()">확인</button>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:15px"><button type="button" class="btn btn-outline" style="flex:1 1 180px;min-height:44px" onclick="hidePopupNoticeToday()">오늘 하루 보지 않기</button><button type="button" class="btn btn-primary" style="flex:1 1 100px;min-height:44px" onclick="closePopupNoticeView()">닫기</button></div>
   </div>`;
 }
 function showPopupNoticeView(n=getPopupNotice(),force=false){
-  if(!force&&!popupNoticeIsActive(n))return;
+  if(!force&&(!popupNoticeIsActive(n)||isPopupNoticeHiddenToday()))return;
   let o=ge('popupNoticeViewOverlay');
   if(!o){o=document.createElement('div');o.id='popupNoticeViewOverlay';o.style.cssText='display:none;position:fixed;inset:0;z-index:10040;background:rgba(15,23,42,.6);align-items:center;justify-content:center;padding:14px';document.body.appendChild(o);}
   o.innerHTML=buildPopupNoticeView(n);o.style.display='flex';
 }
 function closePopupNoticeView(){const o=ge('popupNoticeViewOverlay');if(o)o.style.display='none';}
+function popupNoticeDayKey(now=Date.now()){return new Date(now+9*60*60*1000).toISOString().slice(0,10);}
+function isPopupNoticeHiddenToday(){try{return organizationLocalStorage.getItem('popupNoticeHiddenDay')===popupNoticeDayKey();}catch{return false;}}
+function hidePopupNoticeToday(){
+  try{organizationLocalStorage.setItem('popupNoticeHiddenDay',popupNoticeDayKey());closePopupNoticeView();}
+  catch{toast('브라우저 저장이 차단되어 오늘 하루 숨김을 저장하지 못했습니다.','error');}
+}
+window.hidePopupNoticeToday=hidePopupNoticeToday;
 function previewPopupNotice(){
   const n={enabled:true,title:ge('popupNoticeTitle')?.value||'',text:ge('popupNoticeText')?.value||'',imageUrl:_popupNoticePendingImageData};
   showPopupNoticeView(n,true);
@@ -4484,7 +4491,7 @@ async function disablePopupNotice(){
 }
 let _popupNoticeShownVersion='';
 function maybeShowPopupNotice(){
-  const n=getPopupNotice();if(!popupNoticeIsActive(n))return;
+  const n=getPopupNotice();if(!popupNoticeIsActive(n)||isPopupNoticeHiddenToday())return;
   const ver=String(n.updatedAt||n.title||'notice');
   if(_popupNoticeShownVersion===ver)return;
   _popupNoticeShownVersion=ver;

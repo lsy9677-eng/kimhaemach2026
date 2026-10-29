@@ -37,6 +37,9 @@ try{
   await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>typeof openPopupNoticeManager==='function'&&document.body.innerText.includes('연결 완료'));
   await page.waitForFunction(()=>document.getElementById('popupNoticeViewOverlay')?.style.display==='flex');
   assert.match(await page.locator('#popupNoticeViewOverlay').innerText(),/테스트 내용 저장 검증/);
+  await page.locator('button[onclick="hidePopupNoticeToday()"]').click();
+  await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>typeof openPopupNoticeManager==='function'&&document.body.innerText.includes('연결 완료'));
+  await page.waitForTimeout(800);assert.equal(await page.locator('#popupNoticeViewOverlay').isVisible(),false);
   await page.evaluate(()=>{closePopupNoticeView();document.getElementById('adminPw').value='demo-admin-2026';doLogin();openPopupNoticeManager();});
   assert.equal(await page.locator('#popupNoticeTitle').inputValue(),'가상 공지 '+org);
   await page.evaluate(()=>disablePopupNotice());
