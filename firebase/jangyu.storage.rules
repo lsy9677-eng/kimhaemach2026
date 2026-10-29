@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function uploadAdministrator() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email in ['lsy9677@gmail.com', 'canyone2@korea.com'];
+    }
+    match /guides/{tournamentId}/{fileName} {
+      allow get, list: if true;
+      allow create, update: if uploadAdministrator()
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('(image/.*|application/pdf)');
+      allow delete: if uploadAdministrator();
+    }
+  }
+}

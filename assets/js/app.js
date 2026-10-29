@@ -768,6 +768,7 @@ import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHt
 import{tournamentStatus,selectHomeTournament,renderHomeExperience,showRegistrationReceipt,installBracketNavigator}from'./experience-ui.js';
 import{projectSharedRegistry,projectSharedCertificates,resolveSharedAge65}from'./shared-age65.js';
 import{withGuideDeadline,uploadGuideWithProgress,guideAssetsForSave}from'./guide-upload.js';
+import{usesGuideAuthentication,authenticateGuideUpload,requireGuideUploadAdministrator}from'./guide-auth.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
@@ -7364,6 +7365,7 @@ async function createTournamentCore(){
 }
 
 function renderTL(){
+  installGuideAuthenticationButton('create');
   const el=ge('tournList');if(!G.tournaments.length){el.innerHTML='<div class="empty-state card"><div class="empty-icon">🏆</div><p>등록된 대회 없음</p></div>';return;}
   const sm={open:'s-open',closed:'s-closed',ongoing:'s-ongoing',finished:'s-finished'};
   const sl2={open:'접수중',closed:'접수마감',ongoing:'진행중',finished:'종료'};
@@ -23669,12 +23671,20 @@ function setGuideSaveStatus(mode,message,error=false){
   if(GUIDE_SAVE_BUSY){const root=mode==='edit'?ge('mET'):ge('aoTCreate');root?.querySelectorAll(mode==='edit'?'button[onclick*="saveET"]':'button[onclick*="createTournament"]').forEach(button=>{button.textContent=error?'저장하지 못함':message;});}
 }
 function _pickGuideStore(mode){ return mode==='edit' ? GUIDE_FILES_EDIT : GUIDE_FILES_CREATE; }
+function installGuideAuthenticationButton(mode){
+  if(!usesGuideAuthentication())return;
+  const input=ge(mode==='edit'?'etGuideFiles':'tGuideFiles');if(!input||ge('guideAuth_'+mode))return;
+  const button=document.createElement('button');button.id='guideAuth_'+mode;button.type='button';button.className='btn btn-outline';button.style.cssText='margin-bottom:10px;white-space:normal';button.textContent='업로드 관리자 인증';
+  button.onclick=async()=>{button.disabled=true;try{await authenticateGuideUpload();button.textContent='업로드 관리자 인증 완료';toast('이미지 업로드 권한이 확인됐습니다.','success');}catch(e){toast(e.message,'error');setGuideSaveStatus(mode,e.message,true);}finally{button.disabled=false;}};
+  input.before(button);
+}
 function _setGuideStore(mode, arr){ if(mode==='edit') GUIDE_FILES_EDIT = arr; else GUIDE_FILES_CREATE = arr; }
 
 function renderGuidePreview(mode){
   const arr = _pickGuideStore(mode);
   const box = ge(mode==='edit' ? 'etGuidePreview' : 'tGuidePreview');
   if(!box) return;
+  installGuideAuthenticationButton(mode);
   if(mode==='edit'&&GUIDE_EDIT_CONTEXT?.status==='loading'){box.textContent='기존 첨부를 확인하고 있습니다…';return;}
   if(mode==='edit'&&GUIDE_EDIT_CONTEXT?.error){
     box.textContent='기존 첨부를 불러오지 못했습니다. 입력 내용은 유지됩니다. ';
@@ -23765,6 +23775,7 @@ function onGuideFilesSelected(input,mode){
 async function flushGuideUploads(tid,mode){
   await GUIDE_SELECTION_TASKS[mode];
   const pending=mode==='edit'?GUIDE_FILES_EDIT_PENDING:GUIDE_FILES_CREATE_PENDING,arr=_pickGuideStore(mode),count=pending.length;
+  if(count)await requireGuideUploadAdministrator();
   let done=0;
   for(const entry of [...pending]){
     const index=arr.findIndex(a=>a._uploadId===entry.id);
