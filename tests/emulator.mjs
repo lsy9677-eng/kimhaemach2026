@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {randomUUID} from 'node:crypto';
 import {seed,targets} from '../scripts/seed.mjs';
@@ -8,6 +8,8 @@ import {startServer} from '../scripts/server.mjs';
 const offline=process.argv.includes('--offline');
 const failUpload=process.argv.includes('--fail-upload');
 const runId=randomUUID();
+const appVersion=(await readFile(new URL('../index.html',import.meta.url),'utf8')).match(/const APP_VERSION\s*=\s*"([^"]+)"/)?.[1];
+assert.ok(appVersion,'Current app version must be available');
 async function readDocument(url){const response=await fetch(url);assert.ok(response.ok);return response.json();}
 async function waitDocument(url,predicate){
   for(let i=0;i<60;i++){const document=await readDocument(url);if(predicate(document))return document;await new Promise(resolve=>setTimeout(resolve,150));}
@@ -70,7 +72,7 @@ try{
       });
     });
     // Pre-populate the version in development only to avoid an intentional reload.
-    await context.addInitScript(()=>{localStorage.setItem('OAI_DEV:APP_VERSION','1.0.12-open-tournament-first');localStorage.setItem('OAI_DEV:OAI_ORG_jangyu:APP_VERSION','1.0.12-open-tournament-first');localStorage.setItem('adm','production-session-must-survive');});
+    await context.addInitScript(version=>{localStorage.setItem('OAI_DEV:APP_VERSION',version);localStorage.setItem('OAI_DEV:OAI_ORG_jangyu:APP_VERSION',version);localStorage.setItem('adm','production-session-must-survive');},appVersion);
     await page.goto('http://127.0.0.1:5500/privacy.html');
     await page.evaluate(async()=>{await caches.open('production-cache-must-survive');await caches.open('OAI_DEV:old-test-cache');});
     await page.goto(`http://127.0.0.1:5500/?org=${target.org}&env=production`,{waitUntil:'load'});

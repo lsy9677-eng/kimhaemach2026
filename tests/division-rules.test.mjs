@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import * as sharedAge65 from '../assets/js/shared-age65.js';
 
 const source=readFileSync(new URL('../assets/js/app.js',import.meta.url),'utf8');
 const ruleSource=source.slice(source.indexOf('// PHASE148:'),source.indexOf('function rosterPlayerHTML('));
@@ -10,7 +11,8 @@ const autumn={id:'autumn',name:'2026 추계 장유연합회장배',date:'2026-11
 const old={id:'old',name:'2025 춘계 장유연합회장배',date:'2025-05-01',status:'finished'};
 const reg=(id,club,division,players,extra={})=>({_id:id,club,division,players,...extra});
 function setup({org='jangyu',rows=[],registry=[],archives={}}={}){
-  const c={MATCH_ORGANIZATION:{id:org},REG_YEAR:2026,G:{tournaments:[old,spring,autumn],teams:{}},HIST_DATA:[],G_REGISTRY:{2026:registry},
+  const c={...sharedAge65,MATCH_ORGANIZATION:{id:org},REG_YEAR:2026,G:{tournaments:[old,spring,autumn],teams:{}},HIST_DATA:[],G_REGISTRY:{2026:registry},
+    identityDb:{},doc:()=>null,getDocFromServer:async()=>({exists:()=>false}),getDocsFromServer:async()=>({docs:[]}),transferIdentityParts:name=>({name,tag:''}),registrationClubIdentityKey:value=>String(value||'').trim(),
     normName:n=>String(n||'').replace(/\s/g,''),transferName:n=>String(n||'').trim(),
     normalizeClub:n=>String(n||'').trim(),transferClub:n=>String(n||'').trim(),baseClub:n=>String(n||'').replace(/[A-Z]$/,''),
     _m26YearFromTournament:t=>Number(t.date.slice(0,4)),getTournamentDateKey:t=>t?.date||'',
@@ -76,7 +78,7 @@ test('현재 접수 및 아직 끝나지 않은 대회는 직전 대회 기준�
 test('상위 부서 이력이 없는 은→은 선수는 하향으로 표시하지 않는다',async()=>{
   const c=setup({rows:[{...reg('o','테사모','은',['동일선수']),tournamentId:'old'},{...reg('s','테사모','은',['동일선수']),tournamentId:'spring'}]});
   assert.equal((await classify(c,'동일선수')).isDowngrade,false);
-  assert.equal(c.divisionRuleBadgeHtml('autumn','은','동일선수','테사모'),'');
+  assert.equal(c.divisionRuleBadgeHtml('autumn','은','동일선수','테사모').replace(/^<span data-shared-age65-badge[^>]*><\/span>$/,''),'');
 });
 
 test('2025 금배 예선탈락만으로는 직전 대회 예외가 되지 않는다',async()=>{

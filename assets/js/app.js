@@ -766,6 +766,7 @@ import{getDirectorSessionVersion,isClubPasswordCustomValue,getClubTemporaryPassw
 import{validateRegistrationCapacity,validateIndividualRegistration,validateTeamRegistration,buildTeamRegistrationPayload,buildIndividualRegistrationPayload,buildTeamEditPayload,buildIndividualEditPayload,validateTeamEdit,canDeleteRegistration}from'./registrations.js';
 import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHtml,isUnifiedTeamRoster}from'./registration-ui.js';
 import{tournamentStatus,selectHomeTournament,renderHomeExperience,showRegistrationReceipt,installBracketNavigator}from'./experience-ui.js';
+import{projectSharedRegistry,projectSharedCertificates,resolveSharedAge65}from'./shared-age65.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
 import{normalizeCourtTarget,validateCourtMoveTarget,buildManualCourtMoveMeta,buildTeamCourtMovePatch,applyCourtMovePatch,buildCourtMoveOptions}from'./court-ops.js';
@@ -8027,6 +8028,55 @@ let AGE65_CERTS=[];
 let AGE65_CERTS_LOADED=false;
 let AGE65_CERTS_PROMISE=null;
 let AGE65_ADMIN_REQUESTS=[];
+const SHARED_AGE65_BY_YEAR=new Map();
+const SHARED_AGE65_REQUESTS=new Map();
+async function loadSharedAge65Eligibility(year,force=false){
+  if(MATCH_ORGANIZATION.id!=='jangyu')return null;
+  year=Number(year)||REG_YEAR;
+  const cached=SHARED_AGE65_BY_YEAR.get(year);
+  if(!force&&cached&&Date.now()-cached.checkedAt<60000)return cached;
+  if(SHARED_AGE65_REQUESTS.has(year))return SHARED_AGE65_REQUESTS.get(year);
+  const request=(async()=>{
+    try{
+      const [registry,certs]=await Promise.all([
+        getDocFromServer(doc(identityDb,'memberRegistries',String(year))),
+        getDocsFromServer(collection(identityDb,'age65Certifications'))
+      ]);
+      const state={checkedAt:Date.now(),status:'ready',registry:projectSharedRegistry(registry.exists()?registry.data().members||[]:[]),certificates:projectSharedCertificates(certs.docs.map(d=>d.data()))};
+      SHARED_AGE65_BY_YEAR.set(year,state);return state;
+    }catch(e){
+      // A failed refresh must not preserve an unverified shared exemption.
+      const state={checkedAt:Date.now(),status:'unavailable',registry:[],certificates:[]};
+      SHARED_AGE65_BY_YEAR.set(year,state);console.warn('[Age65] shared eligibility read unavailable');return state;
+    }
+  })().finally(()=>SHARED_AGE65_REQUESTS.delete(year));
+  SHARED_AGE65_REQUESTS.set(year,request);return request;
+}
+function sharedAge65Eligibility(name,club,year){
+  if(MATCH_ORGANIZATION.id!=='jangyu')return {approved:false};
+  const state=SHARED_AGE65_BY_YEAR.get(Number(year)||REG_YEAR);
+  if(state?.status!=='ready')return {approved:false};
+  const parts=transferIdentityParts(name);
+  return resolveSharedAge65({name:parts.name,identityTag:parts.tag,club},state.registry,state.certificates,{name:transferName,club:registrationClubIdentityKey});
+}
+function age65EligibilityLabel(name,club,year){
+  return sharedAge65Eligibility(name,club,year).approved?'65+ 인증완료 · 협회 연동':'65+ 인증완료';
+}
+async function refreshSharedAge65OnFocus(){
+  if(MATCH_ORGANIZATION.id!=='jangyu'||document.visibilityState==='hidden')return;
+  const page=getCurrentPageName(),tid=getSelectedTournamentIdForPage(page)||getRealtimeTargetTournamentId();
+  const tournament=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  if(!tournament)return;
+  await loadSharedAge65Eligibility(_ruleTournamentYear(tournament)||REG_YEAR,true);
+  // The responsive page sheet can keep a registration form mounted while the nav reports home.
+  // Refresh its eligibility hints as well, so revoked approvals never remain on that form.
+  refreshDivisionRuleFormBadges('register');
+  document.querySelectorAll('[data-shared-age65-badge]').forEach(element=>{
+    const d=element.dataset;element.outerHTML=divisionRuleBadgeHtml(d.tid,d.div,d.name,d.club);
+  });
+}
+if(typeof window!=='undefined')window.addEventListener('focus',()=>{refreshSharedAge65OnFocus().catch(()=>{});});
+if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshSharedAge65OnFocus().catch(()=>{});});
 function _age65NormName(v){ return normName(String(v||'')); }
 function _age65SafeId(v){ return String(v||'').trim().replace(/[\\/.#$\[\]]/g,'_').replace(/\s+/g,'_').slice(0,180); }
 function _age65CertDocId(name,club){ return _age65SafeId(`${_age65NormName(name)}__${normalizeClub(club||'')||'unknown'}`); }
@@ -8098,6 +8148,7 @@ async function openAge65CertificationRequest(name,club,tid,div,requestType='age6
   }
   await loadAge65Certifications();
   const year=_ruleTournamentYear((G.tournaments||[]).find(t=>String(t.id)===String(tid)))||REG_YEAR;
+  if(requestType!=='female')await loadSharedAge65Eligibility(year,true);
   if(requestType==='female' && isFemaleForDivisionRule(nm,cc,year)){ toast(`${nm} 선수는 이미 여성으로 확인되어 있습니다`,'success'); return; }
   if(requestType!=='female' && isAge65CertifiedForDivisionRule(nm,cc,year)){ toast(`${nm} 선수는 이미 65+ 인증완료 상태입니다`,'success'); return; }
   ensureAge65RequestModal();
@@ -8354,7 +8405,7 @@ function _ruleRegistryMatches(name,club,year){
   });
 }
 function isAge65CertifiedForDivisionRule(name,club,year){
-  return _ruleRegistryMatches(name,club,year).some(r=>r?.age65Certified===true) || _age65GlobalCertified(name,club,year);
+  return _ruleRegistryMatches(name,club,year).some(r=>r?.age65Certified===true) || _age65GlobalCertified(name,club,year) || sharedAge65Eligibility(name,club,year).approved;
 }
 function _ruleGenderKey(v){
   const s=String(v||'').trim().toLowerCase();
@@ -8473,6 +8524,8 @@ function decorateRegistryAge65Controls(year,members){
 async function ensureDivisionRuleCache(tid){
   tid=String(tid||'');
   if(!tid) return null;
+  const sharedTournament=(G.tournaments||[]).find(t=>String(t.id)===tid);
+  if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR);
   if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===315)return DIVISION_RULE_CACHE.get(tid);
   DIVISION_RULE_CACHE.delete(tid);
   if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
@@ -8609,12 +8662,13 @@ function divisionRuleBadgeHtml(tid,div,name,club){
   const c=_divisionRuleClassifySync(tid,div,name,club);
   const flags=[];
   if(female) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;font-size:.58rem;font-weight:900;white-space:nowrap">여성</span>');
-  if(age65) flags.push('<span style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.58rem;font-weight:900;white-space:nowrap">65+ 인증완료</span>');
-  if(!c.known||!c.isDowngrade||c.step<=0) return flags.join('');
+  if(age65) flags.push(`<span style="display:inline-flex;align-items:center;max-width:100%;margin-left:4px;padding:1px 5px;border-radius:999px;background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:.58rem;font-weight:900;white-space:normal;overflow-wrap:anywhere">${age65EligibilityLabel(name,club,year)}</span>`);
+  const markup=()=>MATCH_ORGANIZATION.id==='jangyu'?`<span data-shared-age65-badge data-tid="${esc(tid)}" data-div="${esc(div)}" data-name="${esc(name)}" data-club="${esc(club||'')}">${flags.join('')}</span>`:flags.join('');
+  if(!c.known||!c.isDowngrade||c.step<=0) return markup();
   const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
   const ok=c.exceptionApproved;
   flags.unshift(`<button type="button" onclick="event.stopPropagation();openDivisionRuleReason('${esc(name)}','${esc(club||'')}','${esc(tid||'')}','${esc(div||'')}')" title="판정 근거 보기" style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap;cursor:pointer;font-family:inherit">↓ ${move}${c.prelimException?' · 직전 예선탈락 예외':ok?' · 예외승인':''}</button>`);
-  return flags.join('');
+  return markup();
 }
 
 function ensureDivisionRuleReasonModal(){
@@ -8695,6 +8749,8 @@ function jangyuDivisionWarningsHtml(warnings){
   return warnings.map(w=>`<div class="division-rule-warning" role="status" style="padding:9px 11px;border:1px solid #fca5a5;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:.73rem;font-weight:800;line-height:1.65"><div>⚠ ${esc(w)}</div><div style="margin-top:5px;font-size:.7rem;font-weight:600">접수 가능 · 관리자 확인 필요</div></div>`).join('');
 }
 async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',excludeIdx=-1}={}){
+  const sharedTournament=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR,true);
   const cache=await ensureDivisionRuleCache(tid);
   if(!cache || !_ruleDivKey(div)) return {ok:true,details:[]};
   // 장유 요강: 팀당 일반 하향 1명. 자격 문제는 접수 차단 대신 검토 경고로 남긴다.
@@ -8763,6 +8819,12 @@ function refreshDivisionRuleFormBadges(mode='register'){
       const names=Array.from({length:12},(_,i)=>ge(prefix+(i+1))).filter(el=>el&&root.contains(el)).map(el=>String(el.value||'').trim()).filter(Boolean);
       warningBox.innerHTML=jangyuDivisionWarningsHtml(jangyuTeamDivisionAssessment(tid,div,club,names).warnings);
     }else if(warningBox)warningBox.remove();
+    let sharedNotice=root.querySelector('.shared-age65-read-notice');
+    if(MATCH_ORGANIZATION.id==='jangyu'&&SHARED_AGE65_BY_YEAR.get(Number(cache?.currentYear||REG_YEAR))?.status==='unavailable'){
+      if(!sharedNotice){sharedNotice=document.createElement('div');sharedNotice.className='shared-age65-read-notice';sharedNotice.style.cssText='font-size:.75rem;padding:10px;border:1px solid #e7c896;border-radius:10px;background:#fff8eb;margin:8px 0;';root.append(sharedNotice);}
+      sharedNotice.textContent='협회의 65세 이상 인증을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요. ';
+      const retry=document.createElement('button');retry.type='button';retry.className='btn btn-outline';retry.textContent='인증 다시 확인';retry.onclick=async()=>{await loadSharedAge65Eligibility(cache?.currentYear||REG_YEAR,true);refreshDivisionRuleFormBadges(mode);};sharedNotice.append(retry);
+    }else sharedNotice?.remove();
 
     // PHASE167: 예외 UI는 실제로 예외가 필요한 순간에만 표시한다.
     // 같은 대회·같은 부서의 1단계 일반 하향은 클럽별 고유 선수 2명까지 허용하므로,
@@ -8799,7 +8861,17 @@ function refreshDivisionRuleFormBadges(mode='register'){
       const slot=el.closest('.pslot'); if(!slot) continue;
       slot.querySelectorAll('.division-rule-form-badge148,.division-rule-form-row153').forEach(x=>x.remove());
       const name=String(el.value||'').trim(); if(!name) continue;
-      const c=_divisionRuleClassifySync(tid,div,name,club); if(!c.known||c.step<=0) continue;
+      const c=_divisionRuleClassifySync(tid,div,name,club);
+      const age65=isAge65CertifiedForDivisionRule(name,club,cache?.currentYear||REG_YEAR);
+      if(!c.known||c.step<=0){
+        if(age65){
+          slot.style.flexWrap='wrap';
+          const row=document.createElement('div');row.className='division-rule-form-row153';
+          row.style.cssText='flex:0 0 100%;padding:4px 4px 2px 42px;color:#166534;font-size:.66rem;font-weight:800;';
+          row.textContent=age65EligibilityLabel(name,club,cache?.currentYear||REG_YEAR)+' · 하향 예외 대상';slot.append(row);
+        }
+        continue;
+      }
       const ok=c.exceptionApproved;
       const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
 
@@ -8813,10 +8885,11 @@ function refreshDivisionRuleFormBadges(mode='register'){
       slot.appendChild(badgeRow);
 
       const b=document.createElement('span'); b.className='division-rule-form-badge148';
-      b.textContent=`↓ ${move}${c.prelimException?' · 직전 예선탈락 예외':c.female?' · 여성':c.age65?' · 65+ 인증완료':''}`;
+      b.textContent=`↓ ${move}${c.prelimException?' · 직전 예선탈락 예외':c.female?' · 여성':c.age65?' · '+age65EligibilityLabel(name,club,cache?.currentYear||REG_YEAR):''}${ok?' · 하향 예외':''}`;
       b.title='판정 근거 보기';
       b.style.cssText=`display:inline-flex;align-items:center;max-width:100%;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};cursor:pointer`;
       b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionRuleReason(name,club,tid,div);};
+      b.style.whiteSpace='normal';b.style.overflowWrap='anywhere';
       badgeRow.appendChild(b);
       if(c.female){
         const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; badgeRow.appendChild(f);

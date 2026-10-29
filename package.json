@@ -9,7 +9,8 @@
     "test:emulator": "node tests/emulator.mjs",
     "test:offline": "node tests/emulator.mjs --offline",
     "test:storage-isolation": "node tests/storage-isolation.mjs",
-    "test:upload-failure": "node tests/upload-failure.mjs"
+    "test:upload-failure": "node tests/upload-failure.mjs",
+    "test:shared-age65": "node tests/shared-age65-emulator.mjs"
   },
   "devDependencies": {
     "firebase-tools": "15.34.1",
