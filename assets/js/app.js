@@ -768,6 +768,7 @@ import{buildRegistrationRosterGrid,getRegistrationFormState,getWomenPairNoticeHt
 import{tournamentStatus,selectHomeTournament,renderHomeExperience,showRegistrationReceipt,installBracketNavigator}from'./experience-ui.js';
 import{projectSharedRegistry,projectSharedCertificates,resolveSharedAge65}from'./shared-age65.js';
 import{withGuideDeadline,uploadGuideWithProgress,guideAssetsForSave}from'./guide-upload.js';
+import{teamRegistrationLabels,planTeamLabelEdit}from'./team-labels.js';
 import{usesGuideAuthentication,authenticateGuideUpload,requireGuideUploadAdministrator}from'./guide-auth.js';
 import{normalizeCourtGroups,expandCourtGroups,buildCourtList,uniqueCourtList,getCourtGroupCount,resolveAllowedCourts,buildCourtShareMap,getCourtShareLevel,getCourtShareSummary}from'./courts.js';
 import{getCourtBoardDisplayLimitsForMatch,splitCourtWaitingByDisplayLimit,getCourtBoardStatusCounts,sortCourtWaitingByPriority,getCourtQueueDisplayState,getCourtBoardItemState}from'./court-status.js';
@@ -1111,7 +1112,7 @@ function compareOrganizationRegistrationOrder(a,b){
     const team=(a.club||'').localeCompare(b.club||'','ko');
     if(team)return team;
   }
-  return (a.registeredAt||'').localeCompare(b.registeredAt||'');
+  return (a.registeredAt||'').localeCompare(b.registeredAt||'')||String(a._id||'').localeCompare(String(b._id||''));
 }
 function applyTournamentBundle(tid, bundle){
   if(!tid) return;
@@ -1135,7 +1136,7 @@ function applyTournamentBundle(tid, bundle){
   });
   Object.keys(G.teams).filter(k=>_k2td(k).tid===tid).forEach(k=>{
     G.teams[k].sort(compareOrganizationRegistrationOrder);
-    const docs=(G.teams[k]||[]).map(t=>normalizeRegistrationPayloadForHash({tournamentId:tid,division:_k2td(k).div,club:t.club,players:t.players||[],registeredAt:t.registeredAt||'',...(t.tournamentType?{tournamentType:t.tournamentType}:{}),...(t.editPin?{editPin:t.editPin}:{}),...(Array.isArray(t.individualPlayers)?{individualPlayers:t.individualPlayers}:{}),...(t.clubTokens?{clubTokens:t.clubTokens}:{}),...(t.pairLabel!==undefined?{pairLabel:t.pairLabel}:{}),...(t.entryLabel!==undefined?{entryLabel:t.entryLabel}:{}),...(t.note!==undefined?{note:t.note}:{}),...(t.doublesCount!==undefined?{doublesCount:t.doublesCount}:{}),...(t.mainPlayerCount!==undefined?{mainPlayerCount:t.mainPlayerCount}:{}),...(t.tiebreakAge!==undefined?{tiebreakAge:Number(t.tiebreakAge||0)||0}:{})}));
+    const docs=(G.teams[k]||[]).map(t=>normalizeRegistrationPayloadForHash({tournamentId:tid,division:_k2td(k).div,club:t.club,players:t.players||[],registeredAt:t.registeredAt||'',...(t.tournamentType?{tournamentType:t.tournamentType}:{}),...(t.editPin?{editPin:t.editPin}:{}),...(Array.isArray(t.individualPlayers)?{individualPlayers:t.individualPlayers}:{}),...(t.clubTokens?{clubTokens:t.clubTokens}:{}),...(t.teamLabel!==undefined?{teamLabel:t.teamLabel}:{}),...(t.pairLabel!==undefined?{pairLabel:t.pairLabel}:{}),...(t.entryLabel!==undefined?{entryLabel:t.entryLabel}:{}),...(t.note!==undefined?{note:t.note}:{}),...(t.doublesCount!==undefined?{doublesCount:t.doublesCount}:{}),...(t.mainPlayerCount!==undefined?{mainPlayerCount:t.mainPlayerCount}:{}),...(t.tiebreakAge!==undefined?{tiebreakAge:Number(t.tiebreakAge||0)||0}:{})}));
     markFbWriteCache('teams',k,{docs,ids:(G._regIdsByKey[k]||[]).slice().sort(),deleted:[]});
   });
 
@@ -2983,7 +2984,7 @@ async function preserveServerRegistrationHistory(tid,reason='명단 교체 전 �
 function registrationSafetyProjection(t,tid,div){
   const payload={tournamentId:tid,division:div,club:t.club,players:t.players||[],registeredAt:t.registeredAt||''};
   ['tournamentType','editPin','individualPlayers','clubTokens'].forEach(k=>{if(t[k])payload[k]=t[k];});
-  ['pairLabel','entryLabel','note','doublesCount','mainPlayerCount'].forEach(k=>{if(t[k]!==undefined)payload[k]=t[k];});
+  ['teamLabel','pairLabel','entryLabel','note','doublesCount','mainPlayerCount'].forEach(k=>{if(t[k]!==undefined)payload[k]=t[k];});
   if(t.tiebreakAge!==undefined)payload.tiebreakAge=Number(t.tiebreakAge||0)||0;
   return normalizeRegistrationPayloadForHash(payload);
 }
@@ -3006,6 +3007,7 @@ async function stT(key,{allowDelete=false}={}){
     ...(t.editPin ? {editPin: t.editPin} : {}),
     ...(Array.isArray(t.individualPlayers) ? {individualPlayers: t.individualPlayers} : {}),
     ...(t.clubTokens ? {clubTokens: t.clubTokens} : {}),
+    ...(t.teamLabel !== undefined ? {teamLabel:t.teamLabel} : {}),
     ...(t.pairLabel !== undefined ? {pairLabel: t.pairLabel} : {}),
     ...(t.entryLabel !== undefined ? {entryLabel: t.entryLabel} : {}),
     ...(t.note !== undefined ? {note: t.note} : {}),
@@ -3037,7 +3039,8 @@ async function stT(key,{allowDelete=false}={}){
       ...(t.editPin ? {editPin: t.editPin} : {}),
       ...(Array.isArray(t.individualPlayers) ? {individualPlayers: t.individualPlayers} : {}),
       ...(t.clubTokens ? {clubTokens: t.clubTokens} : {}),
-      ...(t.pairLabel !== undefined ? {pairLabel: t.pairLabel} : {}),
+      ...(t.teamLabel !== undefined ? {teamLabel:t.teamLabel} : {}),
+    ...(t.pairLabel !== undefined ? {pairLabel: t.pairLabel} : {}),
       ...(t.entryLabel !== undefined ? {entryLabel: t.entryLabel} : {}),
       ...(t.note !== undefined ? {note: t.note} : {}),
       ...(t.doublesCount !== undefined ? {doublesCount: t.doublesCount} : {}),
@@ -7325,9 +7328,10 @@ function tdn(team,key,idx){
   }
   const ts=G.teams[key]||[];
   const same=ts.filter(t=>t.club===team.club);
-  if(same.length<=1)return team.club;
-  let o=0;for(let i=0;i<idx;i++){if(ts[i]&&ts[i].club===team.club)o++;}
-  return team.club+'-'+String.fromCharCode(65+o);
+  if(same.length<=1&&!team.teamLabel)return team.club;
+  const source=team._id||((ts[idx]?.club===team.club)?ts[idx]._id||ts[idx]:team);
+  const label=String(team.teamLabel||'')||teamRegistrationLabels(ts).get(source)||'A';
+  return team.club+'-'+label;
 }
 
 function getIndividualNameOnlyDisplayLine(team){
@@ -9171,7 +9175,7 @@ function buildRegisterRosterCardHtml({tid,div,key,team,idx,isIndividual}){
           </div>
         </div>
       </div>
-      <div class="register-team-actions" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;color:#475569;font-size:.7rem;font-weight:850;max-width:150px">${!isIndividual?pastRosterReferenceButtonHtml(baseClub(team?.club||'')||team?.club||'',div,'지난대회 명단'):''}<span class="register-team-roster-toggle">명단 보기 ⌄</span></div>
+      <div class="register-team-actions" style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;color:#475569;font-size:.7rem;font-weight:850;max-width:150px"><span class="register-team-roster-toggle">명단 보기 ⌄</span></div>
       ${statusBadges?`<div class="register-team-status" style="grid-column:1/-1;display:grid;gap:6px;min-width:0">${statusBadges}</div>`:''}
     </summary>
     <div style="border-top:1px solid #e2e8f0;background:#f8fafc;padding:10px 11px 11px">
@@ -9258,6 +9262,7 @@ function _pastRosterTeamLabel(club='', sameIndex=0, sameCount=1){
   return `${c}${String.fromCharCode(65+Math.max(0,sameIndex))}`;
 }
 function _pastRosterTeamDisplayLabel(team,teams,fallbackDiv=''){
+  if(team.teamLabel)return (team.club||'')+'-'+team.teamLabel;
   if(team.teamName||team.entryLabel)return team.teamName||team.entryLabel;
   const div=_pastRosterDivisionKey(team.div||team.division||fallbackDiv);
   const same=teams.filter(other=>(other.club||'')===(team.club||'')&&_pastRosterDivisionKey(other.div||other.division||fallbackDiv)===div);
@@ -9702,7 +9707,7 @@ function renderRegisterDivisionOverview(){
   ];
   const _divisionFilterBar = divisions.length
     ? `<div class="register-division-filter-bar" style="position:sticky;top:0;z-index:8;margin:0 0 12px;padding:9px 8px;background:rgba(248,250,252,.97);backdrop-filter:blur(7px);border:1px solid #dbe4f0;border-radius:14px;box-shadow:0 3px 10px rgba(15,23,42,.06)">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${!isIndiv?`<div style="display:flex;flex-wrap:wrap;gap:6px">${pastRosterReferenceButtonHtml('','','📋 지난대회 명단 보기','pastRosterRefBtn')}${getPastRosterReferenceClub()?pastRosterReferenceButtonHtml('__all__','','전체 클럽 보기'):''}</div>`:''}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 4px 7px"><div style="font-size:.7rem;font-weight:900;color:#64748b">📂 부서별 보기</div>${!isIndiv?`<div style="display:flex;flex-wrap:wrap;gap:6px">${pastRosterReferenceButtonHtml('','','📋 지난대회 명단 보기','pastRosterRefBtn')}</div>`:''}</div>
         <div style="display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:1px 2px 3px">
           ${filterButtons.map(item=>{const active=REGISTER_DIVISION_FILTER===item.value;return `<button type="button" onclick="setRegisterDivisionFilter('${String(item.value).replace(/'/g,"\\'")}')" style="flex:0 0 auto;min-height:36px;padding:7px 12px;border-radius:999px;border:1.5px solid ${active?'#d4a017':'#cbd5e1'};background:${active?'linear-gradient(180deg,#fff8dc,#ffed9f)':'#fff'};color:${active?'#7a5200':'#334155'};font-size:.78rem;font-weight:900;cursor:pointer;box-shadow:${active?'0 2px 6px rgba(212,160,23,.18)':'0 1px 3px rgba(15,23,42,.05)'};white-space:nowrap">${item.label} <span style="font-size:.68rem;opacity:.75">${item.count}${isIndiv?'조':'팀'}</span></button>`;}).join('')}
         </div>
@@ -9732,7 +9737,6 @@ function renderRegisterDivisionOverview(){
           ${isSel?'<span class="badge" style="background:var(--accent);color:#fff">등록 입력중</span>':''}
         </div>
         <div class="register-division-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          ${!isIndiv?pastRosterReferenceButtonHtml('',div):''}
           <button class="btn ${canRegister?'btn-primary':'btn-gray'}" style="padding:7px 14px;font-size:.78rem" ${canRegister?`onclick="selectRegDivision('${div}')"`:'disabled'}>${canRegister?(isIndividualTournament(t)?'+ 참가 접수':'+ 팀 등록'):'등록 불가'}</button>
         </div>
       </div>
@@ -10101,6 +10105,10 @@ async function beginUnifiedTeamEdit(key,idx){
       let notice=ge('unifiedTeamEditNotice');if(!notice){notice=document.createElement('div');notice.id='unifiedTeamEditNotice';host.prepend(notice);}
       notice.style.cssText='padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;margin-bottom:10px';
       notice.innerHTML='<b>기존 팀 명단 수정 중</b><div style="font-size:.8rem;margin-top:5px">선수 검색으로 등록선수를 선택한 뒤 저장하세요.</div><button type="button" class="btn btn-outline" onclick="cancelUnifiedTeamEdit()">수정 취소</button>';
+      const label=teamRegistrationLabels(G.teams[key]||[]).get(original._id)||'A';
+      const labelRow=document.createElement('label');labelRow.style.cssText='display:block;margin:10px 0;font-size:.8rem;font-weight:800';labelRow.textContent='팀 구분 (예: A, B, 청, 백)';
+      const labelInput=document.createElement('input');labelInput.id='unifiedTeamLabel';labelInput.className='form-input';labelInput.maxLength=12;labelInput.value=label;labelRow.append(labelInput);notice.append(labelRow);
+      const hint=document.createElement('div');hint.style.cssText='font-size:.74rem;margin-bottom:8px';hint.textContent='선수 수정 시 팀 구분은 유지됩니다. 다른 팀의 구분을 선택하면 두 팀의 구분만 서로 바뀝니다.';notice.append(hint);
       const button=host.querySelector('button[onclick*="registerTeam"]');if(button)button.textContent='💾 수정 내용 저장';
     }
     ge('aoReg')?.scrollIntoView({block:'start',behavior:'smooth'});
@@ -10150,6 +10158,7 @@ async function saveUnifiedTeamEditCore(){
   if(missing.length){showMissingMembers2026(missing,club,tournament);return;}
   const rules=await validateTeamDivisionRules({tid,div,club,names,excludeKey:edit.key,excludeIdx:(G.teams[edit.key]||[]).findIndex(t=>t._id===edit.id)});
   if(!rules.ok){alert(rules.error);return;}
+  const requestedTeamLabel=ge('unifiedTeamLabel')?.value||edit.original.teamLabel||teamRegistrationLabels(G.teams[edit.key]||[]).get(edit.id)||'A';
   const next={...edit.original,...buildTeamEditPayload({club,players:names,doublesCount,mainPlayerCount}),division:div,tournamentId:tid};
   try{attachRegistrationIdentities(next,tid);}catch(e){rosterSaveNotice(e.message,'error');return;}
   sl(true);
@@ -10169,7 +10178,10 @@ async function saveUnifiedTeamEditCore(){
       if(matches.docs.some(d=>[edit.div,div].includes(d.data().division||d.data().div)))throw new Error('대진 추첨 이후에는 부서를 옮길 수 없습니다.');
       if([edit.key,nextKey].some(k=>G.draws?.[k]))throw new Error('대진 추첨 이후에는 부서를 옮길 수 없습니다.');
     }
-    const after=before.map(t=>t._id===edit.id?{...t,...next}:t),fullBeforeJson=JSON.stringify(before),fullAfterJson=JSON.stringify(after);
+    const candidates=before.map(t=>t._id===edit.id?{...t,...next}:t).sort(compareOrganizationRegistrationOrder);
+    const labels=planTeamLabelEdit(candidates,edit.id,requestedTeamLabel);
+    next.teamLabel=labels.get(edit.id);
+    const after=before.map(t=>({...t,...(t._id===edit.id?next:{}),...(labels.has(t._id)?{teamLabel:labels.get(t._id)}:{})})),fullBeforeJson=JSON.stringify(before),fullAfterJson=JSON.stringify(after);
     const changes=registrationRosterChanges(before,after),when=new Date().toISOString(),actor=registrationAuditActor();
     const snapshots=[...new Set([edit.div,div])].map(division=>({ref:doc(collection(db,'restorePoints')),data:{tournamentId:tid,tournamentName:tournament?.name||tid,type:'registration_snapshot',division,reason:'공통 등록화면 팀 수정',createdAt:when,createdAtMs:Date.now(),version:202,permanent:true,actor,createdBy:[actor.role,actor.club].filter(Boolean).join(' · '),fullBeforeJson,fullAfterJson,changes,beforeJson:JSON.stringify(before.filter(t=>t.division===division)),afterJson:JSON.stringify(after.filter(t=>t.division===division))}}));
     if(snapshots.some(x=>new TextEncoder().encode(JSON.stringify(x.data)).length>700000))throw new Error('복구 기록 저장 한도를 초과했습니다.');
@@ -10177,11 +10189,14 @@ async function saveUnifiedTeamEditCore(){
     await runTransaction(db,async tx=>{
       const latest=await tx.get(ref);
       if(!latest.exists()||stableStringify(latest.data())!==stableStringify(qs.docs.find(d=>d.id===edit.id).data()))throw new Error('다른 기기에서 명단이 변경됐습니다. 다시 열어 주세요.');
-      tx.set(ref,payload,{merge:true});snapshots.forEach(x=>tx.set(x.ref,x.data));
+      const peers=[];
+      for(const [id,label] of labels){if(id===edit.id)continue;const peerRef=doc(db,'registrations',id),latestPeer=await tx.get(peerRef),baseline=before.find(t=>t._id===id);const expected={...baseline};delete expected._id;if(!latestPeer.exists()||stableStringify(latestPeer.data())!==stableStringify(expected))throw new Error('다른 기기에서 팀 구분이 변경됐습니다. 다시 열어주세요.');peers.push({ref:peerRef,label});}
+      tx.set(ref,payload,{merge:true});peers.forEach(peer=>tx.update(peer.ref,{teamLabel:peer.label,updatedAt:when}));snapshots.forEach(x=>tx.set(x.ref,x.data));
       pastArchiveMutation(tx,tid);
     });
-    G.teams[edit.key]=(G.teams[edit.key]||[]).filter(t=>t._id!==edit.id);
-    if(!G.teams[nextKey])G.teams[nextKey]=[];G.teams[nextKey].push(next);
+    if(nextKey===edit.key){G.teams[edit.key]=(G.teams[edit.key]||[]).map(t=>t._id===edit.id?next:t);}
+    else{G.teams[edit.key]=(G.teams[edit.key]||[]).filter(t=>t._id!==edit.id);if(!G.teams[nextKey])G.teams[nextKey]=[];G.teams[nextKey].push(next);G.teams[nextKey].sort(compareOrganizationRegistrationOrder);}
+    for(const team of G.teams[nextKey]||[]){if(labels.has(team._id))team.teamLabel=labels.get(team._id);}
     if(!G._regIdsByKey)G._regIdsByKey={};
     for(const k of new Set([edit.key,nextKey])){G._regIdsByKey[k]=(G.teams[k]||[]).map(t=>t._id);markFbWriteCache('teams',k,{docs:(G.teams[k]||[]).map(t=>registrationSafetyProjection(t,tid,_k2td(k).div)),ids:G._regIdsByKey[k].slice().sort(),deleted:[]});}
     PLAYER_REG_HISTORY_CACHE.clear();PLAYER_REG_HISTORY_VERIFIED.clear();PLAYER_SEARCH_MODEL=null;pastArchiveLocalInvalidation(tid);
