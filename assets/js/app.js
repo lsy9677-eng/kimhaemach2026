@@ -7328,7 +7328,7 @@ function tdn(team,key,idx){
   }
   const ts=G.teams[key]||[];
   const same=ts.filter(t=>t.club===team.club);
-  if(same.length<=1&&!team.teamLabel)return team.club;
+  if(same.length<=1)return team.club;
   const source=team._id||((ts[idx]?.club===team.club)?ts[idx]._id||ts[idx]:team);
   const label=String(team.teamLabel||'')||teamRegistrationLabels(ts).get(source)||'A';
   return team.club+'-'+label;
@@ -10106,10 +10106,10 @@ async function beginUnifiedTeamEdit(key,idx){
       let notice=ge('unifiedTeamEditNotice');if(!notice){notice=document.createElement('div');notice.id='unifiedTeamEditNotice';host.prepend(notice);}
       notice.style.cssText='padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;margin-bottom:10px';
       notice.innerHTML='<b>기존 팀 명단 수정 중</b><div style="font-size:.8rem;margin-top:5px">선수 검색으로 등록선수를 선택한 뒤 저장하세요.</div><button type="button" class="btn btn-outline" onclick="cancelUnifiedTeamEdit()">수정 취소</button>';
-      const label=teamRegistrationLabels(G.teams[key]||[]).get(original._id)||'A';
+      const label=teamRegistrationLabels(G.teams[key]||[]).get(original._id)??'';
       const labelRow=document.createElement('label');labelRow.style.cssText='display:block;margin:10px 0;font-size:.8rem;font-weight:800';labelRow.textContent='팀 구분 (예: A, B, 청, 백)';
       const labelInput=document.createElement('input');labelInput.id='unifiedTeamLabel';labelInput.className='form-input';labelInput.maxLength=12;labelInput.value=label;labelRow.append(labelInput);notice.append(labelRow);
-      const hint=document.createElement('div');hint.style.cssText='font-size:.74rem;margin-bottom:8px';hint.textContent='선수 수정 시 팀 구분은 유지됩니다. 다른 팀의 구분을 선택하면 두 팀의 구분만 서로 바뀝니다.';notice.append(hint);
+      const hint=document.createElement('div');hint.style.cssText='font-size:.74rem;margin-bottom:8px';hint.textContent='같은 부서에 한 팀이면 클럽명만 표시합니다. 두 팀 이상이면 빈 구분은 A, B 순으로 자동 지정됩니다. 다른 팀의 구분을 선택하면 두 팀의 구분만 서로 바뀝니다.';notice.append(hint);
       const button=host.querySelector('button[onclick*="registerTeam"]');if(button)button.textContent='💾 수정 내용 저장';
     }
     ge('aoReg')?.scrollIntoView({block:'start',behavior:'smooth'});
@@ -10159,7 +10159,7 @@ async function saveUnifiedTeamEditCore(){
   if(missing.length){showMissingMembers2026(missing,club,tournament);return;}
   const rules=await validateTeamDivisionRules({tid,div,club,names,excludeKey:edit.key,excludeIdx:(G.teams[edit.key]||[]).findIndex(t=>t._id===edit.id)});
   if(!rules.ok){alert(rules.error);return;}
-  const requestedTeamLabel=ge('unifiedTeamLabel')?.value||edit.original.teamLabel||teamRegistrationLabels(G.teams[edit.key]||[]).get(edit.id)||'A';
+  const requestedTeamLabel=ge('unifiedTeamLabel')?.value??teamRegistrationLabels(G.teams[edit.key]||[]).get(edit.id)??'';
   const next={...edit.original,...buildTeamEditPayload({club,players:names,doublesCount,mainPlayerCount}),division:div,tournamentId:tid};
   try{attachRegistrationIdentities(next,tid);}catch(e){rosterSaveNotice(e.message,'error');return;}
   sl(true);

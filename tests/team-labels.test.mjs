@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {teamRegistrationLabels,planTeamLabelEdit} from '../assets/js/team-labels.js';
 const teams=[{_id:'a',club:'클럽',division:'금',players:['가']},{_id:'other',club:'다른클럽',division:'금'},{_id:'b',club:'클럽',division:'금',players:['나']},{_id:'silver',club:'클럽',division:'은'}];
 test('automatic team designations are scoped to club and division',()=>{
- const labels=teamRegistrationLabels(teams);assert.equal(labels.get('a'),'A');assert.equal(labels.get('b'),'B');assert.equal(labels.get('silver'),'A');
+ const labels=teamRegistrationLabels(teams);assert.equal(labels.get('a'),'A');assert.equal(labels.get('b'),'B');assert.equal(labels.get('silver'),'');
 });
 test('editing a roster freezes the existing team designations',()=>{
  const labels=planTeamLabelEdit(teams,'a','A');const saved=teams.map(t=>({...t,...(labels.has(t._id)?{teamLabel:labels.get(t._id)}:{})}));
@@ -17,4 +17,17 @@ test('new teams avoid designations already assigned by the director',()=>{
 });
 test('custom Korean designation is accepted and unsafe labels are rejected',()=>{
  assert.equal(planTeamLabelEdit(teams,'a','청').get('a'),'청');assert.throws(()=>planTeamLabelEdit(teams,'a','<script>'),/팀 구분/);
+});
+
+test('a single team hides a previously saved A and allows clearing it',()=>{
+ const single=[{_id:'modern',club:'모던',division:'금',teamLabel:'A'}];
+ assert.equal(teamRegistrationLabels(single).get('modern'),'');
+ assert.equal(planTeamLabelEdit(single,'modern','').get('modern'),'');
+});
+test('adding and removing a second team updates automatic labels',()=>{
+ const first={_id:'a',club:'모던',division:'금',teamLabel:''};
+ const second={_id:'b',club:'모던',division:'금'};
+ assert.deepEqual([...teamRegistrationLabels([first,second]).values()],['A','B']);
+ assert.equal(teamRegistrationLabels([second]).get('b'),'');
+ assert.deepEqual([...planTeamLabelEdit([first,second],'a','').values()],['A','B']);
 });
