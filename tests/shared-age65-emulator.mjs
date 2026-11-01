@@ -21,7 +21,7 @@ await put(source,'memberRegistries/2026',{members});
 await put(source,'age65Certifications/shared-legacy',{name:names[2],clubAtApproval:club,certified:true});
 await put(target,'age65Certifications/shared-local',{name:names[6],clubAtApproval:club,certified:true});
 await put(target,'tournaments/'+tid,{name:'가상 65세 연동 검증',date:'2026-12-01',createdAt:'2026-10-29T00:00:00Z',status:'open',type:'team',divisions:['동'],divSettings:{동:{doublesCount:3}}});
-await put(target,'tournaments/shared-age65-past',{name:'2025 가상 시장기',date:'2025-12-01',createdAt:'2025-01-01T00:00:00Z',status:'finished',type:'team',divisions:['금'],divSettings:{금:{doublesCount:3}}});
+await put(target,'tournaments/shared-age65-past',{name:'2026 상반기 가상 시장기',date:'2026-05-01',createdAt:'2026-01-01T00:00:00Z',status:'finished',type:'team',divisions:['금'],divSettings:{금:{doublesCount:3}}});
 await put(target,'registrations/shared-age65-baseline',{tournamentId:'shared-age65-past',division:'금',club,players:names,doublesCount:3,mainPlayerCount:6});
 const prior=await (await fetch(target+'/registrations')).json();
 for(const doc of prior.documents||[])if(doc.fields?.tournamentId?.stringValue===tid)assert.ok((await fetch('http://127.0.0.1:8081/v1/'+doc.name,{method:'DELETE'})).ok);

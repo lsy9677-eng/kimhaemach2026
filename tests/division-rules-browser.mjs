@@ -34,11 +34,12 @@ try{
     refreshDivisionRuleFormBadges('register');
   },names);
   await page.locator('#jangyuDivisionFormWarning_register').waitFor();
-  assert.match(await page.locator('#roster summary').innerText(),/하향 인원 초과: 3명/);
+  assert.match(await page.locator('#roster summary').innerText(),/하향 인원 초과: 2명/);
   assert.match(await page.locator('#jangyuDivisionFormWarning_register').innerText(),/접수 가능/);
   assert.equal(await page.locator('#p7').locator('..').locator('.division-rule-form-row153').count(),0);
-  await page.locator('#p6').locator('..').locator('.division-rule-form-badge148').first().click();
-  assert.match(await page.locator('#divisionRuleReasonBody').innerText(),/2025년 금배부 출전 명단 기록에 따른 하향 판정/);
+  assert.equal(await page.locator('#p6').locator('..').locator('.division-rule-form-row153').count(),0);
+  await page.locator('#p1').locator('..').locator('.division-rule-form-badge148').first().click();
+  assert.match(await page.locator('#divisionRuleReasonBody').innerText(),/2026년 금배부 출전 명단 기록에 따른 하향 판정/);
   assert.match(await page.locator('#p5').locator('..').innerText(),/직전 예선탈락 예외/);
   assert.match(await page.locator('#p3').locator('..').innerText(),/여성/);
   assert.match(await page.locator('#p4').locator('..').innerText(),/65\+/);

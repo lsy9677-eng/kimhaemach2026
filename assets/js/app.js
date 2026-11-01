@@ -8412,13 +8412,14 @@ function _rulePrevTournaments(currentT){
     const hasFinalResults=t.status==='finished'||!!getPastArchive(t.id)||(HIST_DATA||[]).some(h=>String(h.id)===String(t.id)&&(h.teams||[]).some(tm=>Number(tm.rank||0)>0));
     const completedEarlier=year===currentYear&&isPastArchiveTournament(t)&&hasFinalResults&&date&&currentDate&&date<currentDate;
     if(_divisionRulePolicy().jangyu){
-      if((priorYear||year===currentYear)&&hasFinalResults&&date&&currentDate&&date<currentDate)uniq.set(String(t.id),t);
+      const firstHalf=year===currentYear&&date>=`${currentYear}-01-01`&&date<`${currentYear}-07-01`;
+      if(firstHalf&&hasFinalResults&&date&&currentDate&&date<currentDate)uniq.set(String(t.id),t);
       return;
     }
     if(priorYear||completedEarlier)uniq.set(String(t.id),t);
   });
   let arr=[...uniq.values()];
-  // 장유도 전년도 명단을 함께 비교한다. 직전 대회의 낮은 부서 신청으로 이력을 덮지 않는다.
+  // 장유 하향 기준은 해당 연도 상반기 확정 대회만 사용하며 전년도 기록으로 대체하지 않는다.
   if(_divisionRulePolicy().jangyu){
     return arr.sort((a,b)=>String(getTournamentDateKey(b)||b.date||'').localeCompare(String(getTournamentDateKey(a)||a.date||'')));
   }
@@ -8562,7 +8563,7 @@ async function ensureDivisionRuleCache(tid){
   if(!tid) return null;
   const sharedTournament=(G.tournaments||[]).find(t=>String(t.id)===tid);
   if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR);
-  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===315)return DIVISION_RULE_CACHE.get(tid);
+  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===317)return DIVISION_RULE_CACHE.get(tid);
   DIVISION_RULE_CACHE.delete(tid);
   if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
   const promise=(async()=>{
@@ -8604,7 +8605,7 @@ async function ensureDivisionRuleCache(tid){
       if(!byName.has(nn)) byName.set(nn,[]);
       byName.get(nn).push(r);
     }));
-    const cache={tid,currentYear,prevTs,records,byName,basisVersion:315};
+    const cache={tid,currentYear,prevTs,records,byName,basisVersion:317};
     DIVISION_RULE_CACHE.set(tid,cache);
     return cache;
   })().finally(()=>DIVISION_RULE_PROMISE.delete(tid));
@@ -8755,7 +8756,7 @@ function _divisionRuleReasonLines(tid,div,name,club){
     ${exception?`<div style="margin-top:8px;color:#166534;font-weight:850">예외 자격: ${esc(exception)}</div>`:''}
     ${prelimException?'<div style="margin-top:8px;color:#166534;font-weight:850">직전 대회 금배조 예선탈락팀 명단 · 은배 출전 예외 (일반 하향 1명 제한에서 제외)</div>':''}
     ${reason}
-    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 전년도 및 올해 먼저 종료된 대회의 명단을 함께 비교해 가장 높은 출전 부서로 판정합니다. 올해 낮은 부서 출전 기록이 있어도 전년도 상위 부서 기록은 유지됩니다. 일반 하향은 팀당 1명이며, 여성·65세 이상 및 직전 금배조 예선탈락팀의 은배 출전은 예외입니다. 경고가 있어도 접수는 가능합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
+    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 해당 대회 연도 상반기(1월 1일~6월 30일)의 확정 대회 명단을 기준으로 판정합니다. 작년·하반기·현재 접수 명단은 하향 근거에서 제외하며, 상반기 기록이 없으면 작년 기록으로 대체하지 않습니다. 일반 하향은 팀당 1명이며, 여성·65세 이상 및 직전 금배조 예선탈락팀의 은배 출전은 예외입니다. 경고가 있어도 접수는 가능합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
 }
 function openDivisionRuleReason(name,club,tid,div){
   ensureDivisionRuleReasonModal();
