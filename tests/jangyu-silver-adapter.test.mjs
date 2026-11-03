@@ -15,10 +15,11 @@ test('gold selection compares all eliminated teams and excludes main entrants',(
  assert.equal(result.team.players[0],'b선수');assert.equal(result.candidates.length,1);
 });
 
-test('2025 second-half Modern C is fixed even without historical match scores',()=>{
+test('2025 first-half Modern C is fixed even without historical match scores',()=>{
  const teams=[{_id:'a',club:'모던',teamLabel:'A',players:['A선수']},{_id:'c',club:'모던',teamLabel:'C',players:['C선수']}];
- const c={G:{tournaments:[{id:'old',date:'2025-11-01',divisions:['금']}],teams:{old_금:teams},matches:{}},selectLowestEliminatedTeam,getTournamentDateKey:t=>t?.date||'',_ruleDivKey:()=> 'gold',tdn:t=>t.club+'-'+t.teamLabel};
+ const c={G:{tournaments:[{id:'old',date:'2025-05-01',divisions:['금']}],teams:{old_금:teams},matches:{}},selectLowestEliminatedTeam,getTournamentDateKey:t=>t?.date||'',_ruleDivKey:()=> 'gold',tdn:t=>t.club+'-'+t.teamLabel};
  vm.createContext(c);vm.runInContext(src.slice(src.indexOf('function jangyuSilverSelection('),src.indexOf('async function openJangyuSilverSelection')),c);
  const result=c.jangyuSilverSelection('old');assert.equal(result.team.id,'c');assert.equal(result.team.fixed,true);assert.deepEqual(Array.from(result.team.players),['C선수']);
- teams.pop();assert.equal(c.jangyuSilverSelection('old').status,'missing');
+ c.G.tournaments[0].date='2025-11-01';assert.equal(c.jangyuSilverSelection('old').status,'none');
+ c.G.tournaments[0].date='2025-05-01';teams.pop();assert.equal(c.jangyuSilverSelection('old').status,'missing');
 });
