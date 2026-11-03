@@ -30,3 +30,12 @@ test('all same-club pairs are first when several clubs enter multiple teams, wit
  assert.equal(sameClubMatch(ordered[0],teams,tokens),true);assert.equal(sameClubMatch(ordered[1],teams,tokens),true);assert.ok(ordered.slice(2).every(m=>!sameClubMatch(m,teams,tokens)));
  assert.equal(JSON.stringify(matches),before);assert.ok(ordered.every(m=>m.winner===m.t1));
 });
+
+test('four-team league begins with clubmates then the remaining two teams, in three complementary rounds',()=>{
+ const teams=[{club:'모던'},{club:'다른클럽'},{club:'모던'},{club:'네번째'}],matches=[];
+ for(let a=0;a<4;a++)for(let b=a+1;b<4;b++)matches.push({id:`${a}-${b}`,t1:a,t2:b,winner:a===0&&b===2?0:null});
+ const ordered=prioritizeSameClubMatches(matches,teams,tokens);
+ assert.deepEqual(ordered.map(m=>m.id),['0-2','1-3','0-1','2-3','0-3','1-2']);
+ for(let i=0;i<6;i+=2)assert.equal(new Set(ordered.slice(i,i+2).flatMap(m=>[m.t1,m.t2])).size,4);
+ assert.equal(ordered[0].winner,0);
+});

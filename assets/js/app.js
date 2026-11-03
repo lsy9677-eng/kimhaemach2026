@@ -11858,7 +11858,7 @@ function findGroupMatchByTeams(key, gi, ta, tb){
   return (G.matches[key]||[]).find(m=>m && m.phase==='group' && Number(m.group)===Number(gi) && ((m.t1===ta && m.t2===tb) || (m.t1===tb && m.t2===ta)));
 }
 function getIndividualGroupAutoQueue(key, gi){
-  if(isRoundRobinKey(key))return prioritizeSameClubMatches((G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)&&m.winner==null),G.teams[key]||[],getTeamClubTokens).map(match=>({match,autoLabel:sameClubMatch(match,G.teams[key]||[],getTeamClubTokens)?'풀리그 · 같은 클럽 우선':'풀리그'}));
+  if(isRoundRobinKey(key))return prioritizeSameClubMatches((G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)),G.teams[key]||[],getTeamClubTokens).filter(m=>m.winner==null).map(match=>({match,autoLabel:sameClubMatch(match,G.teams[key]||[],getTeamClubTokens)?'풀리그 · 같은 클럽 우선':'풀리그'}));
   const grp=G.draws[key]?.groups?.[Number(gi)];
   if(!grp || !Array.isArray(grp.teams)) return [];
   const teams=grp.teams.slice();
@@ -12731,7 +12731,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     html+=`</div>`;
   }
 
-  if(mMs.length && showMainSection){
+  if(cfg.format!=='roundrobin'&&mMs.length && showMainSection){
     const rounds=[...new Set(mMs.map(m=>Number(m.round||0)))].sort((a,b)=>a-b);
     const totalR=rounds.length;
 
@@ -12801,7 +12801,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
     }
   }
 
-  if(!mMs.length&&draw.groups?.length&&showMainSection){
+  if(cfg.format!=='roundrobin'&&!mMs.length&&draw.groups?.length&&showMainSection){
     html+=`<div class="sec-title" style="margin-top:16px">🏆 본선 빈 피라미드 대진표</div>${renderActualMainPyramidForDiv(tid,div,false)}`;
   }
   return html;
@@ -13389,6 +13389,7 @@ function switchBVTab(div){
 }
 
 function renderCombinedBracketSection(tid, div){
+  if(gDS(G.tournaments.find(t=>t.id===tid),div).format==='roundrobin')return renderBracketHTMLForDiv(tid,div,false);
   const key = tid+'_'+div;
   if(!bracketPhasePublished(tid,'prelim')&&!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('prelim')+bracketPublicationNotice('main');
   const teams = G.teams[key] || [];
@@ -15860,7 +15861,8 @@ function renderSavedDrawView(entry){
     ? norm.mainPreviewSlots
     : (Array.isArray(norm.plan?.matchSlots) && norm.plan.matchSlots.length ? norm.plan.matchSlots : []);
   const savedMainSize = Number(norm.mainSize || norm.plan?.n || 0);
-  const mainHtml = isMainMode
+  const savedLeague=isRoundRobinKey(norm.key||((norm.tournamentId||'')+'_'+(norm.division||norm.div||'')));
+  const mainHtml = savedLeague?'<div>전체 풀리그 · 최종 순위 확정 · 본선 없음</div>':isMainMode
     ? ((savedMainSlots.length && savedMainSize>=2)
         ? renderMainPreviewHTML(savedMainSlots, savedMainSize, false)
         : '<div style="font-size:.8rem;color:var(--text3)">본선 추첨 정보 없음</div>')
@@ -15908,7 +15910,7 @@ function renderSavedDrawView(entry){
         ${isMainMode&&norm.isTest&&canManageBracket()?`<button class="btn btn-primary" style="margin-top:12px" onclick="applySavedMainDrawToLive('${norm.id||norm._id||entry.id||entry._id}','${norm.key||entry.key}')">이 결과를 실제 본선에 적용</button>`:''}
       </div>
       <div>
-        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${isMainMode ? '본선 추첨 결과' : '본선 빈 피라미드'}</div>
+        <div style="font-weight:800;font-size:.84rem;color:var(--primary-dark);margin-bottom:8px">🌳 ${savedLeague?'풀리그 · 본선 없음':isMainMode ? '본선 추첨 결과' : '본선 빈 피라미드'}</div>
         <div style="background:linear-gradient(135deg,#fffdf5,#eef5ff);border:1.5px dashed var(--accent);border-radius:var(--radius-lg);padding:10px;overflow-x:auto">
           ${mainHtml}
         </div>
@@ -24562,7 +24564,12 @@ async function autoOrderMatches(key){
     remaining = nextRemaining;
   }
 
-  const finalOrder = [...done, ...prioritizeRoundRobinMatches(key,[...ordered, ...withoutCourt])];
+  const pendingOrder=prioritizeRoundRobinMatches(key,[...ordered,...withoutCourt]);
+  if(isRoundRobinKey(key)){
+    const fullOrder=prioritizeSameClubMatches(list,G.teams[key]||[],getTeamClubTokens),positions=new Map(fullOrder.map((m,i)=>[String(m.id),i]));
+    pendingOrder.sort((a,b)=>positions.get(String(a.id))-positions.get(String(b.id)));
+  }
+  const finalOrder = [...done, ...pendingOrder];
   const base = new Date('2000-01-01T00:00:00Z').getTime();
   finalOrder.forEach((m, i) => {
     if(getCourts(m).length > 0){
@@ -29306,6 +29313,7 @@ function outputMainTreeHtml(tid,div,blank=false){
     `<div style="font-size:8px;color:#64748b;text-align:center;margin-bottom:4px">맨 아래 팀 배치 · 승리팀은 굵은 가지선으로 위 단계까지 연결</div>${tree}`;
 }
 function renderActualMainPyramidForDiv(tid,div,showSaveButton=true){
+  if(gDS(G.tournaments.find(t=>t.id===tid),div).format==='roundrobin')return '';
   if(!bracketPhasePublished(tid,'main'))return bracketPublicationNotice('main');
   setTimeout(()=>{ try{ initMobileBracketHorizontalScroll(document); }catch(e){} },0);
   const key=tid+'_'+div, allMs=G.matches?.[key]||[];
