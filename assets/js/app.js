@@ -847,7 +847,11 @@ function stopTournamentListSync(){
 }
 function startTournamentListSync(){
   stopTournamentListSync();
-  _tournamentsUnsub=onSnapshot(query(collection(db,'tournaments'),orderBy('createdAt','desc')), async snap=>{
+  // Firestore orderBy excludes documents without that field. Legacy Jangyu imports
+  // may lack createdAt; include the full collection and keep the existing client sort.
+  const tournamentsRef=collection(db,'tournaments');
+  const tournamentSource=MATCH_ORGANIZATION.id==='jangyu'?tournamentsRef:query(tournamentsRef,orderBy('createdAt','desc'));
+  _tournamentsUnsub=onSnapshot(tournamentSource, async snap=>{
     G.tournaments=sortTournamentsLatest(snap.docs.map(d=>({id:d.id,...d.data()})));
     hydratePastArchives();
     try{
