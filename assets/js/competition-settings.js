@@ -5,7 +5,7 @@ export function mergeCompetitionSettings(previous={},patch={},teamCount=0,organi
  if(next.format==='roundrobin'){
   if(teamCount<2)throw new Error('풀리그는 최소 2팀이 필요합니다.');
   next.grpSize=teamCount;next.advance=1;
-  next.prelimDrawSettings={teamCount,groupSizes:[teamCount],advance:1,format:'roundrobin'};
+  next.prelimDrawSettings={...(patch.prelimDrawSettings||previous.prelimDrawSettings||{}),teamCount,groupSizes:[teamCount],advance:1,format:'roundrobin'};
  }else if(patch.prelimDrawSettings){
   next.prelimDrawSettings={...patch.prelimDrawSettings,format:next.format};
  }else if(next.format!==previous.format||next.grpSize!==previous.grpSize||next.advance!==previous.advance){

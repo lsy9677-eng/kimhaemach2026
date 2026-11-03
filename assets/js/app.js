@@ -1456,7 +1456,10 @@ const COURT_LIST = DEFAULT_COURT_LIST;
 
 function getDrawAllowedCourts(key){
   try{
-    return ((G.draws?.[key]?.allowedCourts)||[]).map(String).filter(Boolean);
+    const {tid,div}=_k2td(key);
+    const config=(G.tournaments||[]).find(t=>String(t.id)===String(tid))?.divSettings?.[div];
+    const saved=config&&Object.prototype.hasOwnProperty.call(config,'prelimAllowedCourts')?config.prelimAllowedCourts:G.draws?.[key]?.allowedCourts;
+    return (Array.isArray(saved)?saved:[]).map(String).filter(Boolean);
   }catch(e){ return []; }
 }
 function getBracketAllowedCourts(key){
@@ -1469,7 +1472,9 @@ function getBracketAllowedCourts(key){
 }
 function renderDrawAllowedCourtSelector(key, selectedCourts=[]){
   const selected=(selectedCourts||[]).map(String).filter(Boolean);
-  const body=renderCourtAccordionSelector(selected, null, `draw_allowed_${key}`, getBracketAllowedCourts(key));
+  const {tid,div}=_k2td(key);
+  const pool=resolveAllowedCourts({divisionCourts:getDivisionConfiguredCourts(tid,div),drawCourts:[],tournamentCourts:getTournamentCourtList(tid,true)});
+  const body=renderCourtAccordionSelector(selected, null, `draw_allowed_${key}`, pool);
   return `<div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#f8fbff,#fffdf5);border:1.5px solid #dbe7ff;border-radius:12px">
     <div style="font-weight:900;font-size:.88rem;color:var(--primary-dark);margin-bottom:6px">🎾 예선 운영 코트 지정</div>
     <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:10px">
@@ -1481,6 +1486,7 @@ function renderDrawAllowedCourtSelector(key, selectedCourts=[]){
     </div>
     <div id="drawAllowedCourtsWrap">${body}</div>
     <div id="drawAllowedCourtsSummary" style="font-size:.72rem;color:var(--text3);margin-top:8px;line-height:1.55"></div>
+    <button type="button" class="btn btn-primary" style="margin-top:10px" onclick="savePrelimDrawSettings()">💾 코트·조편성 설정 저장</button>
   </div>`;
 }
 function updateDrawAllowedCourtsSummary(){
@@ -12444,7 +12450,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         <div class="login-menu-wrap js-mini-menu" id="${prelimMenuWrapId}">
           <button class="btn btn-outline" style="padding:4px 10px;font-size:.72rem;min-height:34px;white-space:nowrap;font-weight:800" onclick="toggleMiniMenu(event,'${prelimMenuWrapId}')">🎲 예선 추첨 관리</button>
           <div class="login-menu-panel" style="min-width:210px">
-            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');${prelimRedrawAction}" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">${draw?'🎲 예선 재추첨':'🎲 예선 추첨 시작'}</button>`:''}
+            ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');${prelimRedrawAction}" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">${draw?'🎲 예선 재추첨 및 설정':'🎲 예선 추첨 시작 및 설정'}</button>`:''}
             <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');openLatestSavedDraw('${tid}','${div}','prelim')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12);${latestPrelimSavedDraw?'':'opacity:.5;cursor:not-allowed;'}" ${latestPrelimSavedDraw?'':'disabled'}>📋 예선 결과 보기</button>
             <button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');openDrawHistory('${tid}','${div}','prelim')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">🗂 예선 추첨 기록</button>
             ${canManageBracket()?`<button class="btn-sm login-menu-item" onclick="closeMiniMenu('${prelimMenuWrapId}');resetPrelimDrawOnly('${key}')" style="background:#fff;color:#0f1e3a;border:1px solid rgba(15,30,58,.12)">♻️ 예선 초기화</button>`:''}
@@ -12534,7 +12540,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
             <div style="flex:1;min-width:0">
               <div style="font-weight:900;font-size:1rem;color:var(--primary-dark);margin-bottom:6px">예선 추첨 전입니다</div>
               <div style="font-size:.84rem;color:var(--text2);line-height:1.7">등록팀은 위에서 바로 확인할 수 있습니다. 예선 추첨을 진행하면 조편성, 예선 경기, 본선 흐름이 자동으로 표시됩니다.</div>
-              ${canManageBracket() ? `<div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-accent" style="padding:8px 14px;font-size:.82rem;min-height:36px" onclick="openDraw('${tid}','${div}')">🎲 예선 추첨 시작</button></div>` : ''}
+              ${canManageBracket() ? `<div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-accent" style="padding:8px 14px;font-size:.82rem;min-height:36px" onclick="openDraw('${tid}','${div}')">🎲 예선 추첨 시작 및 설정</button></div>` : ''}
             </div>
           </div>
         </div>`
@@ -14665,7 +14671,7 @@ function openDraw(tid,div){
   DW.plan=null;
   const histCnt=(G.drawHistories[key]||[]).filter(x=>!x.deleted).length;
   const titleInput=ge('drawTitleInput');
-  if(titleInput) titleInput.value=`${dl(div)} 추첨 ${histCnt+1}`;
+  if(titleInput) titleInput.value=t?.divSettings?.[div]?.prelimDrawSettings?.title||`${dl(div)} 추첨 ${histCnt+1}`;
   const drawIsTestInput=ge('drawIsTestInput');
   if(drawIsTestInput) drawIsTestInput.checked=false;
 
@@ -14705,6 +14711,10 @@ function openDraw(tid,div){
   ge('confirmDrawBtn').disabled=teams.length<2;
   _ensureManualPrelimButton();
   ensurePrelimConfigSaveControls();
+  updatePrelimSettingsSavedStatus(t?.divSettings?.[div]?.prelimDrawSettings?.savedAt);
+  const footer=ge('confirmDrawBtn')?.parentElement;
+  if(footer&&!ge('prelimSettingsFooterSave')){const button=document.createElement('button');button.id='prelimSettingsFooterSave';button.type='button';button.className='btn btn-primary';button.textContent='💾 설정만 저장';button.onclick=()=>savePrelimDrawSettings();footer.insertBefore(button,ge('confirmDrawBtn'));}
+  if(ge('prelimSettingsFooterSave'))ge('prelimSettingsFooterSave').style.display='';
   om('mDraw');
 }
 
@@ -14798,7 +14808,12 @@ function buildDrawPresets(n,t,div){
 function ensurePrelimConfigSaveControls(){
   let box=ge('prelimConfigSaveControls');
   if(!box){box=document.createElement('div');box.id='prelimConfigSaveControls';ge('grpPresets')?.parentElement?.appendChild(box);}
-  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 조추첨 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">설정 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택하세요. 전체 풀리그는 본선 없이 순위를 확정하며, 예선+본선은 조 수와 진출 수로 본선을 계산합니다.</div>';
+  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 코트·조편성 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">추첨 실행 없이 운영 코트와 조편성 기준을 저장합니다. 다시 열어도 유지되며 기존 대진·경기 결과는 바뀌지 않습니다. 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택할 수 있습니다. 전체 풀리그는 본선 없이 순위를 확정하며, 예선+본선은 조 수와 진출 수로 본선을 계산합니다.</div>';
+}
+function updatePrelimSettingsSavedStatus(savedAt){
+  const host=ge('prelimConfigSaveControls');if(!host)return;
+  let status=ge('prelimSettingsSavedStatus');if(!status){status=document.createElement('div');status.id='prelimSettingsSavedStatus';status.setAttribute('role','status');status.style.cssText='margin-top:8px;font-size:.76rem;color:#166534';host.appendChild(status);}
+  status.textContent=savedAt?'저장 완료 · '+new Date(savedAt).toLocaleString('ko-KR'):'설정을 변경한 뒤 저장 버튼을 눌러 주세요.';
 }
 function validPrelimGroupSizes(sizes,count){return Array.isArray(sizes)&&sizes.length>0&&sizes.every(x=>Number.isInteger(x)&&x>=2&&x<=6)&&sizes.reduce((a,b)=>a+b,0)===count;}
 function setCustomPrelimGroupSizes(){
@@ -14816,8 +14831,11 @@ async function savePrelimDrawSettings(){
   if(!canManageBracket()||!DW?.key){toast('설정 권한이 없습니다','error');return;}
   const {tid,div,teams,cfg}=DW;
   if(cfg.format!=='roundrobin'&&!validPrelimGroupSizes(cfg.grpSizes,teams.length)){toast('조 구성을 확인하세요','error');return;}
-  const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,savedAt:new Date().toISOString()};
-  sl(true);try{await saveCompetitionSettings(tid,{[div]:{format:cfg.format||'group_knockout',grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings}});toast('대회 설정과 조편성 설정을 함께 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
+  const savedAt=new Date().toISOString();
+  const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,title:String(ge('drawTitleInput')?.value||'').trim(),sameClubPolicy:'separate_where_possible',savedAt};
+  const patch={format:cfg.format||'group_knockout',grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings};
+  if(AD&&ge('drawAllowedCourtsWrap'))patch.prelimAllowedCourts=getDrawAllowedCourtsFromModal();
+  sl(true);try{await saveCompetitionSettings(tid,{[div]:patch});updatePrelimSettingsSavedStatus(savedAt);toast('코트·조편성 설정을 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
 }
 window.setCustomPrelimGroupSizes=setCustomPrelimGroupSizes;window.savePrelimDrawSettings=savePrelimDrawSettings;
 
@@ -16160,6 +16178,7 @@ function calcIndivGroups(n, grpSize){
 
 // 개인전 추첨 모달 열기
 function openIndividualDraw(tid,div){
+  if(ge('prelimSettingsFooterSave'))ge('prelimSettingsFooterSave').style.display='none';
   const key=tid+'_'+div;
   const teams=G.teams[key]||[];
   const t=G.tournaments.find(t=>t.id===tid);
