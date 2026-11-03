@@ -34,7 +34,7 @@ try{
     refreshDivisionRuleFormBadges('register');
   },names);
   await page.locator('#jangyuDivisionFormWarning_register').waitFor();
-  assert.match(await page.locator('#roster summary').innerText(),/금배 출전 선수 하위 부서 등록 불가/);
+  assert.match(await page.locator('#roster summary').innerText(),/하향 인원 초과: 3명/);
   assert.match(await page.locator('#jangyuDivisionFormWarning_register').innerText(),/접수 불가/);
   assert.equal(await page.locator('#p7').locator('..').locator('.division-rule-form-row153').count(),0);
   assert.equal(await page.locator('#p6').locator('..').locator('.division-rule-form-row153').count(),1);

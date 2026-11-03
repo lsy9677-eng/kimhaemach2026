@@ -47,7 +47,7 @@ test('은→동 일반 하향 1명은 허용하고 2명 이상은 차단한다',
 test('여성·65+ 인증은 2단계 하향에도 예외이며 일반 하향 정원에 포함하지 않는다',async()=>{
   const c=setup({rows:[{...reg('s','테사모','금',['여선수','시니어','일반']),tournamentId:'spring'}],registry:[{name:'여선수',club:'테사모',gender:'F'},{name:'시니어',club:'테사모',age65Certified:true}]});
   const result=await c.validateTeamDivisionRules({tid:'autumn',div:'동',club:'테사모',names:['여선수','시니어','일반']});
-  assert.equal(result.ok,false);assert.equal(result.exceptionCount,2);assert.equal(result.warnings.length,1);assert.match(result.warnings[0],/일반/);
+  assert.equal(result.ok,true);assert.equal(result.exceptionCount,2);assert.equal(result.warnings.length,0);
   assert.equal((await classify(c,'일반','동')).exceptionApproved,false);
 });
 test('예선탈락 예외는 확정된 직전 금배 팀 명단에만 적용하고 같은 클럽 본선팀에는 적용하지 않는다',async()=>{
@@ -60,7 +60,7 @@ test('예선탈락 예외는 확정된 직전 금배 팀 명단에만 적용하�
   assert.equal((await classify(c,'미확정','은','하모니')).prelimException,false);
   assert.equal((await classify(c,'B선수','동','하모니')).prelimException,false);
   const result=await c.validateTeamDivisionRules({tid:'autumn',div:'은',club:'하모니',names:['B선수','A선수']});
-  assert.equal(result.ordinaryCount,0);assert.equal(result.ok,false);assert.equal(result.warnings.length,1);
+  assert.equal(result.ordinaryCount,1);assert.equal(result.ok,true);assert.equal(result.warnings.length,0);
   assert.match(c.divisionRuleBadgeHtml('autumn','은','B선수','하모니'),/직전 예선탈락 예외/);
 });
 test('동명이인의 다른 클럽 기록을 합치지 않는다',async()=>{
@@ -93,7 +93,7 @@ test('장유는 상반기와 전년도의 최신 확정 대회를 각각 하나�
 test('장유는 올해 상반기 출전 기록이 없어도 작년 금배 기록을 판정에 포함한다',async()=>{
  const c=setup({rows:[{...reg('o','테사모','금',['작년만']),tournamentId:'old'}]});
  assert.equal((await classify(c,'작년만')).known,true);
- assert.equal((await c.validateTeamDivisionRules({tid:'autumn',div:'은',club:'테사모',names:['작년만']})).ok,false);
+ assert.equal((await c.validateTeamDivisionRules({tid:'autumn',div:'은',club:'테사모',names:['작년만']})).ok,true);
 });
 
 test('김해시의 전년도 기록과 우승 승격 기준은 유지한다',async()=>{
@@ -107,12 +107,18 @@ test('김해시 기준은 기존 클럽별 2명 제한과 접수 차단을 유�
   assert.equal((await c.validateTeamDivisionRules({tid:'autumn',div:'동',club:'테사모',names:['가']})).ok,false);
 });
 
- test('작년 금배는 올해 은배 출전 여부와 무관하게 은·동배 접수를 차단한다',async()=>{
+ test('작년 금배라도 일반 하향 1명은 은·동배 접수를 허용한다',async()=>{
  const c=setup({rows:[{...reg('o','테사모','금',['작년금']),tournamentId:'old'},{...reg('s','테사모','은',['작년금']),tournamentId:'spring'}]});
- for(const div of ['은','동']){const result=await c.validateTeamDivisionRules({tid:'autumn',div,club:'테사모',names:['작년금']});assert.equal(result.ok,false);assert.match(result.error,/금배 출전/);}
+ for(const div of ['은','동']){const result=await c.validateTeamDivisionRules({tid:'autumn',div,club:'테사모',names:['작년금']});assert.equal(result.ok,true);assert.equal(result.ordinaryCount,1);}
  assert.equal((await c.validateTeamDivisionRules({tid:'autumn',div:'금',club:'테사모',names:['작년금']})).ok,true);
  });
  test('작년 금배 선수의 여성·65세 인증은 하향 예외로 유지한다',async()=>{
  const c=setup({rows:[{...reg('o','테사모','금',['여성','시니어']),tournamentId:'old'}],registry:[{name:'여성',club:'테사모',gender:'F'},{name:'시니어',club:'테사모',age65Certified:true}]});
  for(const div of ['은','동'])assert.equal((await c.validateTeamDivisionRules({tid:'autumn',div,club:'테사모',names:['여성','시니어']})).ok,true);
  });
+
+test('금배와 은배 출전자를 합쳐 팀당 일반 하향 1명만 허용한다',async()=>{
+ const c=setup({rows:[{...reg('o','테사모','금',['금선수']),tournamentId:'old'},{...reg('s','테사모','은',['은선수']),tournamentId:'spring'}]});
+ const result=await c.validateTeamDivisionRules({tid:'autumn',div:'동',club:'테사모',names:['금선수','은선수']});
+ assert.equal(result.ok,false);assert.equal(result.ordinaryCount,2);assert.match(result.error,/팀당 허용 1명/);
+});

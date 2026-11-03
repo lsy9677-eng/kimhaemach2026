@@ -7435,6 +7435,7 @@ function renderTL(){
     return`<div class="tc"><div class="tc-hdr"><h3>${t.name}</h3><span class="sbadge ${sm[t.status]||'s-open'}">${tournamentStatus(t.status).symbol} ${tournamentStatus(t.status).label}</span></div>
     <div class="tc-body"><div class="tc-meta"><span class="tc-mi">📅 ${t.date}</span>${t.venue?`<span class="tc-mi">📍 ${t.venue}</span>`:''}<span class="tc-mi">${(t.type||'team')==='individual_pair'?'🎾 개인전':'👥 단체전'}</span><span class="tc-mi">👥 ${tc}${(t.type||'team')==='individual_pair'?'조':'팀'}</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${(t.divisions||[]).map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${t.id}','${d}')">${dl(d)} <small>${(G.teams[t.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
+    <div class="tc-acts"><button type="button" class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openGuide('${t.id}')">📌 요강보기</button></div>
     ${AD?`<div class="tc-acts"><select class="form-select" style="width:auto;padding:5px 8px;font-size:.75rem" onchange="chgTS('${t.id}',this.value)"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select><button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openTD('${t.id}')">⚙️ 설정</button><button class="btn btn-primary" style="font-size:.75rem;padding:5px 10px" onclick="openET('${t.id}')">✏️ 편집</button>${isPastArchiveTournament(t)?`<button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="finalizePastTournamentArchive('${t.id}')">${getPastArchive(t.id)?'확정본 다시 저장':'지난대회 명단·결과 저장'}</button>`:''}<button class="btn btn-danger" style="font-size:.75rem;padding:5px 10px" onclick="delT('${t.id}')">삭제</button></div>`:
     `<div class="tc-acts"><button class="btn btn-outline" style="font-size:.75rem" onclick="openTD('${t.id}')">상세보기</button></div>`}</div></div>`;
   }).join('');
@@ -8757,7 +8758,7 @@ function _divisionRuleReasonLines(tid,div,name,club){
     ${exception?`<div style="margin-top:8px;color:#166534;font-weight:850">예외 자격: ${esc(exception)}</div>`:''}
     ${prelimException?'<div style="margin-top:8px;color:#166534;font-weight:850">직전 대회 금배조 예선탈락팀 명단 · 은배 출전 예외 (일반 하향 1명 제한에서 제외)</div>':''}
     ${reason}
-    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 올해 상반기(1월 1일~6월 30일)와 작년의 가장 최근 확정 대회 명단을 각 1개씩, 최대 2개 대회 비교해 가장 높은 출전 부서로 판정합니다. 올해 은배 출전 기록이 있어도 작년 금배 출전 기록은 유지합니다. 올해 하반기·현재 접수·미확정 대회는 기준에서 제외합니다. 금배 출전 선수는 예외 없이는 은·동배 접수가 불가합니다. 은→동 일반 하향은 팀당 1명까지 허용합니다. 여성·65세 이상 인증 및 직전 금배조 예선탈락팀의 은배 출전 예외는 유지하며 제한을 넘으면 접수를 차단합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
+    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 올해 상반기(1월 1일~6월 30일)와 작년의 가장 최근 확정 대회 명단을 각 1개씩, 최대 2개 대회 비교해 가장 높은 출전 부서로 판정합니다. 올해 은배 출전 기록이 있어도 작년 금배 출전 기록은 유지합니다. 올해 하반기·현재 접수·미확정 대회는 기준에서 제외합니다. 금배 출전자를 포함해 예외 인증 없는 일반 하향은 출전 부서와 관계없이 팀당 1명까지 허용합니다. 여성·65세 이상 인증 및 직전 금배조 예선탈락팀의 은배 출전 예외는 유지하며 제한을 넘으면 접수를 차단합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
 }
 function openDivisionRuleReason(name,club,tid,div){
   ensureDivisionRuleReasonModal();
@@ -8776,11 +8777,9 @@ function isSameDivisionDowngradeQuota(key,team,tid,div,club){
 }
 function jangyuTeamDivisionAssessment(tid,div,club,names){
   const details=[...new Map((names||[]).map(n=>[normName(n),n])).values()].filter(n=>normName(n)).map(name=>({name,..._divisionRuleClassifySync(tid,div,name,club)})).filter(c=>c.known&&c.isDowngrade);
-  const ordinary=details.filter(c=>!c.exceptionApproved&&c.step===1&&c.profile.baselineLevel<3);
-  const invalid=details.filter(c=>!c.exceptionApproved&&(c.profile.baselineLevel===3||c.step>=2));
+  const ordinary=details.filter(c=>!c.exceptionApproved);
   const warnings=[];
   if(ordinary.length>1)warnings.push(`하향 인원 초과: ${ordinary.length}명 / 팀당 허용 1명 · ${ordinary.map(c=>c.name).join(', ')}`);
-  if(invalid.length)warnings.push(`금배 출전 선수 하위 부서 등록 불가: ${invalid.map(c=>c.name).join(', ')} (여성·65세 이상 인증 또는 직전 금배 예선탈락자의 은배 예외 필요)`);
   return {ok:warnings.length===0,error:warnings.join('\n'),details,warnings,ordinaryCount:ordinary.length,exceptionCount:details.filter(c=>c.exceptionApproved).length};
 }
 function jangyuDivisionWarningsHtml(warnings){
@@ -8791,7 +8790,7 @@ async function validateTeamDivisionRules({tid,div,club,names,excludeKey='',exclu
   if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR,true);
   const cache=await ensureDivisionRuleCache(tid);
   if(!cache || !_ruleDivKey(div)) return {ok:true,details:[]};
-  // 장유: 금배 하향은 인증 예외만 허용, 은→동 일반 하향은 팀당 1명까지 허용한다.
+  // 장유: 출전 부서와 관계없이 일반 하향 팀당 1명. 인증 예외는 정원에서 제외한다.
   if(_divisionRulePolicy().jangyu)return jangyuTeamDivisionAssessment(tid,div,club,names);
   const cc=normalizeClub(club||'');
   const uniqNames=[...new Set((names||[]).map(n=>String(n||'').trim()).filter(Boolean))];
@@ -8886,7 +8885,7 @@ function refreshDivisionRuleFormBadges(mode='register'){
       const pe=ge(prefix+j); if(!pe||!root.contains(pe)) continue;
       const pn=String(pe.value||'').trim(); if(!pn) continue;
       const pc=_divisionRuleClassifySync(tid,div,pn,club);
-      if(pc.known && pc.isDowngrade && pc.step===1 && !pc.exceptionApproved && (!_divisionRulePolicy().jangyu||pc.profile.baselineLevel<3)){
+      if(pc.known && pc.isDowngrade && (_divisionRulePolicy().jangyu||pc.step===1) && !pc.exceptionApproved){
         const nk=normName(pn);
         if(!savedOrdinary.has(nk) && !currentOrdinary.some(x=>x.key===nk)) currentOrdinary.push({key:nk,name:pn});
       }
@@ -8932,7 +8931,7 @@ function refreshDivisionRuleFormBadges(mode='register'){
       if(c.female){
         const f=document.createElement('span'); f.className='division-rule-form-badge148'; f.textContent='여성'; f.style.cssText='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;font-size:.58rem;font-weight:900;background:#fdf2f8;border:1px solid #f9a8d4;color:#9d174d;white-space:nowrap'; badgeRow.appendChild(f);
       }
-      const needsException = !ok && ((_divisionRulePolicy().jangyu&&c.profile.baselineLevel===3) || c.step>=2 || (c.step===1 && needsLimitApproval.has(normName(name))));
+      const needsException = !ok && (_divisionRulePolicy().jangyu ? needsLimitApproval.has(normName(name)) : (c.step>=2 || (c.step===1 && needsLimitApproval.has(normName(name)))));
       // 첫 2명의 정상 1단계 하향은 '하향 표시'만 보여주고 인증 UI는 숨긴다.
       // 금→동 같은 2단계 하향 또는 같은 대회·부서에서 3번째 이후 일반 하향에서만 승인요청을 표시한다.
       if(needsException && (REG||CLUB_MEMBER||AD)) {
