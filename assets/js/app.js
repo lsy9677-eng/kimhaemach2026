@@ -1,3 +1,4 @@
+import{mergeCompetitionSettings}from'./competition-settings.js';
 import{selectLowestEliminatedTeam}from'./jangyu-silver-eligibility.js';
 const MATCH_ORGANIZATION=window.MATCH_ORGANIZATION;
 if(!MATCH_ORGANIZATION)throw new Error("단체 설정을 불러오지 못했습니다. 새로고침해 주세요.");
@@ -3848,6 +3849,7 @@ function getMainMatchSequenceList(key){
     .map((m,i)=>({id:String(m.id), label:`본선 ${i+1}경기`, index:i+1, match:m}));
 }
 function isMatchVisibleByCourtFilter(key, m){
+  if(MATCH_ORGANIZATION.id==='jangyu'&&(m?.phase==='bronze'||m?.isThirdPlaceMatch))return false;
   const selected=getSelectedCourtFilters(key);
   if(!selected.length) return true;
   const courts=getMatchCourtsForStatusBoard(key,m)||[];
@@ -7633,9 +7635,9 @@ function openTD(tid){
   ge('mTDT').textContent=t.name;
   const fl={group_knockout:'예선+본선',knockout:'토너먼트',roundrobin:'풀리그'};
   const rows=(t.divisions||[]).map(d=>{const c=gDS(t,d),cnt=(G.teams[tid+'_'+d]||[]).length;
-    const bronzeOpt=c.format==='roundrobin'?'<span>-</span>':`<span class="badge bg-bronze">${cnt>0&&cnt<10?'3·4위전':'공동 3위'}</span><div style="font-size:.65rem;color:var(--text3);margin-top:4px">참가팀 수 기준 자동 적용</div>`;
+    const bronzeOpt=c.format==='roundrobin'?'<span>-</span>':`<span class="badge bg-bronze">${c.thirdPlaceMode==='match'?'3·4위전':'공동 3위'}</span><div style="font-size:.65rem;color:var(--text3);margin-top:4px">단체별 경기 규정 적용</div>`;
     return`<tr><td><span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${tid}','${d}')">${dl(d)}</span></td><td><b>${cnt}</b>팀</td>
-    <td>${AD?`<select class="form-select" id="dF_${tid}_${d}"><option value="group_knockout" ${c.format==='group_knockout'?'selected':''}>예선+본선</option><option value="roundrobin" ${c.format==='roundrobin'?'selected':''}>풀리그</option><option value="knockout" ${c.format==='knockout'?'selected':''}>토너먼트</option></select>`:`<span class="badge bg-green">${fl[c.format]}</span>`}</td>
+    <td>${AD?`<select class="form-select" id="dF_${tid}_${d}" onchange="syncCompetitionSettingControls('${tid}','${d}','d')"><option value="group_knockout" ${c.format==='group_knockout'?'selected':''}>예선+본선</option><option value="roundrobin" ${c.format==='roundrobin'?'selected':''}>풀리그</option><option value="knockout" ${c.format==='knockout'?'selected':''}>토너먼트</option></select>`:`<span class="badge bg-green">${fl[c.format]}</span>`}</td>
     <td>${AD?`<select class="form-select" id="dG_${tid}_${d}" style="width:75px"><option value="3" ${c.grpSize===3?'selected':''}>3팀</option><option value="4" ${c.grpSize===4?'selected':''}>4팀</option><option value="5" ${c.grpSize===5?'selected':''}>5팀</option></select>`:`${c.grpSize}팀`}</td>
     <td>${AD?`<select class="form-select" id="dA_${tid}_${d}" style="width:80px"><option value="1" ${c.advance===1?'selected':''}>1위</option><option value="2" ${c.advance===2?'selected':''}>상위2</option><option value="3" ${c.advance===3?'selected':''}>상위3</option></select>`:`상위${c.advance}`}</td>
     <td>${bronzeOpt}</td>
@@ -7643,10 +7645,11 @@ function openTD(tid){
   }).join('');
   ge('mTDB').innerHTML=`<div style="font-size:.88rem;margin-bottom:10px"><b>📅 ${t.date}</b>${t.venue?' | 📍 '+t.venue:''}</div>
     <div class="card" style="box-shadow:none;padding:12px"><div class="card-title">⚙️ 부서별 설정</div>
-    <div class="table-wrap"><table><thead><tr><th>부서</th><th>팀수</th><th>방식</th><th>조당</th><th>본선진출</th><th>10팀 미만 3위</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>부서</th><th>팀수</th><th>방식</th><th>조당</th><th>본선진출</th><th>3위 방식</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     ${AD?`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-outline" onclick="openClubMgr()">🏟 클럽</button><button class="btn btn-primary" onclick="saveDivS('${tid}')">💾 저장</button></div>`:''}
     </div>${t.notice?`<div style="background:var(--panel2);padding:10px;border-radius:var(--radius);border:1px solid var(--border);margin-top:8px"><b>공지:</b><br><span style="font-size:.83rem;white-space:pre-line">${t.notice}</span></div>`:''}`+
     `${(t.guideText||t.guideUrl||t.hasGuideAssets||((t.guideAssets||[]).length))?`<div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-outline" style="padding:6px 12px;font-size:.78rem" onclick="openGuide('${tid}')">📌 대회 요강 보기</button></div>`:''}`;
+  (t.divisions||[]).forEach(div=>syncCompetitionSettingControls(tid,div,'d'));
   om('mTD');
 }
 
@@ -11134,6 +11137,7 @@ function renderBracketCore(){
   targetDivs.forEach(d=>{ ensureAutoTeamMainBracketIfReady(tid,d).then(changed=>{ if(changed) try{ renderBracket(); }catch(e){}; }).catch(()=>{}); });
   const parts = targetDivs.map(d=>renderBracketHTMLForDiv(tid,d,isAll)).filter(Boolean);
   cont.innerHTML = parts.length ? parts.join('<div style="height:14px"></div>') : '<div class="empty-state card"><div class="empty-icon">🎲</div><p>표시할 부서가 없습니다</p></div>';
+  targetDivs.forEach(div=>syncCompetitionSettingControls(tid,div,'bs'));
   const _eb=ge('bracketExportBar');
   if(_eb) _eb.style.display = parts.length ? 'flex' : 'none';
   requestAnimationFrame(()=>{
@@ -11171,7 +11175,7 @@ function buildBracketAdminSettingsCard(tid,div,cfg,teams){
     </div>
     <div class="frow3" style="grid-template-columns:1.2fr 1fr 1fr">
       <div class="form-group" style="margin-bottom:0"><label class="form-label">경기 방식</label>
-        <select class="form-select" id="bsFmt_${tid}_${div}">
+        <select class="form-select" id="bsFmt_${tid}_${div}" onchange="syncCompetitionSettingControls('${tid}','${div}','bs')">
           <option value="group_knockout" ${cfg.format==='group_knockout'?'selected':''}>예선조별+본선</option>
           <option value="roundrobin" ${cfg.format==='roundrobin'?'selected':''}>풀 리그전</option>
           <option value="knockout" ${cfg.format==='knockout'?'selected':''}>토너먼트 단판</option>
@@ -11191,6 +11195,10 @@ function buildBracketAdminSettingsCard(tid,div,cfg,teams){
   </div>`;
 }
 function buildBracketPreviewFromConfig(cfg, teams, draw){
+  if(cfg.format==='roundrobin'){
+    const mismatch=draw?.groups?.length&&(draw.groups.length!==1||draw.groups[0].teams?.length!==teams.length);
+    return `<div class="card">전체 풀리그 · 모든 팀이 서로 경기한 뒤 최종 순위를 정합니다. 본선은 없습니다.${mismatch?'<p style="color:#b45309">기존 대진은 조별 방식입니다. 기존 예선을 초기화한 뒤 풀리그로 다시 편성해 주세요.</p>':''}</div>`;
+  }
   // group_knockout이 아니어도 draw.groups가 있으면(=개인전 추첨 완료 전) 미리보기 가능
   const hasDrawGroups = draw && Array.isArray(draw.groups) && draw.groups.length > 0;
   const isGK = cfg.format==='group_knockout' || hasDrawGroups;
@@ -11211,6 +11219,28 @@ function buildBracketPreviewFromConfig(cfg, teams, draw){
     ${renderSavedPrelimNeutralPyramid(pv.n, [])}
   </div>`;
 }
+function syncCompetitionSettingControls(tid,div,prefix='d'){
+  const format=ge(`${prefix==='d'?'dF':'bsFmt'}_${tid}_${div}`),size=ge(`${prefix==='d'?'dG':'bsGs'}_${tid}_${div}`),advance=ge(`${prefix==='d'?'dA':'bsAdv'}_${tid}_${div}`);
+  const league=format?.value==='roundrobin';
+  if(size){size.disabled=league;if(league){const count=getDivisionTeamCount(tid,div);if(![...size.options].some(o=>o.value===String(count))){const option=document.createElement('option');option.value=String(count);option.textContent=count+'팀 전체';size.appendChild(option);}size.value=String(count);}}
+  if(advance){advance.disabled=league;for(const option of advance.options){if(option.value==='1')option.textContent=league?'본선 없음':'1위';}if(league)advance.value='1';}
+}
+async function saveCompetitionSettings(tid,patches){
+  if(!canManageBracket())throw new Error('설정 권한이 없습니다.');
+  const tournament=(G.tournaments||[]).find(t=>t.id===tid);if(!tournament)throw new Error('대회를 찾을 수 없습니다.');
+  for(const [div,patch] of Object.entries(patches)){
+    if(patch.format&&patch.format!==gDS(tournament,div).format&&(G.matches[tid+'_'+div]||[]).some(m=>getMatchResultState(tid+'_'+div,m).done))throw new Error('경기 결과가 있는 부서는 경기 방식을 바꿀 수 없습니다. 결과를 확인한 뒤 대진을 초기화해 주세요.');
+  }
+  let saved;
+  await runTransaction(db,async tx=>{
+    const ref=doc(db,'tournaments',tid),snapshot=await tx.get(ref);if(!snapshot.exists())throw new Error('대회가 삭제되었습니다.');
+    const latest=snapshot.data(),settings={...(latest.divSettings||{})};
+    for(const [div,patch] of Object.entries(patches))settings[div]=mergeCompetitionSettings({...gDS({...tournament,...latest},div),...(settings[div]||{})},patch,getDivisionTeamCount(tid,div),MATCH_ORGANIZATION.id);
+    tx.update(ref,{divSettings:settings,pastArchive:null,pastArchiveRevision:increment(1)});saved=settings;
+  });
+  tournament.divSettings=saved;pastArchiveLocalInvalidation(tid);
+  return saved;
+}
 async function saveBracketDivisionSettings(tid,div){
   const t=G.tournaments.find(x=>x.id===tid);
   if(!t) return;
@@ -11219,14 +11249,9 @@ async function saveBracketDivisionSettings(tid,div){
   const gsParts=gsRaw.split(',').map(v=>parseInt(v,10)).filter(Boolean);
   const grpSize=gsParts[0]||4;
   const adv=parseInt(ge(`bsAdv_${tid}_${div}`)?.value||'2',10);
-  const ds={...(t.divSettings||{})};
-  const prev=gDS(t,div);
-  ds[div]={...prev, format:fmt, grpSize, advance:adv};
   sl(true);
   try{
-    await updateDoc(doc(db,'tournaments',tid),{divSettings:ds,pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);
-    const idx=G.tournaments.findIndex(x=>x.id===tid);
-    if(idx>=0) G.tournaments[idx].divSettings=ds;
+    await saveCompetitionSettings(tid,{[div]:{format:fmt,grpSize,advance:adv}});
     sl(false);
     toast(`${dl(div)} 설정 저장 완료`,'success');
     renderBracket();
@@ -11245,6 +11270,7 @@ function applyBracketRecommend(tid,div){
     const found=[...a.options].find(o=>o.value===String(rec.adv));
     if(found) a.value=found.value;
   }
+  syncCompetitionSettingControls(tid,div,'bs');
   toast(`${dl(div)} 추천 적용`, 'success');
 }
 function buildFreshGroupMatchesFromDraw(key){
@@ -12407,7 +12433,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
   const isGroupKO = cfg.format==='group_knockout' || (isIndivKey && (hasGroups || mMs.length > 0));
   const visibleGroupIndexes = getVisibleGroupIndexesForKey(key);
   const canMainRedraw = isGroupKO && hasGroups;
-  const prelimRedrawLabel = draw ? '예선 재추첨' : '예선 추첨';
+  const prelimRedrawLabel = cfg.format==='roundrobin'?(draw?'풀리그 재편성':'풀리그 편성'):(draw?'예선 재추첨':'예선 추첨');
   const prelimRedrawAction = `openDraw('${tid}','${div}')`;
   const mainRedrawLabel = latestMainSavedDraw || mMs.length ? '본선 재추첨' : '본선 추첨';
   const latestPrelimSavedDraw=(G.drawHistories[key]||[]).filter(it=>isCurrentDrawHistory(key,it,'prelim') && String(it.mode||'')!=='main').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0]||null;
@@ -12625,7 +12651,7 @@ function renderBracketHTMLForDiv(tid,div,isAll){
         const st=getMatchResultState(key,m);
         const done=st.done;
         const sc1=st.sc1,sc2=st.sc2;
-        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,indivMode?getIndividualMatchLabel(key,m):`예선 ${grpLabel(gi)}`);
+        html+=mCard(m,key,dn1,dn2,done,sc1,sc2,indivMode?getIndividualMatchLabel(key,m):(cfg.format==='roundrobin'?'풀리그':`예선 ${grpLabel(gi)}`));
       });
       html+=`</div></div>`;
     });
@@ -14118,6 +14144,7 @@ function getMatchCardDomId(key, mid){
 }
 // PHASE237: every group's qualifier slots survive unfinished results.
 function getAdvT(key,draw,teams,cfg){
+  if(cfg?.format==='roundrobin')return [];
   const res=[];
   (draw?.groups||[]).forEach((grp,gi)=>{
     const tids=grp?.teams||[],grpSize=tids.length;
@@ -14738,6 +14765,15 @@ function calcGroupPresets(n){
 
 function buildDrawPresets(n,t,div){
   const cfg=gDS(t,div);
+  DW.cfg.format=cfg.format;
+  let mode=ge('drawCompetitionFormat');
+  if(!mode){mode=document.createElement('select');mode.id='drawCompetitionFormat';mode.className='form-select';mode.setAttribute('aria-label','경기 방식');ge('grpPresets').parentElement.prepend(mode);}
+  mode.innerHTML='<option value="group_knockout">예선 조별 + 본선</option><option value="roundrobin">전체 풀리그 · 본선 없음</option><option value="knockout">토너먼트</option>';mode.value=cfg.format;
+  mode.onchange=()=>{const preview={...t,divSettings:{...t.divSettings,[div]:{...t.divSettings?.[div],format:mode.value}}};buildDrawPresets(n,preview,div);};
+  if(cfg.format==='roundrobin'){
+    DW.cfg={format:'roundrobin',groups:1,grpSizes:[n],advance:1};
+    ge('grpPresets').innerHTML=`<span class="grp-preset active">전체 ${n}팀 · 1개 리그 · ${n*(n-1)/2}경기</span>`;updateAdvPresets(n);return;
+  }
   const presets=calcGroupPresets(n);
   const saved=t?.divSettings?.[div]?.prelimDrawSettings;
   const savedSizes=saved?.teamCount===n?saved.groupSizes:null;
@@ -14762,10 +14798,11 @@ function buildDrawPresets(n,t,div){
 function ensurePrelimConfigSaveControls(){
   let box=ge('prelimConfigSaveControls');
   if(!box){box=document.createElement('div');box.id='prelimConfigSaveControls';ge('grpPresets')?.parentElement?.appendChild(box);}
-  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 조추첨 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">설정 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택하세요. 본선 구조는 조 수와 진출 수로 자동 계산됩니다.</div>';
+  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 조추첨 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">설정 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택하세요. 전체 풀리그는 본선 없이 순위를 확정하며, 예선+본선은 조 수와 진출 수로 본선을 계산합니다.</div>';
 }
 function validPrelimGroupSizes(sizes,count){return Array.isArray(sizes)&&sizes.length>0&&sizes.every(x=>Number.isInteger(x)&&x>=2&&x<=6)&&sizes.reduce((a,b)=>a+b,0)===count;}
 function setCustomPrelimGroupSizes(){
+  if(DW.cfg.format==='roundrobin'){toast('전체 풀리그는 모든 팀이 한 리그로 경기합니다.','info');return;}
   if(!canManageBracket()||!DW?.key)return;
   const raw=prompt('각 조의 팀 수를 쉼표로 입력하세요. (조당 2~6팀, 등록팀 전체와 합계 일치) 예: 3,3,2',(DW.cfg.grpSizes||[]).join(','));
   if(raw===null)return;
@@ -14777,15 +14814,10 @@ function setCustomPrelimGroupSizes(){
 }
 async function savePrelimDrawSettings(){
   if(!canManageBracket()||!DW?.key){toast('설정 권한이 없습니다','error');return;}
-  const {tid,div,teams,cfg}=DW,t=G.tournaments.find(x=>x.id===tid);
-  if(!t||!validPrelimGroupSizes(cfg.grpSizes,teams.length)||!Number.isInteger(cfg.advance)||cfg.advance<1||cfg.advance>Math.min(...cfg.grpSizes)){toast('조 구성과 진출 수를 확인하세요','error');return;}
+  const {tid,div,teams,cfg}=DW;
+  if(cfg.format!=='roundrobin'&&!validPrelimGroupSizes(cfg.grpSizes,teams.length)){toast('조 구성을 확인하세요','error');return;}
   const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,savedAt:new Date().toISOString()};
-  const next={...(t.divSettings?.[div]||{}),grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings};
-  sl(true);try{
-    await setDoc(doc(db,'tournaments',tid),{divSettings:{[div]:next}},{merge:true});
-    t.divSettings={...(t.divSettings||{}),[div]:next};
-    toast('조추첨 설정 저장 완료 ✅','success');
-  }catch(e){toast('설정 저장 실패: '+e.message,'error');}finally{sl(false);}
+  sl(true);try{await saveCompetitionSettings(tid,{[div]:{format:cfg.format||'group_knockout',grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings}});toast('대회 설정과 조편성 설정을 함께 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
 }
 window.setCustomPrelimGroupSizes=setCustomPrelimGroupSizes;window.savePrelimDrawSettings=savePrelimDrawSettings;
 
@@ -14793,6 +14825,8 @@ function updateAdvPresets(n){
   const {groups,grpSizes}=DW.cfg;
   ge('grpConfigDisplay').textContent=`${grpSizes.join('+')}팀 × ${groups}조`;
   const advEl=ge('advancePresets');advEl.innerHTML='';
+  if(DW.cfg.format==='roundrobin'){advEl.textContent='전체 경기 결과로 최종 순위 확정 · 본선 없음';updateMainSizeDisplay();return;}
+
   const maxAdv=Math.min(...grpSizes);
   DW.cfg.advance=Math.max(1,Math.min(maxAdv,Number(DW.cfg.advance)||1));
   for(let a=1;a<=maxAdv;a++){
@@ -14808,6 +14842,8 @@ function updateAdvPresets(n){
 
 function updateMainSizeDisplay(){
   const {groups,advance,grpSizes}=DW.cfg;if(!groups)return;
+  if(DW.cfg.format==='roundrobin'){ge('mainSizeDisplay').textContent=`전체 풀리그 ${DW.teams.length*(DW.teams.length-1)/2}경기 → 최종 순위 · 본선 없음`;const preview=ge('drawMainPreviewBox');if(preview)preview.style.display='none';return;}
+
   const total=(advance||1)*groups;const spec=computeMainBracketSpec(total);
   ge('mainSizeDisplay').textContent = spec.playInMatches>0
     ? `본선 진출 ${total}팀 → ${spec.mainSize}강 본선 / 직행 ${spec.directCount}팀 + 진출전 ${spec.playInTeams}팀(${spec.playInMatches}경기)`
@@ -14885,6 +14921,7 @@ function updatePrelimSeedSummary(){
 }
 
 function updateDrawMainPreview(){
+  if(DW.cfg.format==='roundrobin'){const box=ge('drawMainPreviewBox');if(box)box.style.display='none';return;}
   const {groups,advance}=DW.cfg;
   const pvBox=ge('drawMainPreviewBox');
   const pvCont=ge('drawMainPreviewContent');
@@ -16643,6 +16680,7 @@ async function saveManualPrelimDraw(){
   if(new Set(used).size!==used.length){toast('같은 팀이 두 자리 이상 들어가 있습니다','error');return;}
   if(used.length!==DW.teams.length){toast('모든 팀을 한 번씩 배치해야 합니다','error');return;}
   if(!confirm('현장 수동 추첨 결과를 예선 대진으로 확정할까요?'))return;
+  if(!await savePrelimDrawSettings())return;
   const key=DW.key,advance=Number(DW.cfg?.advance||2),now=new Date(),allowedCourts=getDrawAllowedCourtsFromModal();
   await resetMatchRecords(key);
   const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
@@ -16655,6 +16693,7 @@ async function startDraw(){
   if(DW.isRunning)return;
   if(!DW.key||DW.teams.length<2){toast('최소 2팀 필요','error');return;}
   DW.isRunning=true;
+  if(!await savePrelimDrawSettings()){DW.isRunning=false;return;}
   ge('confirmDrawBtn').disabled=true;
   ge('confirmDrawBtn').textContent='추첨 중...';
   switchToRunScreen();
@@ -16782,6 +16821,7 @@ async function confirmDraw(){startDraw();}
 let MD = {key:null,tid:null,div:null,advT:[],bracketSize:0,byeCount:0,isRunning:false,seed:1,plan:null,seedHash:'',seedMethod:'time',seedSourceLabel:'',seedSnapshotLabel:'',seedPreparedAt:'',nthPick:1,candidates:[],drawAudit:null};
 
 async function buildMain(tid,div){
+  if(gDS(G.tournaments.find(t=>t.id===tid),div).format==='roundrobin'){toast('전체 풀리그는 본선 없이 리그 성적으로 최종 순위를 정합니다.','info');return;}
   const t=G.tournaments.find(x=>x.id===tid);
   if(isIndividualTournament(t)){ openIndividualMainDraw(tid,div); return; }
   openMainDraw(tid,div);
@@ -16789,6 +16829,7 @@ async function buildMain(tid,div){
 
 // 개인전 본선 재추첨
 function openIndividualMainDraw(tid,div){
+  if(gDS(G.tournaments.find(t=>t.id===tid),div).format==='roundrobin'){toast('전체 풀리그는 본선 없이 리그 성적으로 최종 순위를 정합니다.','info');return;}
   const key=tid+'_'+div;
   const teams=G.teams[key]||[];
   const draw=G.draws[key];
@@ -17610,6 +17651,7 @@ function onMainBracketModeChange(){
 window.onMainBracketModeChange=onMainBracketModeChange;
 
 function openMainDraw(tid,div){
+  if(gDS(G.tournaments.find(t=>t.id===tid),div).format==='roundrobin'){toast('전체 풀리그는 본선 없이 리그 성적으로 최종 순위를 정합니다.','info');return;}
   if(!canManageBracket()){ toast('본선 추첨은 관리자 또는 경기진행자만 실행할 수 있습니다','error'); return; }
   const key=tid+'_'+div, t=G.tournaments.find(t=>t.id===tid),
         draw=G.draws[key], teams=G.teams[key]||[], cfg=gDS(t,div);
@@ -21432,7 +21474,7 @@ function getLiveTeamAchievementForHistory(key, teamIdx, team, tid, div){
     }
 
     const mainMatches=matches.filter(m=>m && (m.phase==='main' || m.phase==='playin' || m.phase==='bronze') && (isMyTeam(m.t1) || isMyTeam(m.t2)));
-    const bronzeMatch=mainMatches.find(m=>m && m.phase==='bronze');
+    const bronzeMatch=getThirdPlaceModeByKey(key)==='match'?mainMatches.find(m=>m && m.phase==='bronze'):null;
     if(bronzeMatch && bronzeMatch.winner!=null){
       const isWinner=isMyTeam(bronzeMatch.winner);
       const loser=(String(bronzeMatch.winner)===String(bronzeMatch.t1)) ? bronzeMatch.t2 : bronzeMatch.t1;
@@ -22440,12 +22482,7 @@ function getDivisionTeamCount(tid,div){
   return (G.teams?.[tid+'_'+div]||[]).length;
 }
 function getOrganizationThirdPlaceMode(t,div){
-  const key=(t?.id||'')+'_'+div;
-  // 기존 장유 대회는 원본의 공동 3위 방식을 보존한다.
-  if(MATCH_ORGANIZATION.id==='jangyu'&&!t?.organizationRulesVersion&&isPastArchiveTournament(t)){
-    const actualBronze=(G.matches[key]||[]).some(m=>(m.phase==='bronze'||m.isThirdPlaceMatch)&&m.winner!=null&&!m.bye);
-    return actualBronze?'match':'shared';
-  }
+  if(MATCH_ORGANIZATION.id==='jangyu')return 'shared';
   return normalizeThirdPlaceMode(t?.divSettings?.[div]?.thirdPlaceMode||'shared',getDivisionTeamCount(t?.id||'',div));
 }
 function getThirdPlaceModeByKey(key){
@@ -22457,6 +22494,7 @@ function getMainOnlyMatches(list){
   return (Array.isArray(list)?list:[]).filter(m=>m && m.phase==='main');
 }
 function getBronzeMatch(key){
+  if(MATCH_ORGANIZATION.id==='jangyu')return null;
   return (G.matches[key]||[]).find(m=>m && (m.phase==='bronze' || m.isThirdPlaceMatch)) || null;
 }
 function getMainFinalMatch(mMs){
@@ -22608,10 +22646,14 @@ function applyRec(tid,div){
   if(doGs  && gee) gee.value=String(rec.gs);
   if(doAdv && ae) ae.value=String(rec.adv);
 
+  syncCompetitionSettingControls(tid,div,'d');
   toast(`${dl(div)} 추천 적용 · ${rec.note}`,'success');
 }
-async function saveDivS
-(tid){const t=G.tournaments.find(t=>t.id===tid);if(!t || !assertTournamentManagePermission(t,'부서 설정 저장'))return;const ds={...(t.divSettings||{})};(t.divisions||[]).forEach(div=>{const fe=ge(`dF_${tid}_${div}`),ge2=ge(`dG_${tid}_${div}`),ae=ge(`dA_${tid}_${div}`),tp=ge(`dTP_${tid}_${div}`);const c=gDS(t,div);const nextMode=normalizeThirdPlaceMode(tp?tp.value:c.thirdPlaceMode,getDivisionTeamCount(tid,div));ds[div]={...(ds[div]||{}),format:fe?fe.value:c.format,grpSize:ge2?parseInt(ge2.value):c.grpSize,advance:ae?parseInt(ae.value):c.advance,doublesCount:Number(ds[div]?.doublesCount||c.doublesCount||((div==='테린이'||div==='terinee')?3:5)),maxTeams:parseInt(ds[div]?.maxTeams||0)||0,thirdPlaceMode:nextMode};});sl(true);try{await updateDoc(doc(db,'tournaments',tid),{divSettings:ds,pastArchive:null,pastArchiveRevision:increment(1)});pastArchiveLocalInvalidation(tid);const idx=G.tournaments.findIndex(x=>x.id===tid);if(idx>=0) G.tournaments[idx].divSettings=ds;for(const div of (t.divisions||[])){await ensureBronzeMatchForKey(tid+'_'+div,true);}await fbLog(`설정 변경: ${t.name}`,'⚙️');sl(false);toast('저장 완료','success');try{renderBracket();}catch(e){}}catch(e){sl(false);toast('저장 실패','error');}}
+async function saveDivS(tid){
+  const t=G.tournaments.find(t=>t.id===tid);if(!t||!assertTournamentManagePermission(t,'부서 설정 저장'))return;
+  const patches={};for(const div of t.divisions||[]){const cfg=gDS(t,div);patches[div]={format:ge(`dF_${tid}_${div}`)?.value||cfg.format,grpSize:Number(ge(`dG_${tid}_${div}`)?.value||cfg.grpSize),advance:Number(ge(`dA_${tid}_${div}`)?.value||cfg.advance)};}
+  sl(true);try{await saveCompetitionSettings(tid,patches);toast('경기 방식과 조편성 설정을 함께 저장했습니다.','success');openTD(tid);renderBracket();}catch(e){toast('설정 저장 실패: '+e.message,'error');}finally{sl(false);}
+}
 
 function goBracket(tid,div){
   showPage('bracket');
@@ -29719,7 +29761,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{openJangyuSilverSelection,saveJangyuSilverSelection,closeTeamRegistrationForm,openOrganizationPlayerEdit,deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone,
+Object.assign(window,{syncCompetitionSettingControls,openJangyuSilverSelection,saveJangyuSilverSelection,closeTeamRegistrationForm,openOrganizationPlayerEdit,deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone,
   removePopupNoticeImage,showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
