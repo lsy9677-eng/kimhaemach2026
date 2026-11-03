@@ -16679,8 +16679,8 @@ function _ensureManualPrelimButton(){
 }
 function _ensureManualPrelimModal(){
   let m=ge('mManualPrelimDraw'); if(m)return m;
-  m=document.createElement('div');m.id='mManualPrelimDraw';m.className='modal';
-  m.innerHTML=`<div class="modal-content" style="max-width:820px"><div class="modal-header"><b>✋ 예선 현장 완전수동 추첨</b><button class="btn btn-gray" onclick="cm('mManualPrelimDraw')">닫기</button></div><div id="manualPrelimBody" style="padding:12px"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mManualPrelimDraw')">취소</button><button class="btn btn-primary" onclick="saveManualPrelimDraw()">✅ 수동 예선 확정</button></div></div>`;
+  m=document.createElement('div');m.id='mManualPrelimDraw';m.className='modal-overlay';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','예선 현장 수동 추첨');
+  m.innerHTML=`<div class="modal-box" style="max-width:820px;display:flex;flex-direction:column;max-height:calc(100dvh - 32px);overflow:hidden"><div class="modal-header" style="flex-shrink:0"><b>✋ 예선 현장 완전수동 추첨</b><button type="button" class="btn btn-gray" onclick="cm('mManualPrelimDraw')">닫기</button></div><div id="manualPrelimBody" class="modal-body" style="padding:12px;overflow-y:auto;min-height:0;flex:1"></div><div class="modal-footer" style="flex-shrink:0;flex-wrap:wrap"><button type="button" class="btn btn-gray" onclick="cm('mManualPrelimDraw')">취소</button><button type="button" class="btn btn-primary" onclick="saveManualPrelimDraw()">✅ 수동 예선 확정</button></div></div>`;
   document.body.appendChild(m);return m;
 }
 function openManualPrelimDraw(){
@@ -17883,8 +17883,8 @@ function _ensureManualMainButton(){
 }
 function _ensureManualMainModal(){
   let m=ge('mManualMainDraw');if(m)return m;
-  m=document.createElement('div');m.id='mManualMainDraw';m.className='modal';
-  m.innerHTML=`<div class="modal-content" style="max-width:900px"><div class="modal-header"><b>✋ 본선 현장 완전수동 추첨</b><button class="btn btn-gray" onclick="cm('mManualMainDraw')">닫기</button></div><div id="manualMainBody" style="padding:12px"></div><div class="modal-footer"><button class="btn btn-gray" onclick="cm('mManualMainDraw')">취소</button><button class="btn btn-primary" onclick="saveManualMainDraw()">✅ 수동 본선 확정</button></div></div>`;document.body.appendChild(m);return m;
+  m=document.createElement('div');m.id='mManualMainDraw';m.className='modal-overlay';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','본선 현장 수동 추첨');
+  m.innerHTML=`<div class="modal-box" style="max-width:900px;display:flex;flex-direction:column;max-height:calc(100dvh - 32px);overflow:hidden"><div class="modal-header" style="flex-shrink:0"><b>✋ 본선 현장 완전수동 추첨</b><button type="button" class="btn btn-gray" onclick="cm('mManualMainDraw')">닫기</button></div><div id="manualMainBody" class="modal-body" style="padding:12px;overflow-y:auto;min-height:0;flex:1"></div><div class="modal-footer" style="flex-shrink:0;flex-wrap:wrap"><button type="button" class="btn btn-gray" onclick="cm('mManualMainDraw')">취소</button><button type="button" class="btn btn-primary" onclick="saveManualMainDraw()">✅ 수동 본선 확정</button></div></div>`;document.body.appendChild(m);return m;
 }
 function _manualMainSize(count){let n=2;while(n<count)n*=2;return n;}
 function _manualMainFixedByePositions(entries,n){
