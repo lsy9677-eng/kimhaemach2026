@@ -9,8 +9,16 @@ test('gold selection compares all eliminated teams and excludes main entrants',(
  const c={selectLowestEliminatedTeam,G:{tournaments:[{id:'past',divisions:['금']}],teams:{past_금:[eliminated('a'),eliminated('b'),{_id:'main',_pastOutcome:{confirmed:true,result:'우승'}}]},matches:{past_금:[
  {phase:'group',t1:0,t2:2,winner:2,sc1:1,sc2:2,rubbers:[{score1:6,score2:4},{score1:2,score2:6},{score1:3,score2:6}]},
  {phase:'group',t1:1,t2:2,winner:2,sc1:0,sc2:3,rubbers:[{score1:1,score2:6},{score1:2,score2:6},{score1:3,score2:6}]}]}},
- tdn:team=>team.club,_ruleDivKey:()=> 'gold',getMatchResultState:(key,m)=>({...m,done:true}),getMatchDoublesCount:()=>3,getRubberScoreErrorMessage:()=>'',analyzeRubberScore:()=>({})};
+ getTournamentDateKey:t=>t?.date||'',tdn:team=>team.club,_ruleDivKey:()=> 'gold',getMatchResultState:(key,m)=>({...m,done:true}),getMatchDoublesCount:()=>3,getRubberScoreErrorMessage:()=>'',analyzeRubberScore:()=>({})};
  vm.createContext(c);vm.runInContext(src.slice(src.indexOf('function jangyuSilverSelection('),src.indexOf('async function openJangyuSilverSelection')),c);
  const result=c.jangyuSilverSelection('past');assert.equal(result.team.id,'b');assert.equal(result.team.setDiff,-3);assert.equal(result.team.gameDiff,-12);
  assert.equal(result.team.players[0],'b선수');assert.equal(result.candidates.length,1);
+});
+
+test('2025 second-half Modern C is fixed even without historical match scores',()=>{
+ const teams=[{_id:'a',club:'모던',teamLabel:'A',players:['A선수']},{_id:'c',club:'모던',teamLabel:'C',players:['C선수']}];
+ const c={G:{tournaments:[{id:'old',date:'2025-11-01',divisions:['금']}],teams:{old_금:teams},matches:{}},selectLowestEliminatedTeam,getTournamentDateKey:t=>t?.date||'',_ruleDivKey:()=> 'gold',tdn:t=>t.club+'-'+t.teamLabel};
+ vm.createContext(c);vm.runInContext(src.slice(src.indexOf('function jangyuSilverSelection('),src.indexOf('async function openJangyuSilverSelection')),c);
+ const result=c.jangyuSilverSelection('old');assert.equal(result.team.id,'c');assert.equal(result.team.fixed,true);assert.deepEqual(Array.from(result.team.players),['C선수']);
+ teams.pop();assert.equal(c.jangyuSilverSelection('old').status,'missing');
 });

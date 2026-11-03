@@ -8588,11 +8588,28 @@ async function loadJangyuSilverPlayerRecord(name,club){
 }
 function jangyuSilverPlayerRecordHtml(name,club){
   const sources=JANGYU_SILVER_PLAYER_RECORDS.get(transferName(name)+'|'+registrationClubIdentityKey(club))||[];
-  return sources.length?`<div style="padding:12px;margin-bottom:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px"><b>금배 최하위 1팀 · 은배 출전 자격 유지</b><div>일반 하향 1명에 포함하지 않습니다. 동배 출전 예외는 아닙니다.</div>${sources.map(r=>`<div>${esc(r.tname)} · ${esc(r.date)} · ${esc(r.club)} · 본선 미진출 / 전체 최하위</div>`).join('')}</div>`:'';
+  return sources.length?`<div style="padding:12px;margin-bottom:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px"><b>금배 최하위 1팀 · 은배 출전 자격 유지</b><div>일반 하향 1명에 포함하지 않습니다. 동배 출전 예외는 아닙니다.</div>${sources.map(r=>`<div>${esc(r.tname)} · ${esc(r.date)} · ${esc(r.label||r.club)} · ${r.fixed?'관리자 지정 · 2025 하반기 모던C':'본선 미진출 / 전체 최하위'}</div>`).join('')}</div>`:'';
 }
 function jangyuSilverSelection(tid){
   const t=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
   const rows=[];
+  // Owner-confirmed historical decision: 2025 second-half Modern C is the sole silver-eligible team.
+  const date=String(getTournamentDateKey(t)||t?.date||'').slice(0,10);
+  if(date>='2025-07-01'&&date<='2025-12-31'){
+    const fixed=[];
+    for(const div of (t?.divisions||[]).filter(d=>_ruleDivKey(d)==='gold')){
+      const key=tid+'_'+div;
+      (G.teams[key]||[]).forEach((team,index)=>{
+        const label=String(tdn(team,key,index)||'').replace(/\s/g,'').toUpperCase();
+        const club=String(team.club||'').replace(/\s/g,'');
+        if(/^모던(?:클럽)?[-]?C$/.test(label)||(/^모던(?:클럽)?$/.test(club)&&String(team.teamLabel||'').trim().toUpperCase()==='C')){
+          fixed.push({id:String(team._id||team.id||''),club:team.club,label:tdn(team,key,index),players:team.players||[],fixed:true});
+        }
+      });
+    }
+    if(fixed.length===1)return {status:'selected',team:fixed[0],candidates:fixed,fingerprint:'owner-confirmed-2025-second-half-modern-c',fixed:true};
+    return {status:fixed.length?'tie':'missing',candidates:fixed,fingerprint:'owner-confirmed-2025-second-half-modern-c-unresolved'};
+  }
   for(const div of (t?.divisions||[]).filter(d=>_ruleDivKey(d)==='gold')){
     const key=tid+'_'+div,teams=G.teams[key]||[],matches=G.matches[key]||[];
     teams.forEach((team,index)=>{
@@ -8624,14 +8641,14 @@ async function openJangyuSilverSelection(tid){
     await ensurePastTournamentArchive(tid);
     const result=jangyuSilverSelection(tid);
     let modal=ge('jangyuSilverSelectionModal');if(!modal){modal=document.createElement('div');modal.id='jangyuSilverSelectionModal';modal.className='modal-overlay';document.body.appendChild(modal);}
-    modal.innerHTML=`<div class="modal-box"><div class="modal-header"><h3>금배 최하위 1팀 · 은배 자격</h3><button class="modal-close" onclick="cm('jangyuSilverSelectionModal')">✕</button></div><div class="modal-body"><p>본선 미진출팀 전체에서 승수 → 세트 득실차 → 스코어 득실차가 낮은 1팀을 선정합니다. 최종 동률만 관리자가 선택합니다.</p>${result.status==='missing'?'<p>예선 경기 또는 세부 점수가 부족합니다. 결과를 입력한 뒤 다시 확인하세요.</p>':result.status==='none'?'<p>확정된 금배 예선탈락 명단이 없습니다.</p>':result.candidates.map((r,i)=>`<div style="padding:12px;border:1px solid #cbd5e1;margin:8px 0"><b>${esc(r.label||r.club)}</b><br>${esc(r.players.join(' / '))}<br>${r.w}승 · 세트득실 ${r.setDiff} · 스코어득실 ${r.gamesReady?r.gameDiff:'미입력'}${result.team?.id===r.id?'<b> · 은배 자격 확정</b>':''}${result.candidates.length>1?`<button class="btn btn-primary" onclick="saveJangyuSilverSelection('${esc(tid)}',${i})">이 팀 선택</button>`:''}</div>`).join('')}</div></div>`;
+    modal.innerHTML=`<div class="modal-box"><div class="modal-header"><h3>금배 최하위 1팀 · 은배 자격</h3><button class="modal-close" onclick="cm('jangyuSilverSelectionModal')">✕</button></div><div class="modal-body"><p>본선 미진출팀 전체에서 승수 → 세트 득실차 → 스코어 득실차가 낮은 1팀을 선정합니다. 최종 동률만 관리자가 선택합니다.</p>${result.status==='missing'?'<p>예선 경기 또는 세부 점수가 부족합니다. 결과를 입력한 뒤 다시 확인하세요.</p>':result.status==='none'?'<p>확정된 금배 예선탈락 명단이 없습니다.</p>':result.candidates.map((r,i)=>`<div style="padding:12px;border:1px solid #cbd5e1;margin:8px 0"><b>${esc(r.label||r.club)}</b><br>${esc(r.players.join(' / '))}<br>${r.fixed?'관리자 지정 · 2025 하반기 모던C 고정':`${r.w}승 · 세트득실 ${r.setDiff} · 스코어득실 ${r.gamesReady?r.gameDiff:'미입력'}`}${result.team?.id===r.id?'<b> · 은배 자격 확정</b>':''}${result.candidates.length>1?`<button class="btn btn-primary" onclick="saveJangyuSilverSelection('${esc(tid)}',${i})">이 팀 선택</button>`:''}</div>`).join('')}</div></div>`;
     window.__jangyuSilverSelection={tid,result};om('jangyuSilverSelectionModal');
   }catch(e){toast('은배 자격 조회 실패: '+e.message,'error');}
 }
 async function saveJangyuSilverSelection(tid,index){
   if(!AD||MATCH_ORGANIZATION.id!=='jangyu')return;
   const context=window.__jangyuSilverSelection;if(context?.tid!==tid)return;
-  const team=context.result.candidates[index];if(!team||context.result.candidates.length<2)return;
+  const team=context.result.candidates[index];if(!team||context.result.candidates.length<2||context.result.fingerprint.startsWith('owner-confirmed-'))return;
   try{
     const ref=doc(db,'tournaments',tid),baseline=(G.tournaments||[]).find(t=>t.id===tid);
     const decision={teamId:team.id,fingerprint:context.result.fingerprint,selectedAt:new Date().toISOString(),actor:registrationAuditActor()};
@@ -8644,7 +8661,7 @@ async function ensureDivisionRuleCache(tid){
   if(!tid) return null;
   const sharedTournament=(G.tournaments||[]).find(t=>String(t.id)===tid);
   if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR);
-  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===319)return DIVISION_RULE_CACHE.get(tid);
+  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===320)return DIVISION_RULE_CACHE.get(tid);
   DIVISION_RULE_CACHE.delete(tid);
   if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
   const promise=(async()=>{
@@ -8691,7 +8708,7 @@ async function ensureDivisionRuleCache(tid){
       if(!byName.has(nn)) byName.set(nn,[]);
       byName.get(nn).push(r);
     }));
-    const cache={tid,currentYear,prevTs,records,byName,silverSources,basisVersion:319};
+    const cache={tid,currentYear,prevTs,records,byName,silverSources,basisVersion:320};
     DIVISION_RULE_CACHE.set(tid,cache);
     return cache;
   })().finally(()=>DIVISION_RULE_PROMISE.delete(tid));
