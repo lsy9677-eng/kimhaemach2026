@@ -1,3 +1,4 @@
+import{prioritizeSameClubMatches,sameClubMatch}from'./round-robin-order.js';
 import{mergeCompetitionSettings}from'./competition-settings.js';
 import{selectLowestEliminatedTeam}from'./jangyu-silver-eligibility.js';
 const MATCH_ORGANIZATION=window.MATCH_ORGANIZATION;
@@ -11325,9 +11326,16 @@ function buildFreshGroupMatchesFromDraw(key){
       }
     }
   });
-  return fresh;
+  return prioritizeRoundRobinMatches(key,fresh);
 }
-
+function isRoundRobinKey(key){
+  const {tid,div}=_k2td(key),t=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  return !!t&&gDS(t,div).format==='roundrobin';
+}
+function prioritizeRoundRobinMatches(key,list){
+  if(!G.tournaments||!isRoundRobinKey(key))return list;
+  return prioritizeSameClubMatches(list,G.teams[key]||[],getTeamClubTokens).map((match,index)=>({...match,leagueOrder:index}));
+}
 
 
 function getPreservedSeedDrawState(key){
@@ -11467,6 +11475,11 @@ function getGroupOrderPairKey(key, gi, m){
   return [a,b].sort((x,y)=>x-y).join('-');
 }
 function getGroupDisplayPriority(key, gi, m){
+  if(isRoundRobinKey(key)){
+    const matches=(G.matches[key]||[]).filter(x=>x.phase==='group'&&Number(x.group)===Number(gi));
+    const ordered=prioritizeSameClubMatches(matches,G.teams[key]||[],getTeamClubTokens);
+    const index=ordered.findIndex(x=>String(x.id)===String(m.id));return index<0?Number(m.leagueOrder||0):index;
+  }
   const grp = G.draws[key]?.groups?.[Number(gi)];
   const gTeams = Array.isArray(grp?.teams) ? grp.teams : [];
   const size = gTeams.length;
@@ -11845,6 +11858,7 @@ function findGroupMatchByTeams(key, gi, ta, tb){
   return (G.matches[key]||[]).find(m=>m && m.phase==='group' && Number(m.group)===Number(gi) && ((m.t1===ta && m.t2===tb) || (m.t1===tb && m.t2===ta)));
 }
 function getIndividualGroupAutoQueue(key, gi){
+  if(isRoundRobinKey(key))return prioritizeSameClubMatches((G.matches[key]||[]).filter(m=>m.phase==='group'&&Number(m.group)===Number(gi)&&m.winner==null),G.teams[key]||[],getTeamClubTokens).map(match=>({match,autoLabel:sameClubMatch(match,G.teams[key]||[],getTeamClubTokens)?'풀리그 · 같은 클럽 우선':'풀리그'}));
   const grp=G.draws[key]?.groups?.[Number(gi)];
   if(!grp || !Array.isArray(grp.teams)) return [];
   const teams=grp.teams.slice();
@@ -14692,6 +14706,7 @@ function openDraw(tid,div){
   ge('drawTeamList').innerHTML=`<div style="padding:10px 12px;background:var(--panel2);border-radius:var(--radius-lg);border:1px solid var(--border)"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${dl(div)} — 등록 팀 (${teams.length}팀)</div><div style="display:flex;flex-wrap:wrap;gap:4px">${teams.map((tm,i)=>`<span class="badge bg-green" style="font-size:.78rem">${tdn(tm,key,i)}</span>`).join('')}</div></div>`;
   buildDrawPresets(teams.length,t,div);
   ge('sameClubWarn').classList.toggle('show',hasSameClub);
+  ge('sameClubWarn').textContent=DW.cfg.format==='roundrobin'?'전체 풀리그는 같은 클럽 팀도 함께 편성하며, 같은 클럽끼리의 맞대결을 가장 먼저 진행합니다.':'⚠️ 같은 클럽 팀이 많아 완전 분리가 어려울 수 있습니다. 조 구성을 확인하세요.';
   DW.candidates=[];
   DW.plan=null;
   const histCnt=(G.drawHistories[key]||[]).filter(x=>!x.deleted).length;
@@ -14801,6 +14816,7 @@ function calcGroupPresets(n){
 function buildDrawPresets(n,t,div){
   const cfg=gDS(t,div);
   DW.cfg.format=cfg.format;
+  const warning=ge('sameClubWarn');if(warning)warning.textContent=cfg.format==='roundrobin'?'전체 풀리그는 같은 클럽 맞대결을 첫 경기부터 우선 진행합니다.':'⚠️ 같은 클럽 팀이 많으면 조 구성을 확인해 주세요.';
   let mode=ge('drawCompetitionFormat');
   if(!mode){mode=document.createElement('select');mode.id='drawCompetitionFormat';mode.className='form-select';mode.setAttribute('aria-label','경기 방식');ge('grpPresets').parentElement.prepend(mode);}
   mode.innerHTML='<option value="group_knockout">예선 조별 + 본선</option><option value="roundrobin">전체 풀리그 · 본선 없음</option><option value="knockout">토너먼트</option>';mode.value=cfg.format;
@@ -14858,7 +14874,7 @@ async function savePrelimDrawSettings(){
   const {tid,div,teams,cfg}=DW;
   if(cfg.format!=='roundrobin'&&!validPrelimGroupSizes(cfg.grpSizes,teams.length)){toast('조 구성을 확인하세요','error');return;}
   const savedAt=new Date().toISOString();
-  const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,title:String(ge('drawTitleInput')?.value||'').trim(),sameClubPolicy:'separate_where_possible',savedAt};
+  const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,title:String(ge('drawTitleInput')?.value||'').trim(),sameClubPolicy:cfg.format==='roundrobin'?'same_club_first':'separate_where_possible',savedAt};
   const patch={format:cfg.format||'group_knockout',grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings};
   if(AD&&ge('drawAllowedCourtsWrap'))patch.prelimAllowedCourts=getDrawAllowedCourtsFromModal();
   sl(true);try{await saveCompetitionSettings(tid,{[div]:patch});updatePrelimSettingsSavedStatus(savedAt);const allocationSummary=ge('divisionCourtAllocationSummary');if(allocationSummary)allocationSummary.innerHTML=renderDivisionCourtAllocationSummary(DW.key);toast('코트·조편성 설정을 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
@@ -15017,10 +15033,11 @@ function buildSnakeOrder(grps,opt){
 
 // PHASE230: uniform shuffled slot assignments conditioned only on club separation
 // and any explicit operational exclusions. No greedy balancing or seed priority.
-function getPrelimSeedDistributedGroups(indices, teams, grpSizes, seedMap){
+function getPrelimSeedDistributedGroups(indices, teams, grpSizes, seedMap,format='group_knockout'){
   const ids=[...(indices||[])],sizes=(grpSizes||[]).map(Number);
   if(!sizes.length)return [];
   if(sizes.some(n=>!Number.isInteger(n)||n<1)||sizes.reduce((a,b)=>a+b,0)!==ids.length||new Set(ids).size!==ids.length)throw new Error('조별 인원과 등록팀 수가 일치하지 않습니다.');
+  if(format==='roundrobin'){if(sizes.length!==1)throw new Error('전체 풀리그는 모든 팀을 한 리그로 편성해야 합니다.');return [{gi:0,size:ids.length,teams:shuffle(ids.slice())}];}
   const tokens=new Map(ids.map(i=>[i,[...new Set(getTeamClubTokens(teams?.[i]||{}))]]));
   const counts=new Map();tokens.forEach(ts=>ts.forEach(t=>counts.set(t,(counts.get(t)||0)+1)));
   if([...counts.values()].some(n=>n>sizes.length))throw new Error('같은 클럽의 팀 수가 조 수보다 많아 분리 배정할 수 없습니다. 조 구성을 변경하세요.');
@@ -16731,7 +16748,7 @@ async function saveManualPrelimDraw(){
   await resetMatchRecords(key);
   const audit={mode:'manual_full',modeLabel:'현장 완전수동',loggedAt:now.toISOString()};
   G.draws[key]={...(G.draws[key]||{}),groups,shuffled:used.slice(),advance,groupDrawAudit:audit,allowedCourts,manualDraw:true,manualConfirmedAt:now.toISOString()};
-  const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=ms;
+  const ms=[];groups.forEach((g,gi)=>{for(let a=0;a<g.teams.length;a++)for(let b=a+1;b<g.teams.length;b++)ms.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:g.teams[a],t2:g.teams[b],winner:null,rubbers:[],court:''});});G.matches[key]=prioritizeRoundRobinMatches(key,ms);
   sl(true);try{await stM(key,{drawOverride:G.draws[key]});await fbLog(`예선 현장 완전수동 추첨 확정: ${dl(DW.div)} / ${groups.length}조`,'✋');sl(false);cm('mManualPrelimDraw');toast('수동 예선 대진 확정 완료 ✅','success');renderBracket();}catch(e){sl(false);toast('저장 실패: '+(e?.message||e),'error');}
 }
 
@@ -16754,7 +16771,7 @@ async function startDraw(){
   const prelimSeedMap=getPrelimManualSeedMap();
   const allowedCourts=getDrawAllowedCourtsFromModal();
   let seededPrelimGroups;
-  try{seededPrelimGroups=getPrelimSeedDistributedGroups(indices,teams,grpSizes,prelimSeedMap);}
+  try{seededPrelimGroups=getPrelimSeedDistributedGroups(indices,teams,grpSizes,prelimSeedMap,DW.cfg.format);}
   catch(e){DW.isRunning=false;ge('confirmDrawBtn').disabled=false;ge('confirmDrawBtn').textContent='추첨 시작';const cfg=ge('drawCfgScreen'),run=ge('drawRunScreen');if(cfg)cfg.style.display='block';if(run)run.style.display='none';toast(e.message,'error');return;}
   await resetMatchRecords(key);
   const shuffled=groupsToAssignmentOrder(seededPrelimGroups).map(x=>x.ti);
@@ -16797,7 +16814,7 @@ async function startDraw(){
   ge('drawStageContent').innerHTML=`<div style="font-size:1.1rem;font-weight:800;color:var(--success);margin:10px 0;text-align:center">🎉 추첨 완료!</div><div style="font-size:.8rem;color:var(--text2);text-align:center">${drawTime.toLocaleString('ko-KR')} 같은클럽 분리 조건 무작위 추첨</div>`;
   await sleep(400);
 
-  const audit={mode:'club_separated_random',modeLabel:'같은클럽 분리 조건 무작위',loggedAt:drawTime.toISOString()};
+  const audit={mode:DW.cfg.format==='roundrobin'?'roundrobin_same_club_first':'club_separated_random',modeLabel:DW.cfg.format==='roundrobin'?'전체 풀리그 · 같은 클럽 맞대결 우선':'같은클럽 분리 조건 무작위',loggedAt:drawTime.toISOString()};
   DW.drawAudit=audit;
   const groupData=grps.map(g=>({teams:g.teams,courts:[],memo:''}));
   G.draws[key]={groups:groupData,shuffled,advance,groupDrawAudit:audit,mainSeedRaw:prelimSeedRaw,mainSeedMap:prelimSeedMap,allowedCourts};
@@ -16807,7 +16824,7 @@ async function startDraw(){
       for(let b=a+1;b<grp.teams.length;b++)
         mlist.push({id:`g_${gi}_${a}_${b}`,phase:'group',group:gi,t1:grp.teams[a],t2:grp.teams[b],winner:null,rubbers:[],court:''});
   });
-  G.matches[key]=mlist;
+  G.matches[key]=prioritizeRoundRobinMatches(key,mlist);
 
   const t=G.tournaments.find(t=>t.id===DW.tid);
   if(t){
@@ -24545,7 +24562,7 @@ async function autoOrderMatches(key){
     remaining = nextRemaining;
   }
 
-  const finalOrder = [...done, ...ordered, ...withoutCourt];
+  const finalOrder = [...done, ...prioritizeRoundRobinMatches(key,[...ordered, ...withoutCourt])];
   const base = new Date('2000-01-01T00:00:00Z').getTime();
   finalOrder.forEach((m, i) => {
     if(getCourts(m).length > 0){
@@ -29024,7 +29041,8 @@ function outputPrelimHtml(tid,div,blank=false){
   const cards=groups.map((g,gi)=>{
     const ids=Array.isArray(g?.teams)?g.teams:(Array.isArray(g)?g:[]);
     const names=ids.map(i=>outputTeamName(key,i));
-    const gm=ms.filter(m=>Number(m.group)===gi).sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
+    const groupMatches=ms.filter(m=>Number(m.group)===gi);
+    const gm=isRoundRobinKey(key)?sortGroupMatchesForDisplay(key,gi,groupMatches):groupMatches.sort((a,b)=>Number(a.slot||0)-Number(b.slot||0));
     let rows='';
     if(gm.length){
       rows=gm.map((m,mi)=>`<tr><td>${mi+1}</td><td>${outputEsc(outputTeamName(key,m.t1))}</td><td class="oc-score">${outputEsc(outputScoreText(key,m,blank))}</td><td>${outputEsc(outputTeamName(key,m.t2))}</td><td class="oc-write">${blank?'':' '}</td></tr>`).join('');
