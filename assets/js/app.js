@@ -1470,23 +1470,44 @@ function getBracketAllowedCourts(key){
     tournamentCourts:getTournamentCourtList(tid,true)
   });
 }
+function getTournamentDivisionCourtAllocations(tid){
+  const tournament=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  return (tournament?.divisions||[]).map(div=>{
+    const config=tournament.divSettings?.[div]||{},draw=G.draws?.[tid+'_'+div];
+    const saved=Object.prototype.hasOwnProperty.call(config,'prelimAllowedCourts')?config.prelimAllowedCourts:(draw?.allowedCourts?.length?draw.allowedCourts:getDivisionConfiguredCourts(tid,div));
+    return {div,courts:[...new Set((Array.isArray(saved)?saved:[]).map(String).filter(Boolean))]};
+  });
+}
+function getOtherDivisionCourtUsage(key){
+  const {tid,div}=_k2td(key),usage={};
+  for(const row of getTournamentDivisionCourtAllocations(tid)){
+    if(row.div===div)continue;
+    for(const court of row.courts){if(!usage[court])usage[court]=[];usage[court].push(dl(row.div)+' 사용');}
+  }
+  return usage;
+}
+function renderDivisionCourtAllocationSummary(key){
+  const {tid,div}=_k2td(key),allocations=getTournamentDivisionCourtAllocations(tid);
+  return `<div style="padding:10px 12px;margin-bottom:12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc"><b style="font-size:.8rem">부서별 저장 코트</b>${allocations.map(row=>`<div style="margin-top:5px;font-size:.76rem"><b>${esc(dl(row.div))}${row.div===div?' (현재 부서)':''}</b> · ${row.courts.length?`${row.courts.length}면 · ${row.courts.map(esc).join(', ')}`:'미지정 · 전체 코트 허용'}</div>`).join('')}</div>`;
+}
 function renderDrawAllowedCourtSelector(key, selectedCourts=[]){
   const selected=(selectedCourts||[]).map(String).filter(Boolean);
   const {tid,div}=_k2td(key);
   const pool=resolveAllowedCourts({divisionCourts:getDivisionConfiguredCourts(tid,div),drawCourts:[],tournamentCourts:getTournamentCourtList(tid,true)});
-  const body=renderCourtAccordionSelector(selected, null, `draw_allowed_${key}`, pool);
+  const body=renderCourtAccordionSelector(selected, getOtherDivisionCourtUsage(key), `draw_allowed_${key}`, pool);
   return `<div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#f8fbff,#fffdf5);border:1.5px solid #dbe7ff;border-radius:12px">
     <div style="font-weight:900;font-size:.88rem;color:var(--primary-dark);margin-bottom:6px">🎾 예선 운영 코트 지정</div>
     <div style="font-size:.76rem;color:var(--text2);line-height:1.6;margin-bottom:10px">
       여기서 고른 코트만 이 부서 예선 운영 코트로 사용됩니다. 저장된 뒤에는 <b>조 코트 배정</b>, <b>경기 코트 배정</b>에서도 이 코트들만 선택할 수 있습니다.
     </div>
+    <div id="divisionCourtAllocationSummary">${renderDivisionCourtAllocationSummary(key)}</div>
+    <div style="font-size:.74rem;color:#92400e;margin-bottom:8px">노란색 코트는 다른 부서가 저장한 코트입니다. 함께 사용하려는 경우에만 선택하세요.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <button type="button" class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;min-height:34px" onclick="toggleAllDrawAllowedCourts(true)">전체 선택</button>
       <button type="button" class="btn btn-outline" style="font-size:.76rem;padding:5px 12px;min-height:34px" onclick="toggleAllDrawAllowedCourts(false)">전체 해제</button>
     </div>
     <div id="drawAllowedCourtsWrap">${body}</div>
     <div id="drawAllowedCourtsSummary" style="font-size:.72rem;color:var(--text3);margin-top:8px;line-height:1.55"></div>
-    <button type="button" class="btn btn-primary" style="margin-top:10px" onclick="savePrelimDrawSettings()">💾 코트·조편성 설정 저장</button>
   </div>`;
 }
 function updateDrawAllowedCourtsSummary(){
@@ -1497,6 +1518,10 @@ function updateDrawAllowedCourtsSummary(){
   summary.innerHTML = selected.length
     ? `선택 코트 <b>${selected.length}</b>면 · ${selected.join(', ')}`
     : '<span style="color:var(--danger);font-weight:800">선택된 코트가 없습니다. 해제 상태면 전체 코트를 허용합니다.</span>';
+  if(DW?.key){
+    const usage=getOtherDivisionCourtUsage(DW.key),overlaps=selected.filter(c=>usage[c]?.length);
+    if(overlaps.length)summary.innerHTML+=`<div role="status" style="margin-top:7px;color:#b45309;font-weight:800">⚠ 다른 부서와 ${overlaps.length}면 중복: ${overlaps.map(c=>esc(c)+' ('+usage[c].map(esc).join(', ')+')').join(' · ')}</div>`;
+  }
 }
 function bindDrawAllowedCourtInputs(){
   const box=ge('drawAllowedCourtsWrap');
@@ -14808,7 +14833,8 @@ function buildDrawPresets(n,t,div){
 function ensurePrelimConfigSaveControls(){
   let box=ge('prelimConfigSaveControls');
   if(!box){box=document.createElement('div');box.id='prelimConfigSaveControls';ge('grpPresets')?.parentElement?.appendChild(box);}
-  box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><button type="button" class="btn btn-primary" onclick="savePrelimDrawSettings()">💾 코트·조편성 설정 저장</button></div><div style="font-size:.75rem;margin-top:7px">추첨 실행 없이 운영 코트와 조편성 기준을 저장합니다. 다시 열어도 유지되며 기존 대진·경기 결과는 바뀌지 않습니다. 저장 후 현장 수동 추첨에서 각 자리에 팀을 선택할 수 있습니다. 전체 풀리그는 본선 없이 순위를 확정하며, 예선+본선은 조 수와 진출 수로 본선을 계산합니다.</div>';
+  box.innerHTML='<button type="button" id="customPrelimSizesButton" class="btn btn-outline" onclick="setCustomPrelimGroupSizes()">✍ 조별 팀 수 직접 설정</button><div style="font-size:.75rem;margin-top:8px">코트와 조편성 기준은 하단의 <b>설정만 저장</b> 버튼으로 함께 저장합니다.</div>';
+  if(ge('customPrelimSizesButton'))ge('customPrelimSizesButton').style.display=DW.cfg.format==='roundrobin'?'none':'';
 }
 function updatePrelimSettingsSavedStatus(savedAt){
   const host=ge('prelimConfigSaveControls');if(!host)return;
@@ -14835,12 +14861,13 @@ async function savePrelimDrawSettings(){
   const settings={teamCount:teams.length,groupSizes:cfg.grpSizes.slice(),advance:cfg.advance,title:String(ge('drawTitleInput')?.value||'').trim(),sameClubPolicy:'separate_where_possible',savedAt};
   const patch={format:cfg.format||'group_knockout',grpSize:Math.max(...cfg.grpSizes),advance:cfg.advance,prelimDrawSettings:settings};
   if(AD&&ge('drawAllowedCourtsWrap'))patch.prelimAllowedCourts=getDrawAllowedCourtsFromModal();
-  sl(true);try{await saveCompetitionSettings(tid,{[div]:patch});updatePrelimSettingsSavedStatus(savedAt);toast('코트·조편성 설정을 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
+  sl(true);try{await saveCompetitionSettings(tid,{[div]:patch});updatePrelimSettingsSavedStatus(savedAt);const allocationSummary=ge('divisionCourtAllocationSummary');if(allocationSummary)allocationSummary.innerHTML=renderDivisionCourtAllocationSummary(DW.key);toast('코트·조편성 설정을 저장했습니다.','success');return true;}catch(e){toast('설정 저장 실패: '+e.message,'error');return false;}finally{sl(false);}
 }
 window.setCustomPrelimGroupSizes=setCustomPrelimGroupSizes;window.savePrelimDrawSettings=savePrelimDrawSettings;
 
 function updateAdvPresets(n){
   const {groups,grpSizes}=DW.cfg;
+  if(ge('customPrelimSizesButton'))ge('customPrelimSizesButton').style.display=DW.cfg.format==='roundrobin'?'none':'';
   ge('grpConfigDisplay').textContent=`${grpSizes.join('+')}팀 × ${groups}조`;
   const advEl=ge('advancePresets');advEl.innerHTML='';
   if(DW.cfg.format==='roundrobin'){advEl.textContent='전체 경기 결과로 최종 순위 확정 · 본선 없음';updateMainSizeDisplay();return;}
