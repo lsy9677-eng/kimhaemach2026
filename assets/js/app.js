@@ -1,3 +1,4 @@
+import{selectLowestEliminatedTeam}from'./jangyu-silver-eligibility.js';
 const MATCH_ORGANIZATION=window.MATCH_ORGANIZATION;
 if(!MATCH_ORGANIZATION)throw new Error("단체 설정을 불러오지 못했습니다. 새로고침해 주세요.");
 const organizationLocalStorage=window.organizationLocalStorage;
@@ -852,7 +853,12 @@ function startTournamentListSync(){
   const tournamentsRef=collection(db,'tournaments');
   const tournamentSource=MATCH_ORGANIZATION.id==='jangyu'?tournamentsRef:query(tournamentsRef,orderBy('createdAt','desc'));
   _tournamentsUnsub=onSnapshot(tournamentSource, async snap=>{
+    const previousSilverSources=JSON.stringify((G.tournaments||[]).map(t=>[t.id,t.pastArchiveRevision,t.pastArchive?.savedAt,t.jangyuSilverDecision]));
     G.tournaments=sortTournamentsLatest(snap.docs.map(d=>({id:d.id,...d.data()})));
+    if(MATCH_ORGANIZATION.id==='jangyu'&&previousSilverSources!==JSON.stringify(G.tournaments.map(t=>[t.id,t.pastArchiveRevision,t.pastArchive?.savedAt,t.jangyuSilverDecision]))){
+      if(typeof DIVISION_RULE_CACHE!=='undefined')DIVISION_RULE_CACHE.clear();
+      if(typeof JANGYU_SILVER_PLAYER_RECORDS!=='undefined')JANGYU_SILVER_PLAYER_RECORDS.clear();
+    }
     hydratePastArchives();
     try{
       const activeTid=getRealtimeTargetTournamentId()||null;
@@ -1187,7 +1193,7 @@ function schedulePastArchiveMigration(){
 }
 function isPastArchiveTournament(t){
   const d=getTournamentDateKey(t);
-  return !!t && (t.status==='finished' || (d && d<getTodayDateKey()));
+  return !!t && (t.status==='finished' || t.status==='done' || (d && d<getTodayDateKey()));
 }
 function getPastArchive(tid){
   const t=(G.tournaments||[]).find(x=>String(x.id)===String(tid));
@@ -7440,6 +7446,7 @@ function renderTL(){
     <div class="tc-body"><div class="tc-meta"><span class="tc-mi">📅 ${t.date}</span>${t.venue?`<span class="tc-mi">📍 ${t.venue}</span>`:''}<span class="tc-mi">${(t.type||'team')==='individual_pair'?'🎾 개인전':'👥 단체전'}</span><span class="tc-mi">👥 ${tc}${(t.type||'team')==='individual_pair'?'조':'팀'}</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${(t.divisions||[]).map(d=>`<span class="dpill ${dc(d)}" style="cursor:pointer" onclick="openRoster('${t.id}','${d}')">${dl(d)} <small>${(G.teams[t.id+'_'+d]||[]).length}팀</small></span>`).join('')}</div>
     <div class="tc-acts"><button type="button" class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openGuide('${t.id}')">📌 요강보기</button></div>
+    ${AD&&MATCH_ORGANIZATION.id==='jangyu'&&['finished','done'].includes(t.status)?`<div class="tc-acts"><button class="btn btn-outline" onclick="openJangyuSilverSelection('${t.id}')">금배 최하위·은배 자격</button></div>`:''}
     ${AD?`<div class="tc-acts"><select class="form-select" style="width:auto;padding:5px 8px;font-size:.75rem" onchange="chgTS('${t.id}',this.value)"><option value="open" ${t.status==='open'?'selected':''}>접수중</option><option value="closed" ${t.status==='closed'?'selected':''}>마감</option><option value="ongoing" ${t.status==='ongoing'?'selected':''}>진행중</option><option value="finished" ${t.status==='finished'?'selected':''}>종료</option></select><button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="openTD('${t.id}')">⚙️ 설정</button><button class="btn btn-primary" style="font-size:.75rem;padding:5px 10px" onclick="openET('${t.id}')">✏️ 편집</button>${isPastArchiveTournament(t)?`<button class="btn btn-outline" style="font-size:.75rem;padding:5px 10px" onclick="finalizePastTournamentArchive('${t.id}')">${getPastArchive(t.id)?'확정본 다시 저장':'지난대회 명단·결과 저장'}</button>`:''}<button class="btn btn-danger" style="font-size:.75rem;padding:5px 10px" onclick="delT('${t.id}')">삭제</button></div>`:
     `<div class="tc-acts"><button class="btn btn-outline" style="font-size:.75rem" onclick="openTD('${t.id}')">상세보기</button></div>`}</div></div>`;
   }).join('');
@@ -8414,7 +8421,7 @@ function _rulePrevTournaments(currentT){
     const priorYear=year===previousYear;
     // Same-year records count only from completed competitions earlier than this one.
     // A withdrawn/current application is never a qualification source.
-    const hasFinalResults=t.status==='finished'||!!getPastArchive(t.id)||(HIST_DATA||[]).some(h=>String(h.id)===String(t.id)&&(h.teams||[]).some(tm=>Number(tm.rank||0)>0));
+    const hasFinalResults=['finished','done'].includes(t.status)||!!getPastArchive(t.id)||(HIST_DATA||[]).some(h=>String(h.id)===String(t.id)&&(h.teams||[]).some(tm=>Number(tm.rank||0)>0));
     const completedEarlier=year===currentYear&&isPastArchiveTournament(t)&&hasFinalResults&&date&&currentDate&&date<currentDate;
     if(_divisionRulePolicy().jangyu){
       const firstHalf=year===currentYear&&date>=`${currentYear}-01-01`&&date<`${currentYear}-07-01`;
@@ -8564,12 +8571,80 @@ function decorateRegistryAge65Controls(year,members){
     cell.appendChild(btn);
   });
 }
+const JANGYU_SILVER_PLAYER_RECORDS=new Map();
+async function loadJangyuSilverPlayerRecord(name,club){
+  if(MATCH_ORGANIZATION.id!=='jangyu')return;
+  const sources=[];
+  for(const t of (G.tournaments||[]).filter(t=>['finished','done'].includes(t.status))){
+    try{
+      const bundle=getPastArchive(t.id);if(bundle)applyTournamentBundle(t.id,bundle);else await ensurePastTournamentArchive(t.id);
+      const selection=jangyuSilverSelection(t.id);if(!selection.team)continue;
+      const record={tid:String(t.id),tname:t.name,date:t.date,div:'금',...selection.team};
+      const byName=new Map();for(const player of record.players)byName.set(transferName(player),[record]);
+      if(_divisionRuleProfileFromCache({currentYear:REG_YEAR,prevTs:[{id:t.id}],byName},name,club))sources.push(record);
+    }catch(e){console.warn('[SilverEligibility] player record unavailable',t.id);}
+  }
+  JANGYU_SILVER_PLAYER_RECORDS.set(transferName(name)+'|'+registrationClubIdentityKey(club),sources);
+}
+function jangyuSilverPlayerRecordHtml(name,club){
+  const sources=JANGYU_SILVER_PLAYER_RECORDS.get(transferName(name)+'|'+registrationClubIdentityKey(club))||[];
+  return sources.length?`<div style="padding:12px;margin-bottom:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px"><b>금배 최하위 1팀 · 은배 출전 자격 유지</b><div>일반 하향 1명에 포함하지 않습니다. 동배 출전 예외는 아닙니다.</div>${sources.map(r=>`<div>${esc(r.tname)} · ${esc(r.date)} · ${esc(r.club)} · 본선 미진출 / 전체 최하위</div>`).join('')}</div>`:'';
+}
+function jangyuSilverSelection(tid){
+  const t=(G.tournaments||[]).find(t=>String(t.id)===String(tid));
+  const rows=[];
+  for(const div of (t?.divisions||[]).filter(d=>_ruleDivKey(d)==='gold')){
+    const key=tid+'_'+div,teams=G.teams[key]||[],matches=G.matches[key]||[];
+    teams.forEach((team,index)=>{
+      if(team._pastOutcome?.confirmed!==true||!/^예선\s*(탈락|참가)$/.test(String(team._pastOutcome?.result||'').trim()))return;
+      const games=matches.filter(m=>m.phase==='group'&&!m.bye&&(String(m.t1)===String(index)||String(m.t2)===String(index)));
+      let w=0,setDiff=0,gameDiff=0,setsReady=games.length>0,gamesReady=games.length>0;
+      for(const m of games){
+        const state=getMatchResultState(key,m),side=String(m.t1)===String(index)?1:-1;
+        if(!state.done||!Number.isFinite(Number(state.sc1))||!Number.isFinite(Number(state.sc2))||m.simpleResult?.scorePending){setsReady=false;gamesReady=false;continue;}
+        if(String(state.winner)===String(index))w++;
+        setDiff+=side*(Number(state.sc1)-Number(state.sc2));
+        const count=getMatchDoublesCount(key,m);let valid=0;
+        for(const rb of (m.rubbers||[]).slice(0,count)){
+          const x=rb.score1??rb.s1,y=rb.score2??rb.s2;
+          if(x==null||y==null||String(x).trim()===''||String(y).trim()===''||!Number.isFinite(Number(x))||!Number.isFinite(Number(y))||Number(x)===Number(y))continue;
+          if(getRubberScoreErrorMessage(analyzeRubberScore(x,y),valid+1))continue;
+          valid++;gameDiff+=side*(Number(x)-Number(y));
+        }
+        if(valid!==count)gamesReady=false;
+      }
+      rows.push({id:String(team._id||team.id||''),club:team.club,label:tdn(team,key,index),players:team.players||[],w,setDiff,gameDiff,setsReady,gamesReady});
+    });
+  }
+  return selectLowestEliminatedTeam(rows,t?.jangyuSilverDecision);
+}
+async function openJangyuSilverSelection(tid){
+  if(!AD||MATCH_ORGANIZATION.id!=='jangyu')return;
+  try{
+    await ensurePastTournamentArchive(tid);
+    const result=jangyuSilverSelection(tid);
+    let modal=ge('jangyuSilverSelectionModal');if(!modal){modal=document.createElement('div');modal.id='jangyuSilverSelectionModal';modal.className='modal-overlay';document.body.appendChild(modal);}
+    modal.innerHTML=`<div class="modal-box"><div class="modal-header"><h3>금배 최하위 1팀 · 은배 자격</h3><button class="modal-close" onclick="cm('jangyuSilverSelectionModal')">✕</button></div><div class="modal-body"><p>본선 미진출팀 전체에서 승수 → 세트 득실차 → 스코어 득실차가 낮은 1팀을 선정합니다. 최종 동률만 관리자가 선택합니다.</p>${result.status==='missing'?'<p>예선 경기 또는 세부 점수가 부족합니다. 결과를 입력한 뒤 다시 확인하세요.</p>':result.status==='none'?'<p>확정된 금배 예선탈락 명단이 없습니다.</p>':result.candidates.map((r,i)=>`<div style="padding:12px;border:1px solid #cbd5e1;margin:8px 0"><b>${esc(r.label||r.club)}</b><br>${esc(r.players.join(' / '))}<br>${r.w}승 · 세트득실 ${r.setDiff} · 스코어득실 ${r.gamesReady?r.gameDiff:'미입력'}${result.team?.id===r.id?'<b> · 은배 자격 확정</b>':''}${result.candidates.length>1?`<button class="btn btn-primary" onclick="saveJangyuSilverSelection('${esc(tid)}',${i})">이 팀 선택</button>`:''}</div>`).join('')}</div></div>`;
+    window.__jangyuSilverSelection={tid,result};om('jangyuSilverSelectionModal');
+  }catch(e){toast('은배 자격 조회 실패: '+e.message,'error');}
+}
+async function saveJangyuSilverSelection(tid,index){
+  if(!AD||MATCH_ORGANIZATION.id!=='jangyu')return;
+  const context=window.__jangyuSilverSelection;if(context?.tid!==tid)return;
+  const team=context.result.candidates[index];if(!team||context.result.candidates.length<2)return;
+  try{
+    const ref=doc(db,'tournaments',tid),baseline=(G.tournaments||[]).find(t=>t.id===tid);
+    const decision={teamId:team.id,fingerprint:context.result.fingerprint,selectedAt:new Date().toISOString(),actor:registrationAuditActor()};
+    await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists()||stableStringify(snap.data().jangyuSilverDecision||null)!==stableStringify(baseline.jangyuSilverDecision||null)||stableStringify(snap.data().pastArchive)!==stableStringify(baseline.pastArchive)||Number(snap.data().pastArchiveRevision||0)!==Number(baseline.pastArchiveRevision||0))throw new Error('경기 결과가 변경됐습니다. 다시 열어 주세요.');tx.update(ref,{jangyuSilverDecision:decision});});
+    baseline.jangyuSilverDecision=decision;DIVISION_RULE_CACHE.clear();JANGYU_SILVER_PLAYER_RECORDS.clear();toast('최하위 1팀 은배 자격을 확정했습니다.','success');await openJangyuSilverSelection(tid);
+  }catch(e){toast('저장 실패: '+e.message,'error');}
+}
 async function ensureDivisionRuleCache(tid){
   tid=String(tid||'');
   if(!tid) return null;
   const sharedTournament=(G.tournaments||[]).find(t=>String(t.id)===tid);
   if(sharedTournament)await loadSharedAge65Eligibility(_ruleTournamentYear(sharedTournament)||REG_YEAR);
-  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===318)return DIVISION_RULE_CACHE.get(tid);
+  if(DIVISION_RULE_CACHE.get(tid)?.basisVersion===319)return DIVISION_RULE_CACHE.get(tid);
   DIVISION_RULE_CACHE.delete(tid);
   if(DIVISION_RULE_PROMISE.has(tid)) return DIVISION_RULE_PROMISE.get(tid);
   const promise=(async()=>{
@@ -8580,7 +8655,12 @@ async function ensureDivisionRuleCache(tid){
     try{ await loadAge65Certifications(); }catch(e){}
     const prevTs=_rulePrevTournaments(currentT);
     const records=[];
-    for(const pt of prevTs){
+    const qualificationTours=_divisionRulePolicy().jangyu?[...new Map([...(HIST_DATA||[]),...(G.tournaments||[])].filter(t=>String(t.id)!==tid&&['finished','done'].includes(t.status)&&String(getTournamentDateKey(t)||t.date||'')<String(getTournamentDateKey(currentT)||currentT.date||'')).map(t=>[String(t.id),t])).values()]:prevTs;
+    const silverSources=[];
+    for(const pt of qualificationTours){
+      if(_divisionRulePolicy().jangyu){
+        try{const archive=getPastArchive(pt.id);if(archive)applyTournamentBundle(pt.id,archive);else await ensurePastTournamentArchive(pt.id);const selected=jangyuSilverSelection(pt.id);if(selected.team)silverSources.push({tid:String(pt.id),tname:pt.name,date:pt.date,...selected.team});}catch(e){console.warn('[SilverEligibility] source unavailable',pt.id);}
+      }
       const seen=new Set();
       try{
         const snap=await getDocs(query(collection(db,'registrations'),where('tournamentId','==',String(pt.id))));
@@ -8611,7 +8691,7 @@ async function ensureDivisionRuleCache(tid){
       if(!byName.has(nn)) byName.set(nn,[]);
       byName.get(nn).push(r);
     }));
-    const cache={tid,currentYear,prevTs,records,byName,basisVersion:318};
+    const cache={tid,currentYear,prevTs,records,byName,silverSources,basisVersion:319};
     DIVISION_RULE_CACHE.set(tid,cache);
     return cache;
   })().finally(()=>DIVISION_RULE_PROMISE.delete(tid));
@@ -8621,7 +8701,7 @@ async function ensureDivisionRuleCache(tid){
 function _divisionRuleProfileFromCache(cache,name,club){
   if(!cache) return null;
   const nn=transferName(name); if(!nn) return null;
-  let recs=(cache.byName.get(nn)||[]).slice();
+  let recs=(cache.byName.get(nn)||[]).filter(r=>cache.prevTs.some(t=>String(t.id)===String(r.tid)));
   if(!recs.length) return null;
 
   // PHASE162: 부서 자격 판정은 동일 이름만으로 과거 타 클럽 기록을 무조건 합치지 않는다.
@@ -8686,16 +8766,22 @@ function _divisionRuleMove(profile,div){
 }
 function _divisionRuleClassifySync(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
-  const profile=_divisionRuleProfileFromCache(cache,name,club);
+  let profile=_divisionRuleProfileFromCache(cache,name,club);
+  if(!profile&&cache?.silverSources?.length){
+    const byName=new Map();for(const r of cache.silverSources)for(const player of r.players){const key=transferName(player);if(!byName.has(key))byName.set(key,[]);byName.get(key).push({...r,div:'금'});}
+    profile=_divisionRuleProfileFromCache({...cache,prevTs:cache.silverSources.map(r=>({id:r.tid})),byName},name,club);
+  }
   if(!profile) return {known:false,step:0,isDowngrade:false,isUpward:false};
   const mv=_divisionRuleMove(profile,div);
   if(!mv.known) return {known:false,step:0,isDowngrade:false,isUpward:false};
   const age65=isAge65CertifiedForDivisionRule(name,club,cache.currentYear);
   const female=isFemaleForDivisionRule(name,club,cache.currentYear);
-  const previousTid=String(cache.prevTs[0]?.id||'');
-  const previousGold=profile.records.filter(r=>String(r.tid)===previousTid && _ruleDivLevel(r.div)===3);
-  const prelimException=_divisionRulePolicy().jangyu && _ruleDivKey(div)==='silver' && profile.baselineLevel===3 && previousGold.length>0 && previousGold.every(r=>r.outcome?.confirmed===true && /^예선\s*(탈락|참가)$/.test(String(r.outcome.result||'').trim()));
-  return {known:true,step:mv.step,isDowngrade:mv.isDowngrade,isUpward:mv.isUpward,delta:mv.delta,age65,female,prelimException,exceptionApproved:(age65||female||prelimException),profile,target:mv.target};
+  const source=(_divisionRulePolicy().jangyu&&_ruleDivKey(div)==='silver')?(cache.silverSources||[]).find(r=>{
+    const byName=new Map();for(const player of r.players){const key=transferName(player);if(!byName.has(key))byName.set(key,[]);byName.get(key).push({...r,div:'금'});}
+    return !!_divisionRuleProfileFromCache({...cache,prevTs:[{id:r.tid}],byName},name,club);
+  }):null;
+  const prelimException=!!source;
+  return {known:true,step:mv.step,isDowngrade:mv.isDowngrade,isUpward:mv.isUpward,delta:mv.delta,age65,female,prelimException,silverSource:source,exceptionApproved:(age65||female||prelimException),profile,target:mv.target};
 }
 function divisionRuleBadgeHtml(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
@@ -8710,7 +8796,7 @@ function divisionRuleBadgeHtml(tid,div,name,club){
   if(!c.known||!c.isDowngrade||c.step<=0) return markup();
   const move=`${_ruleDivLabel(c.profile.baselineDiv)}→${_ruleDivLabel(div)}`;
   const ok=c.exceptionApproved;
-  flags.unshift(`<button type="button" onclick="event.stopPropagation();openDivisionRuleReason('${esc(name)}','${esc(club||'')}','${esc(tid||'')}','${esc(div||'')}')" title="판정 근거 보기" style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap;cursor:pointer;font-family:inherit">↓ ${move}${c.prelimException?' · 직전 예선탈락 예외':ok?' · 예외승인':''}</button>`);
+  flags.unshift(`<button type="button" onclick="event.stopPropagation();openDivisionRuleReason('${esc(name)}','${esc(club||'')}','${esc(tid||'')}','${esc(div||'')}')" title="판정 근거 보기" style="display:inline-flex;align-items:center;margin-left:4px;padding:1px 5px;border-radius:999px;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};font-size:.58rem;font-weight:900;white-space:nowrap;cursor:pointer;font-family:inherit">↓ ${move}${c.prelimException?' · 금배 최하위 은배 자격':ok?' · 예외승인':''}</button>`);
   return markup();
 }
 
@@ -8725,7 +8811,7 @@ function ensureDivisionRuleReasonModal(){
 }
 function _divisionRuleReasonLines(tid,div,name,club){
   const cache=DIVISION_RULE_CACHE.get(String(tid||''));
-  const p=_divisionRuleProfileFromCache(cache,name,club);
+  const p=_divisionRuleProfileFromCache(cache,name,club)||_divisionRuleClassifySync(tid,div,name,club).profile;
   if(!p) return {title:`${name} 선수`,html:'<div style="color:#64748b">자동 판정에 사용할 수 있는 동일인 기준자료가 충분하지 않습니다. 관리자 확인이 필요합니다.</div>'};
   const mv=_divisionRuleMove(p,div);
   const target=_ruleDivLabel(div)||div||'-';
@@ -8755,14 +8841,16 @@ function _divisionRuleReasonLines(tid,div,name,club){
   else if(mv.isSame) result=`${base} → ${target} : 동일 부서`;
   else result=`${base} → ${target} : ${mv.step===1?'1단계':'2단계 이상'} 하향`;
   const exception=[female?'여성':'',age65?'65+ 인증완료':''].filter(Boolean).join(' · ');
-  const prelimException=_divisionRuleClassifySync(tid,div,name,club).prelimException;
+  const classification=_divisionRuleClassifySync(tid,div,name,club);
+  const prelimException=classification.prelimException;
   return {title:`${name} 선수`,html:`
     <div style="font-weight:950;font-size:1rem;color:#0f1e3a">${esc(name)} <span style="font-size:.78rem;color:#64748b">(${esc(club||'-')})</span></div>
     <div style="margin-top:10px;padding:11px 12px;border-radius:12px;background:${mv.isDowngrade?'#fff7ed':'#f0fdf4'};border:1px solid ${mv.isDowngrade?'#fdba74':'#86efac'};font-weight:900;color:${mv.isDowngrade?'#9a3412':'#166534'}">${esc(result)}</div>
     ${exception?`<div style="margin-top:8px;color:#166534;font-weight:850">예외 자격: ${esc(exception)}</div>`:''}
-    ${prelimException?'<div style="margin-top:8px;color:#166534;font-weight:850">직전 대회 금배조 예선탈락팀 명단 · 은배 출전 예외 (일반 하향 1명 제한에서 제외)</div>':''}
+    ${prelimException?'<div style="margin-top:8px;color:#166534;font-weight:850">금배 본선 미진출팀 중 전체 최하위 1팀 명단 · 은배 출전 자격 유지 (일반 하향 1명 제한에서 제외)</div>':''}
+    ${classification.silverSource?`<div style="margin-top:6px;color:#166534">자격 근거: ${esc(classification.silverSource.tname||'')} · ${esc(classification.silverSource.date||'')} · ${esc(classification.silverSource.club||'')}</div>`:''}
     ${reason}
-    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 올해 상반기(1월 1일~6월 30일)와 작년의 가장 최근 확정 대회 명단을 각 1개씩, 최대 2개 대회 비교해 가장 높은 출전 부서로 판정합니다. 올해 은배 출전 기록이 있어도 작년 금배 출전 기록은 유지합니다. 올해 하반기·현재 접수·미확정 대회는 기준에서 제외합니다. 금배 출전자를 포함해 예외 인증 없는 일반 하향은 출전 부서와 관계없이 팀당 1명까지 허용합니다. 여성·65세 이상 인증 및 직전 금배조 예선탈락팀의 은배 출전 예외는 유지하며 제한을 넘으면 접수를 차단합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
+    <div style="margin-top:10px;font-size:.74rem;color:#64748b">${_divisionRulePolicy().jangyu?'※ 올해 상반기(1월 1일~6월 30일)와 작년의 가장 최근 확정 대회 명단을 각 1개씩, 최대 2개 대회 비교해 가장 높은 출전 부서로 판정합니다. 올해 은배 출전 기록이 있어도 작년 금배 출전 기록은 유지합니다. 올해 하반기·현재 접수·미확정 대회는 기준에서 제외합니다. 금배 출전자를 포함해 예외 인증 없는 일반 하향은 출전 부서와 관계없이 팀당 1명까지 허용합니다. 여성·65세 이상 인증 및 금배 본선 미진출팀 중 전체 최하위 1팀의 은배 출전 자격은 유지하며 제한을 넘으면 접수를 차단합니다.':'※ 전년도 및 올해 먼저 종료된 지정대회의 출전 부서를 확인합니다. 우승에 따른 승격은 다음 연도에 반영하며, 현재 신청·취소 기록은 기준에서 제외합니다.'}</div>`};
 }
 function openDivisionRuleReason(name,club,tid,div){
   ensureDivisionRuleReasonModal();
@@ -8926,7 +9014,7 @@ function refreshDivisionRuleFormBadges(mode='register'){
       slot.appendChild(badgeRow);
 
       const b=document.createElement('span'); b.className='division-rule-form-badge148';
-      b.textContent=`↓ ${move}${c.prelimException?' · 직전 예선탈락 예외':c.female?' · 여성':c.age65?' · '+age65EligibilityLabel(name,club,cache?.currentYear||REG_YEAR):''}${ok?' · 하향 예외':''}`;
+      b.textContent=`↓ ${move}${c.prelimException?' · 금배 최하위 은배 자격':c.female?' · 여성':c.age65?' · '+age65EligibilityLabel(name,club,cache?.currentYear||REG_YEAR):''}${ok?' · 하향 예외':''}`;
       b.title='판정 근거 보기';
       b.style.cssText=`display:inline-flex;align-items:center;max-width:100%;padding:3px 6px;border-radius:999px;font-size:.6rem;font-weight:950;white-space:nowrap;background:${ok?'#ecfdf5':'#fff7ed'};border:1px solid ${ok?'#86efac':'#fdba74'};color:${ok?'#166534':'#9a3412'};cursor:pointer`;
       b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openDivisionRuleReason(name,club,tid,div);};
@@ -19177,7 +19265,7 @@ function renderRanking(){
   const fbTour=G.tournaments.find(t=>t.id===tid);
   if(isHist){
     renderHistRanking(tid,div,cont);
-  } else if(fbTour?.isHistorical){
+  } else if(fbTour?.isHistorical||fbTour?._migrated||fbTour?.status==='done'){
     // 엑셀 업로드된 과거 대회 → registrations의 rank로 순위 표시
     renderHistRankingFromRegistrations(tid,div,cont);
   } else {
@@ -20360,7 +20448,7 @@ function getExperienceHomeTournaments(){
   const active=getHomeVisibleTournaments();
   const closed=(G.tournaments||[]).filter(t=>t.status==='closed'&&(!getTournamentDateKey(t)||getTournamentDateKey(t)>=getTodayDateKey()));
   if(active.length||closed.length)return sortTournamentsLatest([...active,...closed]);
-  return sortTournamentsLatest((G.tournaments||[]).filter(t=>t.status==='finished')).slice(0,1);
+  return sortTournamentsLatest((G.tournaments||[]).filter(t=>['finished','done'].includes(t.status))).slice(0,1);
 }
 function getHomeDashboardTournament(){return selectHomeTournament(getExperienceHomeTournaments(),HOME_EXPERIENCE_TOURNAMENT_ID);}
 function updateExperienceTournamentMetrics(t,clubs=0,teams=0,players=0,matches=0){
@@ -20909,7 +20997,7 @@ async function openPHist(iid){
 
   showPlayerHistoryLoading(name);
   om('mPHist');
-  try{ await finalizePastPlayerHistoryToFirebase(name,identityClub); }catch(e){ console.warn('[player-history] finalize failed',e); toast('지난대회 기록 조회 또는 저장 실패: 네트워크·권한을 확인해 주세요.','info'); }
+  try{ await finalizePastPlayerHistoryToFirebase(name,identityClub); await loadJangyuSilverPlayerRecord(name,identityClub); }catch(e){ console.warn('[player-history] finalize failed',e); toast('지난대회 기록 조회 또는 저장 실패: 네트워크·권한을 확인해 주세요.','info'); }
 
   let info=null;
   if(identityClub){
@@ -21271,7 +21359,8 @@ function buildPH(name,p){
     .map(([d,c])=>`<span class="dpill ${dc(d)}" style="font-size:.62rem;padding:2px 7px">${dl(d)} ${c}회</span>`)
     .join('');
 
-  return`<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+  const silverQualification=typeof jangyuSilverPlayerRecordHtml==='function'?jangyuSilverPlayerRecordHtml(safeName,clubInfo.mainClub||p.club||''):'';
+  return`${silverQualification}<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
       <div style="width:46px;height:46px;background:var(--primary);color:white;border-radius:50%;font-size:1.2rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${safeName.charAt(0)}</div>
       <div style="flex:1">
         <b style="font-size:1.1rem">${safeName}</b>
@@ -21604,7 +21693,7 @@ async function showP(name,club){
   const clubFromKey = sp.club || '';
   const useClub = (club||'').trim() || clubFromKey;
 
-  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); }catch(e){}
+  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); await loadJangyuSilverPlayerRecord(dispName,useClub); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -21790,7 +21879,7 @@ async function openPD(name,club){
   const dispClubFromKey = sp.club || '';
   const useClub = (club||'').trim() || dispClubFromKey;
 
-  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); }catch(e){}
+  try{ await ensurePastArchivesForPlayer(); await ensurePlayerRegistrationHistory(dispName); await loadJangyuSilverPlayerRecord(dispName,useClub); }catch(e){}
   const k = useClub ? getPlayerKeyByName(dispName, useClub) : getPlayerKeyByName(dispName);
   let p = k ? G.players[k] : null;
 
@@ -26238,6 +26327,7 @@ async function openRegistryPlayerAdminHub(year,idx,expectedName="",expectedClub=
     const liveRecs=collectLivePlayerHistory(nm,club);
     if(regRecs.length||liveRecs.length||hasHistPlayer(nm)) p={name:nm,club,clubs:[club].filter(Boolean),history:[],wins:0,losses:0};
   }
+  await loadJangyuSilverPlayerRecord(nm,club);
   if(body){
     const female=_ruleGenderKey(m?.gender||m?.sex||'')==='F';
     const age65=!!m?.age65Certified || isAge65CertifiedForDivisionRule(nm,club,Number(year));
@@ -29611,7 +29701,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{closeTeamRegistrationForm,openOrganizationPlayerEdit,deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone,
+Object.assign(window,{openJangyuSilverSelection,saveJangyuSilverSelection,closeTeamRegistrationForm,openOrganizationPlayerEdit,deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone,
   removePopupNoticeImage,showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,

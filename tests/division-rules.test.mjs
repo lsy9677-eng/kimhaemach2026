@@ -10,20 +10,20 @@ const spring={id:'spring',name:'2026 춘계 장유연합회장배',date:'2026-03
 const autumn={id:'autumn',name:'2026 추계 장유연합회장배',date:'2026-11-08',status:'open'};
 const old={id:'old',name:'2025 춘계 장유연합회장배',date:'2025-05-01',status:'finished'};
 const reg=(id,club,division,players,extra={})=>({_id:id,club,division,players,...extra});
-function setup({org='jangyu',rows=[],registry=[],archives={}}={}){
+function setup({org='jangyu',rows=[],registry=[],archives={},silverSelections={}}={}){
   const c={...sharedAge65,MATCH_ORGANIZATION:{id:org},REG_YEAR:2026,G:{tournaments:[old,spring,autumn],teams:{}},HIST_DATA:[],G_REGISTRY:{2026:registry},
     identityDb:{},doc:()=>null,getDocFromServer:async()=>({exists:()=>false}),getDocsFromServer:async()=>({docs:[]}),transferIdentityParts:name=>({name,tag:''}),registrationClubIdentityKey:value=>String(value||'').trim(),
     normName:n=>String(n||'').replace(/\s/g,''),transferName:n=>String(n||'').trim(),
     normalizeClub:n=>String(n||'').trim(),transferClub:n=>String(n||'').trim(),baseClub:n=>String(n||'').replace(/[A-Z]$/,''),
     _m26YearFromTournament:t=>Number(t.date.slice(0,4)),getTournamentDateKey:t=>t?.date||'',
-    isIndividualTournament:()=>false,isPastArchiveTournament:t=>t.status==='finished',getPastArchive:id=>archives[id]||null,
+    isIndividualTournament:()=>false,isPastArchiveTournament:t=>t.status==='finished',getPastArchive:id=>archives[id]||null,applyTournamentBundle:()=>{},ensurePastTournamentArchive:async id=>archives[id]||{},
     loadRegistry:async()=>registry,getMemberRegistry2026:()=>registry,console,
     collection:(_db,name)=>name,where:(_field,_op,value)=>value,query:(...args)=>args,db:{},
     getDocs:async q=>({docs:q[0]==='age65Certifications'?[]:rows.filter(r=>r.tournamentId===q[1]).map(r=>({id:r._id,data:()=>r}))}),
     esc:n=>String(n).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
     _k2td:key=>{const i=key.lastIndexOf('_');return {tid:key.slice(0,i),div:key.slice(i+1)};},
     isSameRegistrationClub:(a,b)=>a===b};
-  vm.createContext(c);vm.runInContext(ruleSource,c);return c;
+  vm.createContext(c);vm.runInContext(ruleSource,c);c.jangyuSilverSelection=id=>({team:silverSelections[id]||null});return c;
 }
 async function classify(c,name,div='은배부',club='테사모'){
   await c.ensureDivisionRuleCache('autumn');return c._divisionRuleClassifySync('autumn',div,name,club);
@@ -50,18 +50,18 @@ test('여성·65+ 인증은 2단계 하향에도 예외이며 일반 하향 정�
   assert.equal(result.ok,true);assert.equal(result.exceptionCount,2);assert.equal(result.warnings.length,0);
   assert.equal((await classify(c,'일반','동')).exceptionApproved,false);
 });
-test('예선탈락 예외는 확정된 직전 금배 팀 명단에만 적용하고 같은 클럽 본선팀에는 적용하지 않는다',async()=>{
+test('최하위 확정팀만 은배 자격을 부여하고 본선팀과 미확정팀은 제외한다',async()=>{
   const eliminated=reg('b','하모니','금',['B선수'],{_pastOutcome:{confirmed:true,result:'예선 참가'}});
   const main=reg('a','하모니','금',['A선수'],{_pastOutcome:{confirmed:true,result:'준우승'}});
   const pending=reg('p','하모니','금',['미확정'],{_pastOutcome:{confirmed:false,result:'예선 참가'}});
-  const c=setup({rows:[eliminated,main,pending].map(r=>({...r,_pastOutcome:undefined,tournamentId:'spring'})),archives:{spring:{regs:[eliminated,main,pending]}}});
+  const c=setup({rows:[eliminated,main,pending].map(r=>({...r,_pastOutcome:undefined,tournamentId:'spring'})),archives:{spring:{regs:[eliminated,main,pending]}},silverSelections:{spring:{id:'b',club:'하모니',players:['B선수']}}});
   assert.equal((await classify(c,'B선수','은','하모니')).prelimException,true);
   assert.equal((await classify(c,'A선수','은','하모니')).prelimException,false);
   assert.equal((await classify(c,'미확정','은','하모니')).prelimException,false);
   assert.equal((await classify(c,'B선수','동','하모니')).prelimException,false);
   const result=await c.validateTeamDivisionRules({tid:'autumn',div:'은',club:'하모니',names:['B선수','A선수']});
   assert.equal(result.ordinaryCount,1);assert.equal(result.ok,true);assert.equal(result.warnings.length,0);
-  assert.match(c.divisionRuleBadgeHtml('autumn','은','B선수','하모니'),/직전 예선탈락 예외/);
+  assert.match(c.divisionRuleBadgeHtml('autumn','은','B선수','하모니'),/금배 최하위 은배 자격/);
 });
 test('동명이인의 다른 클럽 기록을 합치지 않는다',async()=>{
   const c=setup({rows:[{...reg('s','타클럽','금',['동명이인']),tournamentId:'spring'}],registry:[{name:'동명이인',club:'테사모'},{name:'동명이인',club:'타클럽'}]});
@@ -121,4 +121,13 @@ test('금배와 은배 출전자를 합쳐 팀당 일반 하향 1명만 허용�
  const c=setup({rows:[{...reg('o','테사모','금',['금선수']),tournamentId:'old'},{...reg('s','테사모','은',['은선수']),tournamentId:'spring'}]});
  const result=await c.validateTeamDivisionRules({tid:'autumn',div:'동',club:'테사모',names:['금선수','은선수']});
  assert.equal(result.ok,false);assert.equal(result.ordinaryCount,2);assert.match(result.error,/팀당 허용 1명/);
+});
+
+test('최하위 팀 선수의 은배 자격은 이후 은배 출전과 연도 변경에도 유지한다',async()=>{
+ const c=setup({rows:[{...reg('o','테사모','금',['유지선수']),tournamentId:'old'},{...reg('s','테사모','은',['유지선수']),tournamentId:'spring'}],silverSelections:{old:{id:'last',club:'테사모',players:['유지선수']}}});
+ assert.equal((await classify(c,'유지선수')).prelimException,true);
+ c.G.tournaments.push({id:'future',name:'2027 대회',date:'2027-11-01',status:'open'});
+ await c.ensureDivisionRuleCache('future');
+ const result=c._divisionRuleClassifySync('future','은','유지선수','테사모');assert.equal(result.prelimException,true);assert.equal(result.silverSource.tid,'old');
+ assert.equal(c._divisionRuleClassifySync('future','동','유지선수','테사모').prelimException,false);
 });

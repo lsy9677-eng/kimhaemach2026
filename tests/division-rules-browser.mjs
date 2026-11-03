@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {chromium} from 'playwright';
 const source=readFileSync(new URL('../assets/js/app.js',import.meta.url),'utf8');
+const silver=readFileSync(new URL('../assets/js/jangyu-silver-eligibility.js',import.meta.url),'utf8').replace(/^export /gm,'');
 const shared=readFileSync(new URL('../assets/js/shared-age65.js',import.meta.url),'utf8').replace(/^export /gm,'');
 const rules=source.slice(source.indexOf('// PHASE148:'),source.indexOf('function rosterPlayerHTML('));
 const cards=source.slice(source.indexOf('function buildRegisterRosterCardHtml('),source.indexOf('function upsertIndividualPlayerMetaRecords('));
@@ -27,7 +28,8 @@ try{
       ge:id=>document.getElementById(id),om:id=>{document.getElementById(id).style.display='block';},getRegClubInputValue:()=>'테사모',REG:true,REG_CLUB:'테사모',CLUB_MEMBER:false,AD:false,FIRST_APPEARANCE_READY:false,tdn:team=>team.club,rosterPlayerHTML:n=>n,isUnifiedTeamRoster:()=>true
     });
   });
-  await page.addScriptTag({content:shared+rules+rosterButton+cards});
+  await page.addScriptTag({content:silver+shared+rules+rosterButton+cards});
+  await page.evaluate(()=>{window.ensurePastTournamentArchive=async()=>({});window.applyTournamentBundle=()=>{};window.jangyuSilverSelection=id=>({team:id==='spring'?{id:'b',club:'테사모',players:['예선탈락선수']}:null});});
   await page.evaluate(async names=>{
     await ensureDivisionRuleCache('autumn');
     document.getElementById('roster').innerHTML=buildRegisterRosterCardHtml({tid:'autumn',div:'은',key:'autumn_은',team:{club:'테사모',players:names},idx:0,isIndividual:false});
@@ -40,7 +42,7 @@ try{
   assert.equal(await page.locator('#p6').locator('..').locator('.division-rule-form-row153').count(),1);
   await page.locator('#p1').locator('..').locator('.division-rule-form-badge148').first().click();
   assert.match(await page.locator('#divisionRuleReasonBody').innerText(),/2026년 금배부 출전 명단 기록에 따른 하향 판정/);
-  assert.match(await page.locator('#p5').locator('..').innerText(),/직전 예선탈락 예외/);
+  assert.match(await page.locator('#p5').locator('..').innerText(),/금배 최하위 은배 자격/);
   assert.match(await page.locator('#p3').locator('..').innerText(),/여성/);
   assert.match(await page.locator('#p4').locator('..').innerText(),/65\+/);
   assert.equal(await page.evaluate(async names=>(await validateTeamDivisionRules({tid:'autumn',div:'은',club:'테사모',names})).ok,names),false);
