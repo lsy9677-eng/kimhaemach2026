@@ -32,7 +32,8 @@ export function buildPlayerRecordCard({
   row,
   highlight=false,
   escapeHtml,
-  formatRecentLabel
+  formatRecentLabel,
+  canEdit=false
 }){
   const summary=row?.summary||{};
   const recent=formatRecentLabel(summary.lastDate)||'-';
@@ -58,6 +59,7 @@ export function buildPlayerRecordCard({
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end">
+        ${canEdit?`<button type="button" class="btn btn-primary" style="font-size:.76rem;padding:5px 10px;min-height:34px" onclick="openOrganizationPlayerEdit(${escapeHtml(JSON.stringify(row?.name||''))},${escapeHtml(JSON.stringify(row?.club||''))})">✏️ 선수 수정·인증</button>`:''}
         <button class="btn btn-outline" style="font-size:.76rem;padding:5px 10px;min-height:34px" onclick="showP('${escapeHtml(row?.name||'')}','${escapeHtml(row?.club||'')}')">기록 보기</button>
       </div>
     </div>

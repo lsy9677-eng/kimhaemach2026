@@ -21709,7 +21709,8 @@ function renderAllP(reuseSearchModel=false){
     row,
     highlight,
     escapeHtml:esc,
-    formatRecentLabel
+    formatRecentLabel,
+    canEdit:AD&&!MATCH_ORGANIZATION.requiresAssociationRegistration
   });
 
   let displayRows = rows.slice();
@@ -26643,15 +26644,28 @@ async function registryTabQuickAdd(){
 // 선수 등록 현황 탭 — 인라인 빠른 수정
 // 현재 등록명단의 이름/주클럽을 함께 수정한다.
 // 과거 대회 history 안의 club 값은 당시 기록 보존을 위해 변경하지 않는다.
+let ORGANIZATION_PLAYER_EDIT_DRAFT=null;
+async function openOrganizationPlayerEdit(name,club){
+  if(!AD||MATCH_ORGANIZATION.requiresAssociationRegistration)return;
+  const year=Number(REG_YEAR)||2026;
+  try{
+    const members=await loadRegistry(year,true);
+    const matches=members.map((m,idx)=>({m,idx})).filter(({m})=>transferName(m.name)===transferName(name)&&canonicalRegistryClub(m.club)===canonicalRegistryClub(club));
+    if(matches.length>1){toast('같은 클럽의 동명이인입니다. 등록명단에서 구분값을 확인한 뒤 수정해 주세요.','error');return;}
+    ORGANIZATION_PLAYER_EDIT_DRAFT=matches.length?null:{name:cleanName(name),club:canonicalRegistryClub(club),subClub:'',gender:'',age65Certified:false};
+    await quickEditRegistryMember(year,matches.length?matches[0].idx:-1);
+  }catch(e){ORGANIZATION_PLAYER_EDIT_DRAFT=null;toast('선수정보 조회 실패: '+e.message,'error');}
+}
 async function quickEditRegistryMember(year, idx){
+  if(idx!==-1)ORGANIZATION_PLAYER_EDIT_DRAFT=null;
   if(!AD){ toast('관리자 로그인 필요','info'); return; }
   const members=await loadRegistry(year);
-  const m=members[idx];
+  const m=idx===-1?ORGANIZATION_PLAYER_EDIT_DRAFT:members[idx];
   if(!m){ toast('선수를 찾을 수 없습니다','error'); return; }
 
   try{ await loadAge65Certifications(); }catch(_e){}
   ensureRegistryQuickEditModal();
-  const clubOptions=(G.clubs||[]).slice().sort((a,b)=>a.localeCompare(b,'ko'));
+  const clubOptions=[...new Set([...(G.clubs||[]),m.club].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
   ge('rqemYear').value=String(year);
   ge('rqemIdx').value=String(idx);
   ge('rqemName').value=m.name||'';
@@ -26698,7 +26712,7 @@ function ensureRegistryQuickEditModal(){
   o.addEventListener('click',closeRegistryQuickEditModal);
   document.body.appendChild(o);
 }
-function closeRegistryQuickEditModal(){const o=ge('registryQuickEditOverlay');if(o)o.style.display='none';}
+function closeRegistryQuickEditModal(){const o=ge('registryQuickEditOverlay');if(o)o.style.display='none';ORGANIZATION_PLAYER_EDIT_DRAFT=null;}
 function updateRegistryQuickEditRegionHint(){
   const club=canonicalRegistryClub(ge('rqemClub')?.value||'');
   const year=parseInt(ge('rqemYear')?.value||2026);
@@ -26720,8 +26734,9 @@ function updateRegistryQuickEditQualificationHint(){
 async function saveRegistryQuickEditModalCore(){
   if(!AD)return;
   const year=parseInt(ge('rqemYear')?.value||2026);
-  const idx=parseInt(ge('rqemIdx')?.value||'-1',10);
-  const members=await loadRegistry(year),m=members[idx];
+  let idx=parseInt(ge('rqemIdx')?.value||'-1',10);
+  const members=(await loadRegistry(year)).slice(),m=idx===-1?ORGANIZATION_PLAYER_EDIT_DRAFT:members[idx];
+  const adding=idx===-1;
   if(!m){rosterSaveNotice('선수를 찾을 수 없습니다','error');return;}
   try{ await loadAge65Certifications(); }catch(_e){}
   const oldName=cleanName(m.name||''),oldClub=canonicalRegistryClub(m.club||'');
@@ -26746,6 +26761,7 @@ async function saveRegistryQuickEditModalCore(){
   const oldKey=pKey(oldName,oldClub),newKey=pKey(newName,newClub);
   sl(true);
   try{
+    if(adding)idx=members.length;
     members[idx]={...m,identityTag,name:newName,club:newClub,subClub:newSubClub,region:newRegion,gender:newGender,age65Certified:newAge65,age65CertifiedAt:newAge65?(m.age65CertifiedAt||new Date().toISOString()):''};
     G_REGISTRY[year]=members;await saveRegistry(year);
     if(hasRegistryNamesakeInClub(members,members[idx])){
@@ -29563,7 +29579,7 @@ function scheduleRegisterSliderHeightGuard170(){
   }
 }
 
-Object.assign(window,{deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone, 
+Object.assign(window,{openOrganizationPlayerEdit,deleteAge65ApprovalHistory,cancelUnifiedTeamEdit,updateRegistryQuickEditQualificationHint,updateRegistryQuickEditRegionHint,toggleRestorePointPermanent,openRegistrationSnapshotViewer,closeRegistrationSnapshotViewer,finalizePastTournamentArchive,installRegisterMobileLayoutStabilityStyle,normalizeRegisterMobileLayout,scheduleRegisterMobileLayoutNormalize,normalizeRegisterMobileVerticalViewport,scheduleRegisterMobileVerticalViewportNormalize,installRegisterSliderHeightGuard170,scheduleRegisterSliderHeightGuard170,openDivisionRuleReason,closeRegistryPlayerAdminHub,openRegistryPlayerAdminHub,initMobileBracketHorizontalScroll,installPublicOutputCenter,isMobileOutputCenter,ensureMobileOutputCenter,ensureMobileOutputEntryPoints,openMobileOutputCenter,closeMobileOutputCenter,ensureKimhaeMobileNavigation,scheduleKimhaeMobileNavigationSync,syncKimhaeResponsiveNavigation,scheduleKimhaeResponsiveNavigationSync,restoreLegacyDesktopNav,ensureMobileHomeQuickMenu,ensureMobileBottomMore,suppressLegacyMobileBottomNav,setKimhaeBottomActive,mobileBottomGo,openMobileMoreMenu,closeMobileMoreMenu,openMobileClubStatus,openRoleAwareSettings,openKimhaeManual,initOutputCenter,outputTournamentChanged,renderOutputPreview,printOutputCenter,saveOutputCenterHighResImage,saveMainPyramidHighResImage,openPopupNoticeManager,closePopupNoticeManager,saveUnifiedFloatingNotice,clearUnifiedFloatingNotice,previewPopupNoticeImage,renderPopupNoticeImagePreview,previewPopupNotice,savePopupNotice,disablePopupNotice,showPopupNoticeView,closePopupNoticeView,ensurePopupNoticeAdminButton,openAutoRestoreCenter,closeAutoRestoreCenter,manualTournamentRestorePoint,restoreTournamentRestorePoint,cleanupOldTournamentRestorePoints,selectRegistrationPlayerSuggestion,openAdvancedDataTools,advancedDataRecalc,advancedOpenHistoryExcel,advancedOpenSelectiveClear,advancedCleanupHistories,toggleClubMgrSelectAll,applyBulkClubRegion,autoFillClubRegionsFromRegistry,saveClubManagerDetails, closeStickyAlert, goToStickyAlertMatch, toggleModalFullscreen, setModalFullscreenState, openQuickAddPlayer, quickAddPlayer, fillAdminPlayerClub, adminAddPlayer, openSupportModal, sendSupportSMS, saveAdminPhone,
   removePopupNoticeImage,showPage,toggleAdmin,doLogin,openAdminSettings,saveAdminPassword,goBracket,onGuideFilesSelected,removeGuideFile,openGuide,loadHistFromDB,uploadHistFromExcel,previewHistExcel,renderGuidePreview,onHistGuideFilesSelected,uploadHistGuideFiles,manageHistGuide,deleteHistGuideFile,removeHistGuidePending,
   createTournament,renderTL,chgTS,delT,openET,saveET,openTD,applyRec,saveDivS,
   onRegTC,renderRL,renderRegisterDivisionOverview,setRegisterDivisionFilter,openPastClubRosterReference,_pastRosterTogglePlayer,_pastRosterSelectAll,_pastRosterApplySelected,_pastRosterApplyAll,selectRegDivision,registerTeam,delTeam,phint,openPHist,openETeam,saveETeam,etUpdateSlots,updateRegisterSlots,
