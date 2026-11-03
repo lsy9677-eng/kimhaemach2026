@@ -34,19 +34,20 @@ try{
     refreshDivisionRuleFormBadges('register');
   },names);
   await page.locator('#jangyuDivisionFormWarning_register').waitFor();
-  assert.match(await page.locator('#roster summary').innerText(),/하향 인원 초과: 2명/);
-  assert.match(await page.locator('#jangyuDivisionFormWarning_register').innerText(),/접수 가능/);
+  assert.match(await page.locator('#roster summary').innerText(),/금배 출전 선수 하위 부서 등록 불가/);
+  assert.match(await page.locator('#jangyuDivisionFormWarning_register').innerText(),/접수 불가/);
   assert.equal(await page.locator('#p7').locator('..').locator('.division-rule-form-row153').count(),0);
-  assert.equal(await page.locator('#p6').locator('..').locator('.division-rule-form-row153').count(),0);
+  assert.equal(await page.locator('#p6').locator('..').locator('.division-rule-form-row153').count(),1);
   await page.locator('#p1').locator('..').locator('.division-rule-form-badge148').first().click();
   assert.match(await page.locator('#divisionRuleReasonBody').innerText(),/2026년 금배부 출전 명단 기록에 따른 하향 판정/);
   assert.match(await page.locator('#p5').locator('..').innerText(),/직전 예선탈락 예외/);
   assert.match(await page.locator('#p3').locator('..').innerText(),/여성/);
   assert.match(await page.locator('#p4').locator('..').innerText(),/65\+/);
-  assert.equal(await page.evaluate(async names=>(await validateTeamDivisionRules({tid:'autumn',div:'은',club:'테사모',names})).ok,names),true);
+  assert.equal(await page.evaluate(async names=>(await validateTeamDivisionRules({tid:'autumn',div:'은',club:'테사모',names})).ok,names),false);
   await page.locator('#p2').fill('');
   await page.locator('#p1').fill('');
+  await page.locator('#p6').fill('');
   await page.evaluate(()=>refreshDivisionRuleFormBadges('register'));
   await page.waitForFunction(()=>document.getElementById('jangyuDivisionFormWarning_register')?.textContent==='');
-  console.log('PASS: mobile form and saved card warnings, same-division correction, three exceptions, nonblocking validation and warning removal; no network.');
+  console.log('PASS: mobile form and saved card warnings, same-division correction, three exceptions, blocking validation and warning removal; no network.');
 }finally{await browser.close();}
