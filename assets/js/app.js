@@ -29582,21 +29582,20 @@ function outputRaffleParticipants(tid){
 }
 // PHASE228: adjustable raffle printing; larger portrait default.
 function rafflePrintSettings(){
-  let saved={};if(AD)try{saved=JSON.parse(organizationLocalStorage.getItem('OAI_RAFFLE_PRINT_V228')||'{}');}catch(e){}
+  let saved={};try{saved=JSON.parse(organizationLocalStorage.getItem('OAI_RAFFLE_PRINT_V228')||'{}');}catch(e){}
   const clamp=(n,lo,hi,def)=>Number.isFinite(Number(n))?Math.max(lo,Math.min(hi,Math.round(Number(n)))):def;
   return {direction:saved.direction==='landscape'?'landscape':'portrait',cols:clamp(saved.cols,4,10,6),rows:clamp(saved.rows,8,24,12),font:clamp(saved.font,10,18,12)};
 }
 function saveRafflePrintSettings(){
-  if(!AD)return;
   const settings={direction:outputElement('raffleDirection')?.value,cols:Number(outputElement('raffleCols')?.value),rows:Number(outputElement('raffleRows')?.value),font:Number(outputElement('raffleFont')?.value)};
   try{organizationLocalStorage.setItem('OAI_RAFFLE_PRINT_V228',JSON.stringify(settings));}catch(e){toast('인쇄 설정 저장 실패','error');return;}
   renderOutputPreview();
 }
-function resetRafflePrintSettings(){if(!AD)return;try{organizationLocalStorage.removeItem('OAI_RAFFLE_PRINT_V228');}catch(e){}renderOutputPreview();}
+function resetRafflePrintSettings(){try{organizationLocalStorage.removeItem('OAI_RAFFLE_PRINT_V228');}catch(e){}renderOutputPreview();}
 function rafflePrintControlsHtml(){
-  if(!AD)return '';const c=rafflePrintSettings();
+  const c=rafflePrintSettings();
   const options=(lo,hi,value)=>Array.from({length:hi-lo+1},(_,i)=>`<option value="${lo+i}" ${value===lo+i?'selected':''}>${lo+i}</option>`).join('');
-  return `<div id="rafflePrintControls" style="padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px"><b>관리자 · 추첨 쪽지 크기 설정</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px"><label>용지 방향<select id="raffleDirection" class="form-select"><option value="portrait" ${c.direction==='portrait'?'selected':''}>세로</option><option value="landscape" ${c.direction==='landscape'?'selected':''}>가로</option></select></label><label>가로 칸 수<select id="raffleCols" class="form-select">${options(4,10,c.cols)}</select></label><label>세로 칸 수<select id="raffleRows" class="form-select">${options(8,24,c.rows)}</select></label><label>글자 크기 (pt)<select id="raffleFont" class="form-select">${options(10,18,c.font)}</select></label></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="saveRafflePrintSettings()">설정 적용</button><button class="btn btn-outline" onclick="resetRafflePrintSettings()">기본 크기</button></div><div style="font-size:.75rem;margin-top:8px">칸 수를 줄이면 쪽지가 커집니다. 이 기기의 설정으로 저장됩니다. 인쇄창도 같은 용지 방향으로 선택하세요.</div></div>`;
+  return `<div id="rafflePrintControls" style="padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px"><b>추첨 쪽지 크기 설정</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px"><label>용지 방향<select id="raffleDirection" class="form-select"><option value="portrait" ${c.direction==='portrait'?'selected':''}>세로</option><option value="landscape" ${c.direction==='landscape'?'selected':''}>가로</option></select></label><label>가로 칸 수<select id="raffleCols" class="form-select">${options(4,10,c.cols)}</select></label><label>세로 칸 수<select id="raffleRows" class="form-select">${options(8,24,c.rows)}</select></label><label>글자 크기 (pt)<select id="raffleFont" class="form-select">${options(10,18,c.font)}</select></label></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="saveRafflePrintSettings()">설정 적용</button><button class="btn btn-outline" onclick="resetRafflePrintSettings()">기본 크기</button></div><div style="font-size:.75rem;margin-top:8px">칸 수를 줄이면 쪽지가 커집니다. 이 기기의 설정으로 저장됩니다. 인쇄창도 같은 용지 방향으로 선택하세요.</div></div>`;
 }
 Object.assign(window,{saveRafflePrintSettings,resetRafflePrintSettings});
 function outputRaffleSlipsHtml(tid){
