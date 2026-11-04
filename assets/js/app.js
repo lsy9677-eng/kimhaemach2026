@@ -28446,6 +28446,7 @@ function outputCenterInnerHtml(){
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
           <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
           <option value="order-sheets">오더지 · 빈 양식</option>
+          <option value="groups-blank">조편성표 · 현장 수기용</option>
           <option value="prelim-current">예선 대진표 · 현재상황</option>
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
@@ -29122,6 +29123,22 @@ function outputScoreText(key,m,blank=false){
 function outputHistoricalRegs(tid,div){
   return (((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>outputNormalizeDiv(x?.division||x?.div||'')===outputNormalizeDiv(div)));
 }
+function outputHandwrittenGroupSheet(tid,div){
+  div=outputResolveDivision(tid,div);
+  const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
+  const count=(G.teams?.[key]||[]).length||outputHistoricalRegs(tid,div).length;
+  const cfg=gDS(t,div),saved=t?.divSettings?.[div]?.prelimDrawSettings;
+  let sizes=[];
+  if(count&&cfg.format==='roundrobin')sizes=[count];
+  else if(saved&&Number(saved.teamCount)===count&&validPrelimGroupSizes(saved.groupSizes,count))sizes=saved.groupSizes.map(Number);
+  else{
+    const drawn=(G.draws?.[key]?.groups||[]).map(g=>Number(g.size)||g.teams?.length||0);
+    if(count&&drawn.length&&drawn.every(n=>n>0)&&drawn.reduce((a,b)=>a+b,0)===count)sizes=drawn;
+    else if(count){const groups=Math.ceil(count/Math.max(2,Number(cfg.grpSize)||4));sizes=Array.from({length:groups},(_,i)=>Math.floor(count/groups)+(i<count%groups?1:0));}
+  }
+  const groups=sizes.map((size,gi)=>`<section class="oc-group oc-handwritten-group"><div class="oc-group-title"><b>${cfg.format==='roundrobin'?'전체 풀리그':`${gi+1}조`} · ${size}팀</b><span>코트: __________________</span></div><table><thead><tr><th style="width:12%">자리</th><th style="width:58%">클럽 / 팀명</th><th style="width:30%">메모</th></tr></thead><tbody>${Array.from({length:size},(_,i)=>`<tr><td>${i+1}</td><td class="oc-team-write"></td><td></td></tr>`).join('')}</tbody></table></section>`).join('');
+  return outputHeader(t,div,'조편성표 · 현장 수기용')+(groups||'<div class="oc-empty">등록된 팀이 없습니다. 팀 등록 후 조편성표를 출력하세요.</div>');
+}
 function outputGeneratedPrelimSheet(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
   const count=(G.teams[key]||[]).length||outputHistoricalRegs(tid,div).length;
@@ -29690,7 +29707,7 @@ function outputCenterBody(){
   if(type==='raffle-slips')return tid?outputRaffleSlipsHtml(tid):'<div class="oc-empty">대회를 선택하세요.</div>';
   const divisions=outputSelectedDivisions();if(!tid||!divisions.length)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
   return divisions.map(div=>{
-    let html=type==='prelim-current'?outputPrelimHtml(tid,div,false):type==='prelim-blank'?outputPrelimHtml(tid,div,true):type==='main-current'?outputMainTableHtml(tid,div,false):type==='main-blank'?outputMainTableHtml(tid,div,true):outputMainTreeHtml(tid,div,type==='main-tree-blank');
+    let html=type==='groups-blank'?outputHandwrittenGroupSheet(tid,div):type==='prelim-current'?outputPrelimHtml(tid,div,false):type==='prelim-blank'?outputPrelimHtml(tid,div,true):type==='main-current'?outputMainTableHtml(tid,div,false):type==='main-blank'?outputMainTableHtml(tid,div,true):outputMainTreeHtml(tid,div,type==='main-tree-blank');
     return `<section class="oc-output-division" data-division-label="${outputEsc(dl(div))}">${html}</section>`;
   }).join('');
 }
@@ -29702,6 +29719,7 @@ function outputCenterCss(){
   .oc-groups{display:grid;grid-template-columns:1fr 1fr;gap:7px}.oc-group,.oc-round{break-inside:avoid;border:1px solid #777;border-radius:5px;overflow:hidden;margin-bottom:7px}
   .oc-group-title,.oc-round-title{display:flex;justify-content:space-between;background:#e9eef8;padding:5px 7px;font-size:11px;font-weight:900}.oc-teamline{font-size:9px;padding:4px 6px;border-bottom:1px solid #bbb}
   table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #aaa;padding:4px 5px;text-align:center;height:24px}th{background:#f4f5f7;font-weight:900}.oc-score{font-weight:900;white-space:nowrap}.oc-write{min-width:50px}
+  .oc-handwritten-group td{height:18mm}.oc-handwritten-group .oc-group-title{padding:8px;font-size:12px;gap:12px}.oc-handwritten-group th{font-size:12px}
   .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
   @page{size:A4 landscape;margin:7mm}@media print{.mobile-bracket-zoom-tools{display:none!important}body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}${outputPaperCss(spec)}`;
 }
@@ -29743,7 +29761,7 @@ function renderOutputPreview(){
   const type=outputElement('outType')?.value,raffle=type==='raffle-slips',order=type==='order-sheets';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle||order;
   const settings=outputPaperSettings(),spec=outputPaperSpec();for(const [id,value] of [['outPaper',settings.paper],['outDirection',settings.direction]]){const el=outputElement(id);if(el)el.value=value;}if(outputElement('outDuplex'))outputElement('outDuplex').checked=settings.duplex;
   if(outputElement('outDuplexLabel'))outputElement('outDuplexLabel').style.display=order?'':'none';if(outputElement('outDivisionChecks'))outputElement('outDivisionChecks').style.display=!raffle&&!order&&outputElement('outDS')?.value==='__SELECTED__'?'flex':'none';
-  const printButton=box.parentElement?.querySelector('button[onclick="printOutputCenter()"]');if(printButton)printButton.textContent=`🖨️ ${spec.paper} ${spec.direction==='portrait'?'세로':'가로'} 인쇄 · PDF`;
+  const printButton=box.parentElement?.querySelector('button[onclick="printOutputCenter()"]');if(printButton)printButton.textContent=`🖨️ ${spec.paper} ${spec.direction==='portrait'?'세로':'가로'} 인쇄`;
   try{box.innerHTML=`${order?orderSheetControlsHtml():raffle?rafflePrintControlsHtml():''}<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
   prepareOutputPages(box,spec);
