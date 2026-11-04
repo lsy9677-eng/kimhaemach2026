@@ -28446,7 +28446,7 @@ function outputCenterInnerHtml(){
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
           <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
           <option value="order-sheets">오더지 · 빈 양식</option>
-          <option value="groups-blank">조편성표 · 현장 수기용</option>
+          <option value="groups-blank">조편성표 · 현재 편성 / 수기용</option>
           <option value="prelim-current">예선 대진표 · 현재상황</option>
           <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
           <option value="main-current">본선 대진표 · 현재상황</option>
@@ -29128,16 +29128,22 @@ function outputHandwrittenGroupSheet(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
   const count=(G.teams?.[key]||[]).length||outputHistoricalRegs(tid,div).length;
   const cfg=gDS(t,div),saved=t?.divSettings?.[div]?.prelimDrawSettings;
+  const drawn=Array.isArray(G.draws?.[key]?.groups)?G.draws[key].groups:[];
+  const completed=drawn.length>0&&bracketPhasePublished(tid,'prelim');
+  const idsFor=g=>Array.isArray(g?.teams)?g.teams:Array.isArray(g)?g:[];
   let sizes=[];
-  if(count&&cfg.format==='roundrobin')sizes=[count];
+  if(completed)sizes=drawn.map(g=>idsFor(g).length||Number(g.size)||0);
+  else if(count&&cfg.format==='roundrobin')sizes=[count];
   else if(saved&&Number(saved.teamCount)===count&&validPrelimGroupSizes(saved.groupSizes,count))sizes=saved.groupSizes.map(Number);
-  else{
-    const drawn=(G.draws?.[key]?.groups||[]).map(g=>Number(g.size)||g.teams?.length||0);
-    if(count&&drawn.length&&drawn.every(n=>n>0)&&drawn.reduce((a,b)=>a+b,0)===count)sizes=drawn;
-    else if(count){const groups=Math.ceil(count/Math.max(2,Number(cfg.grpSize)||4));sizes=Array.from({length:groups},(_,i)=>Math.floor(count/groups)+(i<count%groups?1:0));}
-  }
-  const groups=sizes.map((size,gi)=>`<section class="oc-group oc-handwritten-group"><div class="oc-group-title"><b>${cfg.format==='roundrobin'?'전체 풀리그':`${gi+1}조`} · ${size}팀</b><span>코트: __________________</span></div><table><thead><tr><th style="width:12%">자리</th><th style="width:58%">클럽 / 팀명</th><th style="width:30%">메모</th></tr></thead><tbody>${Array.from({length:size},(_,i)=>`<tr><td>${i+1}</td><td class="oc-team-write"></td><td></td></tr>`).join('')}</tbody></table></section>`).join('');
-  return outputHeader(t,div,'조편성표 · 현장 수기용')+(groups||'<div class="oc-empty">등록된 팀이 없습니다. 팀 등록 후 조편성표를 출력하세요.</div>');
+  else if(count){const groups=Math.ceil(count/Math.max(2,Number(cfg.grpSize)||4));sizes=Array.from({length:groups},(_,i)=>Math.floor(count/groups)+(i<count%groups?1:0));}
+  const pool=getDrawAllowedCourts(key);
+  const groups=sizes.map((size,gi)=>{
+    const ids=completed?idsFor(drawn[gi]):[];
+    const courts=completed?getGroupAssignedCourts(key,gi):[];
+    const courtLabel=courts.length?'코트: '+courts.join(' / '):pool.length?'부서 운영 코트: '+pool.join(' / '):'코트: __________________';
+    return `<section class="oc-group oc-handwritten-group"><div class="oc-group-title"><b>${cfg.format==='roundrobin'?'전체 풀리그':`${gi+1}조`} · ${size}팀 · ${completed?'추첨 완료':'추첨 전'}</b><span>${outputEsc(courtLabel)}</span></div><table><thead><tr><th style="width:12%">자리</th><th style="width:58%">클럽 / 팀명</th><th style="width:30%">메모</th></tr></thead><tbody>${Array.from({length:size},(_,i)=>`<tr><td>${i+1}</td><td class="oc-team-write">${completed&&ids[i]!=null?outputEsc(outputTeamName(key,ids[i])):''}</td><td></td></tr>`).join('')}</tbody></table></section>`;
+  }).join('');
+  return outputHeader(t,div,'조편성표 · 현장 기록용')+(groups||'<div class="oc-empty">등록된 팀이 없습니다. 팀 등록 후 조편성표를 출력하세요.</div>');
 }
 function outputGeneratedPrelimSheet(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
@@ -29719,7 +29725,7 @@ function outputCenterCss(){
   .oc-groups{display:grid;grid-template-columns:1fr 1fr;gap:7px}.oc-group,.oc-round{break-inside:avoid;border:1px solid #777;border-radius:5px;overflow:hidden;margin-bottom:7px}
   .oc-group-title,.oc-round-title{display:flex;justify-content:space-between;background:#e9eef8;padding:5px 7px;font-size:11px;font-weight:900}.oc-teamline{font-size:9px;padding:4px 6px;border-bottom:1px solid #bbb}
   table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #aaa;padding:4px 5px;text-align:center;height:24px}th{background:#f4f5f7;font-weight:900}.oc-score{font-weight:900;white-space:nowrap}.oc-write{min-width:50px}
-  .oc-handwritten-group td{height:18mm}.oc-handwritten-group .oc-group-title{padding:8px;font-size:12px;gap:12px}.oc-handwritten-group th{font-size:12px}
+  .oc-handwritten-group td{height:18mm}.oc-handwritten-group .oc-group-title{padding:8px;font-size:12px;gap:12px;flex-wrap:wrap}.oc-handwritten-group th{font-size:12px}
   .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
   @page{size:A4 landscape;margin:7mm}@media print{.mobile-bracket-zoom-tools{display:none!important}body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}${outputPaperCss(spec)}`;
 }
