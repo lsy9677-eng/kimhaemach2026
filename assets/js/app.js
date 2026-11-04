@@ -23731,6 +23731,13 @@ function chooseRosterExportAudience(){
     document.body.appendChild(overlay);overlay.querySelector('[data-public]').focus();
   });
 }
+function rosterExportDoublesCount(t,div,team){
+  const configured=Number(t?.divSettings?.[div]?.doublesCount);
+  if(Number.isInteger(configured)&&configured>=1&&configured<=5)return configured;
+  const recorded=Number(team?.doublesCount);
+  if(Number.isInteger(recorded)&&recorded>=1&&recorded<=5)return recorded;
+  return gDS(t,div).doublesCount;
+}
 async function _buildRegListEl44(){
   const tid=ge('regTS')?.value||'';
   const selDiv=ge('regDS')?.value||'';
@@ -23767,7 +23774,7 @@ async function _buildRegListEl44(){
       sorted.forEach(({team,i})=>{
         const teamName=tdn(team,key,i);
         const players=(team.players||[]).filter(Boolean);
-        const dbl=team.doublesCount||5;
+        const dbl=rosterExportDoublesCount(t,div,team);
         const neutralFiveRoster=isUnifiedTeamRoster(div,dbl);
         const main=neutralFiveRoster?players.slice():players.slice(0,dbl*2);
         const sub=neutralFiveRoster?[]:players.slice(dbl*2);
@@ -23897,7 +23904,7 @@ async function saveRegListExcel44(){
       sorted.forEach(({team,sortIdx},idx)=>{
         const teamName=tdn(team,key,sortIdx);
         const players=(team.players||[]).filter(Boolean);
-        const dbl=Number(team.doublesCount||5);
+        const dbl=rosterExportDoublesCount(t,div,team);
         const neutralFiveRoster=isUnifiedTeamRoster(div,dbl);
         const main=neutralFiveRoster?players.slice():players.slice(0,dbl*2);
         const sub=neutralFiveRoster?[]:players.slice(dbl*2);
@@ -28588,6 +28595,34 @@ function openKimhaeManual(){
   if(ge('mDirectorManual')){ om('mDirectorManual'); return; }
   toast('현재 표시할 매뉴얼이 없습니다','info');
 }
+function pcAccessUrl(){
+  const url=new URL('https://kimhaemach2026.pages.dev/');
+  url.searchParams.set('org',MATCH_ORGANIZATION.id);url.hash='home';return url.href;
+}
+function openPcAccess(){
+  closeMobileMoreMenu();
+  let modal=ge('mPcAccess');
+  if(!modal){
+    modal=document.createElement('div');modal.id='mPcAccess';modal.className='modal-overlay';
+    modal.innerHTML=`<div class="modal-box" style="max-width:480px"><div class="modal-header"><h3>💻 PC에서 사용하기</h3><button class="modal-close" onclick="cm('mPcAccess')" aria-label="닫기">✕</button></div><div class="modal-body"><p>주소를 카카오톡 ‘나에게 보내기’로 보낸 뒤, PC 카카오톡에서 열어 주세요.</p><label>PC 접속 주소<input id="pcAccessAddress" class="form-input" readonly onclick="this.select()"></label><div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0"><button class="btn btn-primary" onclick="copyPcAccessUrl()">📋 주소 복사</button><button class="btn btn-outline" onclick="sharePcAccessUrl()">📤 주소 공유</button></div><p style="font-size:.85rem">공유창에서 카카오톡을 선택하거나, 복사한 주소를 ‘나에게 보내기’에 붙여 넣으세요.</p><details><summary>PC 바탕화면에 바로가기 만들기</summary><p>PC에서 주소를 연 후 Chrome의 ⋮ 메뉴 → 전송, 저장, 공유 → 바로가기 만들기를 선택하세요. Edge는 ⋯ 메뉴 → 앱 → 이 사이트를 앱으로 설치를 선택하세요. 메뉴 이름은 브라우저 버전에 따라 다를 수 있습니다.</p></details></div></div>`;
+    modal.addEventListener('click',ev=>{if(ev.target===modal)cm('mPcAccess');});document.body.appendChild(modal);
+  }
+  modal.querySelector('#pcAccessAddress').value=pcAccessUrl();om('mPcAccess');
+}
+async function copyPcAccessUrl(){
+  try{await navigator.clipboard.writeText(pcAccessUrl());toast('주소를 복사했습니다. 카카오톡 나에게 보내기에 붙여 넣으세요','success');}
+  catch(e){const input=ge('pcAccessAddress');input?.focus();input?.select();try{if(!document.execCommand('copy'))throw Error();toast('주소를 복사했습니다','success');}catch(_){toast('주소를 길게 눌러 복사해 주세요','info');}}
+}
+async function sharePcAccessUrl(){
+  if(!navigator.share){await copyPcAccessUrl();return;}
+  try{await navigator.share({title:MATCH_ORGANIZATION.name+' PC 접속',text:'PC에서 아래 주소를 열어 주세요.',url:pcAccessUrl()});}catch(e){if(e.name!=='AbortError')await copyPcAccessUrl();}
+}
+function ensurePcAccessEntryPoints(){
+  const home=ge('page-home');
+  if(home&&!ge('pcAccessHome')){const card=document.createElement('div');card.id='pcAccessHome';card.style.cssText='margin:12px 0';card.innerHTML='<button class="btn btn-outline" style="width:100%" onclick="openPcAccess()">💻 PC에서 사용하기 · 주소 복사 / 공유</button>';const hero=home.querySelector('.hero');if(hero)hero.insertAdjacentElement('afterend',card);else home.prepend(card);}
+  const menu=ge('loginMenuPanel');if(menu&&!ge('pcAccessMenu')){const button=document.createElement('button');button.id='pcAccessMenu';button.className='btn-sm login-menu-item';button.textContent='💻 PC에서 사용하기';button.onclick=()=>{closeLoginMenu();openPcAccess();};menu.appendChild(button);}
+}
+Object.assign(window,{openPcAccess,copyPcAccessUrl,sharePcAccessUrl});
 function ensureMobileMoreMenu(){
   let modal=ge('mKimhaeMobileMore');
   if(!modal){
@@ -28606,6 +28641,7 @@ function ensureMobileMoreMenu(){
   modal.innerHTML=`<div class="modal-box" style="max-width:360px;width:calc(100% - 28px)">
     <div class="modal-header" style="background:#0f1e3a"><h3>••• 더보기</h3><button class="modal-close" onclick="closeMobileMoreMenu()">✕</button></div>
     <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px">
+      <button type="button" class="btn btn-outline" style="min-height:60px" onclick="openPcAccess()">💻 PC에서 사용하기</button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();showPage('ranking')"><span style="font-size:1.25rem">📊</span><span>시합결과</span></button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="closeMobileMoreMenu();openMobileOutputCenter()"><span style="font-size:1.25rem">🖨️</span><span>출력센터</span></button>
       <button type="button" class="btn btn-outline" style="min-height:60px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;font-weight:900" onclick="openRoleAwareSettings()"><span style="font-size:1.25rem">⚙️</span><span>${outputEsc(settingsLabel)}</span></button>
@@ -28622,6 +28658,7 @@ function openMobileMoreMenu(){
 }
 function closeMobileMoreMenu(){ ge('mKimhaeMobileMore')?.classList.remove('open'); }
 function ensureMobileHomeQuickMenu(){
+  ensurePcAccessEntryPoints();
   if(!isMobileOutputCenter()) return;
   const page=ge('page-home');
   if(!page) return;
@@ -28864,6 +28901,7 @@ function scheduleKimhaeMobileNavigationSync(){
   [80,250,700,1500].forEach(ms=>{ __kimhaeMobileNavSyncTimers.push(setTimeout(run,ms)); });
 }
 function ensureKimhaeMobileNavigation(){
+  ensurePcAccessEntryPoints();
   if(!isMobileOutputCenter()) return;
   ensurePhase117MobileHeaderLayout();
   syncMobileClubLoginStatus();
