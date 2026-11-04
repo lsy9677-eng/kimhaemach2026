@@ -28278,9 +28278,10 @@ function prepareOutputPages(root,spec){
   const divisions=[...sheet.querySelectorAll('.oc-output-division')];if(!divisions.length)return;
   // Group sheets follow division sections; equal writing rows never stretch to fill paper.
   if(divisions.length){
+    const compactGroups=divisions.some(d=>d.querySelector('.oc-handwritten-group'));
     const doc=sheet.ownerDocument,heading=divisions[0].querySelector('.oc-head')?.cloneNode(true);
     sheet.replaceChildren();sheet.dataset.paged='true';let page;
-    const newPage=()=>{page=doc.createElement('section');page.className='oc-print-page oc-group-sheet-page';if(heading){const h=heading.cloneNode(true);const sub=h.querySelector('.oc-sub');if(sub)sub.textContent=spec.label;page.appendChild(h);}sheet.appendChild(page);};
+    const newPage=()=>{page=doc.createElement('section');page.className='oc-print-page oc-group-sheet-page'+(compactGroups?' oc-group-summary-page':'');if(heading){const h=heading.cloneNode(true);const sub=h.querySelector('.oc-sub');if(sub)sub.textContent=spec.label;page.appendChild(h);}sheet.appendChild(page);};
     const section=(division,continued=false)=>{const section=doc.createElement('section');section.className='oc-group-division';const title=doc.createElement('h2');title.className='oc-group-division-title';title.textContent=division.dataset.divisionLabel+(continued?' · 계속':'');section.appendChild(title);page.appendChild(section);return section;};
     newPage();
     for(const division of divisions){
@@ -28291,6 +28292,15 @@ function prepareOutputPages(root,spec){
         const rows=[...block.querySelectorAll('tbody tr')];if(rows.length<=maxRows)return [block];
         return Array.from({length:Math.ceil(rows.length/maxRows)},(_,part)=>{const copy=block.cloneNode(true);[...copy.querySelectorAll('tbody tr')].forEach((row,i)=>{if(i<part*maxRows||i>=(part+1)*maxRows)row.remove();});if(part){const title=copy.querySelector('.oc-group-title,.oc-round-title');if(title)title.append(' · 계속');}return copy;});
       });
+      // Keep a department and its main preview together when they fit on a fresh page.
+      if(compactGroups){
+        const probes=[];
+        for(let i=0;i<blocks.length;){const full=blocks[i].matches('.oc-main-outline,.oc-output-division');const take=full||blocks[i+1]?.matches('.oc-main-outline,.oc-output-division')?1:2;const row=doc.createElement('div');row.className='oc-group-section-row';if(full)row.style.gridTemplateColumns='1fr';blocks.slice(i,i+take).forEach(block=>row.appendChild(block.cloneNode(true)));current.appendChild(row);probes.push(row);i+=take;}
+        const height=current.getBoundingClientRect().height,remaining=page.getBoundingClientRect().bottom-current.getBoundingClientRect().top-5;
+        const fresh=page.clientHeight-(page.querySelector('.oc-head')?.getBoundingClientRect().height||0)-18;
+        probes.forEach(row=>row.remove());
+        if(height>remaining&&height<=fresh&&page.querySelector('.oc-group-section-row')){current.remove();newPage();current=section(division);}
+      }
       for(let i=0;i<blocks.length;){
         const full=blocks[i].matches('.oc-main-outline,.oc-output-division');
         const take=full||blocks[i+1]?.matches('.oc-main-outline,.oc-output-division')?1:2;
@@ -28320,11 +28330,18 @@ function outputPaperCss(spec){
  .oc-group-division-title{font-size:13pt;font-weight:900;margin:0 0 2mm;padding:2mm 3mm;background:#e9eef8;border:1px solid #777}
  .oc-group-section-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3mm;margin-bottom:3mm;align-items:start;break-inside:avoid}
  .oc-group-section-row>*{min-width:0;max-width:100%}
+ .oc-group-summary-page .oc-group-section-row{gap:2mm;margin-bottom:2mm}
+ .oc-group-summary-page .oc-group-division{margin-bottom:1mm}
+ .oc-group-summary-page .oc-group-division-title{padding:1.5mm 2mm;margin-bottom:1.5mm}
+
  .oc-group-section-row .oc-group,.oc-group-section-row .oc-round{margin:0;border-radius:0;overflow:visible}
  .oc-group-section-row .oc-group-title,.oc-group-section-row .oc-round-title{font-size:10pt;padding:2mm;min-height:12mm;align-items:center;gap:1mm;flex-wrap:wrap}
  .oc-group-section-row table{table-layout:fixed;font-size:10pt}
  .oc-group-section-row th{height:7mm;padding:1mm;font-size:10pt}
  .oc-group-section-row td{height:11mm;padding:1mm;font-size:10pt;overflow-wrap:anywhere}
+ .oc-group-summary-page .oc-group-section-row td{height:9mm}
+ .oc-group-summary-page .oc-group-section-row th{height:6mm}
+
  .oc-page-grid{display:grid;gap:3mm;flex:1;min-height:0}.oc-print-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:visible;border:1px solid #555}
  .oc-continuation{font-size:11pt;font-weight:800;border-bottom:1px solid #777;padding-bottom:2mm;flex:none}
  .oc-card-division{font-size:12pt;font-weight:900;background:#e9eef8;padding:2mm 3mm;flex:none}
