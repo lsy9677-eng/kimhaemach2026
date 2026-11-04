@@ -27,8 +27,8 @@ test('all and custom division selections return only intended departments',()=>{
  controls.outDS.value='__SELECTED__';controls.outDivisionChecks={querySelectorAll:()=>[{value:'은'}]};assert.deepEqual(Array.from(c.outputSelectedDivisions()),['은']);
  controls.outDS.value='금';assert.deepEqual(Array.from(c.outputSelectedDivisions()),['금']);
 });
-test('duplex order sheets honor A3, repeat equal front/back layouts and include chosen divisions',()=>{
+test('duplex order sheets honor A3, repeat equal front/back layouts and keep department fields blank',()=>{
  const {c}=setup(),spec=c.outputPaperSpec();assert.equal(spec.direction,'portrait');assert.equal(spec.contentWidth,277);
  const html=c.outputHandwrittenOrderSheets('t');assert.equal((html.match(/data-side="front"/g)||[]).length,1);assert.equal((html.match(/data-side="back"/g)||[]).length,1);
- assert.equal((html.match(/class="order-sheet-card"/g)||[]).length,8);assert.match(html,/부서: 금배부/);assert.match(html,/부서: 은배부/);assert.match(html,/width:277mm/);
+ assert.equal((html.match(/class="order-sheet-card"/g)||[]).length,8);assert.match(html,/부서: ______________/);assert.doesNotMatch(html,/금배부|은배부/);assert.match(html,/width:277mm/);
 });
