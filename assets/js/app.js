@@ -28371,33 +28371,58 @@ function prepareOutputPages(root,spec){
       for(const [start,end] of chunks){
         const clone=block.cloneNode(true);if(block===division)clone.querySelector('.oc-head')?.remove();
         if(rows.length>20){const copied=[...clone.querySelectorAll('tbody tr')];copied.forEach((row,i)=>{if(i<start||i>=end)row.remove();});}
+        for(const table of clone.querySelectorAll('table')){
+          table.querySelectorAll('colgroup').forEach(group=>group.remove());
+          const headers=[...(table.querySelector('thead tr')?.children||[])];
+          if(headers.length){const weights=headers.map(cell=>{const text=cell.textContent.trim();return /^no$|번호|순번/i.test(text)?.65:/팀|선수/.test(text)?3:/결과|점수/.test(text)?1.3:/기록|메모|코트/.test(text)?2:!text||/^vs$/i.test(text)?.7:1.5;});
+            const total=weights.reduce((a,b)=>a+b,0),cols=document.createElement('colgroup');weights.forEach(weight=>{const col=document.createElement('col');col.style.width=(weight/total*100)+'%';cols.appendChild(col);});table.prepend(cols);}
+        }
         const card=document.createElement('section');card.className='oc-print-card';
         const title=document.createElement('div');title.className='oc-card-division';title.textContent=division.dataset.divisionLabel+(rows.length>20?' · 계속':'');card.appendChild(title);card.appendChild(clone);
         cards.push({node:card,rows:Math.min(20,rows.length),tree:!groups.length});
       }
     }
   }
-  const plans=planOutputCards(cards);sheet.replaceChildren();sheet.dataset.paged='true';
-  for(const plan of plans){
-    const page=document.createElement('section');page.className='oc-print-page';
-    if(heading){const header=heading.cloneNode(true);const sub=header.querySelector('.oc-sub');if(sub)sub.textContent=[...new Set(plan.map(i=>cards[i].node.querySelector('.oc-card-division').textContent))].join(' · ')+' | '+spec.label;page.appendChild(header);}
-    const grid=document.createElement('div');grid.className='oc-page-grid';
-    const columns=plan.length===1?1:2;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.gridTemplateRows=`repeat(${Math.ceil(plan.length/columns)},minmax(0,1fr))`;
-    plan.forEach(i=>grid.appendChild(cards[i].node));if(plan.length===3)grid.lastElementChild.style.gridColumn='1 / -1';page.appendChild(grid);sheet.appendChild(page);
+  let plans=planOutputCards(cards);
+  function drawPages(){
+    sheet.replaceChildren();sheet.dataset.paged='true';
+    for(let pageIndex=0;pageIndex<plans.length;pageIndex++){
+      const plan=plans[pageIndex],page=document.createElement('section');page.className='oc-print-page';
+      const labels=[...new Set(plan.map(i=>cards[i].node.querySelector('.oc-card-division').textContent))].join(' · ');
+      if(heading&&pageIndex===0){const header=heading.cloneNode(true);const sub=header.querySelector('.oc-sub');if(sub)sub.textContent=labels+' | '+spec.label;page.appendChild(header);}
+      else {const continuation=document.createElement('div');continuation.className='oc-continuation';continuation.textContent=labels+' · 계속';page.appendChild(continuation);}
+      const grid=document.createElement('div');grid.className='oc-page-grid';
+      const columns=plan.length===1?1:2;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.gridTemplateRows=`repeat(${Math.ceil(plan.length/columns)},minmax(0,1fr))`;
+      plan.forEach(i=>grid.appendChild(cards[i].node));if(plan.length===3)grid.lastElementChild.style.gridColumn='1 / -1';page.appendChild(grid);sheet.appendChild(page);
+    }
+  }
+  for(let pass=0;pass<4;pass++){
+    drawPages();let changed=false;const next=[];
+    for(const plan of plans){
+      const overflow=plan.some(i=>{const card=cards[i].node;return [...card.querySelectorAll('table')].some(table=>table.getBoundingClientRect().bottom>card.getBoundingClientRect().bottom+1)||card.scrollHeight>card.clientHeight+2;});
+      if(overflow&&plan.length>1){const middle=Math.ceil(plan.length/2);next.push(plan.slice(0,middle),plan.slice(middle));changed=true;}else next.push(plan);
+    }
+    if(!changed)break;plans=next;
+  }
+  // A single long block must remain readable and visible rather than be cropped.
+  for(const card of sheet.querySelectorAll('.oc-print-card')){
+    const table=card.querySelector('table');if(!table)continue;
+    for(const size of [11,10,9]){if(table.getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)break;table.style.setProperty('font-size',size+'pt','important');}
   }
 }
 function outputPaperCss(spec){
  return `@page{size:${spec.paper} ${spec.direction};margin:${spec.margin}mm}
  .oc-sheet{padding:0!important;width:${spec.contentWidth}mm;max-width:none;margin:auto}
- .oc-print-page{width:${spec.contentWidth}mm;height:${spec.contentHeight-1}mm;display:flex;flex-direction:column;gap:3mm;background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12mm;overflow:hidden}
+ .oc-print-page{width:${spec.contentWidth}mm;height:${spec.contentHeight-1}mm;display:flex;flex-direction:column;gap:3mm;background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12mm;overflow:visible}
  .oc-print-page:last-child{break-after:auto;page-break-after:auto;margin-bottom:0}
  .oc-print-page .oc-head{flex:0 0 auto;margin:0;padding-bottom:2mm}.oc-print-page .oc-title{font-size:18pt}.oc-print-page .oc-sub{font-size:11pt}.oc-print-page .oc-time{display:none}
- .oc-page-grid{display:grid;gap:3mm;flex:1;min-height:0}.oc-print-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;border:1px solid #555}
+ .oc-page-grid{display:grid;gap:3mm;flex:1;min-height:0}.oc-print-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:visible;border:1px solid #555}
+ .oc-continuation{font-size:11pt;font-weight:800;border-bottom:1px solid #777;padding-bottom:2mm;flex:none}
  .oc-card-division{font-size:12pt;font-weight:900;background:#e9eef8;padding:2mm 3mm;flex:none}
- .oc-print-card>.oc-group,.oc-print-card>.oc-round{border:0;border-radius:0;margin:0;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
- .oc-print-card table{height:100%;flex:1;min-height:0;width:100%;font-size:12pt;table-layout:fixed}
- .oc-print-card th:first-child{width:7%}.oc-print-card th:nth-child(3){width:13%}.oc-print-card th:last-child{width:21%}
- .oc-print-card th,.oc-print-card td{height:auto;padding:1.5mm 1mm;overflow-wrap:anywhere;word-break:keep-all}
+ .oc-print-card>.oc-group,.oc-print-card>.oc-round{border:0;border-radius:0;margin:0;display:flex;flex-direction:column;flex:1;min-height:0;overflow:visible}
+ .oc-print-card table{height:auto!important;flex:1 1 auto;min-height:0;width:100%;font-size:11pt!important;line-height:1.3!important;table-layout:fixed}
+ .oc-print-card th{background:#f1f3f5!important;color:#111!important;white-space:normal!important}
+ .oc-print-card th,.oc-print-card td{font-size:inherit!important;text-align:center!important;height:auto!important;padding:1mm!important;line-height:1.3!important;overflow-wrap:anywhere;word-break:keep-all;width:auto!important}
  .oc-print-card .oc-group-title,.oc-print-card .oc-round-title{font-size:11pt;padding:2mm}.oc-print-card .oc-teamline{font-size:10pt;padding:1.5mm}
  .oc-print-card .oc-tree{zoom:1}.oc-print-card>.oc-output-division{padding:2mm;min-height:0;flex:1;overflow:hidden}
  @media print{html,body{margin:0!important;padding:0!important;background:white}.oc-sheet{margin:0}.oc-print-page{margin:0!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
@@ -29057,16 +29082,16 @@ function outputHistoricalRegs(tid,div){
   return (((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>outputNormalizeDiv(x?.division||x?.div||'')===outputNormalizeDiv(div)));
 }
 function outputGeneratedPrelimSheet(tid,div){
-  const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
-  if(!regs.length)return '';
-  const size=Math.max(2,Math.min(4,Number(t?.divSettings?.[div]?.grpSize||t?.grpSize||4)||4));
-  const groups=[]; for(let i=0;i<regs.length;i+=size)groups.push(regs.slice(i,i+size));
-  const body=groups.map((g,gi)=>{
-    const names=g.map((r,i)=>`${i+1}. ${outputEsc(r.club||r.teamName||'')}`).join('<br>');
-    const pairs=[];for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++)pairs.push(`<tr><td>${outputEsc(g[i].club||'')}</td><td>vs</td><td>${outputEsc(g[j].club||'')}</td><td class="oc-write"></td><td class="oc-write"></td></tr>`);
-    return `<section class="oc-round" style="break-inside:avoid"><div class="oc-round-title">${gi+1}조</div><div style="padding:5px 7px;font-size:9px;line-height:1.5">${names}</div><table><thead><tr><th>팀1</th><th></th><th>팀2</th><th>결과</th><th>코트/메모</th></tr></thead><tbody>${pairs.join('')}</tbody></table></section>`;
+  const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
+  const count=(G.teams[key]||[]).length||outputHistoricalRegs(tid,div).length;
+  const cfg=gDS(t,div),saved=t?.divSettings?.[div]?.prelimDrawSettings;
+  let sizes=saved?.teamCount===count&&Array.isArray(saved.groupSizes)?saved.groupSizes.slice():[];
+  if(!sizes.length&&count){if(cfg.format==='roundrobin')sizes=[count];else{const groups=Math.ceil(count/Math.max(2,cfg.grpSize||4));sizes=Array.from({length:groups},(_,i)=>Math.floor(count/groups)+(i<count%groups?1:0));}}
+  const body=sizes.map((size,gi)=>{
+    const pairs=[];for(let a=0;a<size;a++)for(let b=a+1;b<size;b++)pairs.push(`<tr><td>${pairs.length+1}</td><td>${a+1}번 팀 미정</td><td>:</td><td>${b+1}번 팀 미정</td><td></td></tr>`);
+    return `<section class="oc-group"><div class="oc-group-title"><b>${gi+1}조 · 추첨 전</b></div><div class="oc-teamline">팀 배치 미확정 · 실제 조추첨 후 참가팀을 표시합니다.</div><table><thead><tr><th>No</th><th>팀1</th><th>결과</th><th>팀2</th><th>기록</th></tr></thead><tbody>${pairs.join('')}</tbody></table></section>`;
   }).join('');
-  return outputHeader(t,div,'예선 대진표 · 현장 수기용')+`<div style="font-size:8px;margin-bottom:5px;color:#6b7280">※ 저장된 과거 대진이 없어 참가팀 기준으로 만든 수기용 새 양식입니다. 당시 실제 조편성 복원본은 아닙니다.</div>`+body;
+  return outputHeader(t,div,'예선 수기용 · 추첨 전 / 팀 배치 미확정')+(body||'<div class="oc-empty">추첨 전 · 조편성 설정이 없습니다.</div>');
 }
 function outputGeneratedMainTable(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid), regs=outputHistoricalRegs(tid,div);
@@ -29119,7 +29144,7 @@ function outputPrelimHtml(tid,div,blank=false){
   const ms=allMs.filter(m=>m.phase==='group'||m.phase==='prelim'||m.stage==='group'||m.stage==='prelim'||m.group!=null);
   if(!groups.length){
     if(blank){const gen=outputGeneratedPrelimSheet(tid,div);if(gen)return gen;}
-    const hist=outputHistoricalRegistrationFallback(tid,div,blank?'예선 현장 수기용':'예선 현재상황',blank);
+    const hist=(t?.isHistorical||t?._migrated||t?.status==='done')?outputHistoricalRegistrationFallback(tid,div,'과거 참가기록 · 조편성 기록 없음',blank):'';
     return hist||outputHeader(t,div,blank?'예선 현장 수기용':'예선 현재상황')+'<div class="oc-empty">예선 조편성이 아직 없습니다.</div>';
   }
   const cards=groups.map((g,gi)=>{
