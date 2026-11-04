@@ -28355,6 +28355,17 @@ function outputPaperCss(spec){
  `;
 }
 Object.assign(window,{updateOutputPaperSettings,outputDivisionSelectionChanged});
+function outputTypeOptions(category){
+  const items=category==='field'?[
+    ['groups-blank','조편성표 · 현재 편성 / 수기용'],['prelim-current','예선 대진표 · 현재상황'],['prelim-blank','예선 대진표 · 현장 수기용'],['main-current','본선 대진표 · 현재상황'],['main-blank','본선 대진표 · 현장 수기용'],['main-tree','본선 피라미드 · 현재상황'],['main-tree-blank','본선 피라미드 · 현장 수기용']
+  ]:[['order-sheets','오더지 · 빈 양식'],['prelim-team-slips','예선 수동추첨용 쪽지 · 접수 팀명 A/B'],['raffle-slips','경품 추첨 쪽지 · 전체 참가자']];
+  return items.map(([value,label])=>`<option value="${value}">${label}</option>`).join('');
+}
+function outputCategoryChanged(){
+  const category=outputElement('outCategory')?.value||'prepare',type=outputElement('outType');
+  if(type)type.innerHTML=outputTypeOptions(category);renderOutputPreview();
+}
+Object.assign(window,{outputCategoryChanged});
 function outputCenterInnerHtml(){
   return `
     <div class="sec-title">🖨️ 출력센터 <span style="font-size:.72rem;font-weight:500;color:var(--text2)">— 일반 회원도 조회·인쇄 가능</span></div>
@@ -28362,18 +28373,8 @@ function outputCenterInnerHtml(){
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
         <label class="form-group"><span class="form-label">대회</span><select class="form-select" id="outTS" onchange="outputTournamentChanged()"></select></label>
         <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="outputDivisionSelectionChanged()"></select></label>
-        <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
-          <option value="prelim-team-slips">예선 수동추첨용 쪽지 · 클럽명</option>
-          <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
-          <option value="order-sheets">오더지 · 빈 양식</option>
-          <option value="groups-blank">조편성표 · 현재 편성 / 수기용</option>
-          <option value="prelim-current">예선 대진표 · 현재상황</option>
-          <option value="prelim-blank">예선 대진표 · 현장 수기용</option>
-          <option value="main-current">본선 대진표 · 현재상황</option>
-          <option value="main-blank">본선 대진표 · 현장 수기용</option>
-          <option value="main-tree">가지형 본선 대진표 · 현재상황</option>
-          <option value="main-tree-blank">가지형 본선 대진표 · 현장 수기용</option>
-        </select></label>
+        <label class="form-group"><span class="form-label">사용 메뉴</span><select class="form-select" id="outCategory" onchange="outputCategoryChanged()"><option value="prepare">📦 단체전 준비용</option><option value="field">🎾 현장 사용</option></select></label>
+        <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">${outputTypeOptions('prepare')}</select></label>
       </div>
       <div id="outDivisionChecks" style="display:none;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;align-items:center">
@@ -29615,7 +29616,7 @@ Object.assign(window,{saveRafflePrintSettings,resetRafflePrintSettings});
 function outputPrelimTeamSlips(tid){
   return outputSelectedDivisions().map(div=>{
     const key=tid+'_'+outputResolveDivision(tid,div);
-    const rows=(G.teams?.[key]||[]).filter(team=>String(team.club||'').trim()).map(team=>({label:String(team.club).trim()}));
+    const rows=(G.teams?.[key]||[]).map((team,index)=>({team,index})).filter(({team})=>String(team.club||'').trim()).map(({team,index})=>({label:tdn(team,key,index)}));
     if(!rows.length)return `<div class="oc-empty">${outputEsc(dl(div))}: 등록된 팀이 없습니다.</div>`;
     return outputRaffleSlipsHtml(tid,{rows,clubOnly:true,title:dl(div)+' 예선 수동추첨용'});
   }).join('');
@@ -29634,7 +29635,7 @@ function outputRaffleSlipsHtml(tid,options={}){
     .raffle-label{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6mm;padding:.5mm 1mm;font-size:${font}pt;line-height:1.1;color:#111;text-align:center;overflow-wrap:anywhere}
     .raffle-label strong{font-weight:800}
     @media print{.oc-sheet{padding:0!important}.raffle-guide{display:none}.raffle-page{margin:0!important}body{background:white}}
-  </style><div class="raffle-guide">${options.clubOnly?outputEsc(options.title)+' · '+rows.length+'팀':'경품 추첨 쪽지 · 전체 부서 '+rows.length+'명'} · ${pages.length}장 · 한 장당 ${count}칸 · 글자 ${font}pt<br>${spec.paper} ${wide?'가로':'세로'} / 배율 100% / 여백 ${spec.margin}mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 넣으세요. ${options.clubOnly?'등록 팀당 클럽명 쪽지 1개입니다. 같은 클럽의 여러 팀은 같은 이름으로 각각 출력됩니다.':'후보를 포함한 저장 명단 기준이며 빈 쪽지는 출력하지 않습니다.'}</div>${pages.join('')}`;
+  </style><div class="raffle-guide">${options.clubOnly?outputEsc(options.title)+' · '+rows.length+'팀':'경품 추첨 쪽지 · 전체 부서 '+rows.length+'명'} · ${pages.length}장 · 한 장당 ${count}칸 · 글자 ${font}pt<br>${spec.paper} ${wide?'가로':'세로'} / 배율 100% / 여백 ${spec.margin}mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 넣으세요. ${options.clubOnly?'등록 팀당 접수 팀명 쪽지 1개입니다. 여러 팀이 접수한 클럽은 접수 명단의 A·B 등 팀 구분까지 표시됩니다.':'후보를 포함한 저장 명단 기준이며 빈 쪽지는 출력하지 않습니다.'}</div>${pages.join('')}`;
 }
 // PHASE264: compact handwritten team order forms, four/six/eight per portrait A4.
 function orderSheetSettings(){
@@ -29820,7 +29821,7 @@ async function downloadOutputCenter(format){
         ws['!cols']=Array.from({length:table.rows[0]?.cells.length||5},()=>({wch:24}));
         XLSX.utils.book_append_sheet(wb,ws,`표 ${i+1}`);
       });
-      if(!tables.length){const slips=[...root.querySelectorAll('.raffle-slip')].map(e=>[...e.querySelectorAll('span,strong')].map(n=>n.textContent));if(slips.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([outputElement('outType')?.value==='prelim-team-slips'?['클럽']:['클럽','참가자'],...slips]),'추첨 명단');}
+      if(!tables.length){const slips=[...root.querySelectorAll('.raffle-slip')].map(e=>[...e.querySelectorAll('span,strong')].map(n=>n.textContent));if(slips.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([outputElement('outType')?.value==='prelim-team-slips'?['접수 팀명']:['클럽','참가자'],...slips]),'추첨 명단');}
       XLSX.writeFile(wb,filename);
     }else{
       await ensureHtml2CanvasForExport();
