@@ -32,3 +32,8 @@ test('duplex order sheets honor A3, repeat equal front/back layouts and keep dep
  const html=c.outputHandwrittenOrderSheets('t');assert.equal((html.match(/data-side="front"/g)||[]).length,1);assert.equal((html.match(/data-side="back"/g)||[]).length,1);
  assert.equal((html.match(/class="order-sheet-card"/g)||[]).length,8);assert.match(html,/부서: ______________/);assert.doesNotMatch(html,/금배부|은배부/);assert.match(html,/width:277mm/);
 });
+
+test('group sheets default to portrait and honor an explicit landscape selection',()=>{
+ const {c,controls}=setup();controls.outType.value='groups-blank';assert.equal(c.outputPaperSpec().direction,'portrait');
+ c.organizationLocalStorage.getItem=()=>JSON.stringify({paper:'A4',direction:'landscape'});assert.equal(c.outputPaperSpec().direction,'landscape');
+});

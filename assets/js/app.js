@@ -28349,7 +28349,7 @@ function outputPaperSettings(){
 }
 function outputPaperSpec(){
   const settings=outputPaperSettings(),type=outputElement('outType')?.value||'prelim-current';
-  const direction=settings.direction==='auto'?(type==='order-sheets'?'portrait':type==='raffle-slips'?rafflePrintSettings().direction:'landscape'):settings.direction;
+  const direction=settings.direction==='auto'?(['order-sheets','groups-blank'].includes(type)?'portrait':type==='raffle-slips'?rafflePrintSettings().direction:'landscape'):settings.direction;
   return {...outputPaperDimensions(settings.paper,direction),duplex:settings.duplex,label:outputElement('outType')?.selectedOptions?.[0]?.textContent||'대진표'};
 }
 function updateOutputPaperSettings(){
@@ -28458,7 +28458,7 @@ function outputCenterInnerHtml(){
       <div id="outDivisionChecks" style="display:none;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;align-items:center">
         <label>용지<select id="outPaper" class="form-select" onchange="updateOutputPaperSettings()"><option value="A4">A4</option><option value="A3">A3</option></select></label>
-        <label>방향<select id="outDirection" class="form-select" onchange="updateOutputPaperSettings()"><option value="auto">자료에 맞게 자동</option><option value="landscape">가로</option><option value="portrait">세로</option></select></label>
+        <label>인쇄 방향 · 가로/세로<select id="outDirection" class="form-select" onchange="updateOutputPaperSettings()"><option value="auto">자료에 맞게 자동</option><option value="landscape">가로</option><option value="portrait">세로</option></select></label>
         <label id="outDuplexLabel"><input type="checkbox" id="outDuplex" onchange="updateOutputPaperSettings()"> 오더지 양면용 · 앞/뒤 같은 양식 2쪽</label>
       </div>
       <div style="font-size:.75rem;color:#475569;margin-top:8px">여러 부서는 ‘여러 부서 선택’에서 고릅니다. 양면은 프린터 인쇄창에서도 켜 주세요(세로: 긴 쪽, 가로: 짧은 쪽 넘기기). 실제 프린터도 같은 용지 크기와 배율 100%(실제 크기)로 선택하세요. 프린터 속성의 확대·용지 맞춤은 끄고, 머리글·바닥글도 꺼 주세요.</div>
