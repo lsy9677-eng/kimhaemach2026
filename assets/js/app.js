@@ -29735,15 +29735,23 @@ async function ensureHtml2CanvasForExport(){
     sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);
   });
 }
-async function saveHighResElement(el,filename,bg='#ffffff'){
+async function saveHighResElement(el,filename,bg='#ffffff',options={}){
   if(!el){toast('저장할 화면을 찾지 못했습니다','error');return;}
   toast('고화질 이미지 생성 중...','info');
   try{
     await ensureHtml2CanvasForExport();
     try{if(document.fonts?.ready)await document.fonts.ready;}catch(_e){}
-    const sw=Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.max(el.scrollHeight||0,el.clientHeight||0);
+    const sw=options.fitOutputWidth?Math.ceil(el.getBoundingClientRect().width):Math.max(el.scrollWidth||0,el.clientWidth||0,900), sh=Math.ceil(Math.max(el.scrollHeight||0,el.getBoundingClientRect().height||0));
     const canvas=await html2canvas(el,{scale:3.5,backgroundColor:bg,useCORS:true,logging:false,width:sw,height:sh,windowWidth:sw,windowHeight:sh,scrollX:0,scrollY:0,
-      onclone:(doc)=>{
+      onclone:(doc,clonedEl)=>{
+        if(options.fitOutputWidth&&clonedEl){
+          clonedEl.style.setProperty('width',sw+'px','important');
+          clonedEl.style.setProperty('max-width','none','important');
+          clonedEl.style.setProperty('margin','0','important');
+          clonedEl.querySelectorAll('.oc-print-page,.order-sheet-a4,.raffle-page').forEach(page=>{
+            page.style.setProperty('margin-left','auto','important');page.style.setProperty('margin-right','auto','important');
+          });
+        }
         doc.querySelectorAll('.mobile-bracket-zoom-tools').forEach(n=>n.remove());
         doc.querySelectorAll('.output-pyramid-viewport').forEach(n=>{n.style.overflow='visible';n.style.maxWidth='none';});
         doc.querySelectorAll('.output-pyramid-viewport .pyramid-scroll-content').forEach(n=>{n.style.zoom='1';});
@@ -29767,7 +29775,7 @@ async function saveOutputCenterHighResImage(){
   const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
   const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.selectedOptions?.[0]?.textContent||'출력센터';
   const t=G.tournaments.find(x=>x.id===tid);
-  await saveHighResElement(el,`출력센터_${t?.name||'대회'}_${dl(div)}_${type}_${new Date().toISOString().slice(0,10)}.png`);
+  await saveHighResElement(el,`출력센터_${t?.name||'대회'}_${dl(div)}_${type}_${new Date().toISOString().slice(0,10)}.png`,'#ffffff',{fitOutputWidth:true});
 }
 
 function outputDownloadName(extension){
