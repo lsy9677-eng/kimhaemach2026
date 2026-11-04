@@ -28425,7 +28425,7 @@ function outputPaperCss(spec){
  .oc-print-card th,.oc-print-card td{font-size:inherit!important;text-align:center!important;height:auto!important;padding:1mm!important;line-height:1.3!important;overflow-wrap:anywhere;word-break:keep-all;width:auto!important}
  .oc-print-card .oc-group-title,.oc-print-card .oc-round-title{font-size:11pt;padding:2mm}.oc-print-card .oc-teamline{font-size:10pt;padding:1.5mm}
  .oc-print-card .oc-tree{zoom:1}.oc-print-card>.oc-output-division{padding:2mm;min-height:0;flex:1;overflow:hidden}
- @media print{html,body{margin:0!important;padding:0!important;background:white;width:100%!important}.oc-sheet{width:100%!important;max-width:none!important;margin:0!important}.oc-print-page,.order-sheet-a4,.raffle-page{width:calc(100% - 2mm)!important;height:calc(100vh - 1mm)!important;padding-top:1mm!important;padding-bottom:1mm!important;margin-left:auto!important;margin-right:auto!important;margin-top:0!important;margin-bottom:0!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
+ @media print{html,body{margin:0!important;padding:0!important;background:white;width:auto!important;zoom:1!important;transform:none!important}.oc-sheet{width:100%!important;max-width:100%!important;margin:0!important;zoom:1!important;transform:none!important}.oc-print-page,.order-sheet-a4,.raffle-page{width:${spec.contentWidth}mm!important;max-width:100%!important;height:${spec.contentHeight-2}mm!important;box-sizing:border-box!important;padding-top:0!important;padding-bottom:0!important;margin-left:auto!important;margin-right:auto!important;margin-top:0!important;margin-bottom:0!important;zoom:1!important;transform:none!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
  `;
 }
 Object.assign(window,{updateOutputPaperSettings,outputDivisionSelectionChanged});
@@ -28453,7 +28453,7 @@ function outputCenterInnerHtml(){
         <label>방향<select id="outDirection" class="form-select" onchange="updateOutputPaperSettings()"><option value="auto">자료에 맞게 자동</option><option value="landscape">가로</option><option value="portrait">세로</option></select></label>
         <label id="outDuplexLabel"><input type="checkbox" id="outDuplex" onchange="updateOutputPaperSettings()"> 오더지 양면용 · 앞/뒤 같은 양식 2쪽</label>
       </div>
-      <div style="font-size:.75rem;color:#475569;margin-top:8px">여러 부서는 ‘여러 부서 선택’에서 고릅니다. 양면은 프린터 인쇄창에서도 켜 주세요(세로: 긴 쪽, 가로: 짧은 쪽 넘기기). 용지 크기를 맞추고 배율 100%, 머리글·바닥글 끄기를 권장합니다.</div>
+      <div style="font-size:.75rem;color:#475569;margin-top:8px">여러 부서는 ‘여러 부서 선택’에서 고릅니다. 양면은 프린터 인쇄창에서도 켜 주세요(세로: 긴 쪽, 가로: 짧은 쪽 넘기기). 실제 프린터도 같은 용지 크기와 배율 100%(실제 크기)로 선택하세요. 프린터 속성의 확대·용지 맞춤은 끄고, 머리글·바닥글도 꺼 주세요.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
         <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ A4 가로 인쇄 · PDF</button>
         <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 고화질 이미지 저장</button>
@@ -29762,7 +29762,7 @@ async function printOutputCenter(){
   try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
-  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><style>${outputPaperCss(outputPaperSpec())}</style><script>const planOutputCards=${planOutputCards.toString()};const prepareOutputPages=${prepareOutputPages.toString()};const fitOutputPyramids=${fitOutputPyramids.toString()};const paperSpec=${JSON.stringify(outputPaperSpec())};window.addEventListener('beforeprint',()=>fitOutputPyramids(document,true));document.fonts.ready.then(()=>{prepareOutputPages(document,paperSpec);fitOutputPyramids(document,true);requestAnimationFrame(()=>window.print());})<\/script></body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><style>${outputPaperCss(outputPaperSpec())}</style><script>const planOutputCards=${planOutputCards.toString()};const prepareOutputPages=${prepareOutputPages.toString()};const fitOutputPyramids=${fitOutputPyramids.toString()};const paperSpec=${JSON.stringify(outputPaperSpec())};document.fonts.ready.then(()=>{prepareOutputPages(document,paperSpec);fitOutputPyramids(document,true);requestAnimationFrame(()=>window.print());})<\/script></body></html>`);w.document.close();
 }
 
 

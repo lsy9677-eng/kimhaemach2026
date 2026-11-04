@@ -1,4 +1,4 @@
-export function outputPaperDimensions(paper='A4',direction='landscape',margin=7){
+export function outputPaperDimensions(paper='A4',direction='landscape',margin=10){
  const name=paper==='A3'?'A3':'A4',orientation=direction==='portrait'?'portrait':'landscape';
  const sides=name==='A3'?[297,420]:[210,297];
  const width=orientation==='portrait'?sides[0]:sides[1],height=orientation==='portrait'?sides[1]:sides[0];

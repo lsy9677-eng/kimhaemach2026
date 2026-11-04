@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import {outputPaperDimensions,planOutputCards} from '../assets/js/output-paper.js';
 const source=fs.readFileSync(new URL('../assets/js/app.js',import.meta.url),'utf8');
 test('paper dimensions match A4 and A3 in both orientations with printable margins',()=>{
- assert.deepEqual([outputPaperDimensions('A4','landscape').contentWidth,outputPaperDimensions('A4','landscape').contentHeight],[283,196]);
+ assert.deepEqual([outputPaperDimensions('A4','landscape').contentWidth,outputPaperDimensions('A4','landscape').contentHeight],[277,190]);
  assert.deepEqual([outputPaperDimensions('A3','portrait').width,outputPaperDimensions('A3','portrait').height],[297,420]);
- assert.deepEqual([outputPaperDimensions('A3','landscape').contentWidth,outputPaperDimensions('A3','landscape').contentHeight],[406,283]);
+ assert.deepEqual([outputPaperDimensions('A3','landscape').contentWidth,outputPaperDimensions('A3','landscape').contentHeight],[400,277]);
 });
 test('page planning combines small divisions but gives long tables and trees room',()=>{
  assert.deepEqual(planOutputCards([{rows:6},{rows:3},{rows:3}]),[[0,1,2]]);
@@ -28,7 +28,7 @@ test('all and custom division selections return only intended departments',()=>{
  controls.outDS.value='금';assert.deepEqual(Array.from(c.outputSelectedDivisions()),['금']);
 });
 test('duplex order sheets honor A3, repeat equal front/back layouts and include chosen divisions',()=>{
- const {c}=setup(),spec=c.outputPaperSpec();assert.equal(spec.direction,'portrait');assert.equal(spec.contentWidth,283);
+ const {c}=setup(),spec=c.outputPaperSpec();assert.equal(spec.direction,'portrait');assert.equal(spec.contentWidth,277);
  const html=c.outputHandwrittenOrderSheets('t');assert.equal((html.match(/data-side="front"/g)||[]).length,1);assert.equal((html.match(/data-side="back"/g)||[]).length,1);
- assert.equal((html.match(/class="order-sheet-card"/g)||[]).length,8);assert.match(html,/부서: 금배부/);assert.match(html,/부서: 은배부/);assert.match(html,/width:283mm/);
+ assert.equal((html.match(/class="order-sheet-card"/g)||[]).length,8);assert.match(html,/부서: 금배부/);assert.match(html,/부서: 은배부/);assert.match(html,/width:277mm/);
 });
