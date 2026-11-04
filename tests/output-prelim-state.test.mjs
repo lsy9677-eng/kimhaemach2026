@@ -9,7 +9,7 @@ function context(){
  vm.runInContext(src.slice(src.indexOf('function outputPrelimHtml('),src.indexOf('function outputMainTableHtml(')),c);return c;
 }
 test('undrawn blank sheets show unknown slots without assigning any registered team',()=>{
- const c=context(),html=c.outputPrelimHtml('t','은',true);assert.match(html,/추첨 전/);assert.match(html,/미확정/);assert.match(html,/1번 팀 미정/);assert.doesNotMatch(html,/모던|능동|테사모/);
+ const c=context(),html=c.outputPrelimHtml('t','은',true);assert.match(html,/추첨 전/);assert.match(html,/빈칸에 직접/);assert.equal((html.match(/class="oc-team-write"><\/td>/g)||[]).length,6);assert.doesNotMatch(html,/번 팀 미정/);assert.doesNotMatch(html,/모던|능동|테사모/);
 });
 test('undrawn current-state sheets report no group assignment instead of invented fixtures',()=>{
  const c=context(),html=c.outputPrelimHtml('t','은',false);assert.match(html,/아직 없습니다/);assert.doesNotMatch(html,/모던|능동|테사모/);

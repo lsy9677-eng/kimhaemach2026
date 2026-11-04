@@ -28425,7 +28425,7 @@ function outputPaperCss(spec){
  .oc-print-card th,.oc-print-card td{font-size:inherit!important;text-align:center!important;height:auto!important;padding:1mm!important;line-height:1.3!important;overflow-wrap:anywhere;word-break:keep-all;width:auto!important}
  .oc-print-card .oc-group-title,.oc-print-card .oc-round-title{font-size:11pt;padding:2mm}.oc-print-card .oc-teamline{font-size:10pt;padding:1.5mm}
  .oc-print-card .oc-tree{zoom:1}.oc-print-card>.oc-output-division{padding:2mm;min-height:0;flex:1;overflow:hidden}
- @media print{html,body{margin:0!important;padding:0!important;background:white}.oc-sheet{margin:0}.oc-print-page{margin:0!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
+ @media print{html,body{margin:0!important;padding:0!important;background:white;width:100%!important}.oc-sheet{width:100%!important;max-width:none!important;margin:0!important}.oc-print-page,.order-sheet-a4,.raffle-page{width:calc(100% - 2mm)!important;height:calc(100vh - 1mm)!important;padding-top:1mm!important;padding-bottom:1mm!important;margin-left:auto!important;margin-right:auto!important;margin-top:0!important;margin-bottom:0!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
  `;
 }
 Object.assign(window,{updateOutputPaperSettings,outputDivisionSelectionChanged});
@@ -29088,8 +29088,8 @@ function outputGeneratedPrelimSheet(tid,div){
   let sizes=saved?.teamCount===count&&Array.isArray(saved.groupSizes)?saved.groupSizes.slice():[];
   if(!sizes.length&&count){if(cfg.format==='roundrobin')sizes=[count];else{const groups=Math.ceil(count/Math.max(2,cfg.grpSize||4));sizes=Array.from({length:groups},(_,i)=>Math.floor(count/groups)+(i<count%groups?1:0));}}
   const body=sizes.map((size,gi)=>{
-    const pairs=[];for(let a=0;a<size;a++)for(let b=a+1;b<size;b++)pairs.push(`<tr><td>${pairs.length+1}</td><td>${a+1}번 팀 미정</td><td>:</td><td>${b+1}번 팀 미정</td><td></td></tr>`);
-    return `<section class="oc-group"><div class="oc-group-title"><b>${gi+1}조 · 추첨 전</b></div><div class="oc-teamline">팀 배치 미확정 · 실제 조추첨 후 참가팀을 표시합니다.</div><table><thead><tr><th>No</th><th>팀1</th><th>결과</th><th>팀2</th><th>기록</th></tr></thead><tbody>${pairs.join('')}</tbody></table></section>`;
+    const pairs=[];for(let a=0;a<size;a++)for(let b=a+1;b<size;b++)pairs.push(`<tr><td>${pairs.length+1}</td><td class="oc-team-write"></td><td>:</td><td class="oc-team-write"></td><td></td></tr>`);
+    return `<section class="oc-group"><div class="oc-group-title"><b>${gi+1}조 · 추첨 전</b></div><div class="oc-teamline">추첨 전 · 팀 이름은 아래 빈칸에 직접 적어 주세요.</div><table><thead><tr><th>No</th><th>팀1</th><th>결과</th><th>팀2</th><th>기록</th></tr></thead><tbody>${pairs.join('')}</tbody></table></section>`;
   }).join('');
   return outputHeader(t,div,'예선 수기용 · 추첨 전 / 팀 배치 미확정')+(body||'<div class="oc-empty">추첨 전 · 조편성 설정이 없습니다.</div>');
 }
@@ -29762,7 +29762,7 @@ async function printOutputCenter(){
   try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
-  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><style>${outputPaperCss(outputPaperSpec())}</style><script>const planOutputCards=${planOutputCards.toString()};const prepareOutputPages=${prepareOutputPages.toString()};const fitOutputPyramids=${fitOutputPyramids.toString()};const paperSpec=${JSON.stringify(outputPaperSpec())};document.fonts.ready.then(()=>{prepareOutputPages(document,paperSpec);fitOutputPyramids(document,true);requestAnimationFrame(()=>window.print());})<\/script></body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><style>${outputPaperCss(outputPaperSpec())}</style><script>const planOutputCards=${planOutputCards.toString()};const prepareOutputPages=${prepareOutputPages.toString()};const fitOutputPyramids=${fitOutputPyramids.toString()};const paperSpec=${JSON.stringify(outputPaperSpec())};window.addEventListener('beforeprint',()=>fitOutputPyramids(document,true));document.fonts.ready.then(()=>{prepareOutputPages(document,paperSpec);fitOutputPyramids(document,true);requestAnimationFrame(()=>window.print());})<\/script></body></html>`);w.document.close();
 }
 
 
