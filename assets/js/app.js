@@ -29041,19 +29041,18 @@ function outputGroupMainOutline(tid,div,sizes){
   const n=fixed.length?Math.max(2,fixed.length*2):Math.max(2,spec.mainSize||2);
   const entrants=spec.playInTeams?spec.directCount+spec.winnersNeeded:preview.length;
   const byes=fixed.length?slots.filter(label=>label==='부전승').length:Math.max(0,n-entrants);
-  if(!slots.length){let number=1;const byePositions=new Set(Array.from({length:byes},(_,i)=>2*i+1));slots=Array.from({length:n},(_,i)=>byePositions.has(i)?'부전승 (예시)':`진출팀 자리 ${number++}`);}
-  const levels=Math.ceil(Math.log2(n)),width=880,height=220,baseY=153,stepY=120/levels,x=i=>(i+.5)*width/n;
+  if(!slots.length){const byePositions=new Set();const candidates=Array.from({length:n/2},(_,i)=>2*i+1);for(let i=0;i<byes;i++){const balanced=balancedMainByePositions(candidates.filter(p=>!byePositions.has(p)),byePositions,n);if(balanced.length)byePositions.add(balanced[0]);}slots=Array.from({length:n},(_,i)=>byePositions.has(i)?'부전승':'');}
+  const levels=Math.ceil(Math.log2(n)),width=Math.max(480,n*44),height=210,baseY=112,stepY=100/levels,x=i=>(i+.5)*width/n;
   let paths='',boxes='';
   slots.forEach((label,i)=>{
-    const bw=Math.min(100,width/n-6),font=n>=16?10:12,chars=Math.max(2,Math.floor((bw-6)/font));
-    const letters=Array.from(label),lines=Array.from({length:Math.min(4,Math.ceil(letters.length/chars))},(_,line)=>letters.slice(line*chars,(line+1)*chars).join(''));
-    boxes+=`<g><title>${outputEsc(label)}</title><rect x="${x(i)-bw/2}" y="${baseY+4}" width="${bw}" height="56" rx="3" fill="${label.includes('부전승')?'#fff3cf':'#f8fbff'}" stroke="#8b9caf"/><text x="${x(i)}" y="${baseY+18}" font-size="${font}" text-anchor="middle">${lines.map((line,j)=>`<tspan x="${x(i)}" dy="${j?font+1:0}">${outputEsc(line)}</tspan>`).join('')}</text></g>`;
+    const bye=label==='부전승',bw=Math.min(54,width/n-6),font=Math.min(26,bw-6);
+    boxes+=`<g data-slot="${i}" data-bye="${bye}"><rect x="${x(i)-bw/2}" y="${baseY+4}" width="${bw}" height="86" rx="3" fill="${bye?'#fff3cf':'#fff'}" stroke="#8b9caf"/>${bye?`<text x="${x(i)}" y="${baseY+27}" font-size="${font}" font-weight="700" text-anchor="middle"><tspan x="${x(i)}">부</tspan><tspan x="${x(i)}" dy="${font+1}">전</tspan><tspan x="${x(i)}" dy="${font+1}">승</tspan></text>`:''}</g>`;
   });
   for(let level=0;level<levels;level++){
     const group=2**(level+1),y0=baseY-level*stepY,y1=baseY-(level+1)*stepY;
-    for(let start=0;start<n;start+=group){const left=x(start+group/4-.5),right=x(start+3*group/4-.5),mid=(left+right)/2;paths+=`<path d="M ${left} ${y0} V ${y1} H ${right} V ${y0} M ${mid} ${y1} V ${Math.max(14,y1-stepY)}" fill="none" stroke="#8b9caf" stroke-width="1.5"/>`;}
+    for(let start=0;start<n;start+=group){const left=x(start+group/4-.5),right=x(start+3*group/4-.5),mid=(left+right)/2;paths+=`<path d="M ${left} ${y0} V ${y1} H ${right} V ${y0} M ${mid} ${y1} V ${Math.max(0,y1-stepY)}" fill="none" stroke="#718399" stroke-width="2"/>`;}
   }
-  return `<section class="oc-main-outline" style="border:1px solid #aaa;padding:2mm;margin-top:1mm"><b style="font-size:10pt">본선 ${n}강 구조 · ${fixed.length?n-byes:preview.length}팀 진출 · 부전승 ${byes}자리</b><div style="font-size:8pt;margin:1mm 0">${fixed.length?'저장된 본선 배치 기준':'예상 구조 · 팀 배치와 부전승 위치는 본선 추첨 후 확정됩니다.'}${spec.playInMatches?` · 진출전 ${spec.playInMatches}경기`:''}</div><div style="font-size:8pt;margin-bottom:1mm">진출 기준: ${preview.map(p=>outputEsc(p.nm)).join(' / ')}</div><svg xmlns="http://www.w3.org/2000/svg" class="oc-mini-pyramid" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:24mm" aria-label="아래 팀 자리에서 위 결승으로 올라가는 본선 피라미드 구조">${paths}<rect x="${width/2-35}" y="0" width="70" height="21" rx="3" fill="#fff3cf" stroke="#c9a64d"/><text x="${width/2}" y="15" text-anchor="middle" font-size="12">우승</text>${boxes}</svg></section>`;
+  return `<section class="oc-main-outline" style="border:1px solid #aaa;padding:1.5mm;margin-top:1mm;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:3mm;align-items:center"><div><b style="font-size:11pt">본선 ${n}강 · ${fixed.length?n-byes:preview.length}팀 진출 · 부전승 ${byes}자리</b><div style="font-size:10pt;line-height:1.4;margin:1mm 0">${fixed.length?'저장된 본선 부전승 위치':'예상 구조 · 부전승 위치는 예시이며 추첨 후 확정'}${spec.playInMatches?` · 진출전 ${spec.playInMatches}경기`:''}</div><div style="font-size:10pt;line-height:1.4">진출 기준: ${preview.map(p=>outputEsc(p.nm)).join(' / ')}</div></div><svg xmlns="http://www.w3.org/2000/svg" class="oc-mini-pyramid" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:30mm" aria-label="부전승 자리만 표시한 본선 피라미드">${paths}${boxes}</svg></section>`;
 
 }
 function outputHandwrittenGroupSheet(tid,div){
