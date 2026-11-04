@@ -1,3 +1,4 @@
+import{outputPaperDimensions,planOutputCards}from'./output-paper.js';
 import{prioritizeSameClubMatches,sameClubMatch}from'./round-robin-order.js';
 import{mergeCompetitionSettings}from'./competition-settings.js';
 import{selectLowestEliminatedTeam}from'./jangyu-silver-eligibility.js';
@@ -28335,13 +28336,81 @@ function outputElement(id){
   const desktop=document.getElementById('page-output');
   return desktop?.querySelector('#'+id)||document.getElementById(id);
 }
+function outputPaperSettings(){
+  let saved={};try{saved=JSON.parse(organizationLocalStorage.getItem('output_paper_settings')||'{}');}catch(e){}
+  return {paper:saved.paper==='A3'?'A3':'A4',direction:['portrait','landscape'].includes(saved.direction)?saved.direction:'auto',duplex:saved.duplex===true};
+}
+function outputPaperSpec(){
+  const settings=outputPaperSettings(),type=outputElement('outType')?.value||'prelim-current';
+  const direction=settings.direction==='auto'?(type==='order-sheets'?'portrait':type==='raffle-slips'?rafflePrintSettings().direction:'landscape'):settings.direction;
+  return {...outputPaperDimensions(settings.paper,direction),duplex:settings.duplex,label:outputElement('outType')?.selectedOptions?.[0]?.textContent||'대진표'};
+}
+function updateOutputPaperSettings(){
+  organizationLocalStorage.setItem('output_paper_settings',JSON.stringify({paper:outputElement('outPaper')?.value||'A4',direction:outputElement('outDirection')?.value||'auto',duplex:outputElement('outDuplex')?.checked===true}));renderOutputPreview();
+}
+function outputSelectedDivisions(){
+  const select=outputElement('outDS'),value=select?.value||'';
+  if(value==='__ALL__')return [...(select.options||[])].map(o=>o.value).filter(v=>v&&!v.startsWith('__'));
+  if(value==='__SELECTED__')return [...(outputElement('outDivisionChecks')?.querySelectorAll('input:checked')||[])].map(el=>el.value);
+  return value?[value]:[];
+}
+function outputDivisionSelectionChanged(){
+  const box=outputElement('outDivisionChecks');if(box)box.style.display=outputElement('outDS')?.value==='__SELECTED__'?'flex':'none';renderOutputPreview();
+}
+function prepareOutputPages(root,spec){
+  const sheet=root.querySelector('.oc-sheet')||root;if(!sheet||sheet.dataset.paged==='true')return;
+  const divisions=[...sheet.querySelectorAll('.oc-output-division')];if(!divisions.length)return;
+  const cards=[];let heading=null;
+  for(const division of divisions){
+    const head=division.querySelector('.oc-head');if(!heading&&head)heading=head.cloneNode(true);
+    const groups=[...division.querySelectorAll('.oc-group,.oc-round')];
+    const blocks=groups.length?groups:[division];
+    for(const block of blocks){
+      const rows=[...block.querySelectorAll('tbody tr')];
+      const chunks=rows.length>20?Array.from({length:Math.ceil(rows.length/20)},(_,i)=>[i*20,(i+1)*20]):[[0,rows.length]];
+      for(const [start,end] of chunks){
+        const clone=block.cloneNode(true);if(block===division)clone.querySelector('.oc-head')?.remove();
+        if(rows.length>20){const copied=[...clone.querySelectorAll('tbody tr')];copied.forEach((row,i)=>{if(i<start||i>=end)row.remove();});}
+        const card=document.createElement('section');card.className='oc-print-card';
+        const title=document.createElement('div');title.className='oc-card-division';title.textContent=division.dataset.divisionLabel+(rows.length>20?' · 계속':'');card.appendChild(title);card.appendChild(clone);
+        cards.push({node:card,rows:Math.min(20,rows.length),tree:!groups.length});
+      }
+    }
+  }
+  const plans=planOutputCards(cards);sheet.replaceChildren();sheet.dataset.paged='true';
+  for(const plan of plans){
+    const page=document.createElement('section');page.className='oc-print-page';
+    if(heading){const header=heading.cloneNode(true);const sub=header.querySelector('.oc-sub');if(sub)sub.textContent=[...new Set(plan.map(i=>cards[i].node.querySelector('.oc-card-division').textContent))].join(' · ')+' | '+spec.label;page.appendChild(header);}
+    const grid=document.createElement('div');grid.className='oc-page-grid';
+    const columns=plan.length===1?1:2;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.gridTemplateRows=`repeat(${Math.ceil(plan.length/columns)},minmax(0,1fr))`;
+    plan.forEach(i=>grid.appendChild(cards[i].node));if(plan.length===3)grid.lastElementChild.style.gridColumn='1 / -1';page.appendChild(grid);sheet.appendChild(page);
+  }
+}
+function outputPaperCss(spec){
+ return `@page{size:${spec.paper} ${spec.direction};margin:${spec.margin}mm}
+ .oc-sheet{padding:0!important;width:${spec.contentWidth}mm;max-width:none;margin:auto}
+ .oc-print-page{width:${spec.contentWidth}mm;height:${spec.contentHeight-1}mm;display:flex;flex-direction:column;gap:3mm;background:white;box-sizing:border-box;break-after:page;page-break-after:always;margin:0 auto 12mm;overflow:hidden}
+ .oc-print-page:last-child{break-after:auto;page-break-after:auto;margin-bottom:0}
+ .oc-print-page .oc-head{flex:0 0 auto;margin:0;padding-bottom:2mm}.oc-print-page .oc-title{font-size:18pt}.oc-print-page .oc-sub{font-size:11pt}.oc-print-page .oc-time{display:none}
+ .oc-page-grid{display:grid;gap:3mm;flex:1;min-height:0}.oc-print-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;border:1px solid #555}
+ .oc-card-division{font-size:12pt;font-weight:900;background:#e9eef8;padding:2mm 3mm;flex:none}
+ .oc-print-card>.oc-group,.oc-print-card>.oc-round{border:0;border-radius:0;margin:0;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+ .oc-print-card table{height:100%;flex:1;min-height:0;width:100%;font-size:12pt;table-layout:fixed}
+ .oc-print-card th:first-child{width:7%}.oc-print-card th:nth-child(3){width:13%}.oc-print-card th:last-child{width:21%}
+ .oc-print-card th,.oc-print-card td{height:auto;padding:1.5mm 1mm;overflow-wrap:anywhere;word-break:keep-all}
+ .oc-print-card .oc-group-title,.oc-print-card .oc-round-title{font-size:11pt;padding:2mm}.oc-print-card .oc-teamline{font-size:10pt;padding:1.5mm}
+ .oc-print-card .oc-tree{zoom:1}.oc-print-card>.oc-output-division{padding:2mm;min-height:0;flex:1;overflow:hidden}
+ @media print{html,body{margin:0!important;padding:0!important;background:white}.oc-sheet{margin:0}.oc-print-page{margin:0!important}thead{display:table-header-group}tr{break-inside:avoid}.oc-print-page .oc-head{break-inside:avoid}}
+ `;
+}
+Object.assign(window,{updateOutputPaperSettings,outputDivisionSelectionChanged});
 function outputCenterInnerHtml(){
   return `
     <div class="sec-title">🖨️ 출력센터 <span style="font-size:.72rem;font-weight:500;color:var(--text2)">— 일반 회원도 조회·인쇄 가능</span></div>
     <div class="card" style="border-top:3px solid #d4a017">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
         <label class="form-group"><span class="form-label">대회</span><select class="form-select" id="outTS" onchange="outputTournamentChanged()"></select></label>
-        <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="renderOutputPreview()"></select></label>
+        <label class="form-group"><span class="form-label">부서</span><select class="form-select" id="outDS" onchange="outputDivisionSelectionChanged()"></select></label>
         <label class="form-group"><span class="form-label">출력 자료</span><select class="form-select" id="outType" onchange="renderOutputPreview()">
           <option value="raffle-slips">경품 추첨 쪽지 · 전체 참가자</option>
           <option value="order-sheets">오더지 · 빈 양식</option>
@@ -28353,6 +28422,13 @@ function outputCenterInnerHtml(){
           <option value="main-tree-blank">가지형 본선 대진표 · 현장 수기용</option>
         </select></label>
       </div>
+      <div id="outDivisionChecks" style="display:none;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <label>용지<select id="outPaper" class="form-select" onchange="updateOutputPaperSettings()"><option value="A4">A4</option><option value="A3">A3</option></select></label>
+        <label>방향<select id="outDirection" class="form-select" onchange="updateOutputPaperSettings()"><option value="auto">자료에 맞게 자동</option><option value="landscape">가로</option><option value="portrait">세로</option></select></label>
+        <label id="outDuplexLabel"><input type="checkbox" id="outDuplex" onchange="updateOutputPaperSettings()"> 오더지 양면용 · 앞/뒤 같은 양식 2쪽</label>
+      </div>
+      <div style="font-size:.75rem;color:#475569;margin-top:8px">여러 부서는 ‘여러 부서 선택’에서 고릅니다. 양면은 프린터 인쇄창에서도 켜 주세요(세로: 긴 쪽, 가로: 짧은 쪽 넘기기). 용지 크기를 맞추고 배율 100%, 머리글·바닥글 끄기를 권장합니다.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
         <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ A4 가로 인쇄 · PDF</button>
         <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 고화질 이미지 저장</button>
@@ -28909,9 +28985,10 @@ async function outputTournamentChanged(){
   histMap.forEach((r,k)=>{if(!regKeys.has(k))rawRegs.push(r);});
   window.__OUTPUT_RAW_REGS[tid]=rawRegs;
   const divs=outputAvailableDivisions(tid,t,rawRegs,bundle);
-  ds.innerHTML=divs.map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
+  ds.innerHTML='<option value="__ALL__">전체 부서</option><option value="__SELECTED__">여러 부서 선택</option>'+divs.map(d=>`<option value="${outputEsc(d)}">${outputEsc(dl(d))}</option>`).join('');
+  const checks=outputElement('outDivisionChecks');if(checks)checks.innerHTML=divs.map(d=>`<label><input type="checkbox" value="${outputEsc(d)}" checked onchange="renderOutputPreview()"> ${outputEsc(dl(d))}</label>`).join('');
   if(!divs.length)ds.innerHTML='<option value="">저장된 부서 없음</option>';
-  if(old&&divs.includes(old))ds.value=old;
+  if(old&&(divs.includes(old)||['__ALL__','__SELECTED__'].includes(old)))ds.value=old;
   else if(divs.length)ds.value=divs[0];
   renderOutputPreview();
 }
@@ -29494,12 +29571,12 @@ function resetRafflePrintSettings(){if(!AD)return;try{organizationLocalStorage.r
 function rafflePrintControlsHtml(){
   if(!AD)return '';const c=rafflePrintSettings();
   const options=(lo,hi,value)=>Array.from({length:hi-lo+1},(_,i)=>`<option value="${lo+i}" ${value===lo+i?'selected':''}>${lo+i}</option>`).join('');
-  return `<div id="rafflePrintControls" style="padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px"><b>관리자 · 추첨 쪽지 크기 설정</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px"><label>용지 방향<select id="raffleDirection" class="form-select"><option value="portrait" ${c.direction==='portrait'?'selected':''}>A4 세로</option><option value="landscape" ${c.direction==='landscape'?'selected':''}>A4 가로</option></select></label><label>가로 칸 수<select id="raffleCols" class="form-select">${options(4,10,c.cols)}</select></label><label>세로 칸 수<select id="raffleRows" class="form-select">${options(8,24,c.rows)}</select></label><label>글자 크기 (pt)<select id="raffleFont" class="form-select">${options(10,18,c.font)}</select></label></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="saveRafflePrintSettings()">설정 적용</button><button class="btn btn-outline" onclick="resetRafflePrintSettings()">기본 크기</button></div><div style="font-size:.75rem;margin-top:8px">칸 수를 줄이면 쪽지가 커집니다. 이 기기의 설정으로 저장됩니다. 인쇄창도 같은 용지 방향으로 선택하세요.</div></div>`;
+  return `<div id="rafflePrintControls" style="padding:12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px"><b>관리자 · 추첨 쪽지 크기 설정</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px"><label>용지 방향<select id="raffleDirection" class="form-select"><option value="portrait" ${c.direction==='portrait'?'selected':''}>세로</option><option value="landscape" ${c.direction==='landscape'?'selected':''}>가로</option></select></label><label>가로 칸 수<select id="raffleCols" class="form-select">${options(4,10,c.cols)}</select></label><label>세로 칸 수<select id="raffleRows" class="form-select">${options(8,24,c.rows)}</select></label><label>글자 크기 (pt)<select id="raffleFont" class="form-select">${options(10,18,c.font)}</select></label></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="saveRafflePrintSettings()">설정 적용</button><button class="btn btn-outline" onclick="resetRafflePrintSettings()">기본 크기</button></div><div style="font-size:.75rem;margin-top:8px">칸 수를 줄이면 쪽지가 커집니다. 이 기기의 설정으로 저장됩니다. 인쇄창도 같은 용지 방향으로 선택하세요.</div></div>`;
 }
 Object.assign(window,{saveRafflePrintSettings,resetRafflePrintSettings});
 function outputRaffleSlipsHtml(tid){
   const rows=outputRaffleParticipants(tid);if(!rows.length)return '<div class="oc-empty">저장된 참가자 명단이 없습니다. 대회 명단을 불러온 뒤 다시 확인하세요.</div>';
-  const c=rafflePrintSettings(),count=c.cols*c.rows,wide=c.direction==='landscape',width=wide?287:200,height=wide?198:285;
+  const c=rafflePrintSettings(),spec=outputPaperSpec(),count=c.cols*c.rows,wide=spec.direction==='landscape',width=spec.contentWidth,height=spec.contentHeight-1;
   // Two lines must fit vertically; long club names wrap instead of being cut off.
   const font=Math.min(c.font,Math.floor((height/c.rows-2)*72/25.4/2.5));
   const pages=[];for(let start=0;start<rows.length;start+=count){const chunk=rows.slice(start,start+count);pages.push(`<section class="raffle-page">${chunk.map(r=>`<div class="raffle-slip"><div class="raffle-label"><span>${outputEsc(r.club)}</span><strong>${outputEsc(r.label)}</strong></div></div>`).join('')}</section>`);}
@@ -29510,9 +29587,8 @@ function outputRaffleSlipsHtml(tid){
     .raffle-slip{position:relative;border:.15mm solid #888;box-sizing:border-box;overflow:hidden;min-width:0}
     .raffle-label{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6mm;padding:.5mm 1mm;font-size:${font}pt;line-height:1.1;color:#111;text-align:center;overflow-wrap:anywhere}
     .raffle-label strong{font-weight:800}
-    @page{size:A4 ${c.direction};margin:5mm}
     @media print{.oc-sheet{padding:0!important}.raffle-guide{display:none}.raffle-page{margin:0!important}body{background:white}}
-  </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · 한 장당 ${count}명 · 글자 ${font}pt<br>A4 ${wide?'가로':'세로'} / 배율 100% / 여백 5mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 넣으세요. 후보를 포함한 저장 명단 기준이며 빈 쪽지는 출력하지 않습니다.</div>${pages.join('')}`;
+  </style><div class="raffle-guide">경품 추첨 쪽지 · 전체 부서 ${rows.length}명 · ${pages.length}장 · 한 장당 ${count}명 · 글자 ${font}pt<br>${spec.paper} ${wide?'가로':'세로'} / 배율 100% / 여백 ${spec.margin}mm / 머리글·바닥글 끄기<br>실선으로 자른 뒤 한 번 접어 넣으세요. 후보를 포함한 저장 명단 기준이며 빈 쪽지는 출력하지 않습니다.</div>${pages.join('')}`;
 }
 // PHASE264: compact handwritten team order forms, four/six/eight per portrait A4.
 function orderSheetSettings(){
@@ -29526,35 +29602,35 @@ function updateOrderSheetSettings(){
 window.updateOrderSheetSettings=updateOrderSheetSettings;
 function orderSheetControlsHtml(){
   const c=orderSheetSettings();
-  return `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:#f1f5f9;border-radius:10px"><label>A4 한 장 배치<select id="orderSheetCopies" class="form-select" onchange="updateOrderSheetSettings()">${[4,6,8].map(n=>`<option value="${n}" ${c.copies===n?'selected':''}>${n}장</option>`).join('')}</select></label><label>복식 구성<select id="orderSheetDoubles" class="form-select" onchange="updateOrderSheetSettings()">${[5,3].map(n=>`<option value="${n}" ${c.doubles===n?'selected':''}>${n}복식 (${n*2}명)</option>`).join('')}</select></label><div style="align-self:end;font-size:.76rem;color:#475569">A4 세로 · 배율 100% · 여백 5mm · 머리글/바닥글 끄기<br>점선을 따라 잘라 사용하세요.</div></div>`;
+  return `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:#f1f5f9;border-radius:10px"><label>한 면 배치<select id="orderSheetCopies" class="form-select" onchange="updateOrderSheetSettings()">${[4,6,8].map(n=>`<option value="${n}" ${c.copies===n?'selected':''}>${n}장</option>`).join('')}</select></label><label>복식 구성<select id="orderSheetDoubles" class="form-select" onchange="updateOrderSheetSettings()">${[5,3].map(n=>`<option value="${n}" ${c.doubles===n?'selected':''}>${n}복식 (${n*2}명)</option>`).join('')}</select></label><div style="align-self:end;font-size:.76rem;color:#475569">선택한 용지·방향 적용 · 배율 100% · 머리글/바닥글 끄기<br>점선을 따라 잘라 사용하세요.</div></div>`;
 }
 function outputHandwrittenOrderSheets(tid){
   const c=orderSheetSettings();
-  const rowCount=c.copies/2,font=c.copies===8?8.5:10;
-  const card=()=>`<article class="order-sheet-card"><header><strong>오더지 · ${c.doubles}복식</strong></header><div class="order-sheet-meta"><b>클럽 / 팀</b><span></span></div><div class="order-sheet-details">부서: ______________　조 / 경기: __________</div><table><colgroup><col style="width:12%"><col style="width:44%"><col style="width:44%"></colgroup><thead><tr><th>복식</th><th>선수 1</th><th>선수 2</th></tr></thead><tbody>${Array.from({length:c.doubles},(_,i)=>`<tr><th>${i+1}복</th><td></td><td></td></tr>`).join('')}</tbody></table></article>`;
+  const spec=outputPaperSpec(),rowCount=c.copies/2,font=(c.copies===8?8.5:10)*(spec.paper==='A3'?1.3:1);
+  const divisions=outputSelectedDivisions(),formCount=Math.max(c.copies,divisions.length),pageCount=Math.ceil(formCount/c.copies);
+  const card=(index)=>`<article class="order-sheet-card"><header><strong>오더지 · ${c.doubles}복식</strong></header><div class="order-sheet-meta"><b>클럽 / 팀</b><span></span></div><div class="order-sheet-details">부서: ${divisions.length?outputEsc(dl(divisions[index%divisions.length])):'______________'}　조 / 경기: __________</div><table><colgroup><col style="width:12%"><col style="width:44%"><col style="width:44%"></colgroup><thead><tr><th>복식</th><th>선수 1</th><th>선수 2</th></tr></thead><tbody>${Array.from({length:c.doubles},(_,i)=>`<tr><th>${i+1}복</th><td></td><td></td></tr>`).join('')}</tbody></table></article>`;
   return `<style>
-    .order-sheet-a4{width:200mm;height:285mm;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(${rowCount},minmax(0,1fr));gap:2mm;box-sizing:border-box;background:#fff;margin:0 auto;color:#111}
+    .order-sheet-a4{width:${spec.contentWidth}mm;height:${spec.contentHeight-1}mm;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(${rowCount},minmax(0,1fr));gap:2mm;box-sizing:border-box;background:#fff;margin:0 auto;color:#111}
     .order-sheet-card{min-width:0;min-height:0;padding:3mm;border:.2mm dashed #777;box-sizing:border-box;display:flex;flex-direction:column;break-inside:avoid;font-size:${font}pt;overflow:hidden}
     .order-sheet-card header{text-align:center;flex-shrink:0;margin-bottom:1.8mm}.order-sheet-card header strong{display:block;font-size:${font+2}pt;letter-spacing:.3px}.order-sheet-card header span{display:block;font-size:${font-1.5}pt;line-height:1.25;margin-top:1mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
     .order-sheet-meta{display:flex;gap:2mm;align-items:center;margin:1mm 0 2mm;flex-shrink:0}.order-sheet-meta span{flex:1;height:4mm;border-bottom:.2mm solid #222}.order-sheet-details{font-size:${font-1}pt;margin-bottom:2mm;white-space:nowrap;flex-shrink:0}
     .order-sheet-card table{width:100%;height:auto;flex:1;min-height:0;table-layout:fixed;border-collapse:collapse;font-size:${font}pt}.order-sheet-card th,.order-sheet-card td{border:.2mm solid #555;padding:.5mm;text-align:center;height:auto}.order-sheet-card thead{height:5mm}.order-sheet-card thead th{background:#eee}.order-sheet-card tbody th{background:#f7f7f7;font-weight:600}.order-sheet-card footer{font-size:${font-1}pt;flex-shrink:0;padding-top:2mm;white-space:nowrap}
     .order-sheet-a4 .order-sheet-card,.order-sheet-a4 .order-sheet-card *{color:#111!important;-webkit-text-fill-color:#111!important;text-shadow:none!important}.order-sheet-a4 .order-sheet-card{background:#fff!important}.order-sheet-a4 .order-sheet-card table,.order-sheet-a4 .order-sheet-card tr,.order-sheet-a4 .order-sheet-card th,.order-sheet-a4 .order-sheet-card td{background:#fff!important}.order-sheet-a4 .order-sheet-card th{font-weight:700!important}
-    @page{size:A4 portrait;margin:5mm}@media print{.oc-sheet{width:auto!important;padding:0!important}.order-sheet-a4{margin:0!important;break-inside:avoid}body{margin:0!important}}
-  </style><section class="order-sheet-a4">${Array.from({length:c.copies},card).join('')}</section>`;
+    @media print{.oc-sheet{width:auto!important;padding:0!important}.order-sheet-a4{margin:0!important;break-inside:avoid}body{margin:0!important}}
+  </style>${Array.from({length:pageCount},(_,page)=>Array.from({length:spec.duplex?2:1},(_,side)=>`<section class="order-sheet-a4" data-side="${side===0?'front':'back'}" style="break-after:${page<pageCount-1||(spec.duplex&&side===0)?'page':'auto'}">${Array.from({length:c.copies},(_,i)=>card(page*c.copies+i)).join('')}</section>`).join('')).join('')}`;
 }
 function outputCenterBody(){
-  const tid=outputElement('outTS')?.value||'',div=outputElement('outDS')?.value||'',type=outputElement('outType')?.value||'prelim-current';
+  const tid=outputElement('outTS')?.value||'',type=outputElement('outType')?.value||'prelim-current';
   if(type==='order-sheets')return outputHandwrittenOrderSheets(tid);
   if(type==='raffle-slips')return tid?outputRaffleSlipsHtml(tid):'<div class="oc-empty">대회를 선택하세요.</div>';
-  if(!tid||!div)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
-  if(type==='prelim-current')return outputPrelimHtml(tid,div,false);
-  if(type==='prelim-blank')return outputPrelimHtml(tid,div,true);
-  if(type==='main-current')return outputMainTableHtml(tid,div,false);
-  if(type==='main-blank')return outputMainTableHtml(tid,div,true);
-  if(type==='main-tree-blank')return outputMainTreeHtml(tid,div,true);
-  return outputMainTreeHtml(tid,div,false);
+  const divisions=outputSelectedDivisions();if(!tid||!divisions.length)return '<div class="oc-empty">대회와 부서를 선택하세요.</div>';
+  return divisions.map(div=>{
+    let html=type==='prelim-current'?outputPrelimHtml(tid,div,false):type==='prelim-blank'?outputPrelimHtml(tid,div,true):type==='main-current'?outputMainTableHtml(tid,div,false):type==='main-blank'?outputMainTableHtml(tid,div,true):outputMainTreeHtml(tid,div,type==='main-tree-blank');
+    return `<section class="oc-output-division" data-division-label="${outputEsc(dl(div))}">${html}</section>`;
+  }).join('');
 }
 function outputCenterCss(){
+  const spec=outputPaperSpec();
   return `*{box-sizing:border-box}body{font-family:Arial,"Noto Sans KR",sans-serif;color:#111;margin:0;background:#eef2f7}
   .oc-sheet{width:100%;background:#fff;padding:8mm}.oc-head{position:relative;text-align:center;border-bottom:2px solid #111;padding-bottom:5px;margin-bottom:8px}
   .oc-title{font-size:18px;font-weight:900}.oc-sub{font-size:12px;font-weight:800;margin-top:3px}.oc-time{position:absolute;right:0;bottom:5px;font-size:8px;color:#666}
@@ -29562,7 +29638,7 @@ function outputCenterCss(){
   .oc-group-title,.oc-round-title{display:flex;justify-content:space-between;background:#e9eef8;padding:5px 7px;font-size:11px;font-weight:900}.oc-teamline{font-size:9px;padding:4px 6px;border-bottom:1px solid #bbb}
   table{width:100%;border-collapse:collapse;font-size:9px}th,td{border:1px solid #aaa;padding:4px 5px;text-align:center;height:24px}th{background:#f4f5f7;font-weight:900}.oc-score{font-weight:900;white-space:nowrap}.oc-write{min-width:50px}
   .oc-empty{text-align:center;padding:35px;color:#666}.oc-tree{zoom:.72;transform-origin:top left}.oc-tree .btn,.oc-tree button{display:none!important}.oc-tree-blank .score,.oc-tree-blank .match-score,.oc-tree-blank .winner,.oc-tree-blank [class*="status"],.oc-tree-blank [class*="result"]{visibility:hidden!important}
-  @page{size:A4 landscape;margin:7mm}@media print{.mobile-bracket-zoom-tools{display:none!important}body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}`;
+  @page{size:A4 landscape;margin:7mm}@media print{.mobile-bracket-zoom-tools{display:none!important}body{background:#fff}.oc-sheet{padding:0}.oc-time{color:#555}}${outputPaperCss(spec)}`;
 }
 // PHASE220: fit the fixed-width pyramid inside its output frame.
 function fitOutputPyramids(root,force=false){
@@ -29574,7 +29650,13 @@ function fitOutputPyramids(root,force=false){
     const available=parent.clientWidth-parseFloat(style.paddingLeft||0)-parseFloat(style.paddingRight||0);
     const natural=parseFloat(content.style.width)||content.scrollWidth;
     if(available<=0||natural<=0)return;
-    content.style.zoom=String(Math.min(1,(available-4)/natural));
+    const card=content.closest('.oc-print-card');
+    if(card){
+      content.style.zoom='1';
+      const height=content.scrollHeight||content.firstElementChild?.scrollHeight||1;
+      const room=card.clientHeight-(content.getBoundingClientRect().top-card.getBoundingClientRect().top)-6;
+      content.style.zoom=String(Math.max(.05,Math.min((Math.min(available,card.clientWidth)-8)/natural,Math.max(1,room)/height)));
+    }else content.style.zoom=String(Math.min(1,(available-4)/natural));
     content.style.marginLeft='auto';content.style.marginRight='auto';
   });
 }
@@ -29593,10 +29675,13 @@ function initMobileOutputPyramidZoom(box){
 function renderOutputPreview(){
   normalizeDesktopOutputLayout();
   const box=outputElement('outputPreview');if(!box)return;
-  const type=outputElement('outType')?.value,raffle=type==='raffle-slips',order=type==='order-sheets';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle||order;
-  const printButton=box.parentElement?.querySelector('button[onclick="printOutputCenter()"]');if(printButton)printButton.textContent=order?'🖨️ A4 세로 인쇄 · PDF':'🖨️ A4 가로 인쇄 · PDF';
+  const type=outputElement('outType')?.value,raffle=type==='raffle-slips',order=type==='order-sheets';const divisionSelect=outputElement('outDS');if(divisionSelect)divisionSelect.disabled=raffle;
+  const settings=outputPaperSettings(),spec=outputPaperSpec();for(const [id,value] of [['outPaper',settings.paper],['outDirection',settings.direction]]){const el=outputElement(id);if(el)el.value=value;}if(outputElement('outDuplex'))outputElement('outDuplex').checked=settings.duplex;
+  if(outputElement('outDuplexLabel'))outputElement('outDuplexLabel').style.display=order?'':'none';if(outputElement('outDivisionChecks'))outputElement('outDivisionChecks').style.display=!raffle&&outputElement('outDS')?.value==='__SELECTED__'?'flex':'none';
+  const printButton=box.parentElement?.querySelector('button[onclick="printOutputCenter()"]');if(printButton)printButton.textContent=`🖨️ ${spec.paper} ${spec.direction==='portrait'?'세로':'가로'} 인쇄 · PDF`;
   try{box.innerHTML=`${order?orderSheetControlsHtml():raffle?rafflePrintControlsHtml():''}<style>${outputCenterCss()}</style><div class="oc-sheet">${outputCenterBody()}</div>`;}
   catch(e){console.error('[OutputCenter]',e);box.innerHTML='<div class="empty-state"><p>출력 미리보기를 만들지 못했습니다.</p></div>';}
+  prepareOutputPages(box,spec);
   requestAnimationFrame(()=>{fitOutputPyramids(box);initMobileOutputPyramidZoom(box);});
 }
 async function ensureHtml2CanvasForExport(){
@@ -29632,7 +29717,7 @@ async function saveHighResElement(el,filename,bg='#ffffff'){
   }catch(e){console.error(e);toast('이미지 저장 실패: '+e.message,'error');}
 }
 async function saveOutputCenterHighResImage(){
-  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputSelectedDivisions().length)){toast('대회와 부서를 선택하세요','info');return;}
   try{await refreshOutputCenterData();}catch(e){toast('최신 경기 조회 실패: '+e.message,'error');return;}
   renderOutputPreview();
   const el=outputElement('outputPreview')?.querySelector('.oc-sheet');if(!el){toast('출력 미리보기를 먼저 확인해 주세요','info');return;}
@@ -29646,13 +29731,13 @@ async function saveMainPyramidHighResImage(tid,div){
   await saveHighResElement(wrap,`본선가지형_${t?.name||'대회'}_${dl(div)}_${new Date().toISOString().slice(0,10)}.png`);
 }
 async function printOutputCenter(){
-  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputElement('outDS')?.value)){toast('대회와 부서를 선택하세요','info');return;}
+  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputSelectedDivisions().length)){toast('대회와 부서를 선택하세요','info');return;}
   const w=window.open('','_blank','width=1200,height=850');
   if(!w){toast('팝업 차단을 해제해 주세요','info');return;}
   try{await refreshOutputCenterData();}catch(e){w.close();toast('최신 경기 조회 실패: '+e.message,'error');return;}
   let body='';
   try{body=outputCenterBody();}catch(e){console.error(e);toast('출력 자료 생성 중 오류가 발생했습니다','error');return;}
-  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><script>const fitOutputPyramids=${fitOutputPyramids.toString()};setTimeout(()=>{fitOutputPyramids(document,true);window.print();},250)<\/script></body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${outputEsc(MATCH_ORGANIZATION.name)} 출력센터</title><style>${outputCenterCss()}</style></head><body><div class="oc-sheet">${body}</div><style>${outputPaperCss(outputPaperSpec())}</style><script>const planOutputCards=${planOutputCards.toString()};const prepareOutputPages=${prepareOutputPages.toString()};const fitOutputPyramids=${fitOutputPyramids.toString()};const paperSpec=${JSON.stringify(outputPaperSpec())};document.fonts.ready.then(()=>{prepareOutputPages(document,paperSpec);fitOutputPyramids(document,true);requestAnimationFrame(()=>window.print());})<\/script></body></html>`);w.document.close();
 }
 
 
