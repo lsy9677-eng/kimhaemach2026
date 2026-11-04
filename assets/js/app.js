@@ -28455,8 +28455,11 @@ function outputCenterInnerHtml(){
       </div>
       <div style="font-size:.75rem;color:#475569;margin-top:8px">여러 부서는 ‘여러 부서 선택’에서 고릅니다. 양면은 프린터 인쇄창에서도 켜 주세요(세로: 긴 쪽, 가로: 짧은 쪽 넘기기). 실제 프린터도 같은 용지 크기와 배율 100%(실제 크기)로 선택하세요. 프린터 속성의 확대·용지 맞춤은 끄고, 머리글·바닥글도 꺼 주세요.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
-        <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ A4 가로 인쇄 · PDF</button>
-        <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 고화질 이미지 저장</button>
+        <button class="btn btn-primary" onclick="printOutputCenter()">🖨️ 인쇄</button>
+        <button class="btn btn-outline" onclick="saveOutputCenterHighResImage()">🖼️ 이미지 저장 (.png)</button>
+        <button class="btn btn-outline" onclick="downloadOutputCenter('pdf')">📕 PDF 다운로드</button>
+        <button class="btn btn-outline" onclick="downloadOutputCenter('doc')">📄 문서 다운로드 (.doc)</button>
+        <button class="btn btn-outline" onclick="downloadOutputCenter('xlsx')">📊 엑셀 다운로드 (.xlsx)</button>
         <button class="btn btn-outline" onclick="refreshOutputCenter()">↻ 현재상황 새로고침</button>
         <span style="font-size:.73rem;color:var(--text3)">출력센터는 읽기 전용이며 경기 데이터는 변경하지 않습니다.</span>
       </div>
@@ -29749,6 +29752,59 @@ async function saveOutputCenterHighResImage(){
   const t=G.tournaments.find(x=>x.id===tid);
   await saveHighResElement(el,`출력센터_${t?.name||'대회'}_${dl(div)}_${type}_${new Date().toISOString().slice(0,10)}.png`);
 }
+
+function outputDownloadName(extension){
+  const tid=outputElement('outTS')?.value,t=G.tournaments.find(t=>t.id===tid);
+  const type=outputElement('outType')?.selectedOptions?.[0]?.textContent||'출력자료';
+  return `${t?.name||'대회'}_${type}.${extension}`.replace(/[\\/:*?"<>|]/g,'_');
+}
+function downloadOutputBlob(blob,filename){
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function downloadOutputCenter(format){
+  if(!['pdf','doc','xlsx'].includes(format))return;
+  if(!outputElement('outTS')?.value||(!['raffle-slips','order-sheets'].includes(outputElement('outType')?.value)&&!outputSelectedDivisions().length)){toast('대회와 부서를 선택하세요','info');return;}
+  let frame;
+  try{
+    toast('다운로드 파일을 만드는 중입니다','info');
+    await refreshOutputCenterData();
+    const body=outputCenterBody(),spec=outputPaperSpec(),filename=outputDownloadName(format);
+    if(format==='doc'){
+      // Word-compatible HTML document, retaining editable tables and Korean text.
+      const html=`<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>@page{size:${spec.width}mm ${spec.height}mm;margin:10mm}body{font-family:Arial,sans-serif;color:#111}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #555;padding:6px;word-wrap:break-word}th{background:#eef2f6}.order-sheet-card{page-break-inside:avoid;margin-bottom:16px}.order-sheet-card td{height:65px}.oc-head{text-align:center}.raffle-page{display:block}.raffle-slip{display:inline-block;width:120px;border:1px solid #555;padding:12px}.oc-group,.oc-round{margin-bottom:16px}</style></head><body>${body.replace(/<style[\s\S]*?<\/style>/gi,'')}</body></html>`;
+      downloadOutputBlob(new Blob(['\ufeff',html],{type:'application/msword;charset=utf-8'}),filename);
+    }else if(format==='xlsx'){
+      await ensureXLSX();
+      const root=document.createElement('div');root.innerHTML=body;root.querySelectorAll('style,script').forEach(e=>e.remove());
+      const wb=XLSX.utils.book_new(),tables=[...root.querySelectorAll('table')];
+      const text=(root.innerText||root.textContent||'').split(/\n/).map(t=>t.trim()).filter(Boolean);
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(text.map(t=>[t])),'자료 안내');
+      tables.forEach((table,i)=>{
+        const ws=XLSX.utils.table_to_sheet(table,{raw:true});
+        ws['!cols']=Array.from({length:table.rows[0]?.cells.length||5},()=>({wch:24}));
+        XLSX.utils.book_append_sheet(wb,ws,`표 ${i+1}`);
+      });
+      if(!tables.length){const slips=[...root.querySelectorAll('.raffle-slip')].map(e=>[...e.querySelectorAll('span,strong')].map(n=>n.textContent));if(slips.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['클럽','참가자'],...slips]),'추첨 명단');}
+      XLSX.writeFile(wb,filename);
+    }else{
+      await ensureHtml2CanvasForExport();
+      if(!window.jspdf)await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('PDF 도구를 불러오지 못했습니다'));document.head.appendChild(sc);});
+      frame=document.createElement('iframe');frame.style.cssText='position:fixed;left:-20000px;top:0;width:1600px;height:1200px;border:0';document.body.appendChild(frame);
+      const doc=frame.contentDocument;doc.open();doc.write(`<!doctype html><html><head><meta charset="utf-8"><style>${outputCenterCss()}${outputPaperCss(spec)}html,body{margin:0;background:white}.oc-sheet{padding:0!important}.oc-print-page,.order-sheet-a4,.raffle-page{width:${spec.contentWidth}mm!important;height:${spec.contentHeight-2}mm!important;margin:0!important;box-sizing:border-box}.raffle-guide{display:none}</style></head><body><div class="oc-sheet">${body}</div></body></html>`);doc.close();
+      await doc.fonts.ready;prepareOutputPages(doc,spec);fitOutputPyramids(doc,true);
+      const pages=[...doc.querySelectorAll('.oc-print-page,.order-sheet-a4,.raffle-page')];if(!pages.length)throw new Error('저장할 출력 페이지가 없습니다');
+      const pdf=new window.jspdf.jsPDF({orientation:spec.direction,unit:'mm',format:spec.paper.toLowerCase()});
+      for(let i=0;i<pages.length;i++){
+        const canvas=await window.html2canvas(pages[i],{scale:2,backgroundColor:'#fff',useCORS:true,logging:false,scrollX:0,scrollY:0});
+        if(i)pdf.addPage();pdf.addImage(canvas.toDataURL('image/png'),'PNG',spec.margin,spec.margin,spec.contentWidth,spec.contentHeight-2);
+      }
+      pdf.save(filename);
+    }
+    toast('파일 다운로드 완료','success');
+  }catch(e){console.error(e);toast('다운로드 실패: '+e.message,'error');}finally{frame?.remove();}
+}
+Object.assign(window,{downloadOutputCenter});
 async function saveMainPyramidHighResImage(tid,div){
   const key=tid+'_'+div,wrap=document.querySelector(`[data-main-pyramid="${CSS.escape(key)}"] .actual-main-pyramid-body`);
   const t=G.tournaments.find(x=>x.id===tid);
