@@ -28368,19 +28368,25 @@ function prepareOutputPages(root,spec){
   const sheet=root.querySelector('.oc-sheet')||root;if(!sheet||sheet.dataset.paged==='true')return;
   const divisions=[...sheet.querySelectorAll('.oc-output-division')];if(!divisions.length)return;
   // Group sheets follow division sections; equal writing rows never stretch to fill paper.
-  if(divisions.some(d=>d.querySelector('.oc-handwritten-group'))){
+  if(divisions.length){
     const doc=sheet.ownerDocument,heading=divisions[0].querySelector('.oc-head')?.cloneNode(true);
     sheet.replaceChildren();sheet.dataset.paged='true';let page;
     const newPage=()=>{page=doc.createElement('section');page.className='oc-print-page oc-group-sheet-page';if(heading){const h=heading.cloneNode(true);const sub=h.querySelector('.oc-sub');if(sub)sub.textContent=spec.label;page.appendChild(h);}sheet.appendChild(page);};
     const section=(division,continued=false)=>{const section=doc.createElement('section');section.className='oc-group-division';const title=doc.createElement('h2');title.className='oc-group-division-title';title.textContent=division.dataset.divisionLabel+(continued?' · 계속':'');section.appendChild(title);page.appendChild(section);return section;};
     newPage();
     for(const division of divisions){
-      const groups=[...division.querySelectorAll('.oc-handwritten-group')];
+      const groups=[...division.querySelectorAll('.oc-group,.oc-round,.oc-main-outline')];
       let current=section(division);
-      const blocks=groups.length?groups:[division];
-      for(let i=0;i<blocks.length;i+=2){
-        const row=doc.createElement('div');row.className='oc-group-section-row';
-        blocks.slice(i,i+2).forEach(block=>{const copy=block.cloneNode(true);copy.querySelector('.oc-head')?.remove();row.appendChild(copy);});current.appendChild(row);
+      const maxRows=Math.max(4,Math.floor((spec.contentHeight-62)/11));
+      const blocks=(groups.length?groups:[division]).flatMap(block=>{
+        const rows=[...block.querySelectorAll('tbody tr')];if(rows.length<=maxRows)return [block];
+        return Array.from({length:Math.ceil(rows.length/maxRows)},(_,part)=>{const copy=block.cloneNode(true);[...copy.querySelectorAll('tbody tr')].forEach((row,i)=>{if(i<part*maxRows||i>=(part+1)*maxRows)row.remove();});if(part){const title=copy.querySelector('.oc-group-title,.oc-round-title');if(title)title.append(' · 계속');}return copy;});
+      });
+      for(let i=0;i<blocks.length;){
+        const full=blocks[i].matches('.oc-main-outline,.oc-output-division');
+        const take=full||blocks[i+1]?.matches('.oc-main-outline,.oc-output-division')?1:2;
+        const row=doc.createElement('div');row.className='oc-group-section-row';if(full)row.style.gridTemplateColumns='1fr';
+        blocks.slice(i,i+take).forEach(block=>{const copy=block.cloneNode(true);copy.querySelector('.oc-head')?.remove();row.appendChild(copy);});current.appendChild(row);
         if(row.getBoundingClientRect().bottom>page.getBoundingClientRect().bottom-5){
           row.remove();if(current.children.length===1)current.remove();
           // Move a complete pair together so departments never share a row.
@@ -28388,58 +28394,10 @@ function prepareOutputPages(root,spec){
           else if(!current.isConnected)current=section(division,i>0);
           current.appendChild(row);
         }
+        i+=take;
       }
     }
     return;
-  }
-  const cards=[];let heading=null;
-  for(const division of divisions){
-    const head=division.querySelector('.oc-head');if(!heading&&head)heading=head.cloneNode(true);
-    const groups=[...division.querySelectorAll('.oc-group,.oc-round')];
-    const blocks=groups.length?groups:[division];
-    for(const block of blocks){
-      const rows=[...block.querySelectorAll('tbody tr')];
-      const chunks=rows.length>20?Array.from({length:Math.ceil(rows.length/20)},(_,i)=>[i*20,(i+1)*20]):[[0,rows.length]];
-      for(const [start,end] of chunks){
-        const clone=block.cloneNode(true);if(block===division)clone.querySelector('.oc-head')?.remove();
-        if(rows.length>20){const copied=[...clone.querySelectorAll('tbody tr')];copied.forEach((row,i)=>{if(i<start||i>=end)row.remove();});}
-        for(const table of clone.querySelectorAll('table')){
-          table.querySelectorAll('colgroup').forEach(group=>group.remove());
-          const headers=[...(table.querySelector('thead tr')?.children||[])];
-          if(headers.length){const weights=headers.map(cell=>{const text=cell.textContent.trim();return /^no$|번호|순번/i.test(text)?.65:/팀|선수/.test(text)?3:/결과|점수/.test(text)?1.3:/기록|메모|코트/.test(text)?2:!text||/^vs$/i.test(text)?.7:1.5;});
-            const total=weights.reduce((a,b)=>a+b,0),cols=document.createElement('colgroup');weights.forEach(weight=>{const col=document.createElement('col');col.style.width=(weight/total*100)+'%';cols.appendChild(col);});table.prepend(cols);}
-        }
-        const card=document.createElement('section');card.className='oc-print-card';
-        const title=document.createElement('div');title.className='oc-card-division';title.textContent=division.dataset.divisionLabel+(rows.length>20?' · 계속':'');card.appendChild(title);card.appendChild(clone);
-        cards.push({node:card,rows:Math.min(20,rows.length),tree:!groups.length});
-      }
-    }
-  }
-  let plans=planOutputCards(cards);
-  function drawPages(){
-    sheet.replaceChildren();sheet.dataset.paged='true';
-    for(let pageIndex=0;pageIndex<plans.length;pageIndex++){
-      const plan=plans[pageIndex],page=document.createElement('section');page.className='oc-print-page';
-      const labels=[...new Set(plan.map(i=>cards[i].node.querySelector('.oc-card-division').textContent))].join(' · ');
-      if(heading&&pageIndex===0){const header=heading.cloneNode(true);const sub=header.querySelector('.oc-sub');if(sub)sub.textContent=labels+' | '+spec.label;page.appendChild(header);}
-      else {const continuation=document.createElement('div');continuation.className='oc-continuation';continuation.textContent=labels+' · 계속';page.appendChild(continuation);}
-      const grid=document.createElement('div');grid.className='oc-page-grid';
-      const columns=plan.length===1?1:2;grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.gridTemplateRows=`repeat(${Math.ceil(plan.length/columns)},minmax(0,1fr))`;
-      plan.forEach(i=>grid.appendChild(cards[i].node));if(plan.length===3)grid.lastElementChild.style.gridColumn='1 / -1';page.appendChild(grid);sheet.appendChild(page);
-    }
-  }
-  for(let pass=0;pass<4;pass++){
-    drawPages();let changed=false;const next=[];
-    for(const plan of plans){
-      const overflow=plan.some(i=>{const card=cards[i].node;return [...card.querySelectorAll('table')].some(table=>table.getBoundingClientRect().bottom>card.getBoundingClientRect().bottom+1)||card.scrollHeight>card.clientHeight+2;});
-      if(overflow&&plan.length>1){const middle=Math.ceil(plan.length/2);next.push(plan.slice(0,middle),plan.slice(middle));changed=true;}else next.push(plan);
-    }
-    if(!changed)break;plans=next;
-  }
-  // A single long block must remain readable and visible rather than be cropped.
-  for(const card of sheet.querySelectorAll('.oc-print-card')){
-    const table=card.querySelector('table');if(!table)continue;
-    for(const size of [11,10,9]){if(table.getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)break;table.style.setProperty('font-size',size+'pt','important');}
   }
 }
 function outputPaperCss(spec){
@@ -28452,8 +28410,9 @@ function outputPaperCss(spec){
  .oc-group-division{flex:none;min-width:0;margin:0 0 2mm}
  .oc-group-division-title{font-size:13pt;font-weight:900;margin:0 0 2mm;padding:2mm 3mm;background:#e9eef8;border:1px solid #777}
  .oc-group-section-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3mm;margin-bottom:3mm;align-items:start;break-inside:avoid}
- .oc-group-section-row .oc-handwritten-group{margin:0;border-radius:0;overflow:visible}
- .oc-group-section-row .oc-group-title{font-size:10pt;padding:2mm;min-height:12mm;align-items:center;gap:1mm;flex-wrap:wrap}
+ .oc-group-section-row>*{min-width:0;max-width:100%}
+ .oc-group-section-row .oc-group,.oc-group-section-row .oc-round{margin:0;border-radius:0;overflow:visible}
+ .oc-group-section-row .oc-group-title,.oc-group-section-row .oc-round-title{font-size:10pt;padding:2mm;min-height:12mm;align-items:center;gap:1mm;flex-wrap:wrap}
  .oc-group-section-row table{table-layout:fixed;font-size:10pt}
  .oc-group-section-row th{height:7mm;padding:1mm;font-size:10pt}
  .oc-group-section-row td{height:11mm;padding:1mm;font-size:10pt;overflow-wrap:anywhere}
@@ -29157,6 +29116,29 @@ function outputScoreText(key,m,blank=false){
 function outputHistoricalRegs(tid,div){
   return (((window.__OUTPUT_RAW_REGS||{})[tid]||[]).filter(x=>outputNormalizeDiv(x?.division||x?.div||'')===outputNormalizeDiv(div)));
 }
+function outputGroupMainOutline(tid,div,sizes){
+  const t=G.tournaments.find(x=>x.id===tid),key=tid+'_'+div,cfg=gDS(t,div),draw=G.draws?.[key]||{};
+  if(cfg.format==='roundrobin')return '<section class="oc-main-outline"><b>전체 풀리그 · 본선 없음</b><p>리그 경기 결과로 최종 순위를 결정합니다.</p></section>';
+  if(!sizes.length)return '';
+  const preview=getPreviewAdvSlots({groups:sizes.map(n=>({teams:Array(n).fill(null)})),advance:draw.advance||t?.divSettings?.[div]?.prelimDrawSettings?.advance||cfg.advance},cfg);
+  const spec=computeMainBracketSpec(preview.length,draw.mainBracketMode||'auto');
+  const matches=(G.matches?.[key]||[]).filter(isMainPyramidMatch).sort((a,b)=>Number(a.round||0)-Number(b.round||0)||Number(a.slot||0)-Number(b.slot||0));
+  const published=bracketPhasePublished(tid,'main');
+  const first=published&&matches.length?matches.filter(m=>Number(m.round||0)===Number(matches[0].round||0)):[];
+  const planned=published&&Array.isArray(draw.mainPlan?.matchSlots)?draw.mainPlan.matchSlots:[];
+  const fixed=first.length?first:planned;
+  let slots=[];
+  if(fixed.length){for(const m of fixed){for(const side of [1,2]){const team=m['t'+side],source=m['source'+side+'Label'];const name=team!=null&&typeof team!=='object'?outputTeamName(key,team):team?.nm||source||'';slots.push(/^BYE$|^부전승$/i.test(name)?'부전승':name||(m.bye?'부전승':'진출팀 미정'));}}}
+  const n=fixed.length?Math.max(2,fixed.length*2):Math.max(2,spec.mainSize||2);
+  const entrants=spec.playInTeams?spec.directCount+spec.winnersNeeded:preview.length;
+  const byes=fixed.length?slots.filter(label=>label==='부전승').length:Math.max(0,n-entrants);
+  if(!slots.length){let number=1;const byePositions=new Set(Array.from({length:byes},(_,i)=>2*i+1));slots=Array.from({length:n},(_,i)=>byePositions.has(i)?'부전승 (예시)':`진출팀 자리 ${number++}`);}
+  const levels=Math.ceil(Math.log2(n)),width=880,rowHeight=32,height=n*rowHeight+18,step=width/(levels+1),x=8;
+  let paths='',boxes='';
+  slots.forEach((label,i)=>{const y=i*rowHeight+8;boxes+=`<rect x="${x}" y="${y}" width="${step-12}" height="28" fill="${label.includes('부전승')?'#fff3cf':'#fff'}" stroke="#777"/><text x="${x+5}" y="${y+19}" font-size="16">${outputEsc(label)}</text>`;});
+  for(let level=0;level<levels;level++){const count=n/(2**(level+1));for(let i=0;i<count;i++){const top=(i*2**(level+1)+2**level/2)*rowHeight+6,bottom=top+2**level*rowHeight,mid=(top+bottom)/2,left=(level+1)*step-4,right=(level+2)*step-14;paths+=`<path d="M ${left} ${top} H ${left+8} V ${bottom} H ${left} M ${left+8} ${mid} H ${right}" fill="none" stroke="#777"/>`;}}
+  return `<section class="oc-main-outline" style="border:1px solid #777;padding:3mm;margin-top:2mm"><b>본선 ${n}강 구조 · ${fixed.length?n-byes:preview.length}팀 진출 · 부전승 ${byes}자리</b><div style="font-size:9pt;margin:2mm 0">${fixed.length?'저장된 본선 배치 기준':'예상 구조 · 팀 배치와 부전승 위치는 본선 추첨 후 확정됩니다.'}${spec.playInMatches?` · 진출전 ${spec.playInMatches}경기`:''}</div><div style="font-size:9pt;margin-bottom:2mm">진출 기준: ${preview.map(p=>outputEsc(p.nm)).join(' / ')}</div><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;max-height:135mm">${paths}${boxes}</svg></section>`;
+}
 function outputHandwrittenGroupSheet(tid,div){
   div=outputResolveDivision(tid,div);
   const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
@@ -29177,7 +29159,7 @@ function outputHandwrittenGroupSheet(tid,div){
     const courtLabel=courts.length?'코트: '+courts.join(' / '):pool.length?'부서 운영 코트: '+pool.join(' / '):'코트: __________________';
     return `<section class="oc-group oc-handwritten-group"><div class="oc-group-title"><b>${cfg.format==='roundrobin'?'전체 풀리그':`${gi+1}조`} · ${size}팀 · ${completed?'추첨 완료':'추첨 전'}</b><span>${outputEsc(courtLabel)}</span></div><table><thead><tr><th style="width:12%">자리</th><th style="width:58%">클럽 / 팀명</th><th style="width:30%">메모</th></tr></thead><tbody>${Array.from({length:size},(_,i)=>`<tr><td>${i+1}</td><td class="oc-team-write">${completed&&ids[i]!=null?outputEsc(outputTeamName(key,ids[i])):''}</td><td></td></tr>`).join('')}</tbody></table></section>`;
   }).join('');
-  return outputHeader(t,div,'조편성표 · 현장 기록용')+(groups||'<div class="oc-empty">등록된 팀이 없습니다. 팀 등록 후 조편성표를 출력하세요.</div>');
+  return outputHeader(t,div,'조편성표 · 현장 기록용')+(groups||'<div class="oc-empty">등록된 팀이 없습니다. 팀 등록 후 조편성표를 출력하세요.</div>')+outputGroupMainOutline(tid,div,sizes);
 }
 function outputGeneratedPrelimSheet(tid,div){
   const t=(G.tournaments||[]).find(x=>x.id===tid),key=tid+'_'+div;
@@ -29779,7 +29761,13 @@ function fitOutputPyramids(root,force=false){
       const height=content.scrollHeight||content.firstElementChild?.scrollHeight||1;
       const room=card.clientHeight-(content.getBoundingClientRect().top-card.getBoundingClientRect().top)-6;
       content.style.zoom=String(Math.max(.05,Math.min((Math.min(available,card.clientWidth)-8)/natural,Math.max(1,room)/height)));
-    }else content.style.zoom=String(Math.min(1,(available-4)/natural));
+     }else{
+      content.style.zoom='1';
+      const page=content.closest('.oc-print-page');
+      const room=page?page.getBoundingClientRect().bottom-content.getBoundingClientRect().top-12:Infinity;
+      const height=content.scrollHeight||content.firstElementChild?.scrollHeight||1;
+      content.style.zoom=String(Math.max(.05,Math.min(1,(available-4)/natural,Math.max(1,room)/height)));
+    }
     content.style.marginLeft='auto';content.style.marginRight='auto';
   });
 }
