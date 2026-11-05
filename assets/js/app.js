@@ -17184,6 +17184,22 @@ function balancedMainByePositions(positions,reserved,n){
 function assertMainByeSpread(slots){
   const n=slots.length;for(let block=n/2;block>=1;block/=2){const counts=[];for(let start=0;start<n;start+=block)counts.push(slots.slice(start,start+block).filter(s=>s.bye).length);if(Math.max(...counts)-Math.min(...counts)>1)throw new Error('부전승 균등 분산 조건과 시드가 충돌합니다. 본선 설정을 확인하세요.');}
 }
+function applyJangyuGoldSixTeamCross(leaves,entries,rnd,div){
+  if(MATCH_ORGANIZATION.id!=='jangyu'||!['금','gold','금배','금배부'].includes(div)||leaves.length!==8||entries.length!==6)return;
+  const groups=[...new Set(entries.map(e=>Number(e.gn)))].sort((a,b)=>a-b);
+  if(groups.length!==2||groups.some(g=>![1,2,3].every(r=>entries.filter(e=>Number(e.gn)===g&&Number(e.rk)===r).length===1)))return;
+  const find=(g,r)=>entries.find(e=>Number(e.gn)===g&&Number(e.rk)===r);
+  const pairs=[[find(groups[0],2),find(groups[1],3)],[find(groups[1],2),find(groups[0],3)]];
+  const starts=[];for(let i=0;i<leaves.length;i+=2)if(leaves[i]&&leaves[i+1])starts.push(i);
+  if(starts.length!==2)throw new Error('금배 6팀 본선은 각 조 1위의 부전승 2자리가 필요합니다.');
+  const candidates=[];
+  for(const order of [pairs,[pairs[1],pairs[0]]])for(let flip=0;flip<4;flip++){
+    const next=leaves.slice();starts.forEach((start,i)=>{const pair=(flip&(1<<i))?order[i].slice().reverse():order[i];next[start]=pair[0];next[start+1]=pair[1];});
+    if(leaves.every((entry,i)=>!entry?.seedNo||getMainEntryBracketLabel(next[i])===getMainEntryBracketLabel(entry)))candidates.push(next);
+  }
+  if(!candidates.length)throw new Error('수동 시드가 금배 2위–상대 조 3위 교차 대진과 충돌합니다. 수동 시드를 확인하세요.');
+  const chosen=shuffleSeeded(candidates,rnd)[0];chosen.forEach((entry,i)=>{leaves[i]=entry;});
+}
 function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   const total=(entries||[]).length;
   const spec=computeMainBracketSpec(total, bracketMode);
@@ -17282,6 +17298,7 @@ function buildSeededMainSlots(entries, n, seed, tid, div, bracketMode='auto'){
   });
 
   repairMainFirstRoundGroupConflicts(leaves,rnd);
+  applyJangyuGoldSixTeamCross(leaves,allSeeded,rnd,div);
   for(let i=0;i<matchCount;i++){
     const a=leaves[i*2]||null;
     const b=leaves[i*2+1]||null;
